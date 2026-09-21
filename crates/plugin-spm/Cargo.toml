@@ -10,5 +10,8 @@ spm-contracts.workspace = true
 serde = { workspace = true }
 serde_json = { workspace = true }
 
+[dev-dependencies]
+pecofence-render = { path = "../render" }
+
 [lints]
 workspace = true

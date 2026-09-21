@@ -49,6 +49,58 @@ pub enum Presentation {
     Capsule,
 }
 
+impl Presentation {
+    pub const fn default_size(self) -> (f32, f32) {
+        match self {
+            Self::Workspace => (1120.0, 760.0),
+            Self::Compact => (480.0, 320.0),
+            Self::Capsule => (360.0, 48.0),
+        }
+    }
+
+    pub const fn minimum_size(self, text_scale: f32) -> (f32, f32) {
+        match self {
+            Self::Workspace => (480.0, 520.0),
+            Self::Compact => (400.0, 280.0),
+            Self::Capsule => (280.0, if text_scale >= 2.0 { 64.0 } else { 48.0 }),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Grouping {
+    #[default]
+    Single,
+    Tabbed,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Exposure {
+    #[default]
+    Desktop,
+    Peek,
+    Hidden,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WorkspaceBreakpoint {
+    Wide,
+    Medium,
+    Narrow,
+}
+
+impl WorkspaceBreakpoint {
+    pub fn for_width(width: f32) -> Self {
+        if width >= 1040.0 {
+            Self::Wide
+        } else if width >= 760.0 {
+            Self::Medium
+        } else {
+            Self::Narrow
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Error {
     Closed,
@@ -183,7 +235,7 @@ pub struct ThemeSnapshot {
     pub accent: [f32; 4],
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct TextSpec {
     pub text: String,
     pub size_dip: f32,
@@ -290,10 +342,15 @@ pub struct MountContext {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct LayoutInput {
+pub struct FrameInput {
     pub viewport: RectDip,
-    pub mode: Presentation,
+    pub presentation: Presentation,
+    pub grouping: Grouping,
+    pub exposure: Exposure,
+    pub active: bool,
     pub text_scale: f32,
+    pub theme_epoch: u64,
+    pub device_epoch: u64,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -320,9 +377,53 @@ pub struct LayoutSnapshot {
     pub semantics: Vec<SemanticNode>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct FrameIdentity {
+    pub mount_key: MountKey,
+    pub frame_revision: u64,
+    pub layout_revision: u64,
+    pub theme_epoch: u64,
+    pub device_epoch: u64,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct PointDip {
+    pub x: f32,
+    pub y: f32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct StrokeStyle {
+    pub rgba: [f32; 4],
+    pub width: f32,
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Path {
+    pub points: Vec<PointDip>,
+    pub closed: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct ImageId(pub u64);
+
 pub trait Canvas {
-    fn fill(&mut self, rect: RectDip, rgba: [f32; 4]) -> Result<()>;
-    fn text(&mut self, rect: RectDip, text: &TextSpec, rgba: [f32; 4]) -> Result<()>;
+    fn draw_rect(&mut self, rect: RectDip, stroke: StrokeStyle) -> Result<()>;
+    fn fill_rect(&mut self, rect: RectDip, rgba: [f32; 4]) -> Result<()>;
+    fn fill_rounded_rect(&mut self, rect: RectDip, radius: f32, rgba: [f32; 4]) -> Result<()>;
+    fn stroke_path(&mut self, path: &Path, stroke: StrokeStyle) -> Result<()>;
+    fn draw_text(&mut self, rect: RectDip, text: &TextSpec, rgba: [f32; 4]) -> Result<()>;
+    fn draw_image(&mut self, image: ImageId, destination: RectDip) -> Result<()>;
+    fn measure_text(&mut self, text: &TextSpec, width: f32) -> Result<TextMetrics>;
+    fn push_clip(&mut self, rect: RectDip) -> Result<()>;
+    fn pop_clip(&mut self) -> Result<()>;
+}
+
+pub trait PreparedFrame {
+    fn identity(&self) -> FrameIdentity;
+    fn hit_tree(&self) -> &[HitNode];
+    fn semantics(&self) -> &[SemanticNode];
+    fn paint(&self, canvas: &mut dyn Canvas) -> Result<()>;
 }
 
 pub enum PanelEvent {
@@ -378,8 +479,7 @@ pub trait PanelProvider {
 pub trait PanelInstance {
     fn mount(&mut self, ctx: MountContext) -> Result<()>;
     fn event(&mut self, event: PanelEvent) -> Result<PanelUpdate>;
-    fn layout(&mut self, input: LayoutInput) -> Result<LayoutSnapshot>;
-    fn paint(&self, canvas: &mut dyn Canvas, layout: &LayoutSnapshot) -> Result<()>;
+    fn prepare_frame(&mut self, input: FrameInput) -> Result<Rc<dyn PreparedFrame>>;
     fn unmount(&mut self, key: MountKey);
     fn begin_stop(&mut self, reason: StopReason);
 }
@@ -429,5 +529,35 @@ mod tests {
             capability.with(|value| Ok(value.value())),
             Err(Error::Revoked)
         );
+    }
+
+    #[test]
+    fn presentation_geometry_and_workspace_breakpoints_are_stable() {
+        assert_eq!(Presentation::Workspace.default_size(), (1120.0, 760.0));
+        assert_eq!(Presentation::Workspace.minimum_size(1.0), (480.0, 520.0));
+        assert_eq!(Presentation::Compact.default_size(), (480.0, 320.0));
+        assert_eq!(Presentation::Compact.minimum_size(1.0), (400.0, 280.0));
+        assert_eq!(Presentation::Capsule.default_size(), (360.0, 48.0));
+        assert_eq!(Presentation::Capsule.minimum_size(2.0), (280.0, 64.0));
+        assert_eq!(
+            WorkspaceBreakpoint::for_width(1040.0),
+            WorkspaceBreakpoint::Wide
+        );
+        assert_eq!(
+            WorkspaceBreakpoint::for_width(760.0),
+            WorkspaceBreakpoint::Medium
+        );
+        assert_eq!(
+            WorkspaceBreakpoint::for_width(759.0),
+            WorkspaceBreakpoint::Narrow
+        );
+    }
+
+    #[test]
+    fn rendering_contracts_are_dyn_compatible() {
+        fn accepts_canvas(_: &mut dyn Canvas) {}
+        fn accepts_frame(_: &dyn PreparedFrame) {}
+        let _ = accepts_canvas;
+        let _ = accepts_frame;
     }
 }

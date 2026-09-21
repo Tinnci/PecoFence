@@ -510,6 +510,16 @@ impl FenceWindow {
         });
     }
 
+    #[allow(dead_code)]
+    pub fn set_panel_presentation(&self, presentation: pecofence_plugin_api::Presentation) {
+        self.with_view(|view| {
+            if let Some(panel) = &view.plugin_panel {
+                panel.set_presentation(presentation);
+                let _ = view.redraw_content();
+            }
+        });
+    }
+
     /// Replaces the item list with layout motion (see `FenceViewState::replace_items`).
     pub fn set_items(&self, items: Vec<ItemView>) {
         self.with_view(|v| {

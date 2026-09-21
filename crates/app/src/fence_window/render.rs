@@ -655,6 +655,16 @@ impl FenceViewState {
 
     pub(super) fn redraw_content(&mut self) -> Result<()> {
         if let Some(panel) = &mut self.plugin_panel {
+            let exposure = panel.exposure();
+            panel.set_container_state(
+                if self.tabs.len() > 1 {
+                    pecofence_plugin_api::Grouping::Tabbed
+                } else {
+                    pecofence_plugin_api::Grouping::Single
+                },
+                exposure,
+                exposure != pecofence_plugin_api::Exposure::Hidden,
+            );
             let ok = panel.draw(&self.content_panel, self.dpi, &self.theme)?;
             self.note_draw_result(ok);
             return Ok(());
