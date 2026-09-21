@@ -9,6 +9,7 @@ pub struct FenceWindow {
     pub(super) view: Rc<RefCell<Option<FenceViewState>>>,
     pub(super) anchor: AnchorCell,
     pub(super) _drop_target: Option<DropTargetRegistration>,
+    pub(super) panel_manager: Rc<RefCell<crate::app::panel_manager::PanelManager>>,
 }
 
 impl Drop for FenceWindow {
@@ -107,6 +108,7 @@ impl FenceWindow {
         let mut state = FenceViewState {
             fence_id,
             title: title.to_string(),
+            plugin_panel: None,
             rolled_up,
             is_inbox,
             expanded_h_px: expanded_h_px.max(1),
@@ -298,6 +300,7 @@ impl FenceWindow {
             view,
             anchor: ctx.anchor.clone(),
             _drop_target: drop_target,
+            panel_manager: ctx.panel_manager.clone(),
         })
     }
 
@@ -480,13 +483,44 @@ impl FenceWindow {
         }
     }
 
+    pub fn set_content(&self, content: &pecofence_core::FenceContentSpec) {
+        let panel = match content {
+            pecofence_core::FenceContentSpec::Panel { panel } => {
+                match self.panel_manager.borrow_mut().resolve(panel) {
+                    Ok(panel) => Some(super::plugin_panel::PluginPanelContent::new(panel)),
+                    Err(error) => {
+                        tracing::warn!(%error, provider = %panel.provider, "panel activation failed");
+                        None
+                    }
+                }
+            }
+            pecofence_core::FenceContentSpec::Files { .. } => None,
+        };
+        self.with_view(|v| {
+            if v.plugin_panel.as_ref().map(|panel| panel.key())
+                != panel.as_ref().map(|panel| panel.key())
+            {
+                v.plugin_panel = panel;
+            }
+            if v.plugin_panel.is_some() {
+                v.replace_items(Vec::new());
+                v.auto_height = false;
+            }
+            let _ = v.redraw_content();
+        });
+    }
+
     /// Replaces the item list with layout motion (see `FenceViewState::replace_items`).
     pub fn set_items(&self, items: Vec<ItemView>) {
         self.with_view(|v| {
             // Selection / focus / hover ride along by item id (`remap_item_state`), so a sort,
             // a reorder drop, a rename or a watcher refresh keeps them on the same items while
             // the layout glide moves those items to their new cells.
-            v.replace_items(items);
+            v.replace_items(if v.plugin_panel.is_some() {
+                Vec::new()
+            } else {
+                items
+            });
             v.drop_insert = None;
             // The caret's slot index means nothing in the new list.
             v.caret_shown = None;

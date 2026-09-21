@@ -4,6 +4,8 @@
 //! the compositor, the shared GPU device and the drawing helpers. Nothing here knows about
 //! fences' data model — it draws what the app tells it to.
 
+#![cfg(windows)]
+
 #[allow(
     non_snake_case,
     non_upper_case_globals,

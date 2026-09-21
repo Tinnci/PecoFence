@@ -52,6 +52,7 @@ mod frame;
 mod handler;
 mod hit;
 mod items;
+mod plugin_panel;
 mod render;
 mod roll;
 mod scroll;
@@ -66,6 +67,7 @@ mod window_drag;
 
 pub use api::FenceWindow;
 pub use dnd::filter_folder_paths;
+pub(crate) use plugin_panel::PanelHandle;
 
 use self::consts::*;
 use self::dnd::*;
@@ -100,6 +102,7 @@ pub struct FenceContext {
     pub motion: Rc<Motion>,
     /// Frame ticks for client-side tweens; call `request()` whenever a tween is running.
     pub frames: Rc<FrameClock>,
+    pub panel_manager: Rc<RefCell<crate::app::panel_manager::PanelManager>>,
 }
 
 /// Live-tunable behaviour flags shared by all fence windows (mirrors `Settings`).

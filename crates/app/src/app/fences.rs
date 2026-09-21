@@ -49,6 +49,7 @@ impl App {
             let items = self.item_views(&shown);
             let tabs = self.tab_views(fence.id);
             if let Some(w) = self.fences.get(&fence.id) {
+                w.set_content(&shown.content);
                 w.set_tabs(tabs, active);
                 w.set_group_by_date(shown.view.group_by_date);
                 w.set_items(items);
@@ -78,6 +79,7 @@ impl App {
                 items,
             ) {
                 Ok(w) => {
+                    w.set_content(&shown.content);
                     w.set_tabs(tabs, active);
                     self.fences.insert(fence.id, w);
                     // Loading/synchronizing a saved fence must preserve its rectangle.
@@ -120,6 +122,7 @@ impl App {
             {
                 // Grouping first: the layout glide must target the new sections.
                 w.set_group_by_date(f.view.group_by_date);
+                w.set_content(&f.content);
                 w.set_items(self.item_views(f));
                 w.set_sort_indicator(f.view.sort, f.view.reverse);
             }
@@ -179,6 +182,7 @@ impl App {
                 // Drops cached icons/labels, so only when it actually differs.
                 w.set_icon_size(shown.view.icon_size);
             }
+            w.set_content(&shown.content);
             w.set_layout(shown.view.layout);
             w.set_is_inbox(shown.kind == FenceKind::Inbox);
             w.set_spacing(shown.view.spacing);
@@ -191,7 +195,7 @@ impl App {
             w.set_columns_visible(shown.view.columns_visible.unwrap_or([true; 3]));
             w.set_group_by_date(shown.view.group_by_date);
             w.set_sort_indicator(shown.view.sort, shown.view.reverse);
-            w.set_auto_height(f.view.auto_height);
+            w.set_auto_height(f.view.auto_height && shown.content.is_files());
             if w.is_rolled() != f.rolled_up {
                 w.set_rolled(f.rolled_up);
             }
@@ -213,6 +217,7 @@ impl App {
             {
                 w.set_tabs(self.tab_views(id), active);
                 w.set_group_by_date(f.view.group_by_date);
+                w.set_content(&f.content);
                 w.set_items(self.item_views(f));
             }
             self.apply_auto_height(id);
@@ -230,6 +235,15 @@ impl App {
     /// resizing snaps in WM_SIZING; this applies the same rule to loaded fences, icon-size
     /// changes and DPI drift so a fence never sits at an unaligned width.
     pub(super) fn apply_column_snap(&mut self, id: FenceId) {
+        let active = self.state.active_tab_of(self.state.host_of(id));
+        if self
+            .state
+            .fence(active)
+            .is_some_and(|f| !f.content.is_files())
+        {
+            return;
+        }
+
         let id = self.state.host_of(id);
         let Some(f) = self.state.fence(id).cloned() else {
             return;
@@ -318,6 +332,15 @@ impl App {
     }
 
     pub(super) fn apply_auto_height(&mut self, id: FenceId) {
+        let active = self.state.active_tab_of(self.state.host_of(id));
+        if self
+            .state
+            .fence(active)
+            .is_some_and(|f| !f.content.is_files())
+        {
+            return;
+        }
+
         let id = self.state.host_of(id);
         let Some(w) = self.fences.get(&id) else {
             return;

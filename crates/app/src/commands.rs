@@ -30,6 +30,8 @@ pub const WM_APP_PEEK_FOCUSED: u32 = msg::WM_APP + 11;
 /// Posted by the shell (`SHChangeNotifyRegister`) when the Recycle Bin's contents or the
 /// desktop namespace changed; `wparam`/`lparam` carry the notification to release.
 pub const WM_APP_SHELL_CHANGED: u32 = msg::WM_APP + 12;
+/// Posted by the async plugin transport. Payload stays in the generation-guarded kernel queue.
+pub const WM_APP_PLUGIN_EVENT: u32 = msg::WM_APP + 13;
 
 /// What a file drop does with the dropped paths (Explorer's Move / Copy / Create shortcut, the
 /// effect the drop target reported).

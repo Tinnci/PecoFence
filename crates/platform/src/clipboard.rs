@@ -53,3 +53,50 @@ pub fn sequence() -> u32 {
     // SAFETY: plain FFI call.
     unsafe { GetClipboardSequenceNumber() }
 }
+
+/// Writes Unicode text and transfers the allocation to the system clipboard on success.
+pub fn set_text(text: &str) -> windows_core::Result<()> {
+    windows_core::link!("user32.dll" "system" fn OpenClipboard(hwnd: isize) -> i32);
+    windows_core::link!("user32.dll" "system" fn CloseClipboard() -> i32);
+    windows_core::link!("user32.dll" "system" fn EmptyClipboard() -> i32);
+    windows_core::link!("user32.dll" "system" fn SetClipboardData(format: u32, memory: *mut core::ffi::c_void) -> *mut core::ffi::c_void);
+    windows_core::link!("kernel32.dll" "system" fn GlobalAlloc(flags: u32, bytes: usize) -> *mut core::ffi::c_void);
+    windows_core::link!("kernel32.dll" "system" fn GlobalLock(memory: *mut core::ffi::c_void) -> *mut core::ffi::c_void);
+    windows_core::link!("kernel32.dll" "system" fn GlobalUnlock(memory: *mut core::ffi::c_void) -> i32);
+    windows_core::link!("kernel32.dll" "system" fn GlobalFree(memory: *mut core::ffi::c_void) -> *mut core::ffi::c_void);
+    const CF_UNICODETEXT: u32 = 13;
+    const GMEM_MOVEABLE: u32 = 2;
+    let wide: Vec<u16> = text.encode_utf16().chain(std::iter::once(0)).collect();
+    let bytes = wide.len() * std::mem::size_of::<u16>();
+    // SAFETY: the movable allocation is retained until SetClipboardData succeeds, at which point
+    // ownership transfers to the system. Every successful OpenClipboard is paired with close.
+    unsafe {
+        if OpenClipboard(0) == 0 {
+            return Err(windows_core::Error::from_thread());
+        }
+        if EmptyClipboard() == 0 {
+            CloseClipboard();
+            return Err(windows_core::Error::from_thread());
+        }
+        let memory = GlobalAlloc(GMEM_MOVEABLE, bytes);
+        if memory.is_null() {
+            CloseClipboard();
+            return Err(windows_core::Error::from_thread());
+        }
+        let destination = GlobalLock(memory);
+        if destination.is_null() {
+            GlobalFree(memory);
+            CloseClipboard();
+            return Err(windows_core::Error::from_thread());
+        }
+        std::ptr::copy_nonoverlapping(wide.as_ptr() as *const u8, destination as *mut u8, bytes);
+        GlobalUnlock(memory);
+        if SetClipboardData(CF_UNICODETEXT, memory).is_null() {
+            GlobalFree(memory);
+            CloseClipboard();
+            return Err(windows_core::Error::from_thread());
+        }
+        CloseClipboard();
+    }
+    Ok(())
+}

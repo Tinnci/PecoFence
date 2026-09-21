@@ -3,7 +3,7 @@
 use crate::anchor::{self, AnchorCell, DesktopAnchor, ShowDesktopBehavior, ZMode};
 use crate::commands::{
     Command, CommandQueue, TransferMode, WM_APP_COMMAND, WM_APP_FRAME, WM_APP_FS_CHANGED,
-    WM_APP_PEEK_FOCUSED, WM_APP_SHELL_CHANGED, WM_APP_TRAY, WM_APP_WALLPAPER,
+    WM_APP_PEEK_FOCUSED, WM_APP_PLUGIN_EVENT, WM_APP_SHELL_CHANGED, WM_APP_TRAY, WM_APP_WALLPAPER,
 };
 use crate::fence_window::{
     BackdropMode, BackdropSets, Behavior, FenceContext, FenceWindow, ItemView, TabView,
@@ -52,6 +52,7 @@ mod fileops;
 mod items;
 mod menus;
 mod motion;
+pub(crate) mod panel_manager;
 mod peek;
 mod portals;
 mod settings;
@@ -65,6 +66,7 @@ mod wallpaper_refresh;
 
 use fences::work_areas;
 use fileops::{FileOp, FileOpThen};
+use panel_manager::PanelManager;
 use peek::peek_hotkey_label;
 use visuals::{
     backdrop_mode_for, build_backdrop_sets, fence_style_for, icon_variant_for, pick_theme_mode,
@@ -197,6 +199,8 @@ pub struct App {
     /// clears the dimming.
     cut_items: HashSet<ItemId>,
     cut_clip_seq: u32,
+    /// Composition root for built-in panel providers and their instance lifetimes.
+    panel_manager: Rc<RefCell<PanelManager>>,
 }
 
 pub type AppCell = Rc<RefCell<Option<App>>>;
@@ -280,6 +284,16 @@ impl App {
                                 // The App is borrowed (modal loop inside a handler: menu, file
                                 // dialog): retry shortly. A re-post would spin the CPU for as
                                 // long as the modal loop runs.
+                                window::set_timer(hwnd, TIMER_CMD_RETRY, 50);
+                            }
+                            Some(0)
+                        }
+                        WM_APP_PLUGIN_EVENT => {
+                            if let Ok(mut guard) = cell.try_borrow_mut()
+                                && let Some(app) = guard.as_mut()
+                            {
+                                app.process_panel_events();
+                            } else {
                                 window::set_timer(hwnd, TIMER_CMD_RETRY, 50);
                             }
                             Some(0)
@@ -581,6 +595,17 @@ impl App {
                 );
             }))
         };
+        let panel_manager = Rc::new(RefCell::new(PanelManager::new(control.hwnd())));
+        panel_manager
+            .borrow_mut()
+            .register_provider(Rc::new(pecofence_plugin_spm::SpmPlugin))
+            .map_err(|error| {
+                windows_core::Error::new(
+                    windows_core::HRESULT(0x80004005u32 as i32),
+                    error.to_string(),
+                )
+            })?;
+
         let ctx = Rc::new(FenceContext {
             stack: stack.clone(),
             motion,
@@ -620,6 +645,7 @@ impl App {
                 ),
                 wheel_lines: std::cell::Cell::new(sysparams::wheel_scroll_lines()),
             }),
+            panel_manager: panel_manager.clone(),
         });
 
         // Tray (the glyph uses the same accent token as the selection).
@@ -708,6 +734,7 @@ impl App {
             cut_clip_seq: 0,
             wallpaper_sig,
             wallpaper_cache: BackdropCache::default(),
+            panel_manager,
         };
         if let Some(signature) = app.wallpaper_sig.clone() {
             app.wallpaper_cache
@@ -1267,9 +1294,20 @@ impl App {
         self.state.save_if_dirty();
         self.fences.clear();
         self.dying.clear();
+        self.panel_manager.borrow_mut().shutdown();
         if let Some(a) = self.anchor.borrow_mut().as_mut() {
             a.restore_desktop_icons();
         }
         self.tray = None;
+    }
+
+    fn process_panel_events(&mut self) {
+        let delivered = self.panel_manager.borrow_mut().poll_events();
+        if delivered == 0 {
+            return;
+        }
+        for window in self.fences.values() {
+            window.redraw();
+        }
     }
 }

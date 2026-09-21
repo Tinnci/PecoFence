@@ -983,11 +983,11 @@ impl AppState {
         let id = self.new_fence(&title, rect)?;
         if let Some(f) = self.fence_mut(id) {
             f.kind = FenceKind::FolderPortal;
-            f.source = ItemSourceSpec::Folder {
+            f.set_file_source(ItemSourceSpec::Folder {
                 path: folder.to_string_lossy().to_string(),
                 recursive: false,
                 filter: None,
-            };
+            });
             f.view.sort = SortMode::Name;
         }
         self.refresh_portal(id);

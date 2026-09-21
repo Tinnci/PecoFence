@@ -305,6 +305,9 @@ impl FenceDropHandler {
         let Some(v) = guard.as_mut() else {
             return none;
         };
+        if v.plugin_panel.is_some() {
+            return none;
+        }
         let Some(pt) = pt else {
             v.drag_scroll = None;
             if v.snap_scroll() {
@@ -400,7 +403,14 @@ impl DropHandler for FenceDropHandler {
         pt: DragPoint,
         allowed: u32,
     ) -> DropEffect {
-        self.kind = if dragdrop::has_hdrop(data) {
+        self.kind = if self
+            .view
+            .borrow()
+            .as_ref()
+            .is_some_and(|v| v.plugin_panel.is_some())
+        {
+            DropKind::None
+        } else if dragdrop::has_hdrop(data) {
             DropKind::Files
         } else if dragdrop::has_inet_url(data) {
             DropKind::Url

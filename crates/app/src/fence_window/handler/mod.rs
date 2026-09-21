@@ -142,6 +142,11 @@ impl FenceWindow {
                         "native pointer event"
                     );
                 }
+                if let Some(result) =
+                    super::plugin_panel::handle_message(h, message, wparam, lparam)
+                {
+                    return Some(result);
+                }
                 match message {
                     msg::WM_MOUSEACTIVATE => Some(msg::MA_NOACTIVATE),
                     // Alt+F4 / SC_CLOSE while the fence is the active window: fences are

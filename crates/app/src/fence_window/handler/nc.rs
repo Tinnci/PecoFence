@@ -640,6 +640,9 @@ pub(super) fn on_sizing(
     // whole rows, so a fence never shows a partial column or row.
     let guard = view.try_borrow().ok()?;
     let v = guard.as_ref()?;
+    if v.plugin_panel.is_some() {
+        return None;
+    }
     let scale = v.scale();
     let metrics = v.grid_metrics();
     let cell_px = (metrics.cell_w * scale).max(1.0);

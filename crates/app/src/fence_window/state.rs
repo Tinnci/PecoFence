@@ -6,6 +6,7 @@ pub struct FenceViewState {
     #[allow(dead_code)]
     pub fence_id: FenceId,
     pub title: String,
+    pub(super) plugin_panel: Option<super::plugin_panel::PluginPanelContent>,
     pub rolled_up: bool,
     pub is_inbox: bool,
     /// Expanded window height in physical pixels (restored when un-rolling).
