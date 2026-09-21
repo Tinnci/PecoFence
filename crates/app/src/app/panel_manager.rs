@@ -8,8 +8,6 @@ use std::rc::Rc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
-use tokio::sync::mpsc;
 
 const RENDER: ServiceKey<dyn RenderService> = ServiceKey::new("host", "render", 1);
 const THEME: ServiceKey<dyn ThemeService> = ServiceKey::new("host", "theme", 1);
@@ -53,6 +51,38 @@ impl PanelManager {
         let runtime = Arc::new(tokio::runtime::Runtime::new().expect("Tokio runtime"));
         let supervisor = Rc::new(RefCell::new(TaskSupervisor::new()));
         let ipc_state = Arc::new(PipeState::new(notify_hwnd));
+        let endpoint = spm_contracts::v2_pipe_name(&spm_contracts::EndpointIdentity {
+            user_sid: pecofence_platform::named_pipe::current_user_sid()
+                .expect("current process user SID"),
+            windows_session_id: pecofence_platform::named_pipe::current_windows_session_id()
+                .expect("current Windows session ID"),
+        })
+        .expect("valid SPM v2 endpoint identity");
+        let (transport, receiver) = crate::spm_transport::channel();
+        let service_generation = scopes
+            .handle(service_scope)
+            .and_then(|scope| scope.generation())
+            .expect("service scope is open");
+        let actor_handle = transport.clone();
+        let actor_state = ipc_state.clone();
+        supervisor
+            .borrow_mut()
+            .spawn_tokio(
+                runtime.handle(),
+                service_scope,
+                service_generation,
+                move |cancel| async move {
+                    crate::spm_transport::run(
+                        endpoint,
+                        receiver,
+                        actor_handle,
+                        actor_state,
+                        cancel,
+                    )
+                    .await;
+                },
+            )
+            .expect("SPM transport supervisor capacity");
         let mut services = ServiceRegistry::new();
         services
             .publish(RENDER, service_scope, Box::new(HostRender))
@@ -68,9 +98,8 @@ impl PanelManager {
                 IPC,
                 service_scope,
                 Box::new(PipeIpc {
-                    runtime: runtime.clone(),
-                    supervisor: supervisor.clone(),
                     state: ipc_state.clone(),
+                    transport,
                 }),
             )
             .expect("unique service");
@@ -457,11 +486,9 @@ struct PipeEvent {
 struct PipeCommand {
     owner: ScopeId,
     generation: u64,
-    task: Token,
-    sender: mpsc::Sender<Arc<[u8]>>,
 }
 
-struct PipeState {
+pub(crate) struct PipeState {
     next: AtomicU64,
     notify_hwnd: isize,
     events: Mutex<VecDeque<PipeEvent>>,
@@ -488,12 +515,23 @@ impl PipeState {
         Ok(Token(value))
     }
 
-    fn publish(&self, event: PipeEvent) {
+    pub(crate) fn publish(
+        &self,
+        scope: ScopeId,
+        generation: u64,
+        subscription: Token,
+        bytes: Arc<[u8]>,
+    ) {
         if let Ok(mut events) = self.events.lock() {
             if events.len() == 128 {
                 events.pop_front();
             }
-            events.push_back(event);
+            events.push_back(PipeEvent {
+                scope,
+                generation,
+                subscription,
+                bytes,
+            });
         }
         pecofence_platform::window::post_message(
             pecofence_platform::HWND(self.notify_hwnd as *mut core::ffi::c_void),
@@ -505,9 +543,8 @@ impl PipeState {
 }
 
 struct PipeIpc {
-    runtime: Arc<tokio::runtime::Runtime>,
-    supervisor: Rc<RefCell<TaskSupervisor>>,
     state: Arc<PipeState>,
+    transport: crate::spm_transport::TransportHandle,
 }
 
 impl IpcService for PipeIpc {
@@ -517,48 +554,17 @@ impl IpcService for PipeIpc {
         if query.endpoint != "spm.v2/read-model" {
             return Err(Error::Invalid("unsupported local endpoint".into()));
         }
-        let endpoint = spm_contracts::v2_pipe_name(&spm_contracts::EndpointIdentity {
-            user_sid: pecofence_platform::named_pipe::current_user_sid()
-                .map_err(|error| Error::Backend(error.to_string()))?,
-            windows_session_id: pecofence_platform::named_pipe::current_windows_session_id()
-                .map_err(|error| Error::Backend(error.to_string()))?,
-        })
-        .map_err(|error| Error::Backend(error.to_string()))?;
         let subscription = self.state.token()?;
-        let (sender, receiver) = mpsc::channel(16);
-        let state = self.state.clone();
-        let payload = query.payload;
-        let task = self.supervisor.borrow_mut().spawn_tokio(
-            self.runtime.handle(),
-            owner,
-            generation,
-            move |cancel| async move {
-                run_pipe_subscription(
-                    endpoint,
-                    owner,
-                    generation,
-                    subscription,
-                    payload,
-                    receiver,
-                    cancel,
-                    state,
-                )
-                .await;
-            },
-        )?;
+        let project_query: spm_contracts::ProjectQuery = serde_json::from_slice(&query.payload)
+            .map_err(|error| Error::Invalid(error.to_string()))?;
+        self.transport
+            .subscribe(subscription, owner, generation, project_query)
+            .map_err(|_| Error::Backend("SPM transport stopped".into()))?;
         self.state
             .commands
             .lock()
             .map_err(|_| Error::Backend("IPC command mutex poisoned".into()))?
-            .insert(
-                subscription,
-                PipeCommand {
-                    owner,
-                    generation,
-                    task,
-                    sender,
-                },
-            );
+            .insert(subscription, PipeCommand { owner, generation });
         Ok(subscription)
     }
     fn send(&self, scope: &ScopeHandle, payload: Arc<[u8]>) -> Result<Token> {
@@ -570,14 +576,15 @@ impl IpcService for PipeIpc {
             .lock()
             .map_err(|_| Error::Backend("IPC command mutex poisoned".into()))?;
         let mut accepted = false;
-        for command in commands
-            .values()
-            .filter(|command| command.owner == owner && command.generation == generation)
+        for (subscription, _command) in commands
+            .iter()
+            .filter(|(_, command)| command.owner == owner && command.generation == generation)
         {
-            command
-                .sender
-                .try_send(payload.clone())
-                .map_err(|error| Error::Backend(error.to_string()))?;
+            let envelope: spm_contracts::Envelope = serde_json::from_slice(&payload)
+                .map_err(|error| Error::Invalid(error.to_string()))?;
+            self.transport
+                .request(*subscription, envelope)
+                .map_err(|_| Error::Backend("SPM transport stopped".into()))?;
             accepted = true;
         }
         if !accepted {
@@ -586,153 +593,16 @@ impl IpcService for PipeIpc {
         self.state.token()
     }
     fn cancel(&self, token: Token) -> Result<()> {
-        let command = self
-            .state
+        self.state
             .commands
             .lock()
             .map_err(|_| Error::Backend("IPC command mutex poisoned".into()))?
             .remove(&token)
             .ok_or(Error::Revoked)?;
-        self.supervisor.borrow().cancel(command.task);
+        self.transport
+            .unsubscribe(token)
+            .map_err(|_| Error::Backend("SPM transport stopped".into()))?;
         Ok(())
-    }
-}
-
-async fn write_frame(
-    writer: &mut (impl AsyncWrite + Unpin),
-    message: &serde_json::Value,
-) -> std::io::Result<()> {
-    let frame = spm_contracts::encode_frame(message)
-        .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?;
-    writer.write_all(&frame).await?;
-    writer.flush().await
-}
-
-async fn read_frame(reader: &mut (impl AsyncRead + Unpin)) -> std::io::Result<serde_json::Value> {
-    let size = reader.read_u32_le().await? as usize;
-    if size == 0 || size > spm_contracts::MAX_FRAME_BYTES {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidData,
-            "invalid v2 frame length",
-        ));
-    }
-    let mut frame = Vec::with_capacity(size + 4);
-    frame.extend_from_slice(&(size as u32).to_le_bytes());
-    frame.resize(size + 4, 0);
-    reader.read_exact(&mut frame[4..]).await?;
-    spm_contracts::decode_frame(&frame)
-        .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))
-}
-
-#[allow(clippy::too_many_arguments)]
-async fn run_pipe_subscription(
-    endpoint: String,
-    owner: ScopeId,
-    generation: u64,
-    subscription: Token,
-    subscribe_payload: Arc<[u8]>,
-    mut commands: mpsc::Receiver<Arc<[u8]>>,
-    cancel: pecofence_plugin_kernel::CancellationToken,
-    state: Arc<PipeState>,
-) {
-    let payload: serde_json::Value = match serde_json::from_slice(&subscribe_payload) {
-        Ok(payload) => payload,
-        Err(error) => {
-            tracing::warn!(%error, "invalid SPM v2 subscription payload");
-            return;
-        }
-    };
-    let session = uuid::Uuid::new_v4().to_string();
-    let mut retry = Duration::from_millis(100);
-    while !cancel.is_cancelled() {
-        let connected = tokio::net::windows::named_pipe::ClientOptions::new().open(&endpoint);
-        let pipe = match connected {
-            Ok(pipe) => pipe,
-            Err(error) => {
-                tracing::debug!(%error, %endpoint, "SPM v2 pipe connect failed");
-                tokio::select! {
-                    _ = cancel.cancelled() => return,
-                    _ = tokio::time::sleep(retry) => {}
-                }
-                retry = (retry * 2).min(Duration::from_secs(5));
-                continue;
-            }
-        };
-        retry = Duration::from_millis(100);
-        let (mut reader, mut writer) = tokio::io::split(pipe);
-        let hello = serde_json::json!({
-            "version": spm_contracts::PROTOCOL_MAJOR,
-            "session": session,
-            "requestId": subscription.0,
-            "method": "spm.hello"
-        });
-        if write_frame(&mut writer, &hello).await.is_err() {
-            continue;
-        }
-        let hello_response = tokio::select! {
-            _ = cancel.cancelled() => return,
-            response = read_frame(&mut reader) => response,
-        };
-        let Ok(hello_response) = hello_response else {
-            continue;
-        };
-        if hello_response
-            .get("version")
-            .and_then(|value| value.as_u64())
-            != Some(spm_contracts::PROTOCOL_MAJOR as u64)
-            || hello_response
-                .get("method")
-                .and_then(|value| value.as_str())
-                != Some("spm.hello")
-        {
-            tracing::warn!("SPM daemon rejected protocol v2 handshake");
-            return;
-        }
-        let subscribe = serde_json::json!({
-            "version": spm_contracts::PROTOCOL_MAJOR,
-            "session": session,
-            "requestId": subscription.0,
-            "method": "spm.panel.subscribe",
-            "payload": payload,
-        });
-        if write_frame(&mut writer, &subscribe).await.is_err() {
-            continue;
-        }
-        loop {
-            tokio::select! {
-                _ = cancel.cancelled() => return,
-                command = commands.recv() => {
-                    let Some(command) = command else { return };
-                    let payload = serde_json::from_slice::<serde_json::Value>(&command)
-                        .unwrap_or(serde_json::Value::Null);
-                    let request = serde_json::json!({
-                        "version": spm_contracts::PROTOCOL_MAJOR,
-                        "session": session,
-                        "requestId": subscription.0,
-                        "method": "spm.refresh",
-                        "payload": payload,
-                    });
-                    if write_frame(&mut writer, &request).await.is_err() { break; }
-                }
-                response = read_frame(&mut reader) => {
-                    let Ok(response) = response else { break };
-                    if response.get("version").and_then(|value| value.as_u64()) != Some(spm_contracts::PROTOCOL_MAJOR as u64)
-                        || response.get("session").and_then(|value| value.as_str()) != Some(session.as_str())
-                        || response.get("method").and_then(|value| value.as_str()) != Some("spm.panel.snapshot")
-                    {
-                        continue;
-                    }
-                    let Some(snapshot) = response.get("payload").or_else(|| response.get("snapshot")) else { continue };
-                    let Ok(bytes) = serde_json::to_vec(snapshot) else { continue };
-                    state.publish(PipeEvent {
-                        scope: owner,
-                        generation,
-                        subscription,
-                        bytes: Arc::from(bytes),
-                    });
-                }
-            }
-        }
     }
 }
 
