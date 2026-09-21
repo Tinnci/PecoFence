@@ -654,6 +654,11 @@ impl FenceViewState {
     }
 
     pub(super) fn redraw_content(&mut self) -> Result<()> {
+        if let Some(panel) = &mut self.plugin_panel {
+            let ok = panel.draw(&self.content_panel, self.dpi, &self.theme)?;
+            self.note_draw_result(ok);
+            return Ok(());
+        }
         if self.row_metrics().is_some() {
             return self.redraw_rows();
         }

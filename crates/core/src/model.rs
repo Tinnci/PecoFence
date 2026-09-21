@@ -461,13 +461,14 @@ impl Default for IconSettings {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Fence {
     pub id: FenceId,
     pub title: String,
     pub kind: FenceKind,
     pub source: ItemSourceSpec,
+    pub content: FenceContentSpec,
     pub geometry: NormGeometry,
     pub rolled_up: bool,
     /// Height (DIPs) to restore when un-rolling.
@@ -502,13 +503,132 @@ pub struct Fence {
     pub items: Vec<ItemRef>,
 }
 
+fn desktop_source() -> ItemSourceSpec {
+    ItemSourceSpec::Desktop
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum FenceContentSpec {
+    Files { source: ItemSourceSpec },
+    Panel { panel: PanelSpec },
+}
+
+/// Persisted descriptor for any panel provider. The host interprets only the provider id and
+/// version; configuration remains provider-owned JSON in a fresh namespace.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PanelSpec {
+    pub provider: String,
+    pub instance_id: Uuid,
+    pub config_version: u16,
+    pub config: serde_json::Value,
+}
+impl Default for FenceContentSpec {
+    fn default() -> Self {
+        Self::Files {
+            source: ItemSourceSpec::Desktop,
+        }
+    }
+}
+impl FenceContentSpec {
+    pub fn is_files(&self) -> bool {
+        matches!(self, Self::Files { .. })
+    }
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct FenceWire {
+    pub id: FenceId,
+    pub title: String,
+    pub kind: FenceKind,
+    #[serde(default = "desktop_source")]
+    pub source: ItemSourceSpec,
+    #[serde(default)]
+    pub content: Option<FenceContentSpec>,
+    pub geometry: NormGeometry,
+    pub rolled_up: bool,
+    /// Height (DIPs) to restore when un-rolling.
+    pub expanded_h: f32,
+    pub view: FenceView,
+    #[serde(default)]
+    pub appearance: Option<AppearanceOverride>,
+    #[serde(default)]
+    pub exclude_from_quick_hide: bool,
+    /// Position and size cannot be changed with the mouse (Fences "锁定").
+    #[serde(default)]
+    pub locked: bool,
+    /// Shown as a tab inside another fence's window (Fences 6 tabbed fences). A hosted fence has
+    /// no window of its own; its geometry is kept for when it is split out again.
+    #[serde(default)]
+    pub tab_host: Option<FenceId>,
+    /// On a host: which tab's items the window shows (`None` = the host's own).
+    #[serde(default)]
+    pub active_tab: Option<FenceId>,
+    /// On a host: strip order of its tabs (may place the host itself anywhere). Ids that are no
+    /// longer tabs are ignored; tabs missing here are appended in layout order.
+    #[serde(default)]
+    pub tab_order: Vec<FenceId>,
+    /// Folder portal: double-clicking a subfolder opens it inside the portal (Fences
+    /// "Navigate"); off = open it in Explorer.
+    #[serde(default = "default_true")]
+    pub portal_navigate: bool,
+    /// Folder portal: hide the folder glyph before the title.
+    #[serde(default)]
+    pub hide_title_icon: bool,
+    #[serde(default)]
+    pub items: Vec<ItemRef>,
+}
+
+impl<'de> Deserialize<'de> for Fence {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let wire = FenceWire::deserialize(deserializer)?;
+        let content = wire.content.unwrap_or_else(|| FenceContentSpec::Files {
+            source: wire.source.clone(),
+        });
+        let source = match &content {
+            FenceContentSpec::Files { source } => source.clone(),
+            _ => wire.source,
+        };
+        Ok(Self {
+            content,
+            source,
+            id: wire.id,
+            title: wire.title,
+            kind: wire.kind,
+            geometry: wire.geometry,
+            rolled_up: wire.rolled_up,
+            expanded_h: wire.expanded_h,
+            view: wire.view,
+            appearance: wire.appearance,
+            exclude_from_quick_hide: wire.exclude_from_quick_hide,
+            locked: wire.locked,
+            tab_host: wire.tab_host,
+            active_tab: wire.active_tab,
+            tab_order: wire.tab_order,
+            portal_navigate: wire.portal_navigate,
+            hide_title_icon: wire.hide_title_icon,
+            items: wire.items,
+        })
+    }
+}
+
 impl Fence {
+    /// Keep file-content callers and the generalized content specification synchronized.
+    pub fn set_file_source(&mut self, source: ItemSourceSpec) {
+        self.content = FenceContentSpec::Files {
+            source: source.clone(),
+        };
+        self.source = source;
+    }
+
     pub fn new(title: &str, kind: FenceKind, geometry: NormGeometry) -> Self {
         Self {
             id: Uuid::new_v4(),
             title: title.to_string(),
             kind,
             source: ItemSourceSpec::Desktop,
+            content: FenceContentSpec::default(),
             expanded_h: geometry.h,
             geometry,
             rolled_up: false,
@@ -976,6 +1096,9 @@ impl Config {
         }
         let l = self.layouts.get_mut(layout)?;
         let tpos = l.fences.iter().position(|f| f.id == to)?;
+        if !l.fences[tpos].content.is_files() {
+            return None;
+        }
         for f in &mut l.fences {
             f.items.retain(|r| r.item_id != item);
         }
@@ -1105,6 +1228,33 @@ mod tests {
                 "acrylic"
             );
         }
+    }
+
+    #[test]
+    fn generic_panel_descriptor_roundtrips_without_provider_specific_fields() {
+        let mut fence = Fence::new("Portal", FenceKind::FolderPortal, geo());
+        fence.set_file_source(ItemSourceSpec::Folder {
+            path: "C:/projects".into(),
+            recursive: true,
+            filter: Some("*.rs".into()),
+        });
+        assert_eq!(
+            serde_json::from_value::<Fence>(serde_json::to_value(&fence).unwrap()).unwrap(),
+            fence
+        );
+        let mut panel = Fence::new("Release", FenceKind::Virtual, geo());
+        panel.content = FenceContentSpec::Panel {
+            panel: PanelSpec {
+                provider: "pecofence.spm".into(),
+                instance_id: Uuid::new_v4(),
+                config_version: 1,
+                config: serde_json::json!({"project":"P","delivery_scope":"S"}),
+            },
+        };
+        let json = serde_json::to_value(&panel).unwrap();
+        assert_eq!(json["content"]["kind"], "panel");
+        assert_eq!(json["content"]["panel"]["provider"], "pecofence.spm");
+        assert_eq!(serde_json::from_value::<Fence>(json).unwrap(), panel);
     }
 
     #[test]

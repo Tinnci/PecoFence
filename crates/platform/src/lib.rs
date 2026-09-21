@@ -4,6 +4,7 @@
 //! unsafe block carries a `// SAFETY:` note. The generated `bindings` module is private;
 //! other crates use the wrappers exported here.
 
+#![cfg(windows)]
 #![allow(clippy::missing_safety_doc)]
 
 #[allow(
@@ -38,6 +39,7 @@ pub mod locale;
 pub mod memstats;
 pub mod monitors;
 pub mod msg;
+pub mod named_pipe;
 pub mod process;
 pub mod rawinput;
 pub mod shell;

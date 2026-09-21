@@ -5,6 +5,9 @@ use super::*;
 
 impl App {
     pub(super) fn item_views(&self, fence: &pecofence_core::Fence) -> Vec<ItemView> {
+        if !fence.content.is_files() {
+            return Vec::new();
+        }
         self.state
             .items_of(fence)
             .into_iter()

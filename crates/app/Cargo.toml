@@ -7,6 +7,7 @@ license.workspace = true
 [[bin]]
 name = "pecofence"
 path = "src/main.rs"
+test = false
 
 [dependencies]
 windows-core = { workspace = true }
@@ -16,8 +17,12 @@ serde_json = { workspace = true }
 pecofence-core = { path = "../core" }
 pecofence-platform = { path = "../platform" }
 pecofence-render = { path = "../render" }
+pecofence-plugin-api = { path = "../plugin-api" }
+pecofence-plugin-kernel = { path = "../plugin-kernel" }
+pecofence-plugin-spm = { path = "../plugin-spm" }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
+tokio = { workspace = true }
 
 [lints]
 workspace = true

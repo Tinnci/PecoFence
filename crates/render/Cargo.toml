@@ -3,8 +3,9 @@ name = "pecofence-render"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+autoexamples = false
 
-[dependencies]
+[target.'cfg(windows)'.dependencies]
 pecofence-core = { path = "../core" }
 windows-core = { workspace = true }
 windows-numerics = { workspace = true }

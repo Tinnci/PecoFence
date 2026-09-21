@@ -176,6 +176,15 @@ pub fn validate(cfg: &Config) -> Result<(), String> {
             return Err(format!("layout has {inboxes} inbox fences"));
         }
         for f in &layout.fences {
+            if let crate::model::FenceContentSpec::Panel { panel } = &f.content {
+                if panel.provider.trim().is_empty()
+                    || panel.config_version == 0
+                    || f.kind != crate::model::FenceKind::Virtual
+                    || !f.items.is_empty()
+                {
+                    return Err("panels require provider/version and an empty virtual fence".into());
+                }
+            }
             let g = &f.geometry;
             if !(g.w.is_finite() && g.h.is_finite() && g.x.is_finite() && g.y.is_finite()) {
                 return Err(format!("fence {} has non-finite geometry", f.title));
