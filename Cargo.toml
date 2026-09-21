@@ -19,6 +19,7 @@ rust-version = "1.95"
 license = "Apache-2.0"
 
 [workspace.dependencies]
+spm-contracts = { version = "=0.1.0", path = "../spm/crates/spm-contracts" }
 windows-core = "0.100"
 windows-numerics = "0.100"
 windows-window = "0.100"

@@ -12,10 +12,14 @@ pub type Undo = Box<dyn FnOnce() -> Result<()>>;
 pub enum ScopeKind {
     Root,
     Service,
-    Plugin,
+    Provider,
     Instance,
     Mount,
     Gesture,
+    Subscription,
+    Window,
+    Shell,
+    Peek,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -305,6 +309,37 @@ impl ScopeTree {
         Ok(())
     }
 
+    /// Removes a fully disposed non-root subtree from the arena and its parent's child list.
+    pub fn remove_disposed_subtree(&mut self, root: ScopeId) -> Result<usize> {
+        if root == self.root || self.kind(root) == Some(ScopeKind::Service) {
+            return Err(Error::Invalid(
+                "root and service scopes cannot be removed".into(),
+            ));
+        }
+        let mut order = Vec::new();
+        self.postorder(root, &mut order)?;
+        if order.iter().any(|id| {
+            self.scopes
+                .get(id)
+                .is_some_and(|record| record.local.phase() != RuntimePhase::Disposed)
+        }) {
+            return Err(Error::Invalid("scope subtree is not disposed".into()));
+        }
+        let parent = self.scopes.get(&root).and_then(|record| record.parent);
+        if let Some(parent) = parent.and_then(|id| self.scopes.get_mut(&id)) {
+            parent.children.retain(|child| *child != root);
+        }
+        let count = order.len();
+        for id in order {
+            self.scopes.remove(&id);
+        }
+        Ok(count)
+    }
+
+    pub fn len(&self) -> usize {
+        self.scopes.len()
+    }
+
     /// Executes both stop phases for a scope subtree. Task handles remain owned by the
     /// supervisor on timeout and the corresponding scopes enter `Quarantined`.
     pub fn stop_and_drain(
@@ -393,7 +428,7 @@ mod tests {
     #[test]
     fn closed_scope_rejects_children_and_effects() {
         let mut tree = ScopeTree::new();
-        let plugin = tree.create(tree.root(), ScopeKind::Plugin).unwrap();
+        let plugin = tree.create(tree.root(), ScopeKind::Provider).unwrap();
         tree.begin_stop(plugin).unwrap();
         assert_eq!(tree.create(plugin, ScopeKind::Instance), Err(Error::Closed));
         let called = Rc::new(Cell::new(false));
@@ -411,7 +446,7 @@ mod tests {
     #[test]
     fn descendants_are_closed_before_any_callback() {
         let mut tree = ScopeTree::new();
-        let plugin = tree.create(tree.root(), ScopeKind::Plugin).unwrap();
+        let plugin = tree.create(tree.root(), ScopeKind::Provider).unwrap();
         let instance = tree.create(plugin, ScopeKind::Instance).unwrap();
         let instance_handle = tree.handle(instance).unwrap();
         tree.local(plugin)

@@ -9,33 +9,6 @@ use std::fmt;
 use std::rc::{Rc, Weak};
 use std::sync::Arc;
 
-pub const LOCAL_IPC_MAJOR: u16 = 2;
-pub const MAX_LOCAL_FRAME: usize = 8 * 1024 * 1024;
-
-pub fn encode_local_frame<T: Serialize>(message: &T) -> Result<Vec<u8>> {
-    let payload = serde_json::to_vec(message).map_err(|error| Error::Invalid(error.to_string()))?;
-    if payload.is_empty() || payload.len() > MAX_LOCAL_FRAME {
-        return Err(Error::Invalid("invalid local IPC frame length".into()));
-    }
-    let mut frame = Vec::with_capacity(4 + payload.len());
-    frame.extend_from_slice(&(payload.len() as u32).to_le_bytes());
-    frame.extend_from_slice(&payload);
-    Ok(frame)
-}
-
-pub fn decode_local_frame<T: serde::de::DeserializeOwned>(frame: &[u8]) -> Result<T> {
-    let length = frame
-        .get(..4)
-        .and_then(|prefix| <[u8; 4]>::try_from(prefix).ok())
-        .map(u32::from_le_bytes)
-        .ok_or_else(|| Error::Invalid("truncated local IPC frame".into()))?
-        as usize;
-    if length == 0 || length > MAX_LOCAL_FRAME || frame.len() != length + 4 {
-        return Err(Error::Invalid("invalid local IPC frame length".into()));
-    }
-    serde_json::from_slice(&frame[4..]).map_err(|error| Error::Invalid(error.to_string()))
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct InstanceKey {
     pub id: u128,
@@ -456,19 +429,5 @@ mod tests {
             capability.with(|value| Ok(value.value())),
             Err(Error::Revoked)
         );
-    }
-
-    #[test]
-    fn local_v2_frames_are_bounded_and_exact() {
-        let value = serde_json::json!({"version": LOCAL_IPC_MAJOR, "method": "spm.hello"});
-        let frame = encode_local_frame(&value).unwrap();
-        assert_eq!(
-            decode_local_frame::<serde_json::Value>(&frame).unwrap(),
-            value
-        );
-        let mut trailing = frame.clone();
-        trailing.push(0);
-        assert!(decode_local_frame::<serde_json::Value>(&trailing).is_err());
-        assert!(decode_local_frame::<serde_json::Value>(&[1, 0, 0]).is_err());
     }
 }

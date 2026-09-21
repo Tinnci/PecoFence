@@ -1302,7 +1302,7 @@ impl App {
     }
 
     fn process_panel_events(&mut self) {
-        let delivered = self.panel_manager.borrow_mut().poll_events();
+        let delivered = self.panel_manager.borrow_mut().poll();
         if delivered == 0 {
             return;
         }

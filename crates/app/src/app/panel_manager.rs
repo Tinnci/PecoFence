@@ -3,7 +3,7 @@ use pecofence_core::PanelSpec;
 use pecofence_plugin_api::*;
 use pecofence_plugin_kernel::{ScopeKind, ScopeTree, ServiceKey, ServiceRegistry, TaskSupervisor};
 use std::cell::{Cell, RefCell};
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::rc::Rc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -25,6 +25,8 @@ struct InstanceRecord {
     activation: u64,
     scope: ScopeId,
     handle: PanelHandle,
+    mount_scope: Option<ScopeId>,
+    mount_key: Option<MountKey>,
     drain_started: Option<Instant>,
 }
 
@@ -35,6 +37,7 @@ pub(crate) struct PanelManager {
     scopes: ScopeTree,
     services: ServiceRegistry,
     next_activation: u64,
+    next_mount_generation: u64,
     _runtime: Arc<tokio::runtime::Runtime>,
     supervisor: Rc<RefCell<TaskSupervisor>>,
     ipc_state: Arc<PipeState>,
@@ -86,6 +89,7 @@ impl PanelManager {
             scopes,
             services,
             next_activation: 1,
+            next_mount_generation: 1,
             _runtime: runtime,
             supervisor,
             ipc_state,
@@ -94,9 +98,10 @@ impl PanelManager {
 
     pub fn register_provider(&mut self, provider: Rc<dyn PanelProvider>) -> Result<()> {
         let id = provider.descriptor().id.to_string();
-        if self.providers.insert(id, provider).is_some() {
+        if self.providers.contains_key(&id) {
             return Err(Error::Duplicate);
         }
+        self.providers.insert(id, provider);
         Ok(())
     }
 
@@ -140,8 +145,11 @@ impl PanelManager {
             self.providers.get(&spec.provider).cloned().ok_or_else(|| {
                 Error::Invalid(format!("unknown panel provider {}", spec.provider))
             })?;
-        let plugin_scope = self.scopes.create(self.scopes.root(), ScopeKind::Plugin)?;
+        let plugin_scope = self
+            .scopes
+            .create(self.scopes.root(), ScopeKind::Provider)?;
         let instance_scope = self.scopes.create(plugin_scope, ScopeKind::Instance)?;
+        let mount_scope = self.scopes.create(instance_scope, ScopeKind::Mount)?;
         let activation = self.next_activation;
         self.next_activation = self
             .next_activation
@@ -176,25 +184,46 @@ impl PanelManager {
             serde_json::to_vec(&spec.config).map_err(|error| Error::Invalid(error.to_string()))?,
         );
         let key = InstanceKey { id, activation };
-        let mut panel = provider.create(
-            context,
-            CreatePanel {
-                key,
-                config: PanelConfig {
-                    version: spec.config_version,
-                    bytes,
+        let generation = self.next_mount_generation;
+        self.next_mount_generation = self
+            .next_mount_generation
+            .checked_add(1)
+            .ok_or(Error::Exhausted)?;
+        let mount_key = MountKey {
+            instance: key,
+            generation,
+        };
+        let mut transaction = pecofence_plugin_kernel::ActivationTransaction::begin();
+        if let Err(failure) = transaction.create(|| {
+            provider.create(
+                context,
+                CreatePanel {
+                    key,
+                    config: PanelConfig {
+                        version: spec.config_version,
+                        bytes,
+                    },
                 },
-            },
-        )?;
-        panel.mount(MountContext {
-            key: MountKey {
-                instance: key,
-                generation: 1,
-            },
-            scope,
+            )
+        }) {
+            let _ = self.scopes.begin_stop(plugin_scope);
+            let _ = self.scopes.finish_dispose(plugin_scope);
+            let _ = self.scopes.remove_disposed_subtree(plugin_scope);
+            return Err(failure.into());
+        }
+        if let Err(failure) = transaction.attach_initial(Some(MountContext {
+            key: mount_key,
+            scope: self.scopes.handle(mount_scope)?,
             viewport: RectDip::default(),
             dpi: 96,
-        })?;
+        })) {
+            transaction.rollback(failure.clone());
+            let _ = self.scopes.begin_stop(plugin_scope);
+            let _ = self.scopes.finish_dispose(plugin_scope);
+            let _ = self.scopes.remove_disposed_subtree(plugin_scope);
+            return Err(failure.into());
+        }
+        let (panel, _) = transaction.commit().map_err(Error::from)?;
         let handle = PanelHandle::new(key, panel);
         self.instances.insert(
             id,
@@ -204,23 +233,149 @@ impl PanelManager {
                 activation,
                 scope: instance_scope,
                 handle: handle.clone(),
+                mount_scope: Some(mount_scope),
+                mount_key: Some(mount_key),
                 drain_started: None,
             },
         );
         Ok(handle)
     }
 
+    pub fn open_panel(&mut self, spec: &PanelSpec) -> Result<PanelHandle> {
+        self.resolve(spec)
+    }
+
+    pub fn close_panel(&mut self, id: u128, reason: StopReason) -> Result<bool> {
+        let Some(record) = self.instances.get_mut(&id) else {
+            return Ok(false);
+        };
+        if record.drain_started.is_some() {
+            return Ok(false);
+        }
+        if let Some(key) = record.mount_key.take() {
+            record.handle.unmount(key);
+        }
+        if let Some(scope) = record.mount_scope.take() {
+            let _ = self.scopes.begin_stop(scope);
+            self.supervisor.borrow().cancel_scope(scope);
+        }
+        record.handle.stop(reason);
+        self.scopes.begin_stop(record.scope)?;
+        self.supervisor.borrow().cancel_scope(record.scope);
+        record.drain_started = Some(Instant::now());
+        Ok(true)
+    }
+
+    #[allow(dead_code)]
+    pub fn attach_mount(
+        &mut self,
+        id: u128,
+        viewport: RectDip,
+        dpi: u32,
+        _presentation: Presentation,
+    ) -> Result<MountKey> {
+        let record = self.instances.get_mut(&id).ok_or(Error::Closed)?;
+        if record.mount_key.is_some() || record.drain_started.is_some() {
+            return Err(Error::Duplicate);
+        }
+        let scope = self.scopes.create(record.scope, ScopeKind::Mount)?;
+        let generation = self.next_mount_generation;
+        self.next_mount_generation = self
+            .next_mount_generation
+            .checked_add(1)
+            .ok_or(Error::Exhausted)?;
+        let key = MountKey {
+            instance: record.handle.key(),
+            generation,
+        };
+        if let Err(error) = record.handle.mount(MountContext {
+            key,
+            scope: self.scopes.handle(scope)?,
+            viewport,
+            dpi,
+        }) {
+            let _ = self.scopes.begin_stop(scope);
+            let _ = self.scopes.finish_dispose(scope);
+            let _ = self.scopes.remove_disposed_subtree(scope);
+            return Err(error);
+        }
+        record.mount_scope = Some(scope);
+        record.mount_key = Some(key);
+        Ok(key)
+    }
+
+    #[allow(dead_code)]
+    pub fn detach_mount(&mut self, id: u128) -> Result<bool> {
+        let record = self.instances.get_mut(&id).ok_or(Error::Closed)?;
+        let Some(key) = record.mount_key.take() else {
+            return Ok(false);
+        };
+        record.handle.unmount(key);
+        if let Some(scope) = record.mount_scope.take() {
+            self.scopes.begin_stop(scope)?;
+            self.supervisor.borrow().cancel_scope(scope);
+            let report = self.supervisor.borrow_mut().poll_scope(scope);
+            if report.pending == 0 && report.native_pending == 0 {
+                self.scopes.finish_dispose(scope)?;
+                self.scopes.remove_disposed_subtree(scope)?;
+            }
+        }
+        Ok(true)
+    }
+
+    #[allow(dead_code)]
+    pub fn reconcile_fences(&mut self, desired: &[PanelSpec]) -> Vec<(u128, Result<PanelHandle>)> {
+        let wanted: HashSet<_> = desired
+            .iter()
+            .map(|spec| spec.instance_id.as_u128())
+            .collect();
+        let stale: Vec<_> = self
+            .instances
+            .keys()
+            .copied()
+            .filter(|id| !wanted.contains(id))
+            .collect();
+        for id in stale {
+            let _ = self.close_panel(id, StopReason::Deleted);
+        }
+        desired
+            .iter()
+            .map(|spec| (spec.instance_id.as_u128(), self.open_panel(spec)))
+            .collect()
+    }
+
+    pub fn poll(&mut self) -> usize {
+        let delivered = self.poll_events();
+        let draining: Vec<_> = self
+            .instances
+            .iter()
+            .filter_map(|(id, record)| {
+                record
+                    .drain_started
+                    .map(|started| (*id, record.scope, started))
+            })
+            .collect();
+        for (id, scope, started) in draining {
+            let report = self.supervisor.borrow_mut().poll_scope(scope);
+            if report.pending == 0 && report.native_pending == 0 {
+                let provider_scope = self.scopes.parent(scope);
+                let _ = self.scopes.finish_dispose(scope);
+                if let Some(provider_scope) = provider_scope {
+                    let _ = self.scopes.finish_dispose(provider_scope);
+                    let _ = self.scopes.remove_disposed_subtree(provider_scope);
+                }
+                self.instances.remove(&id);
+            } else if started.elapsed() >= Duration::from_secs(5) {
+                let _ = self.scopes.local(scope).map(|scope| scope.quarantine());
+            }
+        }
+        delivered
+    }
+
     pub fn shutdown(&mut self) {
         let ids: Vec<u128> = self.instances.keys().copied().collect();
         for id in ids {
-            if let Some(mut record) = self.instances.remove(&id) {
-                record.handle.stop(StopReason::Shutdown);
-                let _ = self.scopes.stop_and_drain(
-                    record.scope,
-                    &mut self.supervisor.borrow_mut(),
-                    Instant::now() + Duration::from_secs(5),
-                );
-            }
+            let _ = self.close_panel(id, StopReason::Shutdown);
         }
     }
 
@@ -362,8 +517,13 @@ impl IpcService for PipeIpc {
         if query.endpoint != "spm.v2/read-model" {
             return Err(Error::Invalid("unsupported local endpoint".into()));
         }
-        let endpoint = pecofence_platform::named_pipe::spm_v2_endpoint()
-            .map_err(|error| Error::Backend(error.to_string()))?;
+        let endpoint = spm_contracts::v2_pipe_name(&spm_contracts::EndpointIdentity {
+            user_sid: pecofence_platform::named_pipe::current_user_sid()
+                .map_err(|error| Error::Backend(error.to_string()))?,
+            windows_session_id: pecofence_platform::named_pipe::current_windows_session_id()
+                .map_err(|error| Error::Backend(error.to_string()))?,
+        })
+        .map_err(|error| Error::Backend(error.to_string()))?;
         let subscription = self.state.token()?;
         let (sender, receiver) = mpsc::channel(16);
         let state = self.state.clone();
@@ -442,7 +602,7 @@ async fn write_frame(
     writer: &mut (impl AsyncWrite + Unpin),
     message: &serde_json::Value,
 ) -> std::io::Result<()> {
-    let frame = pecofence_plugin_api::encode_local_frame(message)
+    let frame = spm_contracts::encode_frame(message)
         .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?;
     writer.write_all(&frame).await?;
     writer.flush().await
@@ -450,7 +610,7 @@ async fn write_frame(
 
 async fn read_frame(reader: &mut (impl AsyncRead + Unpin)) -> std::io::Result<serde_json::Value> {
     let size = reader.read_u32_le().await? as usize;
-    if size == 0 || size > pecofence_plugin_api::MAX_LOCAL_FRAME {
+    if size == 0 || size > spm_contracts::MAX_FRAME_BYTES {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidData,
             "invalid v2 frame length",
@@ -460,7 +620,7 @@ async fn read_frame(reader: &mut (impl AsyncRead + Unpin)) -> std::io::Result<se
     frame.extend_from_slice(&(size as u32).to_le_bytes());
     frame.resize(size + 4, 0);
     reader.read_exact(&mut frame[4..]).await?;
-    pecofence_plugin_api::decode_local_frame(&frame)
+    spm_contracts::decode_frame(&frame)
         .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))
 }
 
@@ -501,7 +661,7 @@ async fn run_pipe_subscription(
         retry = Duration::from_millis(100);
         let (mut reader, mut writer) = tokio::io::split(pipe);
         let hello = serde_json::json!({
-            "version": LOCAL_IPC_MAJOR,
+            "version": spm_contracts::PROTOCOL_MAJOR,
             "session": session,
             "requestId": subscription.0,
             "method": "spm.hello"
@@ -519,7 +679,7 @@ async fn run_pipe_subscription(
         if hello_response
             .get("version")
             .and_then(|value| value.as_u64())
-            != Some(LOCAL_IPC_MAJOR as u64)
+            != Some(spm_contracts::PROTOCOL_MAJOR as u64)
             || hello_response
                 .get("method")
                 .and_then(|value| value.as_str())
@@ -529,7 +689,7 @@ async fn run_pipe_subscription(
             return;
         }
         let subscribe = serde_json::json!({
-            "version": LOCAL_IPC_MAJOR,
+            "version": spm_contracts::PROTOCOL_MAJOR,
             "session": session,
             "requestId": subscription.0,
             "method": "spm.panel.subscribe",
@@ -546,7 +706,7 @@ async fn run_pipe_subscription(
                     let payload = serde_json::from_slice::<serde_json::Value>(&command)
                         .unwrap_or(serde_json::Value::Null);
                     let request = serde_json::json!({
-                        "version": LOCAL_IPC_MAJOR,
+                        "version": spm_contracts::PROTOCOL_MAJOR,
                         "session": session,
                         "requestId": subscription.0,
                         "method": "spm.refresh",
@@ -556,7 +716,7 @@ async fn run_pipe_subscription(
                 }
                 response = read_frame(&mut reader) => {
                     let Ok(response) = response else { break };
-                    if response.get("version").and_then(|value| value.as_u64()) != Some(LOCAL_IPC_MAJOR as u64)
+                    if response.get("version").and_then(|value| value.as_u64()) != Some(spm_contracts::PROTOCOL_MAJOR as u64)
                         || response.get("session").and_then(|value| value.as_str()) != Some(session.as_str())
                         || response.get("method").and_then(|value| value.as_str()) != Some("spm.panel.snapshot")
                     {

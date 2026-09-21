@@ -7,8 +7,13 @@ use windows_sys::Win32::{
         Authorization::ConvertSidToStringSidW, GetTokenInformation, TOKEN_QUERY, TOKEN_USER,
         TokenUser,
     },
-    System::Threading::{GetCurrentProcess, OpenProcessToken},
+    System::Threading::{GetCurrentProcess, GetCurrentProcessId, OpenProcessToken},
 };
+
+#[link(name = "kernel32")]
+unsafe extern "system" {
+    fn ProcessIdToSessionId(process_id: u32, session_id: *mut u32) -> i32;
+}
 
 /// Returns the current process token's user SID. Mutable environment variables are not used.
 pub fn current_user_sid() -> io::Result<String> {
@@ -49,6 +54,11 @@ pub fn current_user_sid() -> io::Result<String> {
     }
 }
 
-pub fn spm_v2_endpoint() -> io::Result<String> {
-    Ok(format!(r"\\.\pipe\spm.v2.{}", current_user_sid()?))
+pub fn current_windows_session_id() -> io::Result<u32> {
+    let mut session_id = 0;
+    // SAFETY: the output pointer is valid for the duration of the call.
+    if unsafe { ProcessIdToSessionId(GetCurrentProcessId(), &mut session_id) } == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(session_id)
 }
