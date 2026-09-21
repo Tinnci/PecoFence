@@ -5,6 +5,9 @@ edition.workspace = true
 license.workspace = true
 autoexamples = false
 
+[dependencies]
+pecofence-plugin-api = { path = "../plugin-api" }
+
 [target.'cfg(windows)'.dependencies]
 pecofence-core = { path = "../core" }
 windows-core = { workspace = true }

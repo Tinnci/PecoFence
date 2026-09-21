@@ -2,15 +2,18 @@
 
 use super::*;
 use pecofence_plugin_api::{
-    Canvas, InstanceKey, LayoutInput, LayoutSnapshot, MountContext, MountKey, PanelEvent,
-    PanelInstance, Presentation, RectDip, StopReason, TextSpec,
+    Exposure, FrameInput, Grouping, InstanceKey, MountContext, MountKey, PanelEvent, PanelInstance,
+    PreparedFrame, Presentation, RectDip, StopReason,
 };
-use pecofence_render::TextFormat;
 
 #[derive(Clone)]
 pub(crate) struct PanelHandle {
     key: InstanceKey,
     panel: Rc<RefCell<Box<dyn PanelInstance>>>,
+    presentation: Rc<Cell<Presentation>>,
+    grouping: Rc<Cell<Grouping>>,
+    exposure: Rc<Cell<Exposure>>,
+    active: Rc<Cell<bool>>,
 }
 
 impl PanelHandle {
@@ -18,6 +21,10 @@ impl PanelHandle {
         Self {
             key,
             panel: Rc::new(RefCell::new(panel)),
+            presentation: Rc::new(Cell::new(Presentation::Workspace)),
+            grouping: Rc::new(Cell::new(Grouping::Single)),
+            exposure: Rc::new(Cell::new(Exposure::Desktop)),
+            active: Rc::new(Cell::new(true)),
         }
     }
 
@@ -33,7 +40,21 @@ impl PanelHandle {
         &self,
         event: PanelEvent,
     ) -> pecofence_plugin_api::Result<pecofence_plugin_api::PanelUpdate> {
-        self.panel.borrow_mut().event(event)
+        if let PanelEvent::VisibilityChanged { visible } = &event {
+            self.exposure.set(if *visible {
+                Exposure::Desktop
+            } else {
+                Exposure::Hidden
+            });
+            self.active.set(*visible);
+        }
+        let update = self.panel.borrow_mut().event(event)?;
+        for command in &update.commands {
+            if let pecofence_plugin_api::HostCommand::RequestMode(mode) = command {
+                self.set_presentation(*mode);
+            }
+        }
+        Ok(update)
     }
 
     pub(crate) fn mount(&self, context: MountContext) -> pecofence_plugin_api::Result<()> {
@@ -43,25 +64,60 @@ impl PanelHandle {
     pub(crate) fn unmount(&self, key: MountKey) {
         self.panel.borrow_mut().unmount(key);
     }
+
+    pub(crate) fn set_presentation(&self, presentation: Presentation) {
+        self.presentation.set(presentation);
+    }
+
+    pub(crate) fn presentation(&self) -> Presentation {
+        self.presentation.get()
+    }
+
+    pub(crate) fn exposure(&self) -> Exposure {
+        self.exposure.get()
+    }
+
+    pub(crate) fn set_container_state(&self, grouping: Grouping, exposure: Exposure, active: bool) {
+        self.grouping.set(grouping);
+        self.exposure.set(exposure);
+        self.active.set(active);
+    }
 }
 
 pub(super) struct PluginPanelContent {
     handle: PanelHandle,
-    layout: LayoutSnapshot,
-    pressed: Option<(u64, u64)>,
+    committed: Option<Rc<dyn PreparedFrame>>,
+    pressed: Option<(u64, Rc<dyn PreparedFrame>)>,
 }
 
 impl PluginPanelContent {
     pub fn new(handle: PanelHandle) -> Self {
         Self {
             handle,
-            layout: LayoutSnapshot::default(),
+            committed: None,
             pressed: None,
         }
     }
 
     pub fn key(&self) -> InstanceKey {
         self.handle.key()
+    }
+
+    #[allow(dead_code)]
+    pub fn set_presentation(&self, presentation: Presentation) {
+        self.handle.set_presentation(presentation);
+    }
+
+    pub fn presentation(&self) -> Presentation {
+        self.handle.presentation()
+    }
+
+    pub fn exposure(&self) -> Exposure {
+        self.handle.exposure()
+    }
+
+    pub fn set_container_state(&self, grouping: Grouping, exposure: Exposure, active: bool) {
+        self.handle.set_container_state(grouping, exposure, active);
     }
 
     pub fn draw(&mut self, surface: &Panel, dpi: u32, _theme: &Theme) -> Result<bool> {
@@ -73,19 +129,27 @@ impl PluginPanelContent {
             w: width_px as f32 / scale,
             h: height_px as f32 / scale,
         };
-        let layout = match self.handle.panel.borrow_mut().layout(LayoutInput {
+        if self.handle.exposure.get() == Exposure::Hidden || !self.handle.active.get() {
+            return Ok(false);
+        }
+        let candidate = match self.handle.panel.borrow_mut().prepare_frame(FrameInput {
             viewport,
-            mode: Presentation::Workspace,
+            presentation: self.handle.presentation.get(),
+            grouping: self.handle.grouping.get(),
+            exposure: self.handle.exposure.get(),
+            active: self.handle.active.get(),
             text_scale: 1.0,
+            theme_epoch: 0,
+            device_epoch: u64::from(dpi),
         }) {
-            Ok(layout) => layout,
+            Ok(frame) => frame,
             Err(error) => {
-                tracing::warn!(%error, "panel layout rejected");
+                tracing::warn!(%error, "panel frame preparation rejected");
                 return Ok(true);
             }
         };
-        let panel = self.handle.panel.clone();
         let mut paint_error = None;
+        let paint_frame = candidate.clone();
         let drawn = surface.draw(dpi, |session, _width, _height| {
             session.clear(ColorF {
                 r: 0.0,
@@ -93,8 +157,8 @@ impl PluginPanelContent {
                 b: 0.0,
                 a: 0.0,
             });
-            let mut canvas = Direct2dCanvas { session };
-            if let Err(error) = panel.borrow().paint(&mut canvas, &layout) {
+            let mut canvas = pecofence_render::Direct2dCanvas::new(session);
+            if let Err(error) = paint_frame.paint(&mut canvas) {
                 paint_error = Some(error);
             }
             Ok(())
@@ -102,70 +166,19 @@ impl PluginPanelContent {
         if let Some(error) = paint_error {
             tracing::warn!(%error, "panel paint rejected");
         } else if drawn {
-            self.layout = layout;
+            self.committed = Some(candidate);
         }
         Ok(drawn)
     }
 
     fn action_at(&self, x: f32, y: f32) -> Option<u64> {
-        self.layout
-            .hits
+        self.committed
+            .as_ref()?
+            .hit_tree()
             .iter()
             .rev()
             .find(|node| node.rect.contains(x, y))
             .map(|node| node.action)
-    }
-}
-
-struct Direct2dCanvas<'a> {
-    session: &'a pecofence_render::DrawingSession<'a>,
-}
-
-impl Canvas for Direct2dCanvas<'_> {
-    fn fill(&mut self, rect: RectDip, rgba: [f32; 4]) -> pecofence_plugin_api::Result<()> {
-        let brush = self
-            .session
-            .create_solid_brush(ColorF {
-                r: rgba[0],
-                g: rgba[1],
-                b: rgba[2],
-                a: rgba[3],
-            })
-            .map_err(|error| pecofence_plugin_api::Error::Backend(error.to_string()))?;
-        self.session
-            .fill_rect(&Rect::from_xywh(rect.x, rect.y, rect.w, rect.h), &brush);
-        Ok(())
-    }
-
-    fn text(
-        &mut self,
-        rect: RectDip,
-        text: &TextSpec,
-        rgba: [f32; 4],
-    ) -> pecofence_plugin_api::Result<()> {
-        let brush = self
-            .session
-            .create_solid_brush(ColorF {
-                r: rgba[0],
-                g: rgba[1],
-                b: rgba[2],
-                a: rgba[3],
-            })
-            .map_err(|error| pecofence_plugin_api::Error::Backend(error.to_string()))?;
-        let format = TextFormat::new("Segoe UI Variable", text.size_dip)
-            .map_err(|error| pecofence_plugin_api::Error::Backend(error.to_string()))?;
-        self.session.draw_text(
-            &text.text,
-            &format,
-            &Rect::from_xywh(
-                rect.x + 6.0,
-                rect.y + 4.0,
-                (rect.w - 12.0).max(0.0),
-                (rect.h - 8.0).max(0.0),
-            ),
-            &brush,
-        );
-        Ok(())
     }
 }
 
@@ -180,12 +193,18 @@ pub(super) fn handle_message(
     view.plugin_panel.as_ref()?;
     if message == msg::WM_GETMINMAXINFO {
         let scale = view.scale();
+        let presentation = view
+            .plugin_panel
+            .as_ref()
+            .map(PluginPanelContent::presentation)
+            .unwrap_or_default();
+        let (minimum_width, minimum_height) = presentation.minimum_size(1.0);
         // SAFETY: this branch is only reached for WM_GETMINMAXINFO.
         unsafe {
             window::minmaxinfo_set_min_track(
                 lparam,
-                (480.0 * scale).round() as i32,
-                view.title_h_px() + (520.0 * scale).round() as i32,
+                (minimum_width * scale).round() as i32,
+                view.title_h_px() + (minimum_height * scale).round() as i32,
             );
         }
         return Some(0);
@@ -196,9 +215,12 @@ pub(super) fn handle_message(
     let panel = view.plugin_panel.as_mut()?;
     match message {
         msg::WM_LBUTTONDOWN if y >= 0.0 => {
-            panel.pressed = panel
-                .action_at(x, y)
-                .map(|action| (action, panel.layout.revision));
+            panel.pressed = panel.action_at(x, y).and_then(|action| {
+                panel
+                    .committed
+                    .as_ref()
+                    .map(|frame| (action, frame.clone()))
+            });
             let capture = panel.pressed.is_some();
             let hwnd = view.hwnd;
             drop(guard);
@@ -209,9 +231,19 @@ pub(super) fn handle_message(
         }
         msg::WM_LBUTTONUP if y >= 0.0 || panel.pressed.is_some() => {
             let pressed = panel.pressed.take();
-            let invoke = pressed.and_then(|(action, revision)| {
-                (panel.layout.revision == revision && panel.action_at(x, y) == Some(action))
-                    .then_some((action, revision))
+            let invoke = pressed.and_then(|(action, down_frame)| {
+                let down_identity = down_frame.identity();
+                let current_identity = panel.committed.as_ref()?.identity();
+                (down_identity.mount_key == current_identity.mount_key
+                    && down_identity.layout_revision == current_identity.layout_revision
+                    && down_frame
+                        .hit_tree()
+                        .iter()
+                        .rev()
+                        .find(|node| node.rect.contains(x, y))
+                        .map(|node| node.action)
+                        == Some(action))
+                .then_some((action, down_identity.layout_revision))
             });
             if let Some((action, layout_revision)) = invoke {
                 if let Err(error) = panel.handle.panel.borrow_mut().event(PanelEvent::Invoke {

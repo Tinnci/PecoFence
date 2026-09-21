@@ -100,11 +100,8 @@ mod tests {
         fn event(&mut self, _event: PanelEvent) -> Result<PanelUpdate> {
             Ok(PanelUpdate::default())
         }
-        fn layout(&mut self, _input: LayoutInput) -> Result<LayoutSnapshot> {
-            Ok(LayoutSnapshot::default())
-        }
-        fn paint(&self, _canvas: &mut dyn Canvas, _layout: &LayoutSnapshot) -> Result<()> {
-            Ok(())
+        fn prepare_frame(&mut self, _input: FrameInput) -> Result<Rc<dyn PreparedFrame>> {
+            Err(Error::Backend("not reached".into()))
         }
         fn unmount(&mut self, _key: MountKey) {}
         fn begin_stop(&mut self, _reason: StopReason) {

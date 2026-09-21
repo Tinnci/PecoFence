@@ -274,6 +274,28 @@ impl PanelManager {
         self.resolve(spec)
     }
 
+    #[allow(dead_code)]
+    pub fn set_presentation(&mut self, id: u128, presentation: Presentation) -> Result<()> {
+        let record = self
+            .instances
+            .get(&id)
+            .ok_or_else(|| Error::Invalid("unknown panel instance".into()))?;
+        record.handle.set_presentation(presentation);
+        Ok(())
+    }
+
+    #[allow(dead_code)]
+    pub fn set_exposure(&mut self, id: u128, exposure: Exposure) -> Result<()> {
+        let record = self
+            .instances
+            .get(&id)
+            .ok_or_else(|| Error::Invalid("unknown panel instance".into()))?;
+        record
+            .handle
+            .set_container_state(Grouping::Single, exposure, exposure != Exposure::Hidden);
+        Ok(())
+    }
+
     pub fn close_panel(&mut self, id: u128, reason: StopReason) -> Result<bool> {
         let Some(record) = self.instances.get_mut(&id) else {
             return Ok(false);

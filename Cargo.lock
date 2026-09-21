@@ -288,6 +288,7 @@ name = "pecofence-plugin-spm"
 version = "0.0.3"
 dependencies = [
  "pecofence-plugin-api",
+ "pecofence-render",
  "serde",
  "serde_json",
  "spm-contracts",
@@ -300,6 +301,7 @@ dependencies = [
  "bezier_easing",
  "pecofence-core",
  "pecofence-platform",
+ "pecofence-plugin-api",
  "tracing",
  "windows-canvas",
  "windows-collections",
