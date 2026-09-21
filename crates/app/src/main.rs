@@ -13,6 +13,7 @@ mod peek;
 mod rename;
 mod settings_host;
 mod shadow;
+mod spm_transport;
 mod state;
 
 use pecofence_platform::com::OleGuard;

@@ -66,12 +66,6 @@ impl SnapshotCursor {
         let _ = subscription;
         if envelope.daemon_session != Some(snapshot.daemon_session)
             || envelope.revision != Some(snapshot.revision)
-            || self
-                .accepted_session
-                .is_some_and(|session| session != snapshot.daemon_session)
-            || self
-                .revision
-                .is_some_and(|revision| snapshot.revision <= revision)
             || self.query.as_ref().is_some_and(|query| {
                 query.project_id != snapshot.project_id
                     || query.delivery_scope_id != snapshot.delivery_scope_id
@@ -79,7 +73,16 @@ impl SnapshotCursor {
         {
             return false;
         }
-        self.accepted_session.get_or_insert(snapshot.daemon_session);
+        if self.accepted_session != Some(snapshot.daemon_session) {
+            self.accepted_session = Some(snapshot.daemon_session);
+            self.revision = None;
+        }
+        if self
+            .revision
+            .is_some_and(|revision| snapshot.revision <= revision)
+        {
+            return false;
+        }
         self.revision = Some(snapshot.revision);
         true
     }
@@ -669,7 +672,7 @@ mod tests {
     }
 
     #[test]
-    fn snapshot_revision_is_monotone_within_a_daemon_session() {
+    fn snapshot_revision_is_monotone_and_resets_for_a_new_daemon_session() {
         let session = DaemonSessionId::new();
         let query = ProjectQuery {
             project_id: ProjectId::new("project-atlas").unwrap(),
@@ -684,6 +687,8 @@ mod tests {
         assert!(cursor.accept(&current));
         assert!(!cursor.accept(&current));
         assert!(!cursor.accept(&envelope(snapshot(session, 0))));
-        assert!(!cursor.accept(&envelope(snapshot(DaemonSessionId::new(), 2))));
+        let restarted = DaemonSessionId::new();
+        assert!(cursor.accept(&envelope(snapshot(restarted, 1))));
+        assert!(!cursor.accept(&envelope(snapshot(restarted, 1))));
     }
 }
