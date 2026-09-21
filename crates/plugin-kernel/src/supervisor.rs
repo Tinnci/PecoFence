@@ -212,6 +212,21 @@ impl TaskSupervisor {
         false
     }
 
+    pub fn cancel_owned(&self, owner: ScopeId, token: Token) -> Result<()> {
+        if self
+            .tasks
+            .get(&token)
+            .is_some_and(|task| task.owner != owner)
+            || self
+                .native
+                .get(&token)
+                .is_some_and(|native| native.owner != owner)
+        {
+            return Err(Error::Revoked);
+        }
+        self.cancel(token).then_some(()).ok_or(Error::Revoked)
+    }
+
     fn collect_completions(&mut self) {
         while let Ok(completion) = self.completions_rx.try_recv() {
             self.completed.insert(completion);
@@ -243,10 +258,8 @@ impl TaskSupervisor {
         let ready: Vec<Token> = self
             .tasks
             .iter()
-            .filter(|(token, task)| {
-                task.owner == owner
-                    && self.completed.contains(&(**token, task.generation))
-                    && task.join.as_ref().is_some_and(join_finished)
+            .filter(|(_token, task)| {
+                task.owner == owner && task.join.as_ref().is_some_and(join_finished)
             })
             .map(|(token, _)| *token)
             .collect();

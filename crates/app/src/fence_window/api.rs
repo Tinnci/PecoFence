@@ -486,7 +486,7 @@ impl FenceWindow {
     pub fn set_content(&self, content: &pecofence_core::FenceContentSpec) {
         let panel = match content {
             pecofence_core::FenceContentSpec::Panel { panel } => {
-                match self.panel_manager.borrow_mut().resolve(panel) {
+                match self.panel_manager.borrow_mut().open_panel(panel) {
                     Ok(panel) => Some(super::plugin_panel::PluginPanelContent::new(panel)),
                     Err(error) => {
                         tracing::warn!(%error, provider = %panel.provider, "panel activation failed");

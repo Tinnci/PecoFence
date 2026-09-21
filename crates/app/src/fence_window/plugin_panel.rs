@@ -2,8 +2,8 @@
 
 use super::*;
 use pecofence_plugin_api::{
-    Canvas, InstanceKey, LayoutInput, LayoutSnapshot, PanelEvent, PanelInstance, Presentation,
-    RectDip, StopReason, TextSpec,
+    Canvas, InstanceKey, LayoutInput, LayoutSnapshot, MountContext, MountKey, PanelEvent,
+    PanelInstance, Presentation, RectDip, StopReason, TextSpec,
 };
 use pecofence_render::TextFormat;
 
@@ -34,6 +34,14 @@ impl PanelHandle {
         event: PanelEvent,
     ) -> pecofence_plugin_api::Result<pecofence_plugin_api::PanelUpdate> {
         self.panel.borrow_mut().event(event)
+    }
+
+    pub(crate) fn mount(&self, context: MountContext) -> pecofence_plugin_api::Result<()> {
+        self.panel.borrow_mut().mount(context)
+    }
+
+    pub(crate) fn unmount(&self, key: MountKey) {
+        self.panel.borrow_mut().unmount(key);
     }
 }
 

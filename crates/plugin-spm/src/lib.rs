@@ -5,6 +5,12 @@
 
 use pecofence_plugin_api::*;
 use serde::{Deserialize, Serialize};
+use spm_contracts::{
+    Body, BuildBriefingRequest, DaemonSessionId, DeliveryScopeId, DetailLevel, Envelope, Event,
+    GateStatus, IdempotencyKey, PROTOCOL_MAJOR, PROTOCOL_MINOR, ProjectId, ProjectQuery,
+    ProjectSnapshot, RefreshRequest, Request, RequestId, ResolveNavigationRequest, Revision,
+    ViewKind,
+};
 use std::sync::Arc;
 
 pub const PROVIDER_ID: &str = "pecofence.spm";
@@ -14,45 +20,8 @@ const ACTION_OPEN_BASE: u64 = 1_000;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SpmConfig {
-    pub project: String,
-    pub delivery_scope: String,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SpmSnapshot {
-    pub daemon_session: String,
-    pub revision: u64,
-    pub project: String,
-    pub delivery_scope: String,
-    pub next_milestone: String,
-    pub gate_status: String,
-    pub unsatisfied: u32,
-    pub unknown: u32,
-    pub severe_open: u32,
-    pub pending_verification: u32,
-    pub customer_pending: u32,
-    pub freshness: String,
-    pub briefing: String,
-    #[serde(default)]
-    pub work: Vec<WorkItem>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct WorkItem {
-    pub id: String,
-    pub title: String,
-    pub owner: String,
-    pub due: String,
-    pub next_step: String,
-    #[serde(default)]
-    pub targets: Vec<NavigationTarget>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct NavigationTarget {
-    pub system: String,
-    pub https_uri: String,
+    pub project_id: ProjectId,
+    pub delivery_scope_id: DeliveryScopeId,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -73,25 +42,73 @@ pub struct PanelView {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct SnapshotCursor {
-    session: Option<String>,
-    revision: u64,
+    accepted_session: Option<DaemonSessionId>,
+    query: Option<ProjectQuery>,
+    revision: Option<Revision>,
 }
 
 impl SnapshotCursor {
-    pub fn accept(&mut self, snapshot: &SpmSnapshot) -> bool {
-        if self.session.as_deref() == Some(&snapshot.daemon_session)
-            && snapshot.revision <= self.revision
+    pub fn for_query(query: ProjectQuery) -> Self {
+        Self {
+            accepted_session: None,
+            query: Some(query),
+            revision: None,
+        }
+    }
+
+    pub fn accept(&mut self, envelope: &Envelope) -> bool {
+        let Body::Event(Event::Snapshot(snapshot)) = &envelope.body else {
+            return false;
+        };
+        let Some(subscription) = envelope.subscription_id else {
+            return false;
+        };
+        let _ = subscription;
+        if envelope.daemon_session != Some(snapshot.daemon_session)
+            || envelope.revision != Some(snapshot.revision)
+            || self
+                .accepted_session
+                .is_some_and(|session| session != snapshot.daemon_session)
+            || self
+                .revision
+                .is_some_and(|revision| snapshot.revision <= revision)
+            || self.query.as_ref().is_some_and(|query| {
+                query.project_id != snapshot.project_id
+                    || query.delivery_scope_id != snapshot.delivery_scope_id
+            })
         {
             return false;
         }
-        self.session = Some(snapshot.daemon_session.clone());
-        self.revision = snapshot.revision;
+        self.accepted_session.get_or_insert(snapshot.daemon_session);
+        self.revision = Some(snapshot.revision);
         true
+    }
+
+    pub fn accepted_session(&self) -> Option<DaemonSessionId> {
+        self.accepted_session
     }
 }
 
+pub fn encode_request(envelope: &Envelope) -> Result<Arc<[u8]>> {
+    envelope
+        .validate(spm_contracts::Direction::ClientToServer)
+        .map_err(|error| Error::Invalid(error.to_string()))?;
+    serde_json::to_vec(envelope)
+        .map(Arc::from)
+        .map_err(|error| Error::Invalid(error.to_string()))
+}
+
+pub fn decode_event(bytes: &[u8]) -> Result<Envelope> {
+    let envelope: Envelope =
+        serde_json::from_slice(bytes).map_err(|error| Error::Invalid(error.to_string()))?;
+    envelope
+        .validate(spm_contracts::Direction::ServerToClient)
+        .map_err(|error| Error::Invalid(error.to_string()))?;
+    Ok(envelope)
+}
+
 /// Builds presentation data solely from a read-model snapshot and viewport.
-pub fn build_view(snapshot: Option<&SpmSnapshot>, viewport: RectDip) -> PanelView {
+pub fn build_view(snapshot: Option<&ProjectSnapshot>, viewport: RectDip) -> PanelView {
     let mut nodes = Vec::new();
     let panel = [0.125, 0.149, 0.188, 1.0];
     let subtle = [0.165, 0.2, 0.251, 1.0];
@@ -158,7 +175,7 @@ pub fn build_view(snapshot: Option<&SpmSnapshot>, viewport: RectDip) -> PanelVie
             h: 32.0,
         },
         "heading",
-        format!("{} · {}", snapshot.project, snapshot.delivery_scope),
+        format!("{} · {}", snapshot.project_id, snapshot.delivery_scope_id),
         None,
         None,
         primary,
@@ -174,7 +191,14 @@ pub fn build_view(snapshot: Option<&SpmSnapshot>, viewport: RectDip) -> PanelVie
         "status",
         format!(
             "{} · {} · 未满足 {} · 未知 {}",
-            snapshot.next_milestone, snapshot.gate_status, snapshot.unsatisfied, snapshot.unknown
+            snapshot
+                .next_milestone
+                .as_ref()
+                .map(|item| item.name.as_str())
+                .unwrap_or("—"),
+            gate_status_label(snapshot.overall_gate.state),
+            snapshot.overall_gate.unsatisfied_count,
+            snapshot.overall_gate.unknown_count
         ),
         None,
         Some(subtle),
@@ -182,10 +206,10 @@ pub fn build_view(snapshot: Option<&SpmSnapshot>, viewport: RectDip) -> PanelVie
     );
     let metric_width = ((viewport.w - 68.0) / 4.0).max(80.0);
     let metrics = [
-        ("条件未满足", snapshot.unsatisfied),
-        ("严重缺陷", snapshot.severe_open),
-        ("待验证", snapshot.pending_verification),
-        ("客户待验收", snapshot.customer_pending),
+        ("条件未满足", snapshot.overall_gate.unsatisfied_count),
+        ("严重缺陷", snapshot.work_summary.severe_open),
+        ("待验证", snapshot.work_summary.pending_verification),
+        ("客户待验收", snapshot.customer_obligations.pending),
     ];
     for (index, (label, value)) in metrics.into_iter().enumerate() {
         push(
@@ -212,7 +236,7 @@ pub fn build_view(snapshot: Option<&SpmSnapshot>, viewport: RectDip) -> PanelVie
             h: 28.0,
         },
         "status",
-        snapshot.freshness.clone(),
+        format!("数据时间 {}", snapshot.computed_at.to_rfc3339()),
         None,
         None,
         secondary,
@@ -234,9 +258,9 @@ pub fn build_view(snapshot: Option<&SpmSnapshot>, viewport: RectDip) -> PanelVie
     let row_top = 204.0;
     let row_height = 58.0;
     let visible = ((viewport.h - row_top - 52.0).max(0.0) / row_height).floor() as usize;
-    for (index, item) in snapshot.work.iter().take(visible).enumerate() {
+    for (index, item) in snapshot.preview_items.iter().take(visible).enumerate() {
         let y = row_top + index as f32 * row_height;
-        let action = (!item.targets.is_empty()).then_some(ACTION_OPEN_BASE + index as u64);
+        let action = (!item.source_refs.is_empty()).then_some(ACTION_OPEN_BASE + index as u64);
         push(
             100 + index as u64,
             RectDip {
@@ -248,7 +272,13 @@ pub fn build_view(snapshot: Option<&SpmSnapshot>, viewport: RectDip) -> PanelVie
             "listitem",
             format!(
                 "{} · {} · {}\n{} · {}",
-                item.id, item.owner, item.due, item.title, item.next_step
+                item.record_id,
+                item.owner.as_deref().unwrap_or("—"),
+                item.due_at
+                    .map(|value| value.to_rfc3339())
+                    .unwrap_or_else(|| "—".into()),
+                item.title,
+                item.next_step.as_deref().unwrap_or("—")
             ),
             action,
             Some(subtle),
@@ -270,6 +300,15 @@ pub fn build_view(snapshot: Option<&SpmSnapshot>, viewport: RectDip) -> PanelVie
         accent,
     );
     PanelView { nodes }
+}
+
+fn gate_status_label(status: GateStatus) -> &'static str {
+    match status {
+        GateStatus::Satisfied => "已满足",
+        GateStatus::Unsatisfied => "未满足",
+        GateStatus::Unknown => "未知",
+        GateStatus::NotApplicable => "不适用",
+    }
 }
 
 pub fn layout_snapshot(view: &PanelView, revision: u64) -> LayoutSnapshot {
@@ -317,24 +356,19 @@ impl PanelProvider for SpmPlugin {
         ProviderDescriptor {
             id: PROVIDER_ID,
             api_major: 1,
-            config_major: 1,
+            config_major: 2,
             required_services: &["render", "theme", "desktop", "ipc", "storage"],
         }
     }
 
     fn validate(&self, config: &PanelConfig) -> Result<()> {
-        if config.version != 1 {
+        if config.version != 2 {
             return Err(Error::Invalid(
                 "unsupported SPM panel config version".into(),
             ));
         }
-        let parsed: SpmConfig = serde_json::from_slice(&config.bytes)
+        let _parsed: SpmConfig = serde_json::from_slice(&config.bytes)
             .map_err(|error| Error::Invalid(error.to_string()))?;
-        if parsed.project.trim().is_empty() || parsed.delivery_scope.trim().is_empty() {
-            return Err(Error::Invalid(
-                "project and delivery scope are required".into(),
-            ));
-        }
         Ok(())
     }
 
@@ -342,9 +376,20 @@ impl PanelProvider for SpmPlugin {
         self.validate(&input.config)?;
         let config: SpmConfig = serde_json::from_slice(&input.config.bytes)
             .map_err(|error| Error::Invalid(error.to_string()))?;
+        let project_query = ProjectQuery {
+            project_id: config.project_id.clone(),
+            delivery_scope_id: config.delivery_scope_id.clone(),
+            view: ViewKind::Summary,
+            filter: None,
+            detail_level: DetailLevel::Standard,
+            sort: Vec::new(),
+        };
         let query = Query {
             endpoint: "spm.v2/read-model".into(),
-            payload: Arc::from(input.config.bytes.as_ref()),
+            payload: Arc::from(
+                serde_json::to_vec(&project_query)
+                    .map_err(|error| Error::Invalid(error.to_string()))?,
+            ),
         };
         let subscription = ctx.ipc.with(|ipc| ipc.subscribe(&ctx.scope, query))?;
         Ok(Box::new(SpmPanel {
@@ -354,7 +399,7 @@ impl PanelProvider for SpmPlugin {
             subscription,
             mount: None,
             snapshot: None,
-            snapshot_cursor: SnapshotCursor::default(),
+            snapshot_cursor: SnapshotCursor::for_query(project_query),
             view: PanelView::default(),
             layout: LayoutSnapshot::default(),
             layout_revision: 0,
@@ -369,7 +414,7 @@ pub struct SpmPanel {
     config: SpmConfig,
     subscription: Token,
     mount: Option<MountKey>,
-    snapshot: Option<SpmSnapshot>,
+    snapshot: Option<ProjectSnapshot>,
     snapshot_cursor: SnapshotCursor,
     view: PanelView,
     layout: LayoutSnapshot,
@@ -395,11 +440,13 @@ impl PanelInstance for SpmPanel {
                 subscription,
                 bytes,
             } if subscription == self.subscription => {
-                let snapshot: SpmSnapshot = serde_json::from_slice(&bytes)
-                    .map_err(|error| Error::Invalid(error.to_string()))?;
-                if !self.snapshot_cursor.accept(&snapshot) {
+                let envelope = decode_event(&bytes)?;
+                if !self.snapshot_cursor.accept(&envelope) {
                     return Ok(PanelUpdate::default());
                 }
+                let Body::Event(Event::Snapshot(snapshot)) = envelope.body else {
+                    return Ok(PanelUpdate::default());
+                };
                 self.snapshot = Some(snapshot);
                 Ok(PanelUpdate {
                     commands: vec![HostCommand::Invalidate],
@@ -411,22 +458,27 @@ impl PanelInstance for SpmPanel {
                 layout_revision,
             } if layout_revision == self.layout.revision => {
                 if action == ACTION_REFRESH {
-                    let payload = Arc::from(
-                        format!(
-                            "{{\"project\":{:?},\"deliveryScope\":{:?}}}",
-                            self.config.project, self.config.delivery_scope
-                        )
-                        .into_bytes(),
-                    );
+                    let payload = self.action_request(Request::Refresh(RefreshRequest {
+                        project_id: self.config.project_id.clone(),
+                        delivery_scope_id: self.config.delivery_scope_id.clone(),
+                        idempotency_key: IdempotencyKey::new(),
+                    }))?;
                     self.ctx
                         .ipc
                         .with(|ipc| ipc.send(&self.ctx.scope, payload))?;
                 } else if action == ACTION_COPY_BRIEFING {
-                    if let (Some(clipboard), Some(snapshot)) = (&self.ctx.clipboard, &self.snapshot)
-                    {
-                        clipboard.with(|service| {
-                            service.write_text(&self.ctx.scope, snapshot.briefing.clone())
-                        })?;
+                    if let Some(snapshot) = &self.snapshot {
+                        let payload =
+                            self.action_request(Request::BuildBriefing(BuildBriefingRequest {
+                                project_id: snapshot.project_id.clone(),
+                                delivery_scope_id: snapshot.delivery_scope_id.clone(),
+                                revision: snapshot.revision,
+                                locale: "zh-CN".into(),
+                                timezone: snapshot.project_timezone.clone(),
+                            }))?;
+                        self.ctx
+                            .ipc
+                            .with(|ipc| ipc.send(&self.ctx.scope, payload))?;
                     }
                 } else if let Some(index) = action
                     .checked_sub(ACTION_OPEN_BASE)
@@ -434,19 +486,20 @@ impl PanelInstance for SpmPanel {
                     && let Some(target) = self
                         .snapshot
                         .as_ref()
-                        .and_then(|snapshot| snapshot.work.get(index))
-                        .and_then(|item| item.targets.first())
-                    && let Some(navigation) = &self.ctx.navigation
+                        .and_then(|snapshot| snapshot.preview_items.get(index))
+                        .and_then(|item| item.source_refs.first())
                 {
-                    navigation.with(|service| {
-                        service.open(
-                            &self.ctx.scope,
-                            ExternalTarget {
-                                system: target.system.clone(),
-                                https_uri: target.https_uri.clone(),
+                    if let Some(snapshot) = &self.snapshot {
+                        let payload = self.action_request(Request::ResolveNavigation(
+                            ResolveNavigationRequest {
+                                source: target.clone(),
+                                revision: snapshot.revision,
                             },
-                        )
-                    })?;
+                        ))?;
+                        self.ctx
+                            .ipc
+                            .with(|ipc| ipc.send(&self.ctx.scope, payload))?;
+                    }
                 }
                 Ok(PanelUpdate {
                     commands: vec![HostCommand::Invalidate],
@@ -503,33 +556,98 @@ impl PanelInstance for SpmPanel {
     }
 }
 
+impl SpmPanel {
+    fn action_request(&self, request: Request) -> Result<Arc<[u8]>> {
+        let daemon_session = self
+            .snapshot_cursor
+            .accepted_session()
+            .ok_or(Error::Revoked)?;
+        encode_request(&Envelope {
+            protocol_major: PROTOCOL_MAJOR,
+            protocol_minor: PROTOCOL_MINOR,
+            daemon_session: Some(daemon_session),
+            request_id: Some(RequestId::new()),
+            subscription_id: None,
+            revision: None,
+            body: Body::Request(request),
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use spm_contracts::*;
 
-    fn snapshot() -> SpmSnapshot {
-        SpmSnapshot {
-            daemon_session: "test".into(),
-            revision: 1,
-            project: "Atlas".into(),
-            delivery_scope: "EU".into(),
-            next_milestone: "TR5".into(),
-            gate_status: "Unknown".into(),
-            unsatisfied: 2,
-            unknown: 1,
-            severe_open: 5,
-            pending_verification: 11,
-            customer_pending: 3,
-            freshness: "Jira 09:20 · Gerrit 覆盖未知".into(),
-            briefing: "brief".into(),
-            work: vec![WorkItem {
-                id: "C-104".into(),
+    fn snapshot(session: DaemonSessionId, revision: u64) -> ProjectSnapshot {
+        ProjectSnapshot {
+            project_id: ProjectId::new("project-atlas").unwrap(),
+            delivery_scope_id: DeliveryScopeId::new("scope-eu").unwrap(),
+            baseline_id: Some(BaselineId::new("build-7").unwrap()),
+            policy_revision: 1,
+            daemon_session: session,
+            revision: Revision(revision),
+            computed_at: "2026-09-21T01:20:00Z".parse().unwrap(),
+            project_timezone: "Asia/Shanghai".into(),
+            freshness_ttl_secs: 300,
+            sources: vec![],
+            overall_gate: OverallGate {
+                state: GateStatus::Unsatisfied,
+                unsatisfied_count: 2,
+                unknown_count: 1,
+                applicable_count: 3,
+            },
+            gates: vec![],
+            next_milestone: Some(MilestoneSummary {
+                id: "tr5".into(),
+                name: "TR5".into(),
+                due_at: None,
+            }),
+            work_summary: WorkSummary {
+                total: 1,
+                severe_open: 5,
+                pending_verification: 11,
+            },
+            preview_items: vec![WorkItem {
+                record_id: RecordId::new("C-104").unwrap(),
+                kind: WorkItemKind::Obligation,
                 title: "确认验收".into(),
-                owner: "Owner".into(),
-                due: "09-25".into(),
-                next_step: "确认结果".into(),
-                targets: vec![],
+                owner: Some("Owner".into()),
+                due_at: None,
+                next_step: Some("确认结果".into()),
+                source_refs: vec![SourceRef {
+                    system: SourceSystem::Jira,
+                    tenant: "main".into(),
+                    project: "ATLAS".into(),
+                    record_kind: "issue".into(),
+                    record_id: "C-104".into(),
+                }],
+                relation_state: RelationState::Confirmed,
             }],
+            customer_obligations: CustomerObligationSummary {
+                total: 3,
+                accepted: 0,
+                pending: 3,
+            },
+            verification: VerificationSummary::default(),
+            merge: MergeSummary::default(),
+            trend: TrendSummary {
+                basis: TrendBasis::LiveScope,
+                points: vec![],
+                has_plan_line: false,
+            },
+        }
+    }
+
+    fn envelope(snapshot: ProjectSnapshot) -> Envelope {
+        Envelope {
+            protocol_major: PROTOCOL_MAJOR,
+            protocol_minor: PROTOCOL_MINOR,
+            daemon_session: Some(snapshot.daemon_session),
+            request_id: None,
+            subscription_id: Some(SubscriptionId::new()),
+            revision: Some(snapshot.revision),
+            body: Body::Event(Event::Snapshot(snapshot)),
         }
     }
 
@@ -541,8 +659,9 @@ mod tests {
             w: 1120.0,
             h: 760.0,
         };
-        let a = build_view(Some(&snapshot()), viewport);
-        let b = build_view(Some(&snapshot()), viewport);
+        let data = snapshot(DaemonSessionId::new(), 1);
+        let a = build_view(Some(&data), viewport);
+        let b = build_view(Some(&data), viewport);
         assert_eq!(a, b);
         let layout = layout_snapshot(&a, 4);
         assert_eq!(hit_test(&layout, 1020.0, 176.0), Some(ACTION_REFRESH));
@@ -551,13 +670,20 @@ mod tests {
 
     #[test]
     fn snapshot_revision_is_monotone_within_a_daemon_session() {
-        let mut cursor = SnapshotCursor::default();
-        let mut current = snapshot();
+        let session = DaemonSessionId::new();
+        let query = ProjectQuery {
+            project_id: ProjectId::new("project-atlas").unwrap(),
+            delivery_scope_id: DeliveryScopeId::new("scope-eu").unwrap(),
+            view: ViewKind::Summary,
+            filter: None,
+            detail_level: DetailLevel::Standard,
+            sort: vec![],
+        };
+        let mut cursor = SnapshotCursor::for_query(query);
+        let current = envelope(snapshot(session, 1));
         assert!(cursor.accept(&current));
         assert!(!cursor.accept(&current));
-        current.revision = 0;
-        assert!(!cursor.accept(&current));
-        current.daemon_session = "restarted".into();
-        assert!(cursor.accept(&current));
+        assert!(!cursor.accept(&envelope(snapshot(session, 0))));
+        assert!(!cursor.accept(&envelope(snapshot(DaemonSessionId::new(), 2))));
     }
 }

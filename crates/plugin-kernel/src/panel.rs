@@ -20,9 +20,10 @@ pub struct PanelManager {
 impl PanelManager {
     pub fn register_provider(&mut self, provider: Rc<dyn PanelProvider>) -> Result<(), Error> {
         let id = provider.descriptor().id.to_string();
-        if self.providers.insert(id, provider).is_some() {
+        if self.providers.contains_key(&id) {
             return Err(Error::Duplicate);
         }
+        self.providers.insert(id, provider);
         Ok(())
     }
 
