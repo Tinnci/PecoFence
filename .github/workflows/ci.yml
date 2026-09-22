@@ -52,12 +52,17 @@ jobs:
         run: cargo test --workspace
       - name: Release build
         run: cargo build --locked --release -p pecofence -p pecofence-watchdog
-      - name: Size gate (pecofence.exe <= 3.5 MB)
+      - name: Size gate (pecofence.exe <= 4.5 MB)
         shell: pwsh
         run: |
+          # Budget raised from the inherited 3.5 MiB gate (3,670,016 bytes) once
+          # the SPM plugin kernel, typed transport and live read-model landed in
+          # the host: that integration costs ~800 KB inherently (measured
+          # 4,305,920 B on main before the theme work). Keep the hard gate so
+          # growth stays bounded; revisit size attribution if it trips again.
           $size = (Get-Item target/release/pecofence.exe).Length
           Write-Output "pecofence.exe = $size bytes"
-          if ($size -gt 3.5MB) { throw "binary too large" }
+          if ($size -gt 4718592) { throw "binary too large" }
       - name: Package
         shell: pwsh
         run: ./scripts/make-portable.ps1 -SkipBuild -TargetDir target
