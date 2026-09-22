@@ -507,12 +507,15 @@ impl ThemeHost {
 
     /// Re-derive the snapshot from the fence window's live `Theme`. The epoch
     /// (and therefore the published revision) advances only when the derived
-    /// tokens actually change, so per-frame syncs stay free.
+    /// tokens actually change, so per-frame syncs stay free. Token comparison
+    /// deliberately ignores the revision field: it is bookkeeping, not a token.
     pub(crate) fn sync(&self, theme: &pecofence_render::Theme) {
-        let next = theme_snapshot_for(theme.mode, self.epoch() + 1);
+        let candidate = theme_snapshot_for(theme.mode, 0);
         let mut guard = self.current.lock().expect("theme mutex");
-        if **guard != next {
-            self.epoch.fetch_add(1, Ordering::AcqRel);
+        if !same_tokens(&guard, &candidate) {
+            let revision = self.epoch.fetch_add(1, Ordering::AcqRel) + 1;
+            let mut next = candidate;
+            next.revision = revision;
             *guard = Arc::new(next);
         }
     }
@@ -563,6 +566,22 @@ fn theme_snapshot_for(mode: pecofence_render::ThemeMode, revision: u64) -> Theme
             info: [0.0, 0.373, 0.722, 1.0],
         },
     }
+}
+
+/// Token equality excluding the revision bookkeeping field.
+fn same_tokens(a: &ThemeSnapshot, b: &ThemeSnapshot) -> bool {
+    a.high_contrast == b.high_contrast
+        && a.text_primary == b.text_primary
+        && a.text_secondary == b.text_secondary
+        && a.surface_panel == b.surface_panel
+        && a.surface_subtle == b.surface_subtle
+        && a.stroke == b.stroke
+        && a.accent == b.accent
+        && a.danger == b.danger
+        && a.warning == b.warning
+        && a.success == b.success
+        && a.unknown == b.unknown
+        && a.info == b.info
 }
 
 struct HostTheme;
@@ -772,5 +791,43 @@ impl ClipboardService for HostClipboard {
         pecofence_platform::clipboard::set_text(&text)
             .map_err(|error| Error::Backend(error.to_string()))?;
         Ok(Token(1))
+    }
+}
+
+#[cfg(test)]
+mod theme_host_tests {
+    use super::*;
+
+    #[test]
+    fn repeated_sync_of_same_theme_keeps_epoch_stable() {
+        let host = theme_host();
+        let theme = pecofence_render::Theme::dark();
+        host.sync(&theme);
+        let before = host.epoch();
+        for _ in 0..100 {
+            host.sync(&theme);
+        }
+        assert_eq!(
+            host.epoch(),
+            before,
+            "identical tokens must not advance the epoch"
+        );
+        let first = host.snapshot();
+        host.sync(&theme);
+        assert_eq!(host.snapshot().as_ref(), first.as_ref());
+    }
+
+    #[test]
+    fn mode_change_advances_epoch_and_revision() {
+        let host = theme_host();
+        host.sync(&pecofence_render::Theme::dark());
+        let before = host.epoch();
+        let other = match pecofence_render::Theme::dark().mode {
+            pecofence_render::ThemeMode::Dark => pecofence_render::Theme::light(),
+            _ => pecofence_render::Theme::dark(),
+        };
+        host.sync(&other);
+        assert!(host.epoch() > before, "mode change must advance the epoch");
+        assert_ne!(host.snapshot().revision, 0);
     }
 }

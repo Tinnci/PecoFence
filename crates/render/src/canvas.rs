@@ -5,6 +5,7 @@ use pecofence_plugin_api::{
 /// Resolve the design-system font family for a plugin text role. Segoe UI
 /// Variable is the Windows 11 system font; DirectWrite exposes its optical
 /// sizes as separate families, so each role names its family directly.
+#[cfg(windows)]
 fn text_font_family(role: FontRole) -> &'static str {
     match role {
         FontRole::Text => crate::theme::FONT_TEXT,
@@ -12,6 +13,13 @@ fn text_font_family(role: FontRole) -> &'static str {
         FontRole::Display => crate::theme::FONT_DISPLAY,
         FontRole::Icons => crate::theme::FONT_ICONS,
     }
+}
+
+/// Non-Windows (headless test) builds never render real text; any family name
+/// works because the headless canvas only records commands.
+#[cfg(not(windows))]
+fn text_font_family(_role: FontRole) -> &'static str {
+    "Segoe UI Variable"
 }
 
 #[derive(Clone, Debug, PartialEq)]
