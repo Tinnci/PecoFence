@@ -84,6 +84,10 @@ pub(crate) struct Route {
     generation: u64,
 }
 
+// ProjectQuery/Envelope payloads dominate the variant size; the transport
+// clones these commands across the actor boundary and boxing would churn
+// every construction site for no measurable benefit.
+#[allow(clippy::large_enum_variant)]
 pub enum Command {
     Subscribe {
         local: Token,

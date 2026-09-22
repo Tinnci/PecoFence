@@ -4,7 +4,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, mpsc};
-use std::task::{Context, Poll, Wake, Waker};
+use std::task::{Context, Poll, Waker};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
@@ -312,19 +312,14 @@ fn join_finished(join: &JoinKind) -> bool {
     }
 }
 
-struct NoopWake;
-impl Wake for NoopWake {
-    fn wake(self: Arc<Self>) {}
-}
-
 fn observe_join(join: JoinKind) {
     match join {
         JoinKind::Thread(join) => {
             let _ = join.join();
         }
         JoinKind::Tokio(mut join) => {
-            let waker = Waker::from(Arc::new(NoopWake));
-            let mut context = Context::from_waker(&waker);
+            let waker = Waker::noop();
+            let mut context = Context::from_waker(waker);
             match Pin::new(&mut join).poll(&mut context) {
                 Poll::Ready(_) => {}
                 Poll::Pending => unreachable!("is_finished Tokio handle returned Pending"),

@@ -1,6 +1,18 @@
 use pecofence_plugin_api::{
-    Canvas, Error, ImageId, Path, RectDip, Result, StrokeStyle, TextMetrics, TextSpec,
+    Canvas, Error, FontRole, ImageId, Path, RectDip, Result, StrokeStyle, TextMetrics, TextSpec,
 };
+
+/// Resolve the design-system font family for a plugin text role. Segoe UI
+/// Variable is the Windows 11 system font; DirectWrite exposes its optical
+/// sizes as separate families, so each role names its family directly.
+fn text_font_family(role: FontRole) -> &'static str {
+    match role {
+        FontRole::Text => crate::theme::FONT_TEXT,
+        FontRole::Small => crate::theme::FONT_SMALL,
+        FontRole::Display => crate::theme::FONT_DISPLAY,
+        FontRole::Icons => crate::theme::FONT_ICONS,
+    }
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum DrawCommand {
@@ -218,8 +230,12 @@ impl Canvas for Direct2dCanvas<'_> {
             return Ok(());
         };
         let brush = self.brush(rgba)?;
-        let format = windows_canvas::TextFormat::new("Segoe UI Variable", text.size_dip)
-            .map_err(|error| Error::Backend(error.to_string()))?;
+        let format = windows_canvas::TextFormat::with_weight(
+            text_font_family(text.font),
+            text.size_dip,
+            windows_canvas::FontWeight(i32::from(text.weight)),
+        )
+        .map_err(|error| Error::Backend(error.to_string()))?;
         self.session.draw_text(
             &text.text,
             &format,
@@ -251,8 +267,12 @@ impl Canvas for Direct2dCanvas<'_> {
     }
 
     fn measure_text(&mut self, text: &TextSpec, width: f32) -> Result<TextMetrics> {
-        let format = windows_canvas::TextFormat::new("Segoe UI Variable", text.size_dip)
-            .map_err(|error| Error::Backend(error.to_string()))?;
+        let format = windows_canvas::TextFormat::with_weight(
+            text_font_family(text.font),
+            text.size_dip,
+            windows_canvas::FontWeight(i32::from(text.weight)),
+        )
+        .map_err(|error| Error::Backend(error.to_string()))?;
         let layout = windows_canvas::TextLayout::new(&text.text, &format, width.max(1.0), 10_000.0)
             .map_err(|error| Error::Backend(error.to_string()))?;
         let metrics = layout.metrics();
