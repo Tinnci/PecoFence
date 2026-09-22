@@ -1,7 +1,27 @@
-* text=auto eol=lf
+# Normalize line endings across Windows/WSL development
+* text=auto
+
+# Force LF for cross-platform scripts and sources
+*.rs text eol=lf
+*.sh text eol=lf
+*.toml text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.css text eol=lf
+*.js text eol=lf
+*.html text eol=lf
+
+# Windows-only scripts keep CRLF
 *.ps1 text eol=crlf
-*.dll binary
+*.cmd text eol=crlf
+*.vbs text eol=crlf
+*.bat text eol=crlf
+
+# Binaries
 *.png binary
-*.gif binary
+*.ico binary
 *.jpg binary
-*.mp4 binary
+*.woff binary
+*.woff2 binary
