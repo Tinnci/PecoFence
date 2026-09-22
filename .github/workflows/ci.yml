@@ -18,8 +18,11 @@ jobs:
         env:
           PRIVATE_TOKEN: ${{ secrets.PRIVATE_REPO_TOKEN || github.token }}
         run: |
-          # Provide the token through a per-URL credential helper so cargo's
-          # git-CLI fetches (and any other git access) authenticate without GCM.
+          # Provide the token through a per-URL credential helper, and remove the
+          # persisted GITHUB_TOKEN extraheader that actions/checkout leaves in
+          # the LOCAL repo config — it takes precedence over our helper and its
+          # token cannot read the private Tinnci/spm dependency.
+          git config --unset-all http.https://github.com/.extraheader
           git config --global credential.https://github.com.helper ""
           git config --global --add credential.https://github.com.helper "!f() { echo username=x-access-token; echo password=$env:PRIVATE_TOKEN; }; f"
           git ls-remote https://github.com/Tinnci/spm main
