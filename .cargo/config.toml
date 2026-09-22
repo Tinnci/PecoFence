@@ -3,3 +3,9 @@
 # dependencies (policy 10.2.4.1), and portable users no longer need the redistributable.
 [target.x86_64-pc-windows-msvc]
 rustflags = ["-C", "target-feature=+crt-static"]
+
+# Route git dependencies through the git CLI (and its credential helper) instead of
+# libgit2. Required for private git deps in CI where actions/checkout provides the
+# GITHUB_TOKEN extraheader, and locally it picks up the system proxy configuration.
+[net]
+git-fetch-with-cli = true

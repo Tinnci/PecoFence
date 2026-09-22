@@ -19,7 +19,9 @@ rust-version = "1.95"
 license = "Apache-2.0"
 
 [workspace.dependencies]
-spm-contracts = { version = "=0.1.0", path = "../spm/crates/spm-contracts" }
+# Pinned to spm main @ c09e61357fcadb50075b980b17c29987e7061888 — bump rev explicitly
+# after the provider-side change lands (see docs/PECOFENCE_CORDIS_PLUGIN_ARCHITECTURE.md).
+spm-contracts = { version = "=0.1.0", git = "https://github.com/Tinnci/spm", rev = "c09e61357fcadb50075b980b17c29987e7061888" }
 windows-core = "0.100"
 windows-numerics = "0.100"
 windows-window = "0.100"
