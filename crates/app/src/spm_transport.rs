@@ -128,6 +128,7 @@ pub async fn run(
     sink: Arc<PipeState>,
     cancel: CancellationToken,
 ) {
+    let endpoint_for_log = endpoint.clone();
     let mut actor = Actor {
         endpoint,
         receiver,
@@ -139,6 +140,7 @@ pub async fn run(
         pending_subscribes: HashMap::new(),
         daemon_session: None,
     };
+    tracing::info!(endpoint = %endpoint_for_log, "transport.run");
     let mut delay = Duration::from_millis(500);
     actor.set_state(ConnectionState::Connecting);
     while !cancel.is_cancelled() {
@@ -155,7 +157,7 @@ pub async fn run(
                 delay = Duration::from_millis(500);
             }
             Err(error) => {
-                tracing::debug!(%error, endpoint = %actor.endpoint, "SPM v2 pipe connect failed");
+                tracing::warn!(%error, endpoint = %endpoint_for_log, "transport.connect_failed");
                 actor.set_state(if actor.daemon_session.is_some() {
                     ConnectionState::Reconnecting
                 } else {
@@ -393,6 +395,7 @@ impl Actor {
     fn route_incoming(&mut self, envelope: Envelope) {
         if let Body::Response(Response::Subscribe(response)) = &envelope.body {
             if let Some(request_id) = envelope.request_id {
+                tracing::info!(request_id = ?request_id, subscription_id = ?response.subscription_id, "subscribe.acknowledged");
                 if let Some(query) = self.pending_subscribes.remove(&request_id) {
                     self.remote_queries
                         .insert(response.subscription_id, query.clone());
@@ -426,6 +429,11 @@ impl Actor {
         let Ok(bytes) = serde_json::to_vec(&envelope).map(Arc::<[u8]>::from) else {
             return;
         };
+        tracing::info!(
+            revision = envelope.revision.map(|r| r.0).unwrap_or(0),
+            query = ?query,
+            "snapshot.received"
+        );
         if let Some(active) = self.active.get_mut(&query) {
             active.latest = Some(bytes.clone());
             for (local, route) in &active.routes {

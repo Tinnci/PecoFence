@@ -170,6 +170,7 @@ impl PanelManager {
                 ));
             }
         }
+        tracing::info!(provider = %spec.provider, "panel.activation_requested");
         let provider =
             self.providers.get(&spec.provider).cloned().ok_or_else(|| {
                 Error::Invalid(format!("unknown panel provider {}", spec.provider))
