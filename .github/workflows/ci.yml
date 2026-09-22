@@ -18,8 +18,9 @@ jobs:
         env:
           PRIVATE_TOKEN: ${{ secrets.PRIVATE_REPO_TOKEN || github.token }}
         run: |
-          Write-Output "token length: ${($PRIVATE_TOKEN).length}"
-          git config --global url."https://x-access-token:${PRIVATE_TOKEN}@github.com/".insteadOf "https://github.com/"
+          Write-Output "token length: $($env:PRIVATE_TOKEN.Length)"
+          $key = "url.https://x-access-token:$env:PRIVATE_TOKEN@github.com/.insteadOf"
+          git config --global $key "https://github.com/"
           git ls-remote https://github.com/Tinnci/spm main
       - uses: dtolnay/rust-toolchain@stable
         with:
