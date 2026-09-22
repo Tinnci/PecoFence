@@ -18,10 +18,10 @@ jobs:
         env:
           PRIVATE_TOKEN: ${{ secrets.PRIVATE_REPO_TOKEN || github.token }}
         run: |
-          Write-Output "token prefix: $($env:PRIVATE_TOKEN.Substring(0,4))"
-          Write-Output "api status: $(Invoke-RestMethod -Uri 'https://api.github.com/repos/Tinnci/spm' -Headers @{Authorization = 'token ' + $env:PRIVATE_TOKEN} -SkipHttpErrorCheck | ForEach-Object { $_ })"
-          $key = "url.https://x-access-token:$env:PRIVATE_TOKEN@github.com/.insteadOf"
-          git config --global $key "https://github.com/"
+          # Same mechanism actions/checkout uses: an Authorization extraheader on
+          # http.https://github.com/ so cargo's git-CLI fetches authenticate.
+          $auth = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("x-access-token:$env:PRIVATE_TOKEN"))
+          git config --global "http.https://github.com/.extraheader" "AUTHORIZATION: basic $auth"
           git ls-remote https://github.com/Tinnci/spm main
       - uses: dtolnay/rust-toolchain@stable
         with:
