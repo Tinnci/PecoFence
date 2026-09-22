@@ -403,12 +403,8 @@ impl Actor {
             if let Ok(bytes) = serde_json::to_vec(&envelope).map(Arc::<[u8]>::from) {
                 for active in self.active.values() {
                     for (local, route) in &active.routes {
-                        self.sink.publish(
-                            route.owner,
-                            route.generation,
-                            *local,
-                            bytes.clone(),
-                        );
+                        self.sink
+                            .publish(route.owner, route.generation, *local, bytes.clone());
                     }
                 }
             }
