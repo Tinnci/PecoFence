@@ -14,6 +14,7 @@ pub(crate) struct PanelHandle {
     grouping: Rc<Cell<Grouping>>,
     exposure: Rc<Cell<Exposure>>,
     active: Rc<Cell<bool>>,
+    theme_revision: Rc<Cell<u64>>,
 }
 
 impl PanelHandle {
@@ -25,6 +26,7 @@ impl PanelHandle {
             grouping: Rc::new(Cell::new(Grouping::Single)),
             exposure: Rc::new(Cell::new(Exposure::Desktop)),
             active: Rc::new(Cell::new(true)),
+            theme_revision: Rc::new(Cell::new(0)),
         }
     }
 
@@ -120,7 +122,7 @@ impl PluginPanelContent {
         self.handle.set_container_state(grouping, exposure, active);
     }
 
-    pub fn draw(&mut self, surface: &Panel, dpi: u32, _theme: &Theme) -> Result<bool> {
+    pub fn draw(&mut self, surface: &Panel, dpi: u32, theme: &Theme) -> Result<bool> {
         let (width_px, height_px) = surface.size_px();
         let scale = dpi.max(96) as f32 / 96.0;
         let viewport = RectDip {
@@ -132,6 +134,21 @@ impl PluginPanelContent {
         if self.handle.exposure.get() == Exposure::Hidden || !self.handle.active.get() {
             return Ok(false);
         }
+        // Sync the fence window's live theme into the shared theme host, then
+        // let the panel know when the derived tokens changed. The epoch only
+        // advances on actual token changes, so this is free in steady state.
+        let theme_host = crate::app::panel_manager::theme_host();
+        theme_host.sync(theme);
+        let theme_revision = theme_host.snapshot().revision;
+        if self.handle.theme_revision.get() != theme_revision {
+            self.handle.theme_revision.set(theme_revision);
+            let _ = self
+                .handle
+                .event(PanelEvent::ThemeChanged {
+                    revision: theme_revision,
+                })
+                .map(|_| ());
+        }
         let candidate = match self.handle.panel.borrow_mut().prepare_frame(FrameInput {
             viewport,
             presentation: self.handle.presentation.get(),
@@ -139,7 +156,7 @@ impl PluginPanelContent {
             exposure: self.handle.exposure.get(),
             active: self.handle.active.get(),
             text_scale: 1.0,
-            theme_epoch: 0,
+            theme_epoch: theme_host.epoch(),
             device_epoch: u64::from(dpi),
         }) {
             Ok(frame) => frame,

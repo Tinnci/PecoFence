@@ -226,13 +226,37 @@ impl<S: ?Sized> Capability<S> {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ThemeSnapshot {
     pub revision: u64,
     pub high_contrast: bool,
     pub text_primary: [f32; 4],
+    pub text_secondary: [f32; 4],
+    /// Opaque panel body fill.
     pub surface_panel: [f32; 4],
+    /// Slightly stronger fill for cards/badges inside the panel.
+    pub surface_subtle: [f32; 4],
+    /// 1 px rim colour for cards and separators.
+    pub stroke: [f32; 4],
     pub accent: [f32; 4],
+    /// Semantic status roles; the plugin maps business state onto these,
+    /// the host design system owns the concrete colours.
+    pub danger: [f32; 4],
+    pub warning: [f32; 4],
+    pub success: [f32; 4],
+    pub unknown: [f32; 4],
+    pub info: [f32; 4],
+}
+
+/// Which theme font role a [`TextSpec`] should render with. The host design
+/// system owns the concrete family per role (see `render::theme::FONT_*`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum FontRole {
+    #[default]
+    Text,
+    Small,
+    Display,
+    Icons,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -240,6 +264,7 @@ pub struct TextSpec {
     pub text: String,
     pub size_dip: f32,
     pub weight: u16,
+    pub font: FontRole,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]

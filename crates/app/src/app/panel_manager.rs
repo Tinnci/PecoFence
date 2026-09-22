@@ -478,16 +478,97 @@ impl RenderService for HostRender {
     }
 }
 
+/// Shared state behind [`HostTheme`]: the live [`ThemeSnapshot`] derived from
+/// the fence window's [`pecofence_render::Theme`] plus the epoch that advances
+/// whenever the derived tokens change.
+pub(crate) struct ThemeHost {
+    epoch: AtomicU64,
+    current: Mutex<Arc<ThemeSnapshot>>,
+}
+
+impl ThemeHost {
+    fn new() -> Self {
+        Self {
+            epoch: AtomicU64::new(1),
+            current: Mutex::new(Arc::new(theme_snapshot_for(
+                pecofence_render::ThemeMode::Dark,
+                1,
+            ))),
+        }
+    }
+
+    pub(crate) fn epoch(&self) -> u64 {
+        self.epoch.load(Ordering::Acquire)
+    }
+
+    pub(crate) fn snapshot(&self) -> Arc<ThemeSnapshot> {
+        Arc::clone(&self.current.lock().expect("theme mutex"))
+    }
+
+    /// Re-derive the snapshot from the fence window's live `Theme`. The epoch
+    /// (and therefore the published revision) advances only when the derived
+    /// tokens actually change, so per-frame syncs stay free.
+    pub(crate) fn sync(&self, theme: &pecofence_render::Theme) {
+        let next = theme_snapshot_for(theme.mode, self.epoch() + 1);
+        let mut guard = self.current.lock().expect("theme mutex");
+        if **guard != next {
+            self.epoch.fetch_add(1, Ordering::AcqRel);
+            *guard = Arc::new(next);
+        }
+    }
+}
+
+/// Process-wide theme host so fence-window paint bridges and the service
+/// published to plugins observe the same state.
+pub(crate) fn theme_host() -> &'static ThemeHost {
+    static THEME_HOST: std::sync::OnceLock<ThemeHost> = std::sync::OnceLock::new();
+    THEME_HOST.get_or_init(ThemeHost::new)
+}
+
+/// Semantic panel palette for a theme mode. The host design system owns these
+/// values; plugins map business state onto the roles, never onto colours. Dark
+/// values mirror the panel's original tuned palette so the re-wiring is a
+/// visual no-op.
+fn theme_snapshot_for(mode: pecofence_render::ThemeMode, revision: u64) -> ThemeSnapshot {
+    use pecofence_render::ThemeMode::{Dark, Light};
+    match mode {
+        Dark => ThemeSnapshot {
+            revision,
+            high_contrast: false,
+            text_primary: [0.949, 0.961, 0.98, 1.0],
+            text_secondary: [0.725, 0.773, 0.839, 1.0],
+            surface_panel: [0.125, 0.149, 0.188, 1.0],
+            surface_subtle: [0.165, 0.2, 0.251, 1.0],
+            stroke: [0.196, 0.267, 0.314, 1.0],
+            accent: [0.545, 0.765, 1.0, 1.0],
+            danger: [0.973, 0.443, 0.443, 1.0],
+            warning: [0.984, 0.573, 0.235, 1.0],
+            success: [0.29, 0.871, 0.533, 1.0],
+            unknown: [0.725, 0.773, 0.839, 1.0],
+            info: [0.545, 0.765, 1.0, 1.0],
+        },
+        Light => ThemeSnapshot {
+            revision,
+            high_contrast: false,
+            text_primary: [0.059, 0.09, 0.133, 1.0],
+            text_secondary: [0.278, 0.333, 0.412, 1.0],
+            surface_panel: [0.957, 0.969, 0.973, 1.0],
+            surface_subtle: [0.882, 0.906, 0.922, 1.0],
+            stroke: [0.78, 0.839, 0.871, 1.0],
+            accent: [0.0, 0.373, 0.722, 1.0],
+            danger: [0.863, 0.148, 0.148, 1.0],
+            warning: [0.918, 0.345, 0.043, 1.0],
+            success: [0.086, 0.639, 0.29, 1.0],
+            unknown: [0.392, 0.455, 0.545, 1.0],
+            info: [0.0, 0.373, 0.722, 1.0],
+        },
+    }
+}
+
 struct HostTheme;
 impl ThemeService for HostTheme {
     fn snapshot(&self) -> Result<Arc<ThemeSnapshot>> {
-        Ok(Arc::new(ThemeSnapshot {
-            revision: 1,
-            high_contrast: false,
-            text_primary: [0.95, 0.96, 0.98, 1.0],
-            surface_panel: [0.125, 0.15, 0.19, 1.0],
-            accent: [0.55, 0.77, 1.0, 1.0],
-        }))
+        Ok(theme_host().snapshot())
     }
 }
 

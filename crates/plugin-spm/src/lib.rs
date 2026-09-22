@@ -114,22 +114,78 @@ pub fn decode_event(bytes: &[u8]) -> Result<Envelope> {
     Ok(envelope)
 }
 
+/// Semantic colour tokens the view builders consume. Values are derived from
+/// the host `ThemeSnapshot` — the design system owns colours, the panel only
+/// maps business state onto roles, never onto concrete RGBA values.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PanelTokens {
+    pub panel: [f32; 4],
+    pub subtle: [f32; 4],
+    pub primary: [f32; 4],
+    pub secondary: [f32; 4],
+    pub accent: [f32; 4],
+    pub stroke: [f32; 4],
+    pub danger: [f32; 4],
+    pub warning: [f32; 4],
+    pub success: [f32; 4],
+    pub unknown: [f32; 4],
+}
+
+impl PanelTokens {
+    pub fn from_snapshot(snapshot: &ThemeSnapshot) -> Self {
+        Self {
+            panel: snapshot.surface_panel,
+            subtle: snapshot.surface_subtle,
+            primary: snapshot.text_primary,
+            secondary: snapshot.text_secondary,
+            accent: snapshot.accent,
+            stroke: snapshot.stroke,
+            danger: snapshot.danger,
+            warning: snapshot.warning,
+            success: snapshot.success,
+            unknown: snapshot.unknown,
+        }
+    }
+
+    /// Dark-mode fallback used before the first theme snapshot arrives and by
+    /// layout tests; mirrors the host's dark palette.
+    pub fn dark() -> Self {
+        Self {
+            panel: [0.125, 0.149, 0.188, 1.0],
+            subtle: [0.165, 0.2, 0.251, 1.0],
+            primary: [0.949, 0.961, 0.98, 1.0],
+            secondary: [0.725, 0.773, 0.839, 1.0],
+            accent: [0.545, 0.765, 1.0, 1.0],
+            stroke: [0.196, 0.267, 0.314, 1.0],
+            danger: [0.973, 0.443, 0.443, 1.0],
+            warning: [0.984, 0.573, 0.235, 1.0],
+            success: [0.29, 0.871, 0.533, 1.0],
+            unknown: [0.725, 0.773, 0.839, 1.0],
+        }
+    }
+}
+
 /// Builds presentation data solely from a read-model snapshot and viewport.
-pub fn build_view(snapshot: Option<&ProjectSnapshot>, viewport: RectDip) -> PanelView {
-    build_workspace_view(snapshot, viewport, None)
+pub fn build_view(
+    snapshot: Option<&ProjectSnapshot>,
+    viewport: RectDip,
+    tokens: &PanelTokens,
+) -> PanelView {
+    build_workspace_view(snapshot, viewport, None, tokens)
 }
 
 fn build_workspace_view(
     snapshot: Option<&ProjectSnapshot>,
     viewport: RectDip,
     selected_item: Option<usize>,
+    tokens: &PanelTokens,
 ) -> PanelView {
     let mut nodes = Vec::new();
-    let panel = [0.125, 0.149, 0.188, 1.0];
-    let subtle = [0.165, 0.2, 0.251, 1.0];
-    let primary = [0.949, 0.961, 0.98, 1.0];
-    let secondary = [0.725, 0.773, 0.839, 1.0];
-    let accent = [0.545, 0.765, 1.0, 1.0];
+    let panel = tokens.panel;
+    let subtle = tokens.subtle;
+    let primary = tokens.primary;
+    let secondary = tokens.secondary;
+    let accent = tokens.accent;
     let mut push = |id, rect, role, text: String, action, fill, foreground| {
         nodes.push(ViewNode {
             id,
@@ -392,11 +448,15 @@ fn build_workspace_view(
     PanelView { nodes }
 }
 
-fn build_compact_view(snapshot: Option<&ProjectSnapshot>, viewport: RectDip) -> PanelView {
-    let panel = [0.125, 0.149, 0.188, 1.0];
-    let subtle = [0.165, 0.2, 0.251, 1.0];
-    let primary = [0.949, 0.961, 0.98, 1.0];
-    let accent = [0.545, 0.765, 1.0, 1.0];
+fn build_compact_view(
+    snapshot: Option<&ProjectSnapshot>,
+    viewport: RectDip,
+    tokens: &PanelTokens,
+) -> PanelView {
+    let panel = tokens.panel;
+    let subtle = tokens.subtle;
+    let primary = tokens.primary;
+    let accent = tokens.accent;
     let mut nodes = vec![ViewNode {
         id: 1,
         rect: viewport,
@@ -542,11 +602,15 @@ fn build_compact_view(snapshot: Option<&ProjectSnapshot>, viewport: RectDip) -> 
     PanelView { nodes }
 }
 
-fn build_capsule_view(snapshot: Option<&ProjectSnapshot>, viewport: RectDip) -> PanelView {
-    let panel = [0.125, 0.149, 0.188, 1.0];
-    let badge = [0.165, 0.2, 0.251, 1.0];
-    let primary = [0.949, 0.961, 0.98, 1.0];
-    let accent = [0.545, 0.765, 1.0, 1.0];
+fn build_capsule_view(
+    snapshot: Option<&ProjectSnapshot>,
+    viewport: RectDip,
+    tokens: &PanelTokens,
+) -> PanelView {
+    let panel = tokens.panel;
+    let badge = tokens.subtle;
+    let primary = tokens.primary;
+    let accent = tokens.accent;
     let height = viewport.h.max(48.0);
     let project_width = if viewport.w < 360.0 { 88.0 } else { 112.0 };
     let status_width = if viewport.w < 360.0 { 88.0 } else { 112.0 };
@@ -640,8 +704,9 @@ pub fn build_presentation_view(
     snapshot: Option<&ProjectSnapshot>,
     presentation: Presentation,
     viewport: RectDip,
+    tokens: &PanelTokens,
 ) -> PanelView {
-    build_presentation_view_with_selection(snapshot, presentation, viewport, None)
+    build_presentation_view_with_selection(snapshot, presentation, viewport, None, tokens)
 }
 
 fn build_presentation_view_with_selection(
@@ -649,11 +714,12 @@ fn build_presentation_view_with_selection(
     presentation: Presentation,
     viewport: RectDip,
     selected_item: Option<usize>,
+    tokens: &PanelTokens,
 ) -> PanelView {
     match presentation {
-        Presentation::Workspace => build_workspace_view(snapshot, viewport, selected_item),
-        Presentation::Compact => build_compact_view(snapshot, viewport),
-        Presentation::Capsule => build_capsule_view(snapshot, viewport),
+        Presentation::Workspace => build_workspace_view(snapshot, viewport, selected_item, tokens),
+        Presentation::Compact => build_compact_view(snapshot, viewport, tokens),
+        Presentation::Capsule => build_capsule_view(snapshot, viewport, tokens),
     }
 }
 
@@ -754,6 +820,7 @@ impl PreparedFrame for SpmPreparedFrame {
                             text: node.text.clone(),
                             size_dip: if node.role == "heading" { 20.0 } else { 14.0 },
                             weight: if node.action.is_some() { 600 } else { 400 },
+                            font: FontRole::Text,
                         },
                         node.foreground,
                     )?;
@@ -809,6 +876,14 @@ impl PanelProvider for SpmPlugin {
             ),
         };
         let subscription = ctx.ipc.with(|ipc| ipc.subscribe(&ctx.scope, query))?;
+        let tokens = ctx
+            .theme
+            .with(|theme| {
+                theme
+                    .snapshot()
+                    .map(|snapshot| PanelTokens::from_snapshot(&snapshot))
+            })
+            .unwrap_or_else(|_| PanelTokens::dark());
         Ok(Box::new(SpmPanel {
             ctx,
             key: input.key,
@@ -821,6 +896,7 @@ impl PanelProvider for SpmPlugin {
             layout_revision: 0,
             frame_revision: 0,
             selected_item: None,
+            tokens,
             stopped: false,
         }))
     }
@@ -838,6 +914,7 @@ pub struct SpmPanel {
     layout_revision: u64,
     frame_revision: u64,
     selected_item: Option<usize>,
+    tokens: PanelTokens,
     stopped: bool,
 }
 
@@ -870,6 +947,20 @@ impl PanelInstance for SpmPanel {
                 Ok(PanelUpdate {
                     commands: vec![HostCommand::Invalidate],
                     relayout: true,
+                })
+            }
+            PanelEvent::ThemeChanged { revision } => {
+                // Colours changed but geometry did not: refresh tokens and
+                // repaint without advancing the layout revision (keeps any
+                // in-progress gesture's hit targets stable).
+                if let Ok(snapshot) = self.ctx.theme.with(|theme| theme.snapshot()) {
+                    if snapshot.revision == revision {
+                        self.tokens = PanelTokens::from_snapshot(&snapshot);
+                    }
+                }
+                Ok(PanelUpdate {
+                    commands: vec![HostCommand::Invalidate],
+                    relayout: false,
                 })
             }
             PanelEvent::Invoke { action, .. } => {
@@ -961,6 +1052,7 @@ impl PanelInstance for SpmPanel {
                 input.presentation,
                 input.viewport,
                 self.selected_item,
+                &self.tokens,
             )
         } else {
             PanelView::default()
@@ -1104,8 +1196,8 @@ mod tests {
             h: 760.0,
         };
         let data = snapshot(DaemonSessionId::new(), 1);
-        let a = build_view(Some(&data), viewport);
-        let b = build_view(Some(&data), viewport);
+        let a = build_view(Some(&data), viewport, &PanelTokens::dark());
+        let b = build_view(Some(&data), viewport, &PanelTokens::dark());
         assert_eq!(a, b);
         let layout = layout_snapshot(&a, 4);
         assert_eq!(hit_test(&layout, 1020.0, 176.0), Some(ACTION_REFRESH));
@@ -1153,6 +1245,7 @@ mod tests {
                 w: 480.0,
                 h: 320.0,
             },
+            &PanelTokens::dark(),
         );
         assert_eq!(
             view.nodes
@@ -1181,6 +1274,7 @@ mod tests {
                 w: 360.0,
                 h: 48.0,
             },
+            &PanelTokens::dark(),
         );
         assert!(view.nodes.iter().any(|node| node.text.contains("未知 1")));
         assert!(!view.nodes.iter().any(|node| node.role == "listitem"));
@@ -1205,6 +1299,7 @@ mod tests {
                 h: 760.0,
             },
             Some(0),
+            &PanelTokens::dark(),
         );
         assert!(wide.nodes.iter().any(|node| node.role == "complementary"));
         let narrow = build_workspace_view(
@@ -1216,6 +1311,7 @@ mod tests {
                 h: 520.0,
             },
             Some(0),
+            &PanelTokens::dark(),
         );
         assert!(narrow.nodes.iter().any(|node| node.role == "article"));
         assert!(!narrow.nodes.iter().any(|node| node.role == "listitem"));
@@ -1240,6 +1336,7 @@ mod tests {
                 w: 360.0,
                 h: 48.0,
             },
+            &PanelTokens::dark(),
         );
         let frame = SpmPreparedFrame {
             identity: FrameIdentity {
