@@ -799,9 +799,13 @@ impl ClipboardService for HostClipboard {
 mod theme_host_tests {
     use super::*;
 
+    // Tests build their own ThemeHost instead of the process-wide `theme_host()`
+    // global: two tests sharing the global race on its epoch under the default
+    // parallel test runner (a Light-mode sync in one test advanced the epoch
+    // observed by the other).
     #[test]
     fn repeated_sync_of_same_theme_keeps_epoch_stable() {
-        let host = theme_host();
+        let host = ThemeHost::new();
         let theme = pecofence_render::Theme::dark();
         host.sync(&theme);
         let before = host.epoch();
@@ -820,7 +824,7 @@ mod theme_host_tests {
 
     #[test]
     fn mode_change_advances_epoch_and_revision() {
-        let host = theme_host();
+        let host = ThemeHost::new();
         host.sync(&pecofence_render::Theme::dark());
         let before = host.epoch();
         let other = match pecofence_render::Theme::dark().mode {
