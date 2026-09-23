@@ -17,6 +17,40 @@ const STORAGE: ServiceKey<dyn StorageService> = ServiceKey::new("host", "storage
 const NAVIGATION: ServiceKey<dyn NavigationService> = ServiceKey::new("host", "navigation", 1);
 const CLIPBOARD: ServiceKey<dyn ClipboardService> = ServiceKey::new("host", "clipboard", 1);
 
+fn spm_endpoint(
+    user_sid: String,
+    windows_session_id: u32,
+    instance: Option<&str>,
+) -> std::result::Result<String, spm_contracts::ContractError> {
+    spm_contracts::v2_pipe_name(&spm_contracts::EndpointIdentity {
+        user_sid,
+        windows_session_id,
+        instance: instance
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_owned),
+    })
+}
+
+#[cfg(test)]
+mod endpoint_tests {
+    use super::spm_endpoint;
+
+    #[test]
+    fn instance_scopes_spm_endpoint() {
+        let endpoint = |instance| spm_endpoint("S-1-5-21-123".into(), 7, instance).unwrap();
+        let default = endpoint(None);
+        assert_eq!(default, r"\\.\pipe\pecofence.spmd.v2.S-1-5-21-123.7");
+        assert_eq!(endpoint(Some("  ")), default);
+
+        let lab_a = endpoint(Some("lab-a"));
+        let lab_b = endpoint(Some("lab-b"));
+        assert_ne!(lab_a, lab_b);
+        assert!(lab_a.starts_with(&(default.clone() + ".i-")));
+        assert!(lab_b.starts_with(&(default + ".i-")));
+    }
+}
+
 struct InstanceRecord {
     provider: String,
     config: serde_json::Value,
@@ -51,12 +85,13 @@ impl PanelManager {
         let runtime = Arc::new(tokio::runtime::Runtime::new().expect("Tokio runtime"));
         let supervisor = Rc::new(RefCell::new(TaskSupervisor::new()));
         let ipc_state = Arc::new(PipeState::new(notify_hwnd));
-        let endpoint = spm_contracts::v2_pipe_name(&spm_contracts::EndpointIdentity {
-            user_sid: pecofence_platform::named_pipe::current_user_sid()
-                .expect("current process user SID"),
-            windows_session_id: pecofence_platform::named_pipe::current_windows_session_id()
+        let instance = pecofence_core::brand::var("PECOFENCE_INSTANCE").ok();
+        let endpoint = spm_endpoint(
+            pecofence_platform::named_pipe::current_user_sid().expect("current process user SID"),
+            pecofence_platform::named_pipe::current_windows_session_id()
                 .expect("current Windows session ID"),
-        })
+            instance.as_deref(),
+        )
         .expect("valid SPM v2 endpoint identity");
         let (transport, receivers) = crate::spm_transport::channel();
         let service_generation = scopes
