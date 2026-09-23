@@ -89,6 +89,17 @@ PF_SHA="$(git rev-parse HEAD)"
 SPM_REV_PINNED="$(grep -A3 '"spm-contracts"' Cargo.lock | grep -oE "[0-9a-f]{40}" | head -1)"
 
 sha() { sha256sum "$1" | cut -d" " -f1; }
+CARGO_LOCK_SHA="$(sha Cargo.lock)"
+RUSTC_VERSION="$(rustc -V)"
+PROTOCOL_SOURCE="$SPM_REPO/crates/spm-contracts/src"
+protocol_version() {
+  local key="$1" value
+  value="$(grep -rhE "pub const PROTOCOL_${key}:" "$PROTOCOL_SOURCE" | sed -nE 's/.*= ([0-9]+);.*/\1/p' | head -1)"
+  [[ "$value" =~ ^[0-9]+$ ]] || { echo "cannot read PROTOCOL_${key} from $PROTOCOL_SOURCE" >&2; exit 1; }
+  printf '%s' "$value"
+}
+PROTOCOL_MAJOR="$(protocol_version MAJOR)"
+PROTOCOL_MINOR="$(protocol_version MINOR)"
 
 cat > "$INST/run-manifest.json" <<MANIFEST
 {
@@ -98,6 +109,10 @@ cat > "$INST/run-manifest.json" <<MANIFEST
   "spm_commit": "$SPM_SHA",
   "pecofence_commit": "$PF_SHA",
   "spm_rev_pinned_in_pecofence": "$SPM_REV_PINNED",
+  "cargo_lock_sha256": "$CARGO_LOCK_SHA",
+  "toolchain": { "rustc": "$RUSTC_VERSION", "windows_sdk": "10.0.26100.0", "msvc": "14.44.35207" },
+  "wire_protocol": { "major": $PROTOCOL_MAJOR, "minor": $PROTOCOL_MINOR },
+  "db_format": "v2",
   "binaries_sha256": {
     "pecofence.exe": "$(sha "$INST/pecofence.exe")",
     "pecofence-watchdog.exe": "$(sha "$INST/pecofence-watchdog.exe")",
