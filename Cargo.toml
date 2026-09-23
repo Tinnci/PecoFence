@@ -21,7 +21,7 @@ license = "Apache-2.0"
 [workspace.dependencies]
 # Pinned to spm main @ c09e61357fcadb50075b980b17c29987e7061888 — bump rev explicitly
 # after the provider-side change lands (see docs/PECOFENCE_CORDIS_PLUGIN_ARCHITECTURE.md).
-spm-contracts = { version = "=0.1.0", git = "https://github.com/Tinnci/spm", rev = "c09e61357fcadb50075b980b17c29987e7061888" }
+spm-contracts = { version = "=0.1.0", git = "https://github.com/Tinnci/spm", rev = "e0dd3e058d40ef1c4623c12dba2f0715d2011a1b" }
 windows-core = "0.100"
 windows-numerics = "0.100"
 windows-window = "0.100"

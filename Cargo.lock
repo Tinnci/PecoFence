@@ -454,7 +454,7 @@ dependencies = [
 [[package]]
 name = "spm-contracts"
 version = "0.1.0"
-source = "git+https://github.com/Tinnci/spm?rev=c09e61357fcadb50075b980b17c29987e7061888#c09e61357fcadb50075b980b17c29987e7061888"
+source = "git+https://github.com/Tinnci/spm?rev=e0dd3e058d40ef1c4623c12dba2f0715d2011a1b#e0dd3e058d40ef1c4623c12dba2f0715d2011a1b"
 dependencies = [
  "chrono",
  "serde",
