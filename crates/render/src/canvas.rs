@@ -18,6 +18,7 @@ fn text_font_family(role: FontRole) -> &'static str {
 /// Non-Windows (headless test) builds never render real text; any family name
 /// works because the headless canvas only records commands.
 #[cfg(not(windows))]
+#[allow(dead_code)]
 fn text_font_family(_role: FontRole) -> &'static str {
     "Segoe UI Variable"
 }

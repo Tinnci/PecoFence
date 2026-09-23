@@ -263,9 +263,37 @@ impl Actor {
         )
         .await
         .map_err(|_| ())?;
-        let hello = tokio::select! {
-            _ = cancel.cancelled() => return Ok(()),
-            result = read_envelope(&mut reader) => result.map_err(|_| ())?,
+        // Dedicated reader task: owns the read half and the framing state so a
+        // command waking the select loop can no longer discard a half-read
+        // frame. Complete envelopes arrive through the channel instead.
+        let (envelope_tx, mut envelope_rx) = mpsc::channel::<Envelope>(32);
+        let _reader_task = tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    incoming = read_envelope(&mut reader) => {
+                        match incoming {
+                            Ok(envelope) => {
+                                if envelope_tx.send(envelope).await.is_err() {
+                                    break;
+                                }
+                            }
+                            // Reader error or EOF: drop the sender so the actor
+                            // observes the closed connection.
+                            Err(_) => break,
+                        }
+                    }
+                }
+            }
+        });
+        let hello = match tokio::time::timeout(
+            std::time::Duration::from_secs(10),
+            envelope_rx.recv(),
+        )
+        .await
+        {
+            Ok(Some(envelope)) => envelope,
+            Ok(None) => return Ok(()),
+            Err(_) => return Err(()),
         };
         hello.validate(Direction::ServerToClient).map_err(|_| ())?;
         let Body::Response(Response::Hello(response)) = hello.body else {
@@ -294,8 +322,11 @@ impl Actor {
                     let Some(command) = command else { return Ok(()) };
                     self.apply_connected(command, &mut writer).await?;
                 }
-                incoming = read_envelope(&mut reader) => {
-                    let envelope = incoming.map_err(|_| ())?;
+                incoming = envelope_rx.recv() => {
+                    let Some(envelope) = incoming else {
+                        // Reader task ended: connection is closed.
+                        return Ok(());
+                    };
                     envelope.validate(Direction::ServerToClient).map_err(|_| ())?;
                     self.route_incoming(envelope);
                 }
@@ -453,16 +484,6 @@ fn jitter(base: Duration) -> Duration {
     base.mul_f64(percent as f64 / 100.0)
 }
 
-async fn write_envelope(
-    writer: &mut (impl AsyncWrite + Unpin),
-    envelope: &Envelope,
-) -> std::io::Result<()> {
-    let frame = spm_contracts::encode_frame(envelope)
-        .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?;
-    writer.write_all(&frame).await?;
-    writer.flush().await
-}
-
 async fn read_envelope(reader: &mut (impl AsyncRead + Unpin)) -> std::io::Result<Envelope> {
     let mut prefix = [0u8; 4];
     reader.read_exact(&mut prefix).await?;
@@ -474,4 +495,14 @@ async fn read_envelope(reader: &mut (impl AsyncRead + Unpin)) -> std::io::Result
     reader.read_exact(&mut frame[4..]).await?;
     spm_contracts::decode_frame(&frame)
         .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))
+}
+
+async fn write_envelope(
+    writer: &mut (impl AsyncWrite + Unpin),
+    envelope: &Envelope,
+) -> std::io::Result<()> {
+    let frame = spm_contracts::encode_frame(envelope)
+        .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?;
+    writer.write_all(&frame).await?;
+    writer.flush().await
 }
