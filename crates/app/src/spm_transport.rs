@@ -7,7 +7,7 @@ use spm_contracts::{
     UnsubscribeRequest,
 };
 use std::{
-    collections::{BTreeSet, HashMap},
+    collections::{BTreeSet, HashMap, HashSet},
     sync::{
         Arc,
         atomic::{AtomicU8, Ordering},
@@ -28,7 +28,8 @@ pub enum ConnectionState {
 
 #[derive(Clone)]
 pub struct TransportHandle {
-    sender: mpsc::UnboundedSender<Command>,
+    data_sender: mpsc::Sender<Command>,
+    control_sender: mpsc::UnboundedSender<Command>,
     state: Arc<AtomicU8>,
 }
 
@@ -40,25 +41,25 @@ impl TransportHandle {
         generation: u64,
         query: ProjectQuery,
     ) -> Result<(), ()> {
-        self.sender
-            .send(Command::Subscribe {
+        self.data_sender
+            .try_send(Command::Subscribe {
                 local,
                 route: Route { owner, generation },
                 query,
             })
-            .map_err(|_| ())
+            .map_err(send_error)
     }
 
     pub fn unsubscribe(&self, local: Token) -> Result<(), ()> {
-        self.sender
+        self.control_sender
             .send(Command::Unsubscribe { local })
             .map_err(|_| ())
     }
 
     pub fn request(&self, local: Token, envelope: Envelope) -> Result<(), ()> {
-        self.sender
-            .send(Command::Request { local, envelope })
-            .map_err(|_| ())
+        self.data_sender
+            .try_send(Command::Request { local, envelope })
+            .map_err(send_error)
     }
 
     #[allow(dead_code)]
@@ -72,10 +73,31 @@ impl TransportHandle {
     }
 }
 
-pub fn channel() -> (TransportHandle, mpsc::UnboundedReceiver<Command>) {
-    let (sender, receiver) = mpsc::unbounded_channel();
+fn send_error(error: mpsc::error::TrySendError<Command>) {
+    if matches!(error, mpsc::error::TrySendError::Full(_)) {
+        tracing::warn!("transport.data_commands_full");
+    }
+}
+
+pub struct Receivers {
+    data: mpsc::Receiver<Command>,
+    control: mpsc::UnboundedReceiver<Command>,
+}
+
+// PipeState::token uses a checked, increasing u64 counter; tokens never repeat.
+// An unsubscribe may overtake its subscribe across these independent channels.
+pub fn channel() -> (TransportHandle, Receivers) {
+    let (data_sender, data) = mpsc::channel(64);
+    let (control_sender, control) = mpsc::unbounded_channel();
     let state = Arc::new(AtomicU8::new(ConnectionState::Disconnected as u8));
-    (TransportHandle { sender, state }, receiver)
+    (
+        TransportHandle {
+            data_sender,
+            control_sender,
+            state,
+        },
+        Receivers { data, control },
+    )
 }
 
 #[derive(Clone, Copy)]
@@ -111,11 +133,12 @@ struct ActiveQuery {
 
 struct Actor {
     endpoint: String,
-    receiver: mpsc::UnboundedReceiver<Command>,
+    receivers: Receivers,
     connection_state: Arc<AtomicU8>,
     sink: Arc<PipeState>,
     active: HashMap<ProjectQuery, ActiveQuery>,
     local_queries: HashMap<Token, ProjectQuery>,
+    cancelled_tokens: HashSet<Token>,
     remote_queries: HashMap<SubscriptionId, ProjectQuery>,
     pending_subscribes: HashMap<RequestId, ProjectQuery>,
     daemon_session: Option<DaemonSessionId>,
@@ -123,7 +146,7 @@ struct Actor {
 
 pub async fn run(
     endpoint: String,
-    receiver: mpsc::UnboundedReceiver<Command>,
+    receivers: Receivers,
     handle: TransportHandle,
     sink: Arc<PipeState>,
     cancel: CancellationToken,
@@ -131,11 +154,12 @@ pub async fn run(
     let endpoint_for_log = endpoint.clone();
     let mut actor = Actor {
         endpoint,
-        receiver,
+        receivers,
         connection_state: handle.state,
         sink,
         active: HashMap::new(),
         local_queries: HashMap::new(),
+        cancelled_tokens: HashSet::new(),
         remote_queries: HashMap::new(),
         pending_subscribes: HashMap::new(),
         daemon_session: None,
@@ -169,7 +193,11 @@ pub async fn run(
         tokio::select! {
             _ = cancel.cancelled() => break,
             _ = tokio::time::sleep(wait) => {},
-            command = actor.receiver.recv() => {
+            command = actor.receivers.control.recv() => {
+                let Some(command) = command else { break };
+                actor.apply_offline(command);
+            }
+            command = actor.receivers.data.recv() => {
                 let Some(command) = command else { break };
                 actor.apply_offline(command);
             }
@@ -180,6 +208,28 @@ pub async fn run(
 }
 
 impl Actor {
+    fn discard_cancelled(&mut self, local: Token) -> bool {
+        if self.cancelled_tokens.remove(&local) {
+            tracing::debug!(token = local.0, "transport.subscribe_cancelled");
+            true
+        } else {
+            false
+        }
+    }
+
+    fn unsubscribe_local(&mut self, local: Token) -> Option<SubscriptionId> {
+        if self.local_queries.contains_key(&local) {
+            self.remove_local(local)
+        } else {
+            self.cancelled_tokens.insert(local);
+            if self.cancelled_tokens.len() > 4096 {
+                self.cancelled_tokens.clear();
+                tracing::warn!("transport.cancelled_tokens_overflow");
+            }
+            None
+        }
+    }
+
     fn set_state(&self, state: ConnectionState) {
         self.connection_state.store(state as u8, Ordering::Release);
     }
@@ -199,6 +249,9 @@ impl Actor {
                 route,
                 query,
             } => {
+                if self.discard_cancelled(local) {
+                    return;
+                }
                 self.local_queries.insert(local, query.clone());
                 let active = self.active.entry(query).or_insert_with(|| ActiveQuery {
                     routes: HashMap::new(),
@@ -212,7 +265,7 @@ impl Actor {
                 }
             }
             Command::Unsubscribe { local } => {
-                self.remove_local(local);
+                self.unsubscribe_local(local);
             }
             Command::Request { .. } => {}
         }
@@ -317,7 +370,11 @@ impl Actor {
         loop {
             tokio::select! {
                 _ = cancel.cancelled() => return Ok(()),
-                command = self.receiver.recv() => {
+                command = self.receivers.control.recv() => {
+                    let Some(command) = command else { return Ok(()) };
+                    self.apply_connected(command, &mut writer).await?;
+                }
+                command = self.receivers.data.recv() => {
                     let Some(command) = command else { return Ok(()) };
                     self.apply_connected(command, &mut writer).await?;
                 }
@@ -361,6 +418,9 @@ impl Actor {
                 route,
                 query,
             } => {
+                if self.discard_cancelled(local) {
+                    return Ok(());
+                }
                 self.local_queries.insert(local, query.clone());
                 if let Some(active) = self.active.get_mut(&query) {
                     active.routes.insert(local, route);
@@ -381,7 +441,7 @@ impl Actor {
                 }
             }
             Command::Unsubscribe { local } => {
-                if let Some(remote) = self.remove_local(local) {
+                if let Some(remote) = self.unsubscribe_local(local) {
                     self.remote_queries.remove(&remote);
                     let request_id = RequestId::new();
                     let envelope = self.request_envelope(
@@ -504,4 +564,127 @@ async fn write_envelope(
         .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?;
     writer.write_all(&frame).await?;
     writer.flush().await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use spm_contracts::{DeliveryScopeId, DetailLevel, ProjectId, ViewKind};
+
+    fn query() -> ProjectQuery {
+        ProjectQuery {
+            project_id: ProjectId::new("project").unwrap(),
+            delivery_scope_id: DeliveryScopeId::new("scope").unwrap(),
+            view: ViewKind::Summary,
+            filter: None,
+            detail_level: DetailLevel::Standard,
+            sort: Vec::new(),
+        }
+    }
+
+    fn route() -> Route {
+        Route {
+            owner: ScopeId(1),
+            generation: 1,
+        }
+    }
+
+    fn subscribe(local: Token) -> Command {
+        Command::Subscribe {
+            local,
+            route: route(),
+            query: query(),
+        }
+    }
+
+    fn actor() -> Actor {
+        let (_, receivers) = channel();
+        Actor {
+            endpoint: String::new(),
+            receivers,
+            connection_state: Arc::new(AtomicU8::new(0)),
+            sink: Arc::new(PipeState::new(pecofence_platform::HWND(
+                std::ptr::null_mut(),
+            ))),
+            active: HashMap::new(),
+            local_queries: HashMap::new(),
+            cancelled_tokens: HashSet::new(),
+            remote_queries: HashMap::new(),
+            pending_subscribes: HashMap::new(),
+            daemon_session: None,
+        }
+    }
+
+    #[test]
+    fn data_capacity_and_control_bypass() {
+        let (handle, mut receivers) = channel();
+        for id in 1..=64 {
+            assert!(handle.subscribe(Token(id), ScopeId(1), 1, query()).is_ok());
+        }
+        assert!(handle.subscribe(Token(65), ScopeId(1), 1, query()).is_err());
+        assert!(handle.unsubscribe(Token(1)).is_ok());
+        assert!(matches!(
+            receivers.control.try_recv(),
+            Ok(Command::Unsubscribe { local: Token(1) })
+        ));
+    }
+
+    #[test]
+    fn closed_receivers_reject_all_commands() {
+        let (handle, receivers) = channel();
+        drop(receivers);
+        assert!(handle.subscribe(Token(1), ScopeId(1), 1, query()).is_err());
+        assert!(handle.unsubscribe(Token(1)).is_err());
+        let envelope = Envelope {
+            protocol_major: PROTOCOL_MAJOR,
+            protocol_minor: PROTOCOL_MINOR,
+            daemon_session: None,
+            request_id: None,
+            subscription_id: None,
+            revision: None,
+            body: Body::Request(Request::Hello(HelloRequest {
+                client_build: String::new(),
+                protocol_major: PROTOCOL_MAJOR,
+                protocol_minor: PROTOCOL_MINOR,
+                features: BTreeSet::new(),
+            })),
+        };
+        assert!(handle.request(Token(1), envelope).is_err());
+    }
+
+    #[test]
+    fn tombstones_resolve_cross_channel_order() {
+        let mut actor = actor();
+        let local = Token(7);
+        actor.apply_offline(Command::Unsubscribe { local });
+        assert!(actor.cancelled_tokens.contains(&local));
+        actor.apply_offline(subscribe(local));
+        assert!(!actor.local_queries.contains_key(&local));
+        assert!(actor.active.is_empty());
+        assert!(actor.cancelled_tokens.is_empty());
+
+        actor.apply_offline(subscribe(local));
+        assert!(actor.local_queries.contains_key(&local));
+        assert_eq!(actor.active.len(), 1);
+        actor.apply_offline(Command::Unsubscribe { local });
+        assert!(actor.local_queries.is_empty());
+        assert!(actor.active.is_empty());
+        assert!(actor.cancelled_tokens.is_empty());
+    }
+
+    #[test]
+    fn tombstone_overflow_clears_and_continues() {
+        let mut actor = actor();
+        for id in 1..=4096 {
+            actor.apply_offline(Command::Unsubscribe { local: Token(id) });
+        }
+        assert_eq!(actor.cancelled_tokens.len(), 4096);
+        actor.apply_offline(Command::Unsubscribe { local: Token(4097) });
+        assert!(actor.cancelled_tokens.is_empty());
+        actor.apply_offline(Command::Unsubscribe { local: Token(4098) });
+        actor.apply_offline(subscribe(Token(4098)));
+        assert!(actor.local_queries.is_empty());
+        actor.apply_offline(subscribe(Token(4099)));
+        assert!(actor.local_queries.contains_key(&Token(4099)));
+    }
 }

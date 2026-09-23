@@ -58,7 +58,7 @@ impl PanelManager {
                 .expect("current Windows session ID"),
         })
         .expect("valid SPM v2 endpoint identity");
-        let (transport, receiver) = crate::spm_transport::channel();
+        let (transport, receivers) = crate::spm_transport::channel();
         let service_generation = scopes
             .handle(service_scope)
             .and_then(|scope| scope.generation())
@@ -74,7 +74,7 @@ impl PanelManager {
                 move |cancel| async move {
                     crate::spm_transport::run(
                         endpoint,
-                        receiver,
+                        receivers,
                         actor_handle,
                         actor_state,
                         cancel,
@@ -619,7 +619,7 @@ pub(crate) struct PipeState {
 }
 
 impl PipeState {
-    fn new(notify_hwnd: pecofence_platform::HWND) -> Self {
+    pub(crate) fn new(notify_hwnd: pecofence_platform::HWND) -> Self {
         Self {
             next: AtomicU64::new(1),
             notify_hwnd: notify_hwnd.0 as isize,

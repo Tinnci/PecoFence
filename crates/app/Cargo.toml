@@ -7,7 +7,6 @@ license.workspace = true
 [[bin]]
 name = "pecofence"
 path = "src/main.rs"
-test = false
 
 [dependencies]
 spm-contracts.workspace = true

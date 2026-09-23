@@ -2,6 +2,7 @@
 # Cross-build Windows PE artifacts (x86_64-pc-windows-msvc) from WSL.
 # Output stays in this repo ext4 target/: target/x86_64-pc-windows-msvc/<profile-dir>/
 # Usage: scripts/build-windows.sh [profile] [package ...]   (default: release pecofence pecofence-watchdog)
+#        scripts/build-windows.sh test [package ...]
 #
 # Toolchain: clang-cl (C deps) + lld-link (final link) against the Windows SDK and
 # MSVC CRT libraries mounted at /mnt/c. The linker is selected through
@@ -55,6 +56,16 @@ echo
 
 pkg_flags=()
 for p in "${PACKAGES[@]}"; do pkg_flags+=(-p "$p"); done
+if [ "$PROFILE" = test ]; then
+  test_output=$(mktemp)
+  trap 'rm -f "$test_output"' EXIT
+  if cargo test --locked --target "$TRIPLE" --no-run "${pkg_flags[@]}" 2>&1 | tee "$test_output"; then
+    grep 'Executable' "$test_output"
+  else
+    exit 1
+  fi
+  exit 0
+fi
 cargo build --locked --target "$TRIPLE" --profile "$PROFILE" "${pkg_flags[@]}"
 
 echo
