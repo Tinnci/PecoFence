@@ -254,7 +254,6 @@ impl Actor {
                     features: BTreeSet::from([
                         Feature::Multiplexing,
                         Feature::Pagination,
-                        Feature::RefreshEvents,
                         Feature::Navigation,
                         Feature::Briefing,
                     ]),
