@@ -766,6 +766,36 @@ mod tests {
     }
 
     #[test]
+    fn hundred_subscribe_unsubscribe_cycles_leave_no_residue() {
+        let (handle, receivers) = channel();
+        let mut actor = actor();
+        actor.receivers = receivers;
+        for id in 1..=100 {
+            let local = Token(id);
+            if id % 10 == 0 {
+                handle.unsubscribe(local).unwrap();
+                let command = actor.receivers.control.try_recv().unwrap();
+                actor.apply_offline(command);
+                handle.subscribe(local, ScopeId(1), 1, query()).unwrap();
+                let command = actor.receivers.data.try_recv().unwrap();
+                actor.apply_offline(command);
+                assert!(!actor.cancelled_tokens.contains(&local));
+            }
+            handle.subscribe(local, ScopeId(1), 1, query()).unwrap();
+            let command = actor.receivers.data.try_recv().unwrap();
+            actor.apply_offline(command);
+            handle.unsubscribe(local).unwrap();
+            let command = actor.receivers.control.try_recv().unwrap();
+            actor.apply_offline(command);
+        }
+        assert!(actor.local_queries.is_empty());
+        assert!(actor.active.is_empty());
+        assert!(actor.remote_queries.is_empty());
+        assert!(actor.pending_subscribes.is_empty());
+        assert!(actor.cancelled_tokens.is_empty());
+    }
+
+    #[test]
     fn tombstone_overflow_clears_and_continues() {
         let mut actor = actor();
         for id in 1..=4096 {
