@@ -3,8 +3,8 @@
 use pecofence_core::geometry::{self, PxRect, WorkArea};
 use pecofence_core::rules::{Cond, Decision, RuleSet, Target, Template};
 use pecofence_core::{
-    AssignedBy, Config, ConfigStore, Fence, FenceId, FenceKind, IconKey, Item, ItemId, ItemKey,
-    ItemRef, ItemSourceSpec, Layout, LoadOutcome, MonitorIdentity, Origin, SortMode,
+    AssignedBy, Config, ConfigStore, Fence, FenceId, FenceKind, FreshReason, IconKey, Item, ItemId,
+    ItemKey, ItemRef, ItemSourceSpec, Layout, LoadOutcome, MonitorIdentity, Origin, SortMode,
 };
 use pecofence_platform::RECT;
 use pecofence_platform::shell::{self, DesktopEntry, EntryOrigin};
@@ -28,6 +28,7 @@ pub struct AppState {
     pub work_areas: Vec<WorkArea>,
     pub first_run: bool,
     pub recovered_from: Option<PathBuf>,
+    pub load_issue: Option<String>,
 }
 
 /// Summary of a desktop sync pass.
@@ -72,11 +73,33 @@ impl AppState {
         if store.dir() != directory {
             tracing::info!(path = %store.dir().display(), "reusing pre-rename configuration");
         }
-        let (config, first_run, recovered_from) = match store.load() {
-            LoadOutcome::Primary(c) => (c, false, None),
-            LoadOutcome::Recovered(c, from) => (c, false, Some(from)),
-            LoadOutcome::Fresh(c) => (c, true, None),
+        let (config, first_run, recovered_from, load_issue) = match store.load() {
+            LoadOutcome::Primary(c) => (c, false, None, None),
+            LoadOutcome::Recovered(c, from) => (c, false, Some(from), None),
+            LoadOutcome::Fresh(c, FreshReason::FirstRun) => (c, true, None, None),
+            LoadOutcome::Fresh(
+                c,
+                FreshReason::CorruptPrimary {
+                    reason,
+                    quarantined,
+                },
+            ) => {
+                let detail = match quarantined {
+                    Some(path) => format!(
+                        "Corrupt config: {reason}; quarantined at {}",
+                        path.display()
+                    ),
+                    None => format!("Corrupt config: {reason}"),
+                };
+                (c, false, None, Some(detail))
+            }
+            LoadOutcome::Fresh(c, FreshReason::UnreadablePrimary { reason }) => {
+                (c, false, None, Some(format!("Unreadable config: {reason}")))
+            }
         };
+        if let Some(issue) = &load_issue {
+            tracing::warn!(load_issue = %issue, "config.load_issue");
+        }
         pecofence_core::i18n::set_language(
             config
                 .settings
@@ -95,10 +118,14 @@ impl AppState {
             work_areas,
             first_run,
             recovered_from,
+            load_issue,
         };
         state.rebuild_catalog();
         state.ensure_layout();
         state.normalize_tabs();
+        if state.load_issue.is_some() {
+            state.dirty = false;
+        }
         state
     }
 
@@ -1785,6 +1812,7 @@ mod tests {
             work_areas: vec![work],
             first_run: true,
             recovered_from: None,
+            load_issue: None,
         };
         state.ensure_layout();
         state
