@@ -22,7 +22,7 @@ foreach ($log in @("spmd.stderr.log", "spmd.stdout.log", "pecofence.stderr.log",
 
 # 1. spmd: v2 named pipe, fixture mode, instance-local logs.
 $spmd = Start-Process -FilePath (Join-Path $Inst "spmd.exe") `
-  -ArgumentList @("--ipc-version", "v2", "--fixture", $fixture) `
+  -ArgumentList @("--ipc-version", "v2", "--fixture", $fixture, "--instance", $Name) `
   -WorkingDirectory $Inst `
   -RedirectStandardOutput (Join-Path $Inst "logs\spmd.stdout.log") `
   -RedirectStandardError (Join-Path $Inst "logs\spmd.stderr.log") `

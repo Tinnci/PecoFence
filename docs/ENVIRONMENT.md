@@ -70,8 +70,8 @@ PecoFence-lab\
   `stop-instance.ps1 -Name <n>`（spmd 走 fixture 模式 + 实例内绝对路径日志；
   pecofence 走 `--portable --no-hide-icons` + `PECOFENCE_INSTANCE` +
   实例专属 APPDATA/LOCALAPPDATA）
-- **多后端场景不能并行**：v2 命名管道按用户 SID+会话计算，双端都没有实例
-  覆盖参数（后续开发项）；当前顺序运行，或多个前端共享同一 spmd
+- 多后端实例通过 spmd 的 `--instance` 与 pecofence 的 `PECOFENCE_INSTANCE`
+  使用同名实例标识实现管道级隔离，可并行运行不同 fixture 的场景。
 - **DLP 规则（实测）**：
   - WSL 写入（fixtures/manifest/二进制）→ 明文，必须保持
   - Windows 进程写文档类（实例 config 被应用重写）→ 可能加密；对应用透明，
