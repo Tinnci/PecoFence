@@ -10,19 +10,31 @@ pub const MAX_ITEMS: usize = 5000;
 pub const DAILY_BACKUPS_KEPT: usize = 7;
 
 #[derive(Debug)]
+pub enum FreshReason {
+    FirstRun,
+    CorruptPrimary {
+        reason: String,
+        quarantined: Option<PathBuf>,
+    },
+    UnreadablePrimary {
+        reason: String,
+    },
+}
+
+#[derive(Debug)]
 pub enum LoadOutcome {
     /// Loaded from the primary file.
     Primary(Config),
     /// Primary missing/corrupt; loaded from `.bak` or a daily backup (path given).
     Recovered(Config, PathBuf),
     /// Nothing usable: fresh default (first run or total loss).
-    Fresh(Config),
+    Fresh(Config, FreshReason),
 }
 
 impl LoadOutcome {
     pub fn into_config(self) -> Config {
         match self {
-            LoadOutcome::Primary(c) | LoadOutcome::Recovered(c, _) | LoadOutcome::Fresh(c) => c,
+            LoadOutcome::Primary(c) | LoadOutcome::Recovered(c, _) | LoadOutcome::Fresh(c, _) => c,
         }
     }
 }
@@ -75,7 +87,11 @@ impl ConfigStore {
     /// Reads and validates any config file (import / backup restore), with the reason on error.
     pub fn parse_file(path: &Path) -> Result<Config, String> {
         let text = fs::read_to_string(path).map_err(|e| e.to_string())?;
-        let cfg: Config = serde_json::from_str(&text).map_err(|e| e.to_string())?;
+        Self::parse_text(&text)
+    }
+
+    fn parse_text(text: &str) -> Result<Config, String> {
+        let cfg: Config = serde_json::from_str(text).map_err(|e| e.to_string())?;
         validate(&cfg)?;
         Ok(migrate(cfg))
     }
@@ -88,9 +104,47 @@ impl ConfigStore {
 
     /// Loads with fallbacks: primary → .bak → newest daily backup → default.
     pub fn load(&self) -> LoadOutcome {
-        if let Some(c) = Self::parse(&self.primary_path()) {
-            return LoadOutcome::Primary(c);
-        }
+        let primary = self.primary_path();
+        let reason = match fs::read_to_string(&primary) {
+            Ok(text) => match Self::parse_text(&text) {
+                Ok(c) => return LoadOutcome::Primary(c),
+                Err(reason) => {
+                    let stamp = today_yyyy_mm_dd().replace('-', "");
+                    let seconds = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_secs() % 86_400)
+                        .unwrap_or(0);
+                    let quarantine = self.dir.join(format!(
+                        "config.corrupt-{stamp}-{:02}{:02}{:02}.json",
+                        seconds / 3600,
+                        seconds / 60 % 60,
+                        seconds % 60
+                    ));
+                    let result = if quarantine.exists() {
+                        Err(io::Error::new(
+                            io::ErrorKind::AlreadyExists,
+                            "quarantine filename already exists",
+                        ))
+                    } else {
+                        fs::rename(&primary, &quarantine)
+                    };
+                    match result {
+                        Ok(()) => FreshReason::CorruptPrimary {
+                            reason,
+                            quarantined: Some(quarantine),
+                        },
+                        Err(e) => FreshReason::CorruptPrimary {
+                            reason: format!("{reason}; quarantine failed: {e}"),
+                            quarantined: None,
+                        },
+                    }
+                }
+            },
+            Err(e) if e.kind() == io::ErrorKind::NotFound => FreshReason::FirstRun,
+            Err(e) => FreshReason::UnreadablePrimary {
+                reason: e.to_string(),
+            },
+        };
         if let Some(c) = Self::parse(&self.bak_path()) {
             return LoadOutcome::Recovered(c, self.bak_path());
         }
@@ -101,7 +155,7 @@ impl ConfigStore {
                 return LoadOutcome::Recovered(c, p);
             }
         }
-        LoadOutcome::Fresh(Config::default())
+        LoadOutcome::Fresh(Config::default(), reason)
     }
 
     /// Daily backups (`backups/YYYY-MM-DD.json`), unsorted.
@@ -158,7 +212,10 @@ impl ConfigStore {
 /// Range checks from plan §7.5.
 pub fn validate(cfg: &Config) -> Result<(), String> {
     if cfg.schema_version == 0 || cfg.schema_version > SCHEMA_VERSION {
-        return Err(format!("unsupported schemaVersion {}", cfg.schema_version));
+        return Err(format!(
+            "unsupported schema version {} (supported: {SCHEMA_VERSION})",
+            cfg.schema_version
+        ));
     }
     if cfg.items.len() > MAX_ITEMS {
         return Err(format!("too many items: {}", cfg.items.len()));
@@ -297,7 +354,116 @@ mod tests {
     #[test]
     fn nothing_usable_gives_fresh() {
         let store = ConfigStore::new(tmpdir("fresh"));
-        assert!(matches!(store.load(), LoadOutcome::Fresh(_)));
+        assert!(matches!(
+            store.load(),
+            LoadOutcome::Fresh(_, FreshReason::FirstRun)
+        ));
+    }
+
+    #[test]
+    fn truncated_primary_quarantined_and_reason_visible() {
+        let store = ConfigStore::new(tmpdir("truncated"));
+        fs::create_dir_all(store.dir()).unwrap();
+        let damaged = b"{\"schemaVersion\":";
+        fs::write(store.primary_path(), damaged).unwrap();
+        match store.load() {
+            LoadOutcome::Fresh(
+                _,
+                FreshReason::CorruptPrimary {
+                    reason,
+                    quarantined,
+                },
+            ) => {
+                assert!(!reason.is_empty());
+                let path = quarantined.unwrap();
+                assert_eq!(fs::read(path).unwrap(), damaged);
+                assert!(!store.primary_path().exists());
+                assert!(store.list_backups().is_empty());
+            }
+            other => panic!("unexpected {other:?}"),
+        }
+    }
+
+    #[test]
+    fn syntax_error_primary_quarantined() {
+        let store = ConfigStore::new(tmpdir("syntax"));
+        fs::create_dir_all(store.dir()).unwrap();
+        fs::write(store.primary_path(), "{ bad json").unwrap();
+        assert!(matches!(
+            store.load(),
+            LoadOutcome::Fresh(
+                _,
+                FreshReason::CorruptPrimary {
+                    quarantined: Some(_),
+                    ..
+                }
+            )
+        ));
+    }
+
+    #[test]
+    fn future_schema_version_reports_unsupported() {
+        let store = ConfigStore::new(tmpdir("future-schema"));
+        fs::create_dir_all(store.dir()).unwrap();
+        let cfg = Config {
+            schema_version: SCHEMA_VERSION + 1,
+            ..Config::default()
+        };
+        fs::write(store.primary_path(), serde_json::to_vec(&cfg).unwrap()).unwrap();
+        match store.load() {
+            LoadOutcome::Fresh(_, FreshReason::CorruptPrimary { reason, .. }) => {
+                assert!(reason.contains(&format!(
+                    "unsupported schema version {} (supported: {SCHEMA_VERSION})",
+                    cfg.schema_version
+                )));
+            }
+            other => panic!("unexpected {other:?}"),
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unreadable_primary_not_first_run() {
+        use std::os::unix::fs::PermissionsExt;
+        let store = ConfigStore::new(tmpdir("unreadable"));
+        fs::create_dir_all(store.dir()).unwrap();
+        fs::write(store.primary_path(), "{}").unwrap();
+        fs::set_permissions(store.primary_path(), fs::Permissions::from_mode(0o000)).unwrap();
+        let outcome = store.load();
+        fs::set_permissions(store.primary_path(), fs::Permissions::from_mode(0o600)).unwrap();
+        assert!(matches!(
+            outcome,
+            LoadOutcome::Fresh(_, FreshReason::UnreadablePrimary { .. })
+        ));
+    }
+
+    #[test]
+    fn save_after_quarantine_writes_clean_primary() {
+        let store = ConfigStore::new(tmpdir("save-quarantine"));
+        fs::create_dir_all(store.dir()).unwrap();
+        fs::write(store.primary_path(), "{").unwrap();
+        let (cfg, quarantine) = match store.load() {
+            LoadOutcome::Fresh(
+                cfg,
+                FreshReason::CorruptPrimary {
+                    quarantined: Some(path),
+                    ..
+                },
+            ) => (cfg, path),
+            other => panic!("unexpected {other:?}"),
+        };
+        store.save(&cfg).unwrap();
+        assert!(matches!(store.load(), LoadOutcome::Primary(_)));
+        assert_eq!(fs::read(quarantine).unwrap(), b"{");
+    }
+
+    #[test]
+    fn missing_everything_is_first_run() {
+        let store = ConfigStore::new(tmpdir("missing-first-run"));
+        assert!(matches!(
+            store.load(),
+            LoadOutcome::Fresh(_, FreshReason::FirstRun)
+        ));
     }
 
     #[test]
