@@ -16,6 +16,7 @@ use std::{
 };
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::sync::mpsc;
+use tokio::task::JoinHandle;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
@@ -289,7 +290,7 @@ impl Actor {
         pipe: tokio::net::windows::named_pipe::NamedPipeClient,
         cancel: &CancellationToken,
     ) -> Result<(), ()> {
-        let (mut reader, mut writer) = tokio::io::split(pipe);
+        let (reader, mut writer) = tokio::io::split(pipe);
         let hello_id = RequestId::new();
         write_envelope(
             &mut writer,
@@ -319,75 +320,61 @@ impl Actor {
         // command waking the select loop can no longer discard a half-read
         // frame. Complete envelopes arrive through the channel instead.
         let (envelope_tx, mut envelope_rx) = mpsc::channel::<Envelope>(32);
-        let _reader_task = tokio::spawn(async move {
+        let reader_task = spawn_reader(reader, envelope_tx);
+        let result = async {
+            let hello =
+                match tokio::time::timeout(std::time::Duration::from_secs(10), envelope_rx.recv())
+                    .await
+                {
+                    Ok(Some(envelope)) => envelope,
+                    Ok(None) => return Ok(()),
+                    Err(_) => return Err(()),
+                };
+            hello.validate(Direction::ServerToClient).map_err(|_| ())?;
+            let Body::Response(Response::Hello(response)) = hello.body else {
+                return Err(());
+            };
+            if hello.request_id != Some(hello_id) {
+                return Err(());
+            }
+            let session_changed = self.daemon_session != Some(response.daemon_session);
+            self.daemon_session = Some(response.daemon_session);
+            self.reset_remote();
+            if session_changed {
+                for active in self.active.values_mut() {
+                    active.latest = None;
+                }
+            }
+            self.set_state(ConnectionState::Connected);
+            let queries: Vec<_> = self.active.keys().cloned().collect();
+            for query in queries {
+                self.send_subscribe(&mut writer, query).await?;
+            }
             loop {
                 tokio::select! {
-                    incoming = read_envelope(&mut reader) => {
-                        match incoming {
-                            Ok(envelope) => {
-                                if envelope_tx.send(envelope).await.is_err() {
-                                    break;
-                                }
-                            }
-                            // Reader error or EOF: drop the sender so the actor
-                            // observes the closed connection.
-                            Err(_) => break,
-                        }
+                    _ = cancel.cancelled() => return Ok(()),
+                    command = self.receivers.control.recv() => {
+                        let Some(command) = command else { return Ok(()) };
+                        self.apply_connected(command, &mut writer).await?;
+                    }
+                    command = self.receivers.data.recv() => {
+                        let Some(command) = command else { return Ok(()) };
+                        self.apply_connected(command, &mut writer).await?;
+                    }
+                    incoming = envelope_rx.recv() => {
+                        let Some(envelope) = incoming else {
+                            // Reader task ended: connection is closed.
+                            return Ok(());
+                        };
+                        envelope.validate(Direction::ServerToClient).map_err(|_| ())?;
+                        self.route_incoming(envelope);
                     }
                 }
             }
-        });
-        let hello = match tokio::time::timeout(
-            std::time::Duration::from_secs(10),
-            envelope_rx.recv(),
-        )
-        .await
-        {
-            Ok(Some(envelope)) => envelope,
-            Ok(None) => return Ok(()),
-            Err(_) => return Err(()),
-        };
-        hello.validate(Direction::ServerToClient).map_err(|_| ())?;
-        let Body::Response(Response::Hello(response)) = hello.body else {
-            return Err(());
-        };
-        if hello.request_id != Some(hello_id) {
-            return Err(());
         }
-        let session_changed = self.daemon_session != Some(response.daemon_session);
-        self.daemon_session = Some(response.daemon_session);
-        self.reset_remote();
-        if session_changed {
-            for active in self.active.values_mut() {
-                active.latest = None;
-            }
-        }
-        self.set_state(ConnectionState::Connected);
-        let queries: Vec<_> = self.active.keys().cloned().collect();
-        for query in queries {
-            self.send_subscribe(&mut writer, query).await?;
-        }
-        loop {
-            tokio::select! {
-                _ = cancel.cancelled() => return Ok(()),
-                command = self.receivers.control.recv() => {
-                    let Some(command) = command else { return Ok(()) };
-                    self.apply_connected(command, &mut writer).await?;
-                }
-                command = self.receivers.data.recv() => {
-                    let Some(command) = command else { return Ok(()) };
-                    self.apply_connected(command, &mut writer).await?;
-                }
-                incoming = envelope_rx.recv() => {
-                    let Some(envelope) = incoming else {
-                        // Reader task ended: connection is closed.
-                        return Ok(());
-                    };
-                    envelope.validate(Direction::ServerToClient).map_err(|_| ())?;
-                    self.route_incoming(envelope);
-                }
-            }
-        }
+        .await;
+        reap_reader(reader_task, Duration::from_secs(2)).await;
+        result
     }
 
     async fn send_subscribe(
@@ -543,6 +530,30 @@ fn jitter(base: Duration) -> Duration {
     base.mul_f64(percent as f64 / 100.0)
 }
 
+fn spawn_reader<R: AsyncRead + Unpin + Send + 'static>(
+    mut reader: R,
+    tx: mpsc::Sender<Envelope>,
+) -> JoinHandle<()> {
+    tokio::spawn(async move {
+        while let Ok(envelope) = read_envelope(&mut reader).await {
+            if tx.send(envelope).await.is_err() {
+                break;
+            }
+        }
+    })
+}
+
+async fn reap_reader(handle: JoinHandle<()>, timeout: Duration) -> bool {
+    handle.abort();
+    match tokio::time::timeout(timeout, handle).await {
+        Ok(_) => true,
+        Err(_) => {
+            tracing::error!("transport.reader_reap_timeout");
+            false
+        }
+    }
+}
+
 async fn read_envelope(reader: &mut (impl AsyncRead + Unpin)) -> std::io::Result<Envelope> {
     let mut prefix = [0u8; 4];
     reader.read_exact(&mut prefix).await?;
@@ -613,6 +624,88 @@ mod tests {
             pending_subscribes: HashMap::new(),
             daemon_session: None,
         }
+    }
+
+    fn test_envelope() -> Envelope {
+        Envelope {
+            protocol_major: PROTOCOL_MAJOR,
+            protocol_minor: PROTOCOL_MINOR,
+            daemon_session: None,
+            request_id: None,
+            subscription_id: None,
+            revision: None,
+            body: Body::Request(Request::Hello(HelloRequest {
+                client_build: String::new(),
+                protocol_major: PROTOCOL_MAJOR,
+                protocol_minor: PROTOCOL_MINOR,
+                features: BTreeSet::new(),
+            })),
+        }
+    }
+
+    #[tokio::test]
+    async fn silent_stream_reaped_within_2s() {
+        let (reader, _silent_peer) = tokio::io::duplex(1024);
+        let (tx, _rx) = mpsc::channel(32);
+        let handle = spawn_reader(reader, tx);
+        assert!(
+            tokio::time::timeout(
+                Duration::from_secs(2),
+                reap_reader(handle, Duration::from_secs(2))
+            )
+            .await
+            .unwrap()
+        );
+    }
+
+    #[tokio::test]
+    async fn eof_ends_reader() {
+        let (reader, mut peer) = tokio::io::duplex(1024);
+        let (tx, mut rx) = mpsc::channel(32);
+        let handle = spawn_reader(reader, tx);
+        write_envelope(&mut peer, &test_envelope()).await.unwrap();
+        drop(peer);
+        assert!(rx.recv().await.is_some());
+        assert!(
+            tokio::time::timeout(Duration::from_secs(2), handle)
+                .await
+                .unwrap()
+                .is_ok()
+        );
+    }
+
+    #[tokio::test]
+    async fn receiver_dropped_ends_reader() {
+        let (reader, mut peer) = tokio::io::duplex(1024);
+        let (tx, rx) = mpsc::channel(32);
+        let handle = spawn_reader(reader, tx);
+        drop(rx);
+        write_envelope(&mut peer, &test_envelope()).await.unwrap();
+        assert!(
+            tokio::time::timeout(Duration::from_secs(2), handle)
+                .await
+                .unwrap()
+                .is_ok()
+        );
+    }
+
+    #[tokio::test]
+    async fn reap_finished_reader_is_fast() {
+        let (reader, peer) = tokio::io::duplex(1024);
+        let (tx, _rx) = mpsc::channel(32);
+        let handle = spawn_reader(reader, tx);
+        drop(peer);
+        while !handle.is_finished() {
+            tokio::task::yield_now().await;
+        }
+        assert!(
+            tokio::time::timeout(
+                Duration::from_millis(100),
+                reap_reader(handle, Duration::from_secs(2))
+            )
+            .await
+            .unwrap()
+        );
     }
 
     #[test]
