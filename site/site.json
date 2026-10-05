@@ -1,6 +1,7 @@
 {
-  "domain": "pecofence.jiang.jp",
-  "repository": "https://github.com/DayuanJiang/PecoFence",
+  "baseUrl": null,
+  "customDomain": null,
+  "repository": "https://github.com/Tinnci/PecoFence",
   "languages": [
     {
       "code": "en",

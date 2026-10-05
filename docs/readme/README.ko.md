@@ -84,15 +84,14 @@ https://github.com/user-attachments/assets/6320cf28-a791-4720-9659-b4575df021a0
 
 ## PecoFence 시작하기
 
-<a href="https://apps.microsoft.com/detail/9MV6WG3XNWSX?mode=direct"><img src="https://get.microsoft.com/images/ko%20dark.svg" alt="Microsoft Store에서 받기" width="200"></a>
+이 버전은 [Tinnci/PecoFence](https://github.com/Tinnci/PecoFence)에서 독립적으로 유지 관리하는 버전입니다.
+이 버전의 Microsoft Store 및 winget 배포 채널은 설정되어 있지 않으며, 아직 릴리스가 게시되지 않았습니다.
+사용 가능한 빌드는 이 저장소의 [Releases](https://github.com/Tinnci/PecoFence/releases) 또는
+[CI 아티팩트](https://github.com/Tinnci/PecoFence/actions)에서 확인하거나, 아래 안내에 따라 소스에서 빌드하세요.
 
-Microsoft Store 버전은 Microsoft가 서명하고 자동으로 업데이트되며 SmartScreen 경고가 나타나지 않습니다. ZIP을 원한다면 아래 포터블 빌드도 같은 앱입니다.
-
-1. 이 저장소의 **Releases** 페이지에서 `pecofence-<버전>-x64.zip`을 다운로드합니다.
+1. 포터블 빌드가 제공되면 이 저장소의 Releases 또는 CI 아티팩트에서 `pecofence-<버전>-x64.zip`을 다운로드합니다.
 2. **ZIP 전체**를 한 폴더에 풀고 `pecofence.exe`를 실행합니다.
 3. 이제 정리를 시작하세요. 설정을 열거나 종료하려면 트레이 아이콘을 오른쪽 클릭하면 됩니다.
-
-패키지 관리자를 선호한다면 `winget install DayuanJiang.PecoFence`로 같은 포터블 빌드를 설치할 수 있고, SmartScreen 경고도 나타나지 않습니다.
 
 **Windows 11 x64 · 포터블 ZIP · 계정 불필요 · Apache 2.0 라이선스**
 
@@ -113,8 +112,7 @@ Microsoft Store 버전은 Microsoft가 서명하고 자동으로 업데이트되
 - 유리 효과는 정적 바탕 화면 배경을 사용합니다. 다른 앱 창이나 동영상 배경 화면은
   굴절하지 않습니다.
 - Windows 자체 대화 상자와 타사 파일 탐색기 메뉴 항목은 Windows 언어를 따릅니다.
-- 포터블 빌드는 코드 서명이 되어 있지 않습니다. 첫 실행 때 Windows SmartScreen이 나타나면 **추가 정보 → 실행**을 선택하세요.
-  Microsoft Store나 winget으로 설치하면 이 경고가 나타나지 않습니다.
+- 포터블 빌드는 코드 서명이 되어 있지 않습니다. 첫 실행 때 Windows SmartScreen이 나타나면 빌드 출처를 신뢰하는 경우에만 **추가 정보 → 실행**을 선택하세요.
 
 [포터블 버전 안내](../PORTABLE.md) · [언어 안내](../LOCALIZATION.md)
 
@@ -131,6 +129,8 @@ PecoFence는 Apache 2.0 라이선스로 공개되어 있습니다. 더 정확한
 <summary><strong>소스에서 빌드하기</strong></summary>
 
 Rust stable과 C++ 워크로드 및 Windows SDK가 포함된 Visual Studio Build Tools를 설치합니다.
+이 버전은 현재 비공개 `Tinnci/spm` 저장소에 대한 인증된 Git 접근 권한도 필요합니다.
+공개 PecoFence 저장소에 대한 접근 권한만으로는 빌드할 수 없습니다.
 
 ```powershell
 cargo build --locked --release

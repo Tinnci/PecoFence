@@ -83,15 +83,14 @@ https://github.com/user-attachments/assets/6320cf28-a791-4720-9659-b4575df021a0
 
 ## 开始使用
 
-<a href="https://apps.microsoft.com/detail/9MV6WG3XNWSX?mode=direct"><img src="https://get.microsoft.com/images/zh-cn%20dark.svg" alt="从 Microsoft Store 获取" width="200"></a>
+这是在 [Tinnci/PecoFence](https://github.com/Tinnci/PecoFence) 独立维护的版本。
+本版本尚未配置 Microsoft Store 和 winget 分发渠道，也尚未发布任何 Release。
+请在本仓库的 [Releases](https://github.com/Tinnci/PecoFence/releases) 或
+[CI 构建产物](https://github.com/Tinnci/PecoFence/actions)中查看是否有可用构建，或按下方说明从源码构建。
 
-Microsoft Store 版由微软签名，自动更新，不会出现 SmartScreen 提示。想要纯压缩包？下面的便携版是同一个程序。
-
-1. 在本仓库的 **Releases** 页面下载 `pecofence-<版本>-x64.zip`。
+1. 有可用的便携构建时，从本仓库的 Releases 或 CI 构建产物下载 `pecofence-<版本>-x64.zip`。
 2. **完整解压**到一个文件夹，运行 `pecofence.exe`。
 3. 开始整理。需要设置或退出时，右键系统托盘里的 PecoFence 图标。
-
-习惯用包管理器？`winget install DayuanJiang.PecoFence` 安装的是同一个便携版，并且不会触发 SmartScreen 提示。
 
 **Windows 11 x64 · 便携版 · 无需账号 · Apache 2.0 开源**
 
@@ -110,7 +109,7 @@ Microsoft Store 版由微软签名，自动更新，不会出现 SmartScreen 提
 - 已有安装会继续使用旧配置目录，保留布局、规则和备份。详见[升级说明](../UPGRADING.md)。
 - 玻璃效果采样静态桌面壁纸，不会折射其他应用窗口或视频壁纸。
 - Windows 自带对话框和第三方资源管理器菜单仍使用系统语言。
-- 便携版未做代码签名。首次运行若出现 Windows SmartScreen 提示，点击**更多信息 → 仍要运行**。通过 Microsoft Store 或 winget 安装不会出现该提示。
+- 便携版未做代码签名。首次运行若出现 Windows SmartScreen 提示，仅在信任构建来源时点击**更多信息 → 仍要运行**。
 
 [便携版说明](../PORTABLE.md) · [多语言说明](../LOCALIZATION.md)
 
@@ -125,7 +124,9 @@ Microsoft Store 版由微软签名，自动更新，不会出现 SmartScreen 提
 <details>
 <summary><strong>从源码构建</strong></summary>
 
-安装 Rust stable、Visual Studio Build Tools 的 C++ 工作负载和 Windows SDK，然后运行：
+安装 Rust stable、Visual Studio Build Tools 的 C++ 工作负载和 Windows SDK。
+本版本目前还需要经身份验证的 Git 访问权限，以获取私有仓库 `Tinnci/spm`；
+仅能访问公开的 PecoFence 仓库不足以完成构建。具备上述条件后运行：
 
 ```powershell
 cargo build --locked --release

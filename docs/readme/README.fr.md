@@ -85,16 +85,16 @@ personnalisés restent intacts.
 
 ## Télécharger PecoFence
 
-<a href="https://apps.microsoft.com/detail/9MV6WG3XNWSX?mode=direct"><img src="https://get.microsoft.com/images/fr%20dark.svg" alt="Télécharger dans le Microsoft Store" width="200"></a>
+Il s’agit de l’édition maintenue indépendamment sur [Tinnci/PecoFence](https://github.com/Tinnci/PecoFence).
+Ses canaux Microsoft Store et winget ne sont pas configurés ; aucune version n’a encore été publiée.
+Consultez les [Releases](https://github.com/Tinnci/PecoFence/releases) ou les
+[artefacts CI](https://github.com/Tinnci/PecoFence/actions) de ce dépôt pour les builds disponibles,
+ou compilez depuis les sources comme indiqué ci-dessous.
 
-La version Microsoft Store est signée par Microsoft, se met à jour automatiquement et n’affiche jamais l’avertissement SmartScreen. Vous préférez un simple ZIP ? La version portable ci-dessous est la même application.
-
-1. Ouvrez la page **Releases** de ce dépôt et téléchargez `pecofence-<version>-x64.zip`.
+1. Lorsqu’un build portable est disponible, téléchargez `pecofence-<version>-x64.zip` depuis les Releases ou les artefacts CI de ce dépôt.
 2. Extrayez **l’intégralité du ZIP** dans un dossier et lancez `pecofence.exe`.
 3. Commencez à ranger. Un clic droit sur l’icône de la zone de notification ouvre les Paramètres
    ou quitte l’application.
-
-Vous préférez un gestionnaire de paquets ? `winget install DayuanJiang.PecoFence` installe la même version portable et évite l’avertissement SmartScreen.
 
 **Windows 11 x64 · ZIP portable · Sans compte · Licence Apache 2.0**
 
@@ -118,7 +118,7 @@ et Bureau dans la langue de votre choix. Les icônes du Bureau Windows réappara
 - Les boîtes de dialogue de Windows et les entrées tierces des menus de l’Explorateur suivent
   la langue de Windows.
 - Les versions portables ne sont pas signées. Si Windows SmartScreen s’affiche au premier lancement, choisissez
-  **Informations complémentaires → Exécuter quand même**. L’installation via le Microsoft Store ou winget évite cet avertissement.
+  **Informations complémentaires → Exécuter quand même** uniquement si vous faites confiance à la source du build.
 
 [Guide de l’édition portable](../PORTABLE.md) · [Guide des langues](../LOCALIZATION.md)
 
@@ -135,6 +135,8 @@ PecoFence est sous licence Apache 2.0 et les contributions sont bienvenues, d’
 <summary><strong>Compiler depuis les sources</strong></summary>
 
 Installez Rust stable ainsi que Visual Studio Build Tools avec la charge de travail C++ et le SDK Windows.
+Cette édition nécessite aussi actuellement un accès Git authentifié au dépôt privé
+`Tinnci/spm` ; l’accès au seul dépôt public PecoFence ne suffit pas.
 
 ```powershell
 cargo build --locked --release

@@ -19,6 +19,14 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
+# Validate publishing ownership before locating SDK tools or compiling anything.
+$id = Get-Content -LiteralPath $Identity -Raw | ConvertFrom-Json
+foreach ($field in "identityName", "publisher", "publisherDisplayName") {
+  if ([string]::IsNullOrWhiteSpace([string]$id.$field)) {
+    throw "$Identity is not configured: set '$field' from your own Partner Center product identity. See docs/STORE.md."
+  }
+}
+
 function Find-SdkTool([string]$name) {
   $cmd = Get-Command $name -ErrorAction SilentlyContinue
   if ($cmd) { return $cmd.Source }
@@ -49,11 +57,6 @@ if ($Version -notmatch '^(\d+)\.(\d+)\.(\d+)(?:-[0-9A-Za-z.-]+)?$') { throw "Inv
 # MSIX needs four parts; the Store requires the revision (last part) to be 0.
 $packageVersion = "$($Matches[1]).$($Matches[2]).$($Matches[3]).0"
 
-$id = Get-Content -LiteralPath $Identity -Raw | ConvertFrom-Json
-foreach ($field in "identityName", "publisher", "publisherDisplayName") {
-  if (-not $id.$field) { throw "$Identity is missing '$field'" }
-}
-
 $distRoot = [IO.Path]::GetFullPath((Join-Path $root "dist"))
 $stage = [IO.Path]::GetFullPath((Join-Path $distRoot "pecofence-$Version-msix"))
 if (-not $stage.StartsWith($distRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { throw "Unsafe package destination" }
@@ -67,6 +70,7 @@ Copy-Item -LiteralPath (Join-Path $release "pecofence-watchdog.exe") -Destinatio
 Copy-Item -LiteralPath "third_party/webview2/WebView2Loader.x64.dll" -Destination (Join-Path $stage "WebView2Loader.dll")
 Copy-Item -LiteralPath "third_party/webview2/LICENSE.txt" -Destination (Join-Path $stage "LICENSE-WebView2Loader.txt")
 Copy-Item -LiteralPath "LICENSE" -Destination (Join-Path $stage "LICENSE.txt")
+Copy-Item -LiteralPath "NOTICE" -Destination $stage
 & $Python scripts/write-license-notices.py (Join-Path $stage "THIRD-PARTY-LICENSES.txt")
 if ($LASTEXITCODE -ne 0) { throw "License notice generation failed" }
 
@@ -76,9 +80,9 @@ if ($LASTEXITCODE -ne 0) { throw "Asset generation failed" }
 
 # Manifest with the Partner Center identity filled in.
 $manifest = Get-Content -LiteralPath "packaging/msix/AppxManifest.xml" -Raw
-$manifest = $manifest.Replace("__IDENTITY_NAME__", [string]$id.identityName)
-$manifest = $manifest.Replace("__IDENTITY_PUBLISHER__", [string]$id.publisher)
-$manifest = $manifest.Replace("__PUBLISHER_DISPLAY_NAME__", [string]$id.publisherDisplayName)
+$manifest = $manifest.Replace("__IDENTITY_NAME__", [Security.SecurityElement]::Escape([string]$id.identityName))
+$manifest = $manifest.Replace("__IDENTITY_PUBLISHER__", [Security.SecurityElement]::Escape([string]$id.publisher))
+$manifest = $manifest.Replace("__PUBLISHER_DISPLAY_NAME__", [Security.SecurityElement]::Escape([string]$id.publisherDisplayName))
 $manifest = $manifest.Replace("__VERSION__", $packageVersion)
 if ($manifest -match "__[A-Z_]+__") { throw "Unreplaced manifest token: $($Matches[0])" }
 $manifestPath = Join-Path $stage "AppxManifest.xml"

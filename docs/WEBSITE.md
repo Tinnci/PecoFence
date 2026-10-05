@@ -1,105 +1,93 @@
-# Product website
+# Website setup
 
-The product page at <https://pecofence.jiang.jp> is a static site generated from
-`site/` and published with Cloudflare Pages. It needs no Node toolchain: the build is
-`scripts/build-site.py` and the standard library.
+The independent [Tinnci/PecoFence repository](https://github.com/Tinnci/PecoFence)
+does not currently configure a public website deployment. No upstream domain,
+Cloudflare project or account is assumed to belong to this edition. Choose a host
+and URL before enabling publishing; see [INDEPENDENCE.md](INDEPENDENCE.md).
 
-## Layout
+## Local build and previews
 
-| Path | Purpose |
-|---|---|
-| `site/template.html` | One HTML template rendered once per language |
-| `site/assets/site.css`, `site.js`, `mark.svg` | Responsive styles, desktop preview toggle, clip playback, command copy button, language picker and favicon |
-| `site/assets/*.mp4`, `*.jpg`, `panel-*.png`, `wallpaper.jpg` | The 30-second spot (`promo.mp4`), six feature clips, posters, the three hero fences and the wallpaper, exported by `scripts/make-site-media.py` from the local promo project |
-| `site/i18n/<language>.json` | Copy for each language; `en.json` is the source and every other file must have the same keys |
-| `site/site.json` | Domain, repository URL and the language list |
-
-The build writes `dist/site/`: `index.html` for English, one `<language>/index.html`
-per translation, the localized README hero images as Open Graph previews, `CNAME`,
-`robots.txt` and `sitemap.xml`. Pages carry `hreflang` alternates, so search engines
-send visitors to their language; the header's language picker and the language links
-do the same by hand. The picker preserves the current section.
-
-The page uses a light canvas with the original desktop wallpaper and product panels
-inside the hero preview. Feature videos play only while visible, with individual
-pause controls, and never autoplay when reduced motion is preferred. The preview's
-hide/show button demonstrates clearing the desktop. Installation requirements expand
-without JavaScript; clipboard copying is available on HTTPS and localhost. No external
-fonts, UI libraries or additional build dependencies are required.
-
-## Building locally
-
-```powershell
-python scripts/build-site.py
-```
-
-Open `dist/site/index.html` in a browser. `--base http://localhost:8000` rewrites the
-canonical URLs for a local server, and `--strict` fails on any language file whose
-keys differ from `en.json` (the deployment workflow uses it).
-
-## Publishing
-
-The site is served by **Cloudflare Pages** from the project `pecofence`
-(`pecofence.pages.dev`), which was created as a direct-upload project: deployments are
-pushed to it with wrangler rather than pulled from Git. The custom domain
-`pecofence.jiang.jp` is attached to the project; the zone `jiang.jp` lives in the same
-Cloudflare account.
-
-### Deploy from this machine
+The site uses Python >=3.11 and the standard library, with no Node build toolchain:
 
 ```powershell
 python scripts/build-site.py --strict
-npx wrangler pages deploy dist/site --project-name pecofence --branch main
+python -m http.server 8000 --directory dist/site
 ```
 
-`npx wrangler login` once beforehand. The `--branch main` deployment becomes production;
-any other branch name creates a preview URL.
+Open <http://localhost:8000>. If needed, select a compatible Python with
+`uv run --no-project --python ">=3.11" python scripts/build-site.py --strict`.
+The default local base URL is `http://localhost:8000`; `--base` overrides it for
+previews, for example `--base http://localhost:9000`. `--strict` checks translation
+keys against `site/i18n/en.json`.
 
-### Deploy from GitHub
+`site/site.json` points to `https://github.com/Tinnci/PecoFence`, with `baseUrl`
+and `customDomain` initially `null`. The build writes localized pages, assets,
+Open Graph previews, `robots.txt` and `sitemap.xml` under `dist/site/`.
+There are no Store/winget buttons or analytics beacon.
 
-`.github/workflows/website.yml` runs the same two steps on every push to `main` that
-touches the site. It needs two repository secrets: `CLOUDFLARE_API_TOKEN`, a token with
-**Account → Cloudflare Pages → Edit**, and `CLOUDFLARE_ACCOUNT_ID`.
+## Configure a public deployment
 
-### DNS
+1. Choose a hosting account and create your own site/project.
+2. Set `site/site.json`'s `baseUrl` to the actual public HTTPS URL, including any
+   repository base path. For example, `https://<owner>.github.io/<repository>`
+   is a **placeholder**, not an existing deployment.
+3. Leave `customDomain` as `null` unless you control and configure a custom domain.
+   If set, it must match the base URL hostname, and the URL must have no base path.
+   Only this matching configuration generates a `CNAME`; local defaults do not.
+4. Validate before uploading:
 
-Pages does not create the record on its own. The zone needs one record, proxied or
-DNS-only:
+   ```powershell
+   python scripts/build-site.py --strict --deploy
+   ```
 
+`--deploy` requires an explicit public HTTPS URL; localhost defaults are rejected.
+The workflows do not pass `--base`, so configure `baseUrl` before enabling them.
+An explicit `--base` override must also satisfy deployment validation when used
+with `--deploy`; do not accidentally publish preview URLs as production metadata.
+
+### Cloudflare Pages
+
+Create a direct-upload Pages project in your own Cloudflare account. Configure
+these repository Actions settings for `.github/workflows/website.yml`:
+
+| Kind | Name | Value |
+|---|---|---|
+| Variable | `ENABLE_WEBSITE_DEPLOY` | `true` only when ready to publish |
+| Variable | `CLOUDFLARE_PAGES_PROJECT` | Your actual Pages project name |
+| Secret | `CLOUDFLARE_API_TOKEN` | Token with Account → Cloudflare Pages → Edit for your account |
+| Secret | `CLOUDFLARE_ACCOUNT_ID` | Your account ID |
+
+The workflow only publishes from `main` and calls `--strict --deploy`.
+For a manual local upload, authenticate with `npx wrangler login`, build with the
+same flags, then run:
+
+```powershell
+npx wrangler pages deploy dist/site --project-name "<your-project>" --branch main
 ```
-CNAME  pecofence  pecofence.pages.dev
-```
 
-The domain shows as **Active** in the project's Custom domains tab a few minutes after
-the record exists, and Cloudflare issues the certificate itself. The `CNAME` and
-`.nojekyll` files in the build output are only meaningful to GitHub Pages and are
-harmless here.
+`<your-project>` is a placeholder to replace. Configure any custom domain in your
+own project's Custom domains settings and follow the provider's DNS instructions;
+no existing domain, DNS zone or certificate is supplied by this repository.
 
-### Fallback: GitHub Pages
+### GitHub Pages alternative
 
-`.github/workflows/pages.yml` can deploy the same output to GitHub Pages when run
-manually from the Actions tab. To use it as the real host instead: in the repository's
-**Settings → Pages** set **Source** to **GitHub Actions**, point the DNS record at
-`<account>.github.io` (DNS only until the certificate exists), enter
-`pecofence.jiang.jp` as the custom domain, and turn on **Enforce HTTPS**.
+GitHub Pages is an optional alternative, **not an already live fallback**.
+Configure the repository's own Pages URL in `site/site.json` first. In
+**Settings → Pages**, select **GitHub Actions** as the source, then set the
+repository variable `ENABLE_GITHUB_PAGES=true`. Manually run
+`.github/workflows/pages.yml` from `main`; it calls `--strict --deploy` and uses
+GitHub Actions OIDC for deployment. Configure any custom domain and HTTPS in
+repository Pages settings separately. Keep unused hosting workflows disabled.
 
-## Changing copy
+## Copy and media
 
-Edit `site/i18n/en.json` first, then update every other language file with the same
-key. Keep UI terms identical to the language's catalog in `locales/`, and reuse the
-wording of the matching README in `docs/readme/`. Strings whose keys are inserted
-with `{{raw:...}}` in the template may contain the `<kbd>` and `<code>` markup shown
-in `en.json`; everything else is escaped.
-
-## Refreshing media
-
-`python scripts/make-site-media.py` regenerates the clips, posters, panels and
-wallpaper from `extras/pecofence-promo/public/`, which is a local, ignored directory.
-The exported files in `site/assets/` are checked in so the site builds anywhere.
-
-## Analytics
-
-The template loads the Cloudflare Web Analytics beacon (site `pecofence.jiang.jp` in the
-Cloudflare account, token in `site/template.html`). It counts page views and Core Web
-Vitals without cookies or fingerprinting; the dashboard is under **Analytics & Logs →
-Web Analytics** in Cloudflare.
+- `site/template.html` and `site/assets/site.css` / `site.js` define the page.
+- Edit `site/i18n/en.json` first, then keep every language's keys in sync. Reuse
+  native UI terms from `locales/` and localized README wording from `docs/readme/`.
+  Only template strings inserted with `{{raw:...}}` accept the supported markup;
+  other strings are escaped.
+- Checked-in images and clips let the site build without the local promo project.
+  `python scripts/make-site-media.py` regenerates media from the ignored
+  `extras/pecofence-promo/public/` directory when that source is available.
+  Replace inherited demonstrations with this edition's own demos when ready,
+  while retaining applicable licensing and attribution.

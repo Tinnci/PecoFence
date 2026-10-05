@@ -26,8 +26,6 @@
   <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c-5 5-5 13 0 18 5-5 5-13 0-18"/></symbol>
   <symbol id="i-github" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.87c-2.78.61-3.37-1.18-3.37-1.18-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.61.07-.61 1 .07 1.53 1.03 1.53 1.03.89 1.53 2.34 1.09 2.91.83.09-.65.35-1.09.64-1.34-2.22-.25-4.56-1.11-4.56-4.94 0-1.09.39-1.99 1.03-2.69-.1-.25-.45-1.27.1-2.65 0 0 .84-.27 2.75 1.03a9.6 9.6 0 0 1 5 0c1.91-1.3 2.75-1.03 2.75-1.03.55 1.38.2 2.4.1 2.65.64.7 1.03 1.6 1.03 2.69 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.85v2.77c0 .27.18.58.69.48A10 10 0 0 0 12 2Z"/></symbol>
   <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></symbol>
-  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></symbol>
-  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
   <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h5l3 4h6a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/></symbol>
   <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></symbol>
   <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 3 10 5-10 5L2 8Zm-9 10 9 5 9-5M3 18l9 5 9-5"/></symbol>
@@ -68,8 +66,8 @@
       <h1 id="hero-title">{{t:hero.headline}} <span>{{t:hero.headline_accent}}</span></h1>
       <p class="lede">{{t:hero.text}}</p>
       <div class="actions hero-actions">
-        <a class="button primary" href="https://apps.microsoft.com/detail/9MV6WG3XNWSX?mode=direct"><svg class="icon" aria-hidden="true"><use href="#i-windows"/></svg>{{t:store.button}}<svg class="icon button-arrow" aria-hidden="true"><use href="#i-arrow"/></svg></a>
-        <a class="button secondary" href="{{releases}}">{{t:hero.download}}</a>
+        <a class="button primary" href="{{releases}}">{{t:hero.download}}<svg class="icon button-arrow" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+        <a class="button secondary" href="{{repository}}">{{t:hero.github}}</a>
         <a class="button secondary" href="#watch"><svg class="icon" aria-hidden="true"><use href="#i-play"/></svg>{{t:watch.title}}</a>
       </div>
       <p class="note">{{t:hero.download_note}}</p>
@@ -153,10 +151,10 @@
       <h2 id="download-title">{{t:download.heading}}</h2>
       <p>{{t:footer.tagline}}</p>
       <div class="actions download-actions">
-        <a class="button primary" href="https://apps.microsoft.com/detail/9MV6WG3XNWSX?mode=direct"><svg class="icon" aria-hidden="true"><use href="#i-windows"/></svg>{{t:store.button}}<svg class="icon button-arrow" aria-hidden="true"><use href="#i-arrow"/></svg></a>
-        <a class="button secondary" href="{{releases}}">{{t:download.button}}</a>
+        <a class="button primary" href="{{releases}}">{{t:download.button}}<svg class="icon button-arrow" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+        <a class="button secondary" href="{{repository}}">{{t:hero.github}}</a>
       </div>
-      <span class="download-note">{t:hero.download_note}</span>
+      <span class="download-note">{{t:hero.download_note}}</span>
     </div>
     <div class="install-grid">
       <div class="install-steps">
@@ -166,10 +164,6 @@
           <li>{{raw:download.step2}}</li>
           <li>{{raw:download.step3}}</li>
         </ol>
-        <div class="command-install">
-          <p class="small">{{raw:download.winget}}</p>
-          <button class="copy-command" type="button" data-command="winget install DayuanJiang.PecoFence" data-copy="{{t:download.copy}}" data-copied="{{t:download.copied}}" hidden><svg class="icon" aria-hidden="true"><use href="#i-copy"/></svg><span aria-live="polite">{{t:download.copy}}</span></button>
-        </div>
         <p class="small first-run">{{t:download.first_run}}</p>
       </div>
       <div class="requirements">
@@ -206,7 +200,5 @@
 </footer>
 
 <script src="{{root}}assets/site.js?v={{v}}" defer></script>
-<!-- Cloudflare Web Analytics: privacy-first page views, no cookies, no fingerprinting. -->
-<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "6834394752314154b82bfc82c61e31bd"}'></script>
 </body>
 </html>

@@ -1,5 +1,6 @@
-# Builds the product site and uploads it to the Cloudflare Pages project "pecofence"
-# (direct upload, no Git integration). Requires two repository secrets:
+# Opt-in deployment to an independently configured Cloudflare Pages project.
+# Requires ENABLE_WEBSITE_DEPLOY=true and CLOUDFLARE_PAGES_PROJECT repository variables,
+# a public baseUrl in site/site.json, and two repository secrets:
 #   CLOUDFLARE_API_TOKEN   token with "Cloudflare Pages: Edit" on the account
 #   CLOUDFLARE_ACCOUNT_ID  the account id shown by `wrangler whoami`
 name: Website
@@ -10,6 +11,7 @@ on:
     paths:
       - 'site/**'
       - 'scripts/build-site.py'
+      - 'scripts/test-build-site.py'
       - 'docs/assets/hero-*.png'
       - '.github/workflows/website.yml'
   workflow_dispatch:
@@ -23,8 +25,8 @@ concurrency:
 
 jobs:
   deploy:
-    # Forks must review their domain/project identity and opt in before publishing.
-    if: ${{ github.repository == 'DayuanJiang/PecoFence' || vars.ENABLE_WEBSITE_DEPLOY == 'true' }}
+    # Manual runs cannot publish a non-main ref to the production branch.
+    if: ${{ vars.ENABLE_WEBSITE_DEPLOY == 'true' && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -32,11 +34,23 @@ jobs:
         with:
           python-version: '3.x'
           check-latest: true
+      - name: Validate publishing configuration
+        id: config
+        env:
+          PROJECT: ${{ vars.CLOUDFLARE_PAGES_PROJECT }}
+        run: |
+          if [[ ! "$PROJECT" =~ ^[a-z0-9][a-z0-9-]*$ || "$PROJECT" == *- || ${#PROJECT} -gt 58 ]]; then
+            echo "::error::Set CLOUDFLARE_PAGES_PROJECT to your own Cloudflare Pages project name."
+            exit 1
+          fi
+          echo "project=$PROJECT" >> "$GITHUB_OUTPUT"
+      - name: Test website builder
+        run: python scripts/test-build-site.py
       - name: Build site
-        run: python scripts/build-site.py --strict
+        run: python scripts/build-site.py --strict --deploy
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy dist/site --project-name pecofence --branch main
+          command: pages deploy dist/site --project-name ${{ steps.config.outputs.project }} --branch main

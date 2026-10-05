@@ -33,6 +33,7 @@ Copy-Item -LiteralPath (Join-Path $release "pecofence-watchdog.exe") -Destinatio
 Copy-Item -LiteralPath "third_party/webview2/WebView2Loader.x64.dll" -Destination (Join-Path $stage "WebView2Loader.dll")
 Copy-Item -LiteralPath "third_party/webview2/LICENSE.txt" -Destination (Join-Path $stage "LICENSE-WebView2Loader.txt")
 Copy-Item -LiteralPath "LICENSE" -Destination $stage
+Copy-Item -LiteralPath "NOTICE" -Destination $stage
 Copy-Item -LiteralPath "docs/PORTABLE.md" -Destination (Join-Path $stage "README.md")
 Copy-Item -LiteralPath "docs/UPGRADING.md" -Destination (Join-Path $stage "UPGRADING.md")
 & $Python scripts/write-license-notices.py (Join-Path $stage "THIRD-PARTY-LICENSES.txt")

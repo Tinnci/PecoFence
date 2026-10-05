@@ -84,15 +84,15 @@ https://github.com/user-attachments/assets/6320cf28-a791-4720-9659-b4575df021a0
 
 ## Скачать PecoFence
 
-<a href="https://apps.microsoft.com/detail/9MV6WG3XNWSX?mode=direct"><img src="https://get.microsoft.com/images/ru%20dark.svg" alt="Загрузить из Microsoft Store" width="200"></a>
+Это независимо поддерживаемая редакция в [Tinnci/PecoFence](https://github.com/Tinnci/PecoFence).
+Её каналы Microsoft Store и winget не настроены; опубликованных релизов пока нет.
+Проверьте [Releases](https://github.com/Tinnci/PecoFence/releases) или
+[артефакты CI](https://github.com/Tinnci/PecoFence/actions) этого репозитория на наличие сборок
+либо соберите приложение из исходного кода по инструкции ниже.
 
-Версия из Microsoft Store подписана Microsoft, обновляется автоматически и не показывает предупреждение SmartScreen. Нужен просто ZIP? Портативная сборка ниже — то же приложение.
-
-1. Откройте страницу **Releases** этого репозитория и скачайте `pecofence-<версия>-x64.zip`.
+1. Когда портативная сборка станет доступна, скачайте `pecofence-<версия>-x64.zip` из Releases или артефактов CI этого репозитория.
 2. Распакуйте **весь ZIP-архив** в папку и запустите `pecofence.exe`.
 3. Начинайте наводить порядок. Настройки и выход — по правому щелчку на значке в трее.
-
-Предпочитаете пакетный менеджер? `winget install DayuanJiang.PecoFence` устанавливает ту же портативную сборку и не вызывает предупреждение SmartScreen.
 
 **Windows 11 x64 · Портативный ZIP · Без учётной записи · Лицензия Apache 2.0**
 
@@ -114,7 +114,7 @@ https://github.com/user-attachments/assets/6320cf28-a791-4720-9659-b4575df021a0
   и видеообои.
 - Системные диалоги Windows и сторонние пункты меню Проводника отображаются на языке Windows.
 - Портативные сборки не подписаны. Если при первом запуске появится Windows SmartScreen, выберите
-  **Подробнее → Выполнить в любом случае**. При установке из Microsoft Store или через winget предупреждения нет.
+  **Подробнее → Выполнить в любом случае**, только если доверяете источнику сборки.
 
 [Портативная версия](../PORTABLE.md) · [Языки и переводы](../LOCALIZATION.md)
 
@@ -131,6 +131,8 @@ PecoFence распространяется под лицензией Apache 2.0,
 <summary><strong>Сборка из исходного кода</strong></summary>
 
 Установите Rust stable и Visual Studio Build Tools с рабочей нагрузкой C++ и Windows SDK.
+Для этой редакции сейчас также нужен аутентифицированный Git-доступ к приватному репозиторию
+`Tinnci/spm`; одного доступа к публичному репозиторию PecoFence недостаточно.
 
 ```powershell
 cargo build --locked --release
