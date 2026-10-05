@@ -9,66 +9,27 @@ on:
   pull_request:
   workflow_dispatch:
 
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: windows-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-      - name: Authenticate cargo git fetch for private deps (Tinnci/spm)
-        env:
-          PRIVATE_TOKEN: ${{ secrets.PRIVATE_REPO_TOKEN || github.token }}
-        run: |
-          # Provide the token through a per-URL credential helper, and remove the
-          # persisted GITHUB_TOKEN extraheader that actions/checkout leaves in
-          # the LOCAL repo config — it takes precedence over our helper and its
-          # token cannot read the private Tinnci/spm dependency.
-          git config --unset-all http.https://github.com/.extraheader
-          git config --global credential.https://github.com.helper ""
-          git config --global --add credential.https://github.com.helper "!f() { echo username=x-access-token; echo password=$env:PRIVATE_TOKEN; }; f"
-          git ls-remote https://github.com/Tinnci/spm main
-      - uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
-      - uses: actions/setup-python@v5
+          persist-credentials: false
+      - uses: ./.github/actions/build-desktop
         with:
-          python-version: '3.12'
-      - name: Format
-        run: cargo fmt --all -- --check
-      - name: Clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
-      - name: Bindings are up to date
-        run: |
-          cargo run -p tool_bindgen
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          git diff --exit-code -- crates/platform/src/bindings.rs crates/render/src/comp.rs crates/render/src/gpu_bindings.rs
-      - name: Translation coverage
-        run: python scripts/check-locales.py
-      - name: README translations
-        run: python scripts/check-readme-translations.py
-      - name: Website builds
-        run: python scripts/build-site.py --out .cache/site-check
-      - name: Test (core)
-        run: cargo test --workspace
-      - name: Release build
-        run: cargo build --locked --release -p pecofence -p pecofence-watchdog
-      - name: Size gate (pecofence.exe <= 4.5 MB)
-        shell: pwsh
-        run: |
-          # Budget raised from the inherited 3.5 MiB gate (3,670,016 bytes) once
-          # the SPM plugin kernel, typed transport and live read-model landed in
-          # the host: that integration costs ~800 KB inherently (measured
-          # 4,305,920 B on main before the theme work). Keep the hard gate so
-          # growth stays bounded; revisit size attribution if it trips again.
-          $size = (Get-Item target/release/pecofence.exe).Length
-          Write-Output "pecofence.exe = $size bytes"
-          if ($size -gt 4718592) { throw "binary too large" }
-      - name: Package
-        shell: pwsh
-        run: ./scripts/make-portable.ps1 -SkipBuild -TargetDir target
+          private-dependency-token: ${{ secrets.PRIVATE_REPO_TOKEN || github.token }}
       - uses: actions/upload-artifact@v4
         with:
           name: pecofence-portable
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
           path: |
             dist/pecofence-*-x64.zip
             dist/pecofence-*-x64.zip.sha256

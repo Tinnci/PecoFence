@@ -46,6 +46,25 @@ Windows 进程写入的文档类文件（.json/.md/.js/.sh 等），git blob 干
 - 全局代理：`http.proxy = http://127.0.0.1:7890`（mihomo）。直连 443 间歇失败时先查代理
 - spm-contracts 依赖固定在 git rev（见根 Cargo.toml）；契约变更后手动 bump rev
 
+开发/测试构建默认关闭 debug symbols 和 incremental compilation，减少仓内
+`target/` 占用；release 保留 line-table 崩溃诊断符号。临时开启调试信息、清理
+旧产物及 `RUST_LOG` 调整见 [DEVELOPMENT.md](DEVELOPMENT.md#build-disk-usage)。
+
+Python 脚本只要求 >=3.11（`tomllib`），不固定 minor 版本；CI 使用最新稳定
+Python 3。本机旧 Python 可保留，使用
+`uv run --no-project --python ">=3.11" python scripts/<script>.py` 选择兼容版本。
+Windows 会话（2026-10-05）已将 Rust stable/rustfmt/Clippy 更新到 1.99 系列、
+uv 更新到 0.12.23；现有 VS 2022 C++ Build Tools 与 Windows SDK 10.0.26100.0
+已通过 Windows workspace 编译。
+
+Windows CI 与 tag release 共用 `.github/actions/build-desktop/action.yml` 和
+`scripts/build-and-verify.ps1`，私有依赖认证不落盘 token。公开仓库的 CI 缓存
+仅包含公开 registry 下载包，不缓存私有 Git checkout 或编译中间产物；
+CI 便携包 artifact 保留 7 天。完整触发/部署边界见
+[RELEASING.md](RELEASING.md#ci-and-deployment-flow)。
+fork 的 Cloudflare 网站部署默认关闭；核对域名/项目身份并配置凭据后，
+才可通过仓库 variable `ENABLE_WEBSITE_DEPLOY=true` 显式开启。
+
 ## 验收实例实验室（`C:\Users\Administrator\PecoFence-lab\`）
 
 ```text
