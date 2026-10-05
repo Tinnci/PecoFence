@@ -23,12 +23,15 @@ concurrency:
 
 jobs:
   deploy:
+    # Forks must review their domain/project identity and opt in before publishing.
+    if: ${{ github.repository == 'DayuanJiang/PecoFence' || vars.ENABLE_WEBSITE_DEPLOY == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: '3.x'
+          check-latest: true
       - name: Build site
         run: python scripts/build-site.py --strict
       - name: Deploy to Cloudflare Pages

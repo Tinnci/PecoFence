@@ -6,7 +6,19 @@
 - Rust stable (MSVC toolchain); the workspace's minimum Rust version is in `Cargo.toml`.
 - Visual Studio Build Tools with the Desktop development with C++ workload and Windows SDK.
 - Microsoft Edge WebView2 Runtime to use Settings.
-- Python 3 for catalog checks/source packaging; Node.js for the settings browser tests.
+- Python >=3.11 for catalog checks/source packaging; Node.js for the settings browser tests.
+
+Python is not pinned to a minor version. The validation, site-build and
+source-packaging scripts use the standard library, including `tomllib` (available
+since 3.11), and support newer Python releases. CI uses the latest stable Python 3.
+If the system `python` is older, use `uv` without replacing it or adding a version pin:
+
+```powershell
+uv run --no-project --python ">=3.11" python scripts/check-locales.py
+```
+
+The same prefix works for other Python scripts. `setup-toolchain.ps1` resolves
+a compatible Python through `uv` and updates Rust stable, rustfmt and Clippy.
 
 ## Build and run
 
@@ -24,6 +36,27 @@ For an isolated test instance, use a separate directory, `--portable`,
 configuration. Portable startup leaves the Windows autostart entry alone.
 `--exit-after <milliseconds>` closes a smoke-test instance automatically.
 
+### Build disk usage
+
+Development and test builds disable debug symbols and incremental compilation
+to keep `target/` smaller. Debug assertions and overflow checks remain enabled;
+the tradeoffs are less detailed debugger/backtrace information and slower rebuilds.
+Release builds retain line-table symbols for crash diagnosis.
+
+For a debugger session, temporarily set `CARGO_PROFILE_DEV_DEBUG=2` (or
+`CARGO_PROFILE_TEST_DEBUG=2` for tests). Incremental compilation can likewise be
+enabled with `CARGO_PROFILE_DEV_INCREMENTAL=true` or
+`CARGO_PROFILE_TEST_INCREMENTAL=true`. Unset the overrides afterward to return
+to the low-disk defaults.
+
+Changing profiles does not remove old symbols or incremental caches. To reclaim
+existing development/test artifacts, run `cargo clean --profile dev`; the next
+build/test will rebuild them. For cross-target builds, add
+`--target x86_64-pc-windows-msvc`.
+
+Runtime logging is separate from build artifacts. The app defaults to `info`;
+set `RUST_LOG=warn` to reduce log output, or `RUST_LOG=debug` when diagnosing issues.
+
 ## Verification
 
 ```powershell
@@ -34,6 +67,12 @@ python scripts/check-locales.py
 python scripts/check-readme-translations.py
 node scripts/test-settings-ui.mjs
 ```
+
+For the complete native CI/release gates and a portable ZIP, run
+`./scripts/build-and-verify.ps1` on Windows. It shares the build contract used by
+both workflows, prints per-command timings and compiles release binaries only
+once. See [RELEASING.md](RELEASING.md#ci-and-deployment-flow) for authentication,
+cache boundaries and deployment triggers.
 
 Open the address printed by the last command. The browser suite uses a mock host
 bridge and does not change the running desktop application's settings. It covers

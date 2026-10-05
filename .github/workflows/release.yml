@@ -10,36 +10,19 @@ permissions:
 jobs:
   release:
     runs-on: windows-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
+          persist-credentials: false
       - name: Check release version
         shell: pwsh
         run: |
           $version = (Select-String -Path Cargo.toml -Pattern '^version = "([^"]+)"').Matches[0].Groups[1].Value
           if ($env:GITHUB_REF_NAME -cne "v$version") { throw "Tag must match Cargo.toml version" }
-      - name: Verify
-        shell: pwsh
-        run: |
-          cargo fmt --all --check
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cargo clippy --workspace --all-targets -- -D warnings
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cargo test --workspace
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python scripts/check-locales.py
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python scripts/check-readme-translations.py
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Package
-        shell: pwsh
-        run: ./scripts/make-portable.ps1
+      - uses: ./.github/actions/build-desktop
+        with:
+          private-dependency-token: ${{ secrets.PRIVATE_REPO_TOKEN || github.token }}
       - name: Create draft GitHub Release
         shell: pwsh
         env:

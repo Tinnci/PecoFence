@@ -67,3 +67,7 @@ debug = "line-tables-only"
 
 [profile.dev]
 opt-level = 1
+# Tests inherit this profile. Keep local builds small; enable symbols/incremental
+# compilation through CARGO_PROFILE_{DEV,TEST}_* when needed (docs/DEVELOPMENT.md).
+debug = 0
+incremental = false
