@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — Tinnci edition
+
+- Unify local, CI and tag-release verification; reduce development build disk usage.
+- Separate repository/download links from upstream publishing accounts. Store,
+  winget and website deployment require independently configured identities.
+- Remove inherited website analytics and include `NOTICE` in binary packages.
+
+The versioned entries below are retained from the upstream baseline. References
+to Store submissions or a published website describe that history, not an active
+distribution channel for this independent edition.
+
 ## 0.0.3
 
 - Fence context menu → Sort → "Group by date": items are shown under Today / Yesterday / This week / This month / Earlier headers in the icon, list and details layouts.

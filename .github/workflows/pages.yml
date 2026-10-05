@@ -1,6 +1,5 @@
-# Fallback deployment to GitHub Pages. The primary host is Cloudflare Pages, which
-# builds from the repository on its own (see docs/WEBSITE.md); run this manually only
-# if the site should be served from GitHub instead.
+# Optional GitHub Pages hosting, not an already configured publishing destination.
+# Enable ENABLE_GITHUB_PAGES=true and configure your public baseUrl first.
 name: Website (GitHub Pages)
 
 on:
@@ -17,6 +16,7 @@ concurrency:
 
 jobs:
   build:
+    if: ${{ vars.ENABLE_GITHUB_PAGES == 'true' && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -24,8 +24,10 @@ jobs:
         with:
           python-version: '3.x'
           check-latest: true
+      - name: Test website builder
+        run: python scripts/test-build-site.py
       - name: Build site
-        run: python scripts/build-site.py --strict
+        run: python scripts/build-site.py --strict --deploy
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

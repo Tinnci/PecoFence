@@ -85,16 +85,16 @@ personalizados são preservados.
 
 ## Baixe o PecoFence
 
-<a href="https://apps.microsoft.com/detail/9MV6WG3XNWSX?mode=direct"><img src="https://get.microsoft.com/images/pt-br%20dark.svg" alt="Obter na Microsoft Store" width="200"></a>
+Esta é a edição mantida de forma independente em [Tinnci/PecoFence](https://github.com/Tinnci/PecoFence).
+Seus canais da Microsoft Store e do winget não estão configurados; ainda não há Releases publicadas.
+Confira as [Releases](https://github.com/Tinnci/PecoFence/releases) ou os
+[artefatos de CI](https://github.com/Tinnci/PecoFence/actions) deste repositório para ver as compilações disponíveis,
+ou compile a partir do código-fonte conforme as instruções abaixo.
 
-A versão da Microsoft Store é assinada pela Microsoft, atualiza sozinha e nunca mostra o aviso do SmartScreen. Prefere um ZIP? A versão portátil abaixo é o mesmo aplicativo.
-
-1. Abra a página **Releases** deste repositório e baixe `pecofence-<versão>-x64.zip`.
+1. Quando uma compilação portátil estiver disponível, baixe `pecofence-<versão>-x64.zip` das Releases ou dos artefatos de CI deste repositório.
 2. Extraia o **ZIP inteiro** para uma pasta e execute `pecofence.exe`.
 3. Comece a organizar. Clique com o botão direito no ícone da bandeja sempre que precisar
    das Configurações ou quiser sair.
-
-Prefere um gerenciador de pacotes? `winget install DayuanJiang.PecoFence` instala a mesma versão portátil e evita o aviso do SmartScreen.
 
 **Windows 11 x64 · ZIP portátil · Sem conta · Licença Apache 2.0**
 
@@ -118,7 +118,7 @@ a aparecer quando você sai.
 - Caixas de diálogo do Windows e entradas de terceiros no menu do Explorador de Arquivos
   seguem o idioma do Windows.
 - As versões portáteis não são assinadas. Se o Windows SmartScreen aparecer na primeira execução, escolha
-  **Mais informações → Executar assim mesmo**. Instalar pela Microsoft Store ou pelo winget evita o aviso.
+  **Mais informações → Executar assim mesmo** somente se você confiar na origem da compilação.
 
 [Guia da edição portátil](../PORTABLE.md) · [Guia de idiomas](../LOCALIZATION.md)
 
@@ -135,6 +135,8 @@ a uma interação melhor na área de trabalho.
 <summary><strong>Compilar a partir do código-fonte</strong></summary>
 
 Instale o Rust stable e o Visual Studio Build Tools com a carga de trabalho C++ e o Windows SDK.
+Esta edição também exige atualmente acesso Git autenticado ao repositório privado
+`Tinnci/spm`; o acesso apenas ao repositório público do PecoFence não é suficiente.
 
 ```powershell
 cargo build --locked --release

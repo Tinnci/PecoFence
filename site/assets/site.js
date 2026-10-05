@@ -25,33 +25,6 @@
     });
   }
 
-  var copy = document.querySelector(".copy-command");
-  if (copy && navigator.clipboard && window.isSecureContext) {
-    copy.hidden = false;
-    var copyReset;
-    copy.addEventListener("click", function () {
-      navigator.clipboard.writeText(copy.getAttribute("data-command")).then(function () {
-        window.clearTimeout(copyReset);
-        copy.querySelector("span").textContent = copy.getAttribute("data-copied");
-        copy.querySelector("use").setAttribute("href", "#i-check");
-        copyReset = window.setTimeout(function () {
-          copy.querySelector("span").textContent = copy.getAttribute("data-copy");
-          copy.querySelector("use").setAttribute("href", "#i-copy");
-        }, 2200);
-      }).catch(function () {
-        // The command remains selectable if browser permissions block copying.
-        var code = document.querySelector(".command-install code");
-        if (code) {
-          var range = document.createRange();
-          range.selectNodeContents(code);
-          var selection = window.getSelection();
-          selection.removeAllRanges();
-          selection.addRange(range);
-        }
-      });
-    });
-  }
-
   // Feature clips play while at least half visible and pause off-screen. They never
   // start on their own when the user prefers reduced motion. The button on each
   // fence toggles playback and remembers a deliberate pause.

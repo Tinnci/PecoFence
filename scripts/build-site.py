@@ -1,17 +1,19 @@
 """Build the static product site into dist/site.
 
 Renders site/template.html once per language in site/i18n/, copies site/assets and
-the localized README hero images, and writes CNAME, robots.txt and sitemap.xml for
-GitHub Pages. No dependencies beyond the standard library.
+the localized README hero images, and writes robots.txt and sitemap.xml. A CNAME
+is emitted only for an explicitly configured custom domain. Standard library only.
 """
 import argparse
 import datetime
 import hashlib
 import html
+import ipaddress
 import json
 import re
 import shutil
 from pathlib import Path
+from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 SITE = ROOT / "site"
@@ -87,18 +89,65 @@ def language_items(languages, current, root):
     return "\n".join(parts)
 
 
+def publication_location(config, base=None, deploy=False):
+    """Preview safely without a domain; publishing requires an explicit HTTPS URL."""
+    configured = base if base is not None else config.get("baseUrl")
+    if configured is not None and not isinstance(configured, str):
+        raise ValueError("baseUrl must be a URL string or null")
+    origin = (configured or "http://localhost:8000").rstrip("/")
+    parts = urlsplit(origin)
+    _ = parts.port  # Validate an explicitly supplied port as well as the hostname.
+    if (
+        parts.scheme not in ("http", "https") or not parts.hostname
+        or parts.username is not None or parts.password is not None
+        or parts.query or parts.fragment
+        or re.search(r"""[\s\\<>"']""", origin)
+    ):
+        raise ValueError("baseUrl/--base must be an absolute HTTP(S) URL without credentials, query or fragment")
+    host = parts.hostname.rstrip(".")
+    local = host == "localhost" or host.endswith(".localhost")
+    try:
+        local = local or not ipaddress.ip_address(host).is_global
+    except ValueError:
+        pass  # A DNS name, whose ownership is configured by the maintainer.
+    if deploy and (not configured or parts.scheme != "https" or local):
+        raise ValueError("Publishing requires your public HTTPS URL in site/site.json baseUrl or --base")
+
+    domain = config.get("customDomain")
+    if domain is not None and not isinstance(domain, str):
+        raise ValueError("customDomain must be a hostname string or null")
+    domain = domain or None
+    if domain:
+        if len(domain) > 253 or not re.fullmatch(
+            r"(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+"
+            r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?",
+            domain,
+        ):
+            raise ValueError("customDomain must be a hostname, not a URL or path")
+        if base and not deploy and parts.hostname != domain.lower():
+            domain = None  # A local URL override must not emit the production CNAME.
+        elif parts.hostname != domain.lower() or parts.path:
+            raise ValueError("customDomain must match the base URL host, without a project path")
+    return origin, domain
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", default=str(ROOT / "dist/site"))
     parser.add_argument("--base", default=None,
-                        help="absolute origin for canonical URLs (default: https://<domain>)")
+                        help="absolute site URL (overrides site/site.json baseUrl; preview default: http://localhost:8000)")
     parser.add_argument("--strict", action="store_true",
                         help="fail when a language is missing or its keys differ from en.json")
+    parser.add_argument("--deploy", action="store_true",
+                        help="require an explicit public HTTPS publishing URL before generating output")
     args = parser.parse_args()
     problems = []
     out = Path(args.out).resolve()
     config = json.loads((SITE / "site.json").read_text(encoding="utf-8"))
-    origin = (args.base or f"https://{config['domain']}").rstrip("/")
+    try:
+        origin, custom_domain = publication_location(config, args.base, args.deploy)
+    except ValueError as error:
+        parser.error(str(error))
     repository = config["repository"].rstrip("/")
     docs = f"{repository}/blob/main/docs"
     template = (SITE / "template.html").read_text(encoding="utf-8")
@@ -120,8 +169,9 @@ def main():
             shutil.copy2(hero, out / "assets" / hero.name)
 
     alternates = "\n".join(
-        f'<link rel="alternate" hreflang="{lang["code"]}" href="{origin}/{lang["dir"]}">' for lang in languages
-    ) + f'\n<link rel="alternate" hreflang="x-default" href="{origin}/">'
+        f'<link rel="alternate" hreflang="{lang["code"]}" href="{html.escape(origin, quote=True)}/{lang["dir"]}">'
+        for lang in languages
+    ) + f'\n<link rel="alternate" hreflang="x-default" href="{html.escape(origin, quote=True)}/">'
 
     urls = []
     for language in languages:
@@ -149,12 +199,12 @@ def main():
         values = {
             "lang": code,
             "root": root,
-            "origin": origin,
-            "canonical": f"{origin}/{directory}",
+            "origin": html.escape(origin, quote=True),
+            "canonical": html.escape(f"{origin}/{directory}", quote=True),
             "alternates": alternates,
             "og_locale": OG_LOCALES.get(code, code.replace("-", "_")),
             "repository": repository,
-            "releases": f"{repository}/releases/latest",
+            "releases": f"{repository}/releases",
             "docs": docs,
             "readme": readme,
             "features": feature_fences(strings, root),
@@ -170,12 +220,13 @@ def main():
         target.write_text(page, encoding="utf-8", newline="\n")
         urls.append(f"{origin}/{directory}")
 
-    (out / "CNAME").write_text(config["domain"] + "\n", encoding="utf-8")
+    if custom_domain:
+        (out / "CNAME").write_text(custom_domain + "\n", encoding="utf-8")
     (out / ".nojekyll").write_text("", encoding="utf-8")
     (out / "robots.txt").write_text(f"User-agent: *\nAllow: /\nSitemap: {origin}/sitemap.xml\n", encoding="utf-8")
     (out / "sitemap.xml").write_text(
         '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
-        + "".join(f"  <url><loc>{url}</loc></url>\n" for url in urls) + "</urlset>\n", encoding="utf-8")
+        + "".join(f"  <url><loc>{html.escape(url)}</loc></url>\n" for url in urls) + "</urlset>\n", encoding="utf-8")
     total = sum(p.stat().st_size for p in out.rglob("*") if p.is_file())
     print(f"built {len(urls)} pages into {out} ({total / 1024 / 1024:.1f} MiB)")
     if "YOUR-ACCOUNT" in repository:

@@ -83,15 +83,14 @@ All translations are included and work offline. Your filenames and custom names 
 
 ## Get PecoFence
 
-<a href="https://apps.microsoft.com/detail/9MV6WG3XNWSX?mode=direct"><img src="https://get.microsoft.com/images/en-us%20dark.svg" alt="Get it from Microsoft Store" width="200"></a>
+This is the independently maintained edition at [Tinnci/PecoFence](https://github.com/Tinnci/PecoFence).
+Its Microsoft Store and winget channels are not configured, and no Releases have been published yet.
+Check this repository's [Releases](https://github.com/Tinnci/PecoFence/releases) or
+[CI artifacts](https://github.com/Tinnci/PecoFence/actions) for available builds, or build from source below.
 
-The Microsoft Store edition is signed by Microsoft, updates automatically and never shows a SmartScreen prompt. Prefer a plain ZIP? The portable build below is the same app.
-
-1. Open this repository's **Releases** page and download `pecofence-<version>-x64.zip`.
+1. When a portable build is available, download `pecofence-<version>-x64.zip` from this repository's Releases or CI artifacts.
 2. Extract the **whole ZIP** into a folder and run `pecofence.exe`.
 3. Start organizing. Right-click the tray icon whenever you need Settings or want to exit.
-
-Prefer a package manager? `winget install DayuanJiang.PecoFence` installs the same portable build and skips the SmartScreen prompt.
 
 **Windows 11 x64 · Portable ZIP · No account required · Apache 2.0 licensed**
 
@@ -113,7 +112,7 @@ in your selected language. Windows desktop icons are restored when you exit.
   or live video wallpaper.
 - Windows-owned dialogs and third-party Explorer menu entries follow Windows' language.
 - Portable builds are unsigned. If Windows SmartScreen appears on first launch, choose
-  **More info → Run anyway**. Installing from the Microsoft Store or through winget avoids the prompt.
+  **More info → Run anyway** only if you trust the build's source.
 
 [Portable edition guide](docs/PORTABLE.md) · [Language guide](docs/LOCALIZATION.md)
 
@@ -130,6 +129,8 @@ to a better desktop interaction.
 <summary><strong>Build from source</strong></summary>
 
 Install Rust stable and Visual Studio Build Tools with the C++ workload and Windows SDK.
+This edition also currently requires authenticated Git access to the private
+`Tinnci/spm` repository; access to the public PecoFence repository alone is not sufficient.
 
 ```powershell
 cargo build --locked --release

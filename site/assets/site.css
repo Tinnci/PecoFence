@@ -211,11 +211,6 @@ h2 { margin: 0; font: 650 clamp(28px, 3.4vw, 40px)/1.22 var(--font-display); let
 .steps li { position: relative; padding: 0 0 21px 42px; color: var(--ink-soft); font-size: 14px; }
 .steps li::before { counter-increment: steps; content: counter(steps); position: absolute; top: -2px; left: 0; display: grid; place-items: center; width: 27px; height: 27px; border: 1px solid #dde5f3; border-radius: 50%; background: #edf2fc; color: #5c77aa; font-size: 12px; font-weight: 600; }
 .steps li:last-child { padding-bottom: 0; }
-.command-install { padding: 16px 18px; border: 1px solid var(--edge); border-radius: 10px; background: #f0f3f9; }
-.command-install p { margin: 0; font-size: 12px; }
-.command-install code { border: 0; padding: 0; background: none; font-size: 12px; color: var(--ink); }
-.copy-command { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; margin-top: 6px; padding: 5px 0; border: 0; background: transparent; color: var(--accent-dark); font-size: 12px; font-weight: 500; }
-.copy-command .icon { width: 14px; height: 14px; }
 .first-run { margin-bottom: 0; font-size: 12px; }
 .requirements details { border-bottom: 1px solid var(--edge); }
 .requirements summary { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 0 0 22px; list-style: none; font-size: 16px; font-weight: 600; cursor: pointer; }
