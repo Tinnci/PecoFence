@@ -264,13 +264,6 @@ pub fn enumerate_special_desktop_items() -> Vec<DesktopEntry> {
     out
 }
 
-/// Lists one folder the same way the desktop is listed (folder portals).
-pub fn enumerate_folder(dir: &Path) -> Vec<DesktopEntry> {
-    let mut out = Vec::new();
-    enumerate_dir_into(dir, EntryOrigin::UserDesktop, &mut out);
-    out
-}
-
 fn enumerate_dir_into(dir: &Path, origin: EntryOrigin, out: &mut Vec<DesktopEntry>) {
     let Ok(rd) = std::fs::read_dir(dir) else {
         return;

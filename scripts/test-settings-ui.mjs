@@ -11,6 +11,7 @@ const catalogs = Object.fromEntries(await Promise.all(languageTags.map(async lan
 const port = Number(process.env.PECOFENCE_UI_TEST_PORT || 43190);
 const fixture = {
   type: 'state',
+  saveAllowed: true, writable: true, loadIssue: null, saveHealth: null, recoveredFrom: null,
   locale: 'zh-CN', translations: {},
   settings: {
     language: 'zh-CN',
@@ -23,8 +24,8 @@ const fixture = {
   rules: {
     keepUpdated: true, defaultTarget: 'inbox',
     list: [
-      { id: 'rule-a', name: 'Documents', enabled: true, target: { fence: 'fence-a' }, allOf: [{ cond: 'ext', value: ['txt'] }], priorityClass: 'type' },
-      { id: 'rule-b', name: 'Images', enabled: true, target: { fence: 'fence-b' }, allOf: [{ cond: 'ext', value: ['png'] }], priorityClass: 'type' },
+      { id: 'rule-a', name: 'Documents', enabled: true, target: { collection: 'fence-a' }, allOf: [{ cond: 'ext', value: ['txt'] }], priorityClass: 'type' },
+      { id: 'rule-b', name: 'Images', enabled: true, target: { collection: 'fence-b' }, allOf: [{ cond: 'ext', value: ['png'] }], priorityClass: 'type' },
     ],
   },
   fences: [
@@ -35,12 +36,22 @@ const fixture = {
   ],
   tintPalette: [{ name: '红', hex: 'E74856' }, { name: '蓝', hex: '0078D4' }, { name: '灰', hex: '7A7574' }],
   snapshots: [{ id: 'snapshot-a', name: 'Before changes', date: '2026-09-09', fenceCount: 4 }],
-  backups: [{ name: '2026-09-09', path: 'C:\\PecoFence\\backups\\2026-09-09.json' }],
+  backups: [{ name: '2026-09-09', path: 'C:\\PecoFence\\workspace.v2.backups\\2026-09-09.json' }],
   monitors: [{ id: 'one', label: 'Display 1' }, { id: 'two', label: 'Display 2' }],
   desktopIconsHidden: false,
-  version: 'test', configPath: 'C:\\PecoFence\\config.json', memoryMb: 28, itemCount: 12,
+  version: 'test', configPath: 'C:\\PecoFence\\workspace.v2.json', memoryMb: 28, itemCount: 12,
   themeMode: 'dark', accent: '#60CDFF',
 };
+// Window properties are projected onto every content in the same container.
+for (const row of fixture.fences) {
+  row.contentId = row.id;
+  row.containerId = ['fence-a', 'fence-b'].includes(row.id) ? 'container-documents' : 'container-' + row.id;
+  row.isCollection = row.kind === 'virtual' || row.kind === 'inbox';
+  row.sort = 'manual';
+  row.autoHeight = false;
+}
+fixture.fences.push({ ...fixture.fences[0], id: 'panel', contentId: 'panel',
+  containerId: 'container-panel', title: 'Panel', kind: 'virtual', isCollection: false });
 
 function bridge() {
   const state = JSON.parse(document.getElementById('fixture').textContent);
@@ -55,6 +66,18 @@ function bridge() {
       addEventListener(_type, handler) { receive = handler; },
       postMessage(message) {
         window.testMessages.push(structuredClone(message));
+        const replacement = message.type === 'action'
+          && ['newWorkspace', 'acceptRecovery'].includes(message.name) && message.confirmed === true;
+        if (!state.saveAllowed && !replacement
+          && (['patchSettings', 'setRules', 'setFence'].includes(message.type) || message.type === 'action')) {
+          receive({ data: { type: 'toast', text: '此工作区为只读，请先解决加载问题再编辑。', error: true } });
+          setTimeout(window.testRefresh, 0);
+          return;
+        }
+        if (replacement) {
+          state.saveAllowed = state.writable = true;
+          state.loadIssue = state.recoveredFrom = state.saveHealth = null;
+        }
         if (message.type === 'patchSettings') {
           state.settings = structuredClone(message.settings);
           state.locale = state.settings.language === 'system' ? 'en' : state.settings.language;
@@ -72,18 +95,24 @@ function bridge() {
         if (message.name === 'addTemplate' && !state.rules.list.some(r => r.template === message.template)) {
           // Mirror the host: a new fence plus its rule at the top of the list.
           const id = 'tpl-' + message.template;
-          state.fences.push({ id, title: message.template, kind: 'virtual', host: null, iconSize: 48, spacing: 'normal', autoHeight: false, locked: false, excludeFromQuickHide: false, opacity: 'default', tint: null, titleColor: 'theme', titleSize: 'normal', portal: null });
+          state.fences.push({ id, contentId: id, containerId: 'container-' + id, isCollection: true, title: message.template, kind: 'virtual', host: null, iconSize: 48, spacing: 'normal', autoHeight: false, locked: false, excludeFromQuickHide: false, opacity: 'default', tint: null, titleColor: 'theme', titleSize: 'normal', portal: null });
           const idle = message.template === 'cleanup';
           const allOf = idle ? [{ cond: 'type', value: ['installers', 'archives'] }, { cond: 'idleDays', value: { min: 30 } }] : [{ cond: 'type', value: [message.template] }];
           const at = idle ? 0 : state.rules.list.findIndex(r => !r.allOf.some(c => c.cond === 'idleDays'));
-          state.rules.list.splice(at < 0 ? state.rules.list.length : at, 0, { id: 'rule-' + id, name: message.template, enabled: true, target: { fence: id }, allOf, priorityClass: 'type', template: message.template });
+          state.rules.list.splice(at < 0 ? state.rules.list.length : at, 0, { id: 'rule-' + id, name: message.template, enabled: true, target: { collection: id }, allOf, priorityClass: 'type', template: message.template });
         }
         if (message.type === 'setFence') {
-          // Mirror the host: a portal flag lands in `portal`, everything else on the fence.
-          const fence = state.fences.find(f => f.id === message.id);
+          const fence = state.fences.find(f => f.contentId === message.contentId && f.containerId === message.containerId);
+          if (!fence) {
+            receive({ data: { type: 'toast', text: '内容已移动，请刷新设置后再编辑。', error: true } });
+            setTimeout(window.testRefresh, 0);
+            return;
+          }
           if (message.prop === 'portalNavigate') fence.portal.navigate = message.value;
           else if (message.prop === 'portalTitleIcon') fence.portal.titleIcon = message.value;
-          else if (message.prop !== 'dockTop') fence[message.prop] = message.value;
+          else if (['autoHeight', 'locked', 'excludeFromQuickHide', 'opacity', 'tint', 'titleColor', 'titleSize'].includes(message.prop)) {
+            for (const row of state.fences.filter(f => f.containerId === fence.containerId)) row[message.prop] = message.value;
+          } else if (message.prop !== 'dockTop') fence[message.prop] = message.value;
         }
         window.testShowFence = (id) => receive({ data: { type: 'showFence', id } });
         if (message.name === 'deleteSnapshot') state.snapshots = state.snapshots.filter(s => s.id !== message.id);
@@ -171,8 +200,8 @@ async function runTests() {
   await test('Fence page lists every fence and reflects the selected fence', async () => {
     doc.querySelector('[data-page=fences]').click();
     const sel = doc.getElementById('fenceSel');
-    assert(sel.options.length === 4, 'Fence list incomplete');
-    assert([...sel.options].map(o => o.textContent).join('|') === 'Documents|Images（Documents 的标签页）|Desktop（桌面）|Portal（门户）', 'Fence labels wrong: ' + [...sel.options].map(o => o.textContent).join('|'));
+    assert(sel.options.length === 5, 'Content list incomplete');
+    assert([...sel.options].map(o => o.textContent).join('|') === 'Documents|Images（Documents 的标签页）|Desktop（桌面）|Portal（门户）|Panel', 'Content labels wrong: ' + [...sel.options].map(o => o.textContent).join('|'));
     assert(doc.getElementById('fencePortalGroup').style.display === 'none', 'Portal options shown for an ordinary fence');
     assert(doc.querySelector('[data-fence=titleColor] [value=tint]').disabled, 'Follow-tint offered without a tint');
     change(doc, 'fenceSel', 'inbox');
@@ -197,7 +226,7 @@ async function runTests() {
     await settle();
     const sent = messages().slice(before);
     assert(sent.length === 4, 'Expected four setFence messages, got ' + sent.length);
-    assert(sent.every(m => m.id === 'fence-a'), 'Message addressed to the wrong fence');
+    assert(sent.every(m => m.contentId === 'fence-a' && m.containerId === 'container-documents' && !('id' in m)), 'Message missing explicit content/container pair');
     assert(sent[0].prop === 'locked' && sent[0].value === true, 'Lock toggle not posted');
     assert(sent[1].prop === 'iconSize' && sent[1].value === 96, 'Icon size not posted as a number');
     assert(sent[2].prop === 'tint' && sent[2].value === 'E74856', 'Tint not posted');
@@ -216,6 +245,48 @@ async function runTests() {
     assert(doc.getElementById('fenceSel').value === 'portal', 'Requested fence not selected');
     assert(doc.activeElement.id === 'fenceSel', 'Fence selector not focused');
   });
+  await test('Container properties are shared but content properties are independent', async () => {
+    doc = await reset();
+    doc.querySelector('[data-page=fences]').click();
+    change(doc, 'fenceSel', 'fence-a');
+    change(doc, 'fenceIconSize', '32'); await settle();
+    assert(current().fences.find(f => f.id === 'fence-a').iconSize === 32, 'Content icon size was not applied');
+    assert(current().fences.find(f => f.id === 'fence-b').iconSize === 96, 'Content edit leaked into sibling tab');
+    doc.querySelector('[data-fence=autoHeight]').click(); await settle();
+    assert(current().fences.filter(f => f.containerId === 'container-documents').every(f => f.autoHeight), 'Container edit was not projected onto all tabs');
+    change(doc, 'fenceTint', 'E74856'); await settle();
+    assert(current().fences.filter(f => f.containerId === 'container-documents').every(f => f.tint === 'E74856'), 'Container appearance diverged between tabs');
+    doc = await reset();
+  });
+  await test('Moved content rejects the old target pair instead of retargeting', async () => {
+    const win = frame.contentWindow;
+    const row = current().fences.find(f => f.id === 'fence-a');
+    const before = row.locked;
+    win.chrome.webview.postMessage({
+      type: 'setFence', contentId: row.contentId, containerId: 'retired-container',
+      prop: 'locked', value: !before,
+    });
+    await settle();
+    assert(row.locked === before && errorShown(doc), 'Stale pair changed the current container');
+    doc = await reset();
+  });
+  await test('Read-only recovery blocks edits and explicit acceptance rebinds controls', async () => {
+    current().saveAllowed = current().writable = false;
+    current().loadIssue = 'Unsupported workspace';
+    current().recoveredFrom = 'workspace.v2.bak';
+    frame.contentWindow.testRefresh();
+    assert(!doc.getElementById('recoveryPanel').hidden, 'Recovery issue is invisible');
+    const toggle = doc.querySelector('[data-bind=autostart]');
+    const before = current().settings.autostart;
+    toggle.click(); await settle();
+    assert(current().settings.autostart === before, 'Read-only control changed the document');
+    frame.contentWindow.confirm = () => true;
+    doc.getElementById('recoveryAccept').click(); await settle();
+    assert(current().saveAllowed && doc.getElementById('recoveryPanel').hidden, 'Acceptance left read-only status behind');
+    toggle.click(); await settle();
+    assert(current().settings.autostart !== before, 'Accepted workspace did not restore the control handler');
+    doc = await reset();
+  });
   await test('Live item totals update without replacing a name being edited', async () => {
     doc.querySelector('[data-page=fences]').click();
     const title = doc.getElementById('fenceTitle');
@@ -223,7 +294,7 @@ async function runTests() {
     title.value = '尚未提交的标题';
     const selected = doc.getElementById('fenceSel').value;
     frame.contentWindow.testSummary(53);
-    assert(doc.getElementById('workspaceSummary').textContent === '4 个栅栏 · 53 个项目', 'Portal count not reflected in sidebar');
+    assert(doc.getElementById('workspaceSummary').textContent === '5 个栅栏 · 53 个项目', 'Portal count not reflected in sidebar');
     assert(doc.getElementById('memDetail').textContent.includes('53 个项目'), 'About page count is stale');
     assert(title.value === '尚未提交的标题' && doc.activeElement === title, 'Live update replaced the input or focus');
     assert(doc.getElementById('fenceSel').value === selected, 'Live update changed selected fence');
@@ -286,6 +357,7 @@ async function runTests() {
     assert(doc.getElementById('nrTarget').value === 'fence-b', 'Target reset');
     assert(doc.getElementById('nrName').value === 'Unfinished draft', 'Draft lost');
     assert(![...doc.getElementById('nrTarget').options].some(o => o.value === 'portal'), 'Portal offered as a routing target');
+    assert(![...doc.getElementById('nrTarget').options].some(o => o.value === 'panel'), 'Panel offered as a collection target');
   });
   await test('Reordering and toggling rules preserve keyboard focus', async () => {
     const down = doc.querySelector('[data-row-id="rule-a"] [data-act=down]');
@@ -342,7 +414,7 @@ async function runTests() {
     assert(!doc.getElementById('iconTintStrength').disabled, 'Tint strength disabled for custom tint');
   });
   await test('Long configuration paths wrap and can be selected', async () => {
-    current().configPath = 'C:\\' + 'long-directory\\'.repeat(30) + 'config.json';
+    current().configPath = 'C:\\' + 'long-directory\\'.repeat(30) + 'workspace.v2.json';
     frame.contentWindow.testRefresh();
     doc.querySelector('[data-page=about]').click();
     const main = doc.querySelector('main');
@@ -376,7 +448,7 @@ async function runTests() {
     assert(preview.style.getPropertyValue('--preview-tint') === '#123456', 'Custom tint did not update');
     assert(preview.style.getPropertyValue('--preview-tint-strength') === '0.9', 'Tint strength did not update');
     assert(preview.classList.contains('chameleon'), 'Chameleon preview did not update');
-    assert(doc.getElementById('workspaceSummary').textContent === '4 个栅栏 · 12 个项目', 'Workspace summary does not reflect host state');
+    assert(doc.getElementById('workspaceSummary').textContent === '5 个栅栏 · 12 个项目', 'Workspace summary does not reflect host state');
   });
   await test('Liquid Glass persists independently of the colour mode and can switch back', async () => {
     const select = doc.getElementById('themeStyle');
@@ -395,7 +467,7 @@ async function runTests() {
       assert(frame.contentWindow.getComputedStyle(doc.querySelector('.preview-glass')).display === 'none', 'Optical layer remained visible');
     }
   });
-  await test('Older settings without a material field retain Fluent', async () => {
+  await test('Missing material in a presentation stays readable', async () => {
     delete current().settings.themeStyle;
     frame.contentWindow.testRefresh();
     assert(doc.getElementById('themeStyle').value === 'fluent', 'Missing material has no valid selection');

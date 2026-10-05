@@ -10,19 +10,34 @@ import ast
 import copy
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 
+REPO = Path(__file__).resolve().parents[1]
+
 
 def prepare(seed, root):
+    seed = seed.resolve()
+    root = root.resolve()
+    # Reject old/malformed input before creating any fixture files. Use the actual domain
+    # validator, not a second Python schema or an implicit migration.
+    subprocess.run(
+        ["cargo", "run", "--quiet", "--locked", "-p", "pecofence-core",
+         "--example", "validate_workspace", "--", str(seed)],
+        cwd=REPO, check=True,
+    )
+    cfg = json.loads(seed.read_text(encoding="utf-8-sig"))
+    if not cfg["layouts"] or not cfg["layouts"][0]["contents"] or not cfg["layouts"][0]["containers"]:
+        raise ValueError("interaction seed needs a populated supported layout")
     root.mkdir(parents=True, exist_ok=True)
     (root / "config").mkdir(exist_ok=True)
     (root / "files").mkdir(exist_ok=True)
     (root / "empty").mkdir(exist_ok=True)
-    cfg = json.loads(seed.read_text(encoding="utf-8-sig"))
     cfg.update(items={}, snapshots=[], undoLog=[])
     cfg["rules"]["list"] = []
     cfg["rules"]["keepUpdated"] = False
+    cfg["rules"]["defaultTarget"] = "inbox"
     settings = cfg["settings"]
     settings.update(theme="dark", themeStyle="liquidGlass", hideRealIcons=False)
     settings["snapping"]["enabled"] = False
@@ -30,25 +45,30 @@ def prepare(seed, root):
     settings["peek"]["enabled"] = False
     settings["rollUp"].update(hoverPeek=False, clickToExpand=False)
     layout = cfg["layouts"][0]
-    template = copy.deepcopy(layout["fences"][0])
+    template = copy.deepcopy(layout["contents"][0])
     titles = ["标签甲", "标签乙", "标签丙", "桌面"]
     ids = [f"11111111-1111-4111-8111-{i:012d}" for i in range(1, 5)]
-    fences = []
+    container_ids = [f"22222222-2222-4222-8222-{i:012d}" for i in range(1, 5)]
+    contents, containers = [], []
     for i, title in enumerate(titles):
         f = copy.deepcopy(template)
-        f.update(id=ids[i], title=title, kind="folderPortal",
-                 source={"kind": "folder", "path": str(root / "files")},
-                 items=[], tabHost=None, activeTab=None, tabOrder=[],
-                 appearance=None, rolledUp=False, locked=False, expandedH=300,
-                 excludeFromQuickHide=False)
-        f["geometry"].update(x=300+i*420, y=200, w=400, h=300, anchor="leftTop")
-        f["view"].update(layout="details", autoHeight=False)
-        fences.append(f)
-    fences[-1].update(kind="inbox", source={"kind": "desktop"}, rolledUp=True)
-    fences[-1]["geometry"].update(x=1600, y=900, w=200)
-    layout["fences"] = fences
+        f.update(id=ids[i], title=title, content=dict(
+            kind="folderPortal", root=str(root / "files"), recursive=False,
+            filter=None, navigate=True, hideTitleIcon=False))
+        f["view"].update(layout="details")
+        contents.append(f)
+        c = copy.deepcopy(layout["containers"][0])
+        c.update(id=container_ids[i], tabs=[ids[i]], activeTab=ids[i],
+                 autoHeight=False, appearance=None, rolledUp=False, locked=False,
+                 expandedH=300, excludeFromQuickHide=False)
+        c["geometry"].update(x=300+i*420, y=200, w=400, h=300, anchor="leftTop")
+        containers.append(c)
+    contents[-1]["content"] = dict(kind="fileCollection", inbox=True, items=[])
+    containers[-1].update(rolledUp=True)
+    containers[-1]["geometry"].update(x=1600, y=900, w=200)
+    layout.update(contents=contents, containers=containers)
     cfg["layouts"] = [layout]
-    (root / "config" / "config.json").write_text(
+    (root / "config" / "workspace.v2.json").write_text(
         json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
     for i in range(12):
         (root / "files" / f"Test-{i:02d}.txt").write_text("Interaction fixture\n", encoding="utf-8")
@@ -68,8 +88,9 @@ def prepare(seed, root):
         snap(tag)
 
     def prop(index, key, value):
-        lines.append("message " + json.dumps(
-            {"type": "setFence", "id": ids[index], "prop": key, "value": value}, ensure_ascii=False))
+        # The current container can change during tear-off. Resolve it at execution time
+        # from the stable content identity, then send the same explicit pair as the UI.
+        lines.append(f"set-content {ids[index]} {key} " + json.dumps(value, ensure_ascii=False))
 
     def patch_settings():
         lines.append("message " + json.dumps({"type": "patchSettings", "settings": settings}))

@@ -40,6 +40,7 @@ pub mod memstats;
 pub mod monitors;
 pub mod msg;
 pub mod named_pipe;
+pub mod portal_reader;
 pub mod process;
 pub mod rawinput;
 pub mod shell;

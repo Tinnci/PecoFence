@@ -78,9 +78,10 @@ PFX/private key. The default test password is not protection for distribution.
 
 Packaged startup uses the manifest startup task rather than the normal HKCU Run
 entry; the in-app toggle opens Windows Startup settings. Windows virtualizes the
-normal `%APPDATA%\PecoFence\config.json` under the package's own identity-dependent
-AppData location. An existing portable configuration can be read on first launch,
-but packaged changes stay in that location; uninstall removes virtualized data.
+normal `%APPDATA%\PecoFence\workspace.v2.json` under the package's own identity-dependent
+AppData location. Only supported schema-2 documents can be imported explicitly;
+there is no automatic migration of portable/old-format data. Packaged writes and
+uninstall behavior depend on Windows virtualization and the assigned identity.
 Test first launch, updates, startup, uninstall and desktop-icon restoration with
 your assigned identity rather than assuming portable/MSIX isolation.
 

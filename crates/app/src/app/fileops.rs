@@ -131,21 +131,26 @@ impl App {
                 }
                 self.refresh_portals_in(&dirs);
             }
-            FileOpThen::ToDesktop { routed, copy, what } => match result {
-                Ok(true) => tracing::info!(count = routed.len(), copy, "{what}"),
-                Ok(false) => {
-                    tracing::info!("move to desktop cancelled by user");
-                    self.pending_routes.retain(|r| !routed.contains(&r.path));
+            FileOpThen::ToDesktop { routed, copy, what } => {
+                match result {
+                    Ok(true) => tracing::info!(count = routed.len(), copy, "{what}"),
+                    Ok(false) => {
+                        tracing::info!("move to desktop cancelled by user");
+                        self.pending_routes.retain(|r| !routed.contains(&r.path));
+                    }
+                    Err(e) => {
+                        tracing::warn!(error = %e, "move to desktop failed");
+                        self.pending_routes.retain(|r| !routed.contains(&r.path));
+                        self.toast(pecofence_core::i18n::format(
+                            "移动到桌面失败：{0}",
+                            std::slice::from_ref(&e),
+                        ));
+                    }
                 }
-                Err(e) => {
-                    tracing::warn!(error = %e, "move to desktop failed");
-                    self.pending_routes.retain(|r| !routed.contains(&r.path));
-                    self.toast(pecofence_core::i18n::format(
-                        "移动到桌面失败：{0}",
-                        std::slice::from_ref(&e),
-                    ));
-                }
-            },
+                // Refresh after the worker outcome, including partial/cancelled operations.
+                // A pre-operation read cannot reflect files that have not moved yet.
+                self.refresh_portals();
+            }
             FileOpThen::Duplicate => {
                 match &result {
                     Ok(true) => tracing::info!("pasted duplicates"),

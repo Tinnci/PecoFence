@@ -4,7 +4,7 @@ use super::*;
 fn window_drag_keeps_the_latest_sample_and_release_before_first_frame() {
     let mut drag = RemoteDrag {
         hwnd: HWND::default(),
-        fence: FenceId::new_v4(),
+        fence: ContainerId::new_v4(),
         offset: (20, 10),
         merge_target: 0,
         merge_x: i32::MIN,

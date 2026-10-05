@@ -1,6 +1,6 @@
 //! Auto-sorting rule engine (plan §8). Pure functions over `ItemFacts`.
 
-use crate::model::{FenceId, Origin, RuleId};
+use crate::model::{ContentId, Origin, RuleId};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -8,7 +8,7 @@ use uuid::Uuid;
 #[serde(rename_all = "camelCase")]
 pub enum Target {
     Inbox,
-    Fence(FenceId),
+    Collection(ContentId),
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -433,14 +433,14 @@ impl RuleSet {
     }
 
     /// Stardock-style first-run presets: 程序 / 文件夹 / 文件与文档 (+ 下载 by name).
-    pub fn default_presets(programs: FenceId, folders: FenceId, documents: FenceId) -> Self {
+    pub fn default_presets(programs: ContentId, folders: ContentId, documents: ContentId) -> Self {
         Self {
             default_target: Target::Inbox,
             keep_updated: true,
             list: vec![
                 Rule::new(
                     crate::i18n::text("程序与快捷方式"),
-                    Target::Fence(programs),
+                    Target::Collection(programs),
                     vec![Cond::Type(vec![
                         TypeCategory::Programs,
                         TypeCategory::Shortcuts,
@@ -448,12 +448,12 @@ impl RuleSet {
                 ),
                 Rule::new(
                     crate::i18n::text("文件夹"),
-                    Target::Fence(folders),
+                    Target::Collection(folders),
                     vec![Cond::Type(vec![TypeCategory::Folders])],
                 ),
                 Rule::new(
                     crate::i18n::text("文件与文档"),
-                    Target::Fence(documents),
+                    Target::Collection(documents),
                     vec![Cond::Type(vec![
                         TypeCategory::Documents,
                         TypeCategory::Images,
@@ -524,7 +524,7 @@ impl Template {
     }
 
     /// The rule that fills `fence`, tagged with this template's key.
-    pub fn rule(self, fence: FenceId) -> Rule {
+    pub fn rule(self, collection: ContentId) -> Rule {
         let conds = match self {
             Template::Images => vec![Cond::Type(vec![TypeCategory::Images])],
             Template::Music => vec![Cond::Type(vec![TypeCategory::Music])],
@@ -538,7 +538,7 @@ impl Template {
                 },
             ],
         };
-        let mut rule = Rule::new(&self.title(), Target::Fence(fence), conds);
+        let mut rule = Rule::new(&self.title(), Target::Collection(collection), conds);
         rule.template = Some(self.key().to_string());
         rule
     }
@@ -566,18 +566,18 @@ mod tests {
 
     #[test]
     fn presets_route_by_type_and_default_to_inbox() {
-        let (p, f, d) = (Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4());
+        let (p, f, d) = (ContentId::new(), ContentId::new(), ContentId::new());
         let rs = RuleSet::default_presets(p, f, d);
         assert!(
-            matches!(rs.evaluate(&facts("Steam.lnk")), Decision::Route { target: Target::Fence(t), .. } if t == p)
+            matches!(rs.evaluate(&facts("Steam.lnk")), Decision::Route { target: Target::Collection(t), .. } if t == p)
         );
         let mut folder = facts("Projects");
         folder.is_folder = true;
         assert!(
-            matches!(rs.evaluate(&folder), Decision::Route { target: Target::Fence(t), .. } if t == f)
+            matches!(rs.evaluate(&folder), Decision::Route { target: Target::Collection(t), .. } if t == f)
         );
         assert!(
-            matches!(rs.evaluate(&facts("photo.JPG")), Decision::Route { target: Target::Fence(t), .. } if t == d)
+            matches!(rs.evaluate(&facts("photo.JPG")), Decision::Route { target: Target::Collection(t), .. } if t == d)
         );
         assert_eq!(
             rs.evaluate(&facts("weird.xyz")),
@@ -587,19 +587,19 @@ mod tests {
 
     #[test]
     fn target_class_rules_win_regardless_of_order() {
-        let (a, b) = (Uuid::new_v4(), Uuid::new_v4());
+        let (a, b) = (ContentId::new(), ContentId::new());
         let rs = RuleSet {
             default_target: Target::Inbox,
             keep_updated: true,
             list: vec![
                 Rule::new(
                     "all lnk",
-                    Target::Fence(a),
+                    Target::Collection(a),
                     vec![Cond::Ext(vec!["lnk".into()])],
                 ),
                 Rule::new(
                     "games",
-                    Target::Fence(b),
+                    Target::Collection(b),
                     vec![Cond::ShortcutTarget {
                         op: StrOp::Contains,
                         value: "steam".into(),
@@ -610,7 +610,7 @@ mod tests {
         let mut f = facts("Dota.lnk");
         f.shortcut_target = Some("C:\\Program Files\\Steam\\steam.exe".into());
         assert!(
-            matches!(rs.evaluate(&f), Decision::Route { target: Target::Fence(t), .. } if t == b)
+            matches!(rs.evaluate(&f), Decision::Route { target: Target::Collection(t), .. } if t == b)
         );
     }
 
@@ -641,7 +641,7 @@ mod tests {
 
     #[test]
     fn cleanup_template_gathers_only_idle_installers_and_archives() {
-        let fence = Uuid::new_v4();
+        let fence = ContentId::new();
         let rule = Template::Cleanup.rule(fence);
         assert_eq!(rule.template.as_deref(), Some("cleanup"));
         assert_eq!(rule.priority_class, Class::Type);
@@ -652,7 +652,7 @@ mod tests {
         let mut old_zip = facts("backup.zip");
         old_zip.idle_days = Some(45);
         assert!(
-            matches!(rs.evaluate(&old_zip), Decision::Route { target: Target::Fence(t), .. } if t == fence)
+            matches!(rs.evaluate(&old_zip), Decision::Route { target: Target::Collection(t), .. } if t == fence)
         );
         let mut fresh_zip = facts("backup.zip");
         fresh_zip.idle_days = Some(2);
@@ -669,7 +669,7 @@ mod tests {
 
     #[test]
     fn idle_template_rule_is_recognised_for_ordering() {
-        let f = Uuid::new_v4();
+        let f = ContentId::new();
         let cleanup = Template::Cleanup.rule(f);
         let installers = Template::Installers.rule(f);
         assert!(

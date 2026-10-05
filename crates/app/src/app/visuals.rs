@@ -228,7 +228,7 @@ pub(super) fn icon_variant_for(s: &pecofence_core::IconSettings) -> IconVariant 
     }
 }
 
-pub(super) fn fence_style_for(f: &pecofence_core::Fence) -> FenceStyle {
+pub(super) fn fence_style_for(f: &pecofence_core::FenceSnapshot) -> FenceStyle {
     let a = f.appearance.as_ref();
     let rgb = |c: [u8; 3]| pecofence_render::ColorF::from_rgba8(c[0], c[1], c[2], 0xFF);
     FenceStyle {
@@ -375,7 +375,7 @@ impl App {
             return;
         }
         tracing::info!(family = %f.family, size = f.size_dip, "icon-title font changed");
-        let ids: Vec<FenceId> = self.fences.keys().copied().collect();
+        let ids: Vec<ContainerId> = self.fences.keys().copied().collect();
         for id in ids {
             if let Some(w) = self.fences.get(&id) {
                 w.on_icon_font_changed();

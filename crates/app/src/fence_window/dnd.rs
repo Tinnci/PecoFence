@@ -10,7 +10,7 @@ pub(super) fn drag_image_fits(w_dip: f32, h_dip: f32) -> bool {
 /// thread-local beside the shell data object is enough — no private clipboard format).
 #[derive(Clone, Debug)]
 pub(super) struct InternalDrag {
-    pub(super) from: FenceId,
+    pub(super) from: ContentId,
     pub(super) items: Vec<ItemId>,
     pub(super) paths: Vec<PathBuf>,
 }

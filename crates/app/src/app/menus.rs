@@ -215,9 +215,13 @@ impl App {
         let inbox = self.state.inbox_id();
         let from_portal = self.state.portal_path(fence).is_some();
         let move_menu = PopupMenu::new();
-        let targets: Vec<(u32, String, bool)> = self
+        let destinations: Vec<_> = self
             .state
             .fences()
+            .into_iter()
+            .filter(|f| f.content.is_files())
+            .collect();
+        let targets: Vec<(u32, String, bool)> = destinations
             .iter()
             .enumerate()
             .map(|(i, f)| {
@@ -342,7 +346,7 @@ impl App {
             CMD_ITEM_DELETE => self.delete_items(fence, &items, window::key_down(msg::VK_SHIFT)),
             c if c >= CMD_ITEM_MOVE_BASE && c < CMD_ITEM_MOVE_BASE + 1000 => {
                 let idx = (c - CMD_ITEM_MOVE_BASE) as usize;
-                if let Some(target) = self.state.fences().get(idx).map(|f| f.id) {
+                if let Some(target) = destinations.get(idx).map(|f| f.id) {
                     self.move_items(&items, target);
                 }
             }
@@ -356,11 +360,16 @@ impl App {
     pub(super) fn show_fence_menu(&mut self, fence: FenceId, x: i32, y: i32) {
         // `fence` may be a tab: window-level items (roll, lock) act on its host `h`, content
         // items (view, sort, new, delete) on the fence itself.
-        let Some(f) = self.state.fence(fence).cloned() else {
+        let Some(f) = self.state.fence(fence) else {
             return;
         };
-        let host = self.state.host_of(fence);
-        let h = self.state.fence(host).cloned().unwrap_or_else(|| f.clone());
+        let Some(host) = self.state.host_of(fence) else {
+            return;
+        };
+        let Some(h) = self.state.container(host) else {
+            return;
+        };
+        let locked = h.locked;
         let menu = PopupMenu::new();
         let rolled = self.fences.get(&host).is_some_and(|w| w.is_rolled());
         menu.item(
@@ -534,12 +543,11 @@ impl App {
         // fence into another window. Hidden when none of that applies.
         let tabs = self.state.tabs_of(host);
         let tab_idx = tabs.iter().position(|t| *t == fence).unwrap_or(0);
-        let other_hosts: Vec<(u32, String)> = self
-            .state
-            .host_fences()
+        let attach_hosts = self.state.host_fences();
+        let other_hosts: Vec<(u32, String)> = attach_hosts
             .iter()
             .enumerate()
-            .filter(|(_, o)| o.id != host)
+            .filter(|(_, o)| o.container_id != host)
             .map(|(i, o)| (CMD_TAB_ATTACH_BASE + i as u32, o.title.clone()))
             .collect();
         if tabs.len() >= 2 || !other_hosts.is_empty() {
@@ -580,7 +588,7 @@ impl App {
         menu.item(
             CMD_FENCE_LOCK,
             pecofence_core::i18n::text("锁定位置和大小"),
-            h.locked,
+            locked,
             false,
         );
         menu.separator()
@@ -622,7 +630,9 @@ impl App {
                     .state
                     .new_fence(pecofence_core::i18n::text("新标签页"), rect)
                 {
-                    self.state.attach_tab(id, host);
+                    if let Err(error) = self.state.attach_tab(id, host) {
+                        self.settings_error(&error.to_string());
+                    }
                     self.resync_windows();
                     self.apply_fence_view(host);
                     self.schedule_save();
@@ -633,19 +643,21 @@ impl App {
             CMD_TAB_MOVE_RIGHT => self.reorder_tab(host, fence, tab_idx + 1),
             CMD_FENCE_PASTE => self.paste_into(fence),
             c if c >= CMD_TAB_ATTACH_BASE
-                && c < CMD_TAB_ATTACH_BASE + self.state.host_fences().len() as u32 =>
+                && c < CMD_TAB_ATTACH_BASE + attach_hosts.len() as u32 =>
             {
                 let idx = (c - CMD_TAB_ATTACH_BASE) as usize;
-                if let Some(target) = self.state.host_fences().get(idx).map(|o| o.id)
-                    && self.state.attach_tab(fence, target)
-                {
-                    // The merged fence's own window (if it had one) goes away in resync.
-                    self.resync_windows();
-                    self.apply_fence_view(target);
-                    if let Some(w) = self.fences.get(&target) {
-                        self.queue.push(Command::RaiseFence(w.hwnd()));
+                if let Some(target) = attach_hosts.get(idx).map(|o| o.container_id) {
+                    match self.state.attach_tab(fence, target) {
+                        Ok(_) => {
+                            self.resync_windows();
+                            self.apply_fence_view(target);
+                            if let Some(w) = self.fences.get(&target) {
+                                self.queue.push(Command::RaiseFence(w.hwnd()));
+                            }
+                            self.schedule_save();
+                        }
+                        Err(error) => self.settings_error(&error.to_string()),
                     }
-                    self.schedule_save();
                 }
             }
             CMD_FENCE_OPEN_FOLDER => {
@@ -682,8 +694,8 @@ impl App {
                 {
                     w.set_layout(layout);
                 }
-                self.apply_column_snap(fence);
-                self.apply_auto_height(fence);
+                self.apply_column_snap(host);
+                self.apply_auto_height(host);
                 self.schedule_save();
             }
             CMD_FENCE_SORT_MANUAL
@@ -716,7 +728,7 @@ impl App {
                 self.refresh_fence(fence);
                 self.schedule_save();
             }
-            CMD_FENCE_LOCK => self.set_fence_locked(host, !h.locked),
+            CMD_FENCE_LOCK => self.set_fence_locked(host, !locked),
             CMD_FENCE_OPTIONS => self.open_fence_options(fence),
             CMD_FENCE_NEW => {
                 let rect = self.place_new_fence(3, 200.0, x, y, Some(host));
@@ -731,7 +743,7 @@ impl App {
 
     /// Right-click on the Details header: Explorer's column chooser (名称 always on).
     pub(super) fn show_header_menu(&mut self, fence: FenceId, x: i32, y: i32) {
-        let Some(f) = self.state.fence(fence).cloned() else {
+        let Some(f) = self.state.fence(fence) else {
             return;
         };
         let mut vis = f.view.columns_visible.unwrap_or([true; 3]);
@@ -781,7 +793,9 @@ impl App {
                 {
                     w.set_columns_visible(vis);
                 }
-                self.apply_auto_height(fence);
+                if let Some(host) = self.state.host_of(fence) {
+                    self.apply_auto_height(host);
+                }
                 self.schedule_save();
             }
             CMD_COL_RESET_WIDTHS => {

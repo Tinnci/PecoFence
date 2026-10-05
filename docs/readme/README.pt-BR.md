@@ -109,9 +109,10 @@ a aparecer quando você sai.
   a matriz completa de versões antigas e configurações com vários monitores ainda está em andamento.
 - O Microsoft Edge WebView2 Runtime é necessário para as Configurações. Mantenha
   `WebView2Loader.dll` e `pecofence-watchdog.exe` na mesma pasta do aplicativo.
-- A configuração fica em `%APPDATA%\PecoFence\config.json`. Inicie com
+- A configuração fica em `%APPDATA%\PecoFence\workspace.v2.json`. Inicie com
   `--portable` para mantê-la em uma pasta `config` ao lado do executável.
-- Instalações existentes continuam usando o diretório de configuração anterior.
+- O novo formato não importa nem migra configurações antigas.
+  Os arquivos existentes são preservados; crie um espaço de trabalho ou importe um documento compatível.
   Veja o [guia de atualização](../UPGRADING.md).
 - O vidro usa o papel de parede estático. Ele não refrata outros aplicativos
   nem papéis de parede em vídeo.

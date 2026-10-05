@@ -51,6 +51,10 @@ Copy-Item -LiteralPath "third_party/webview2/WebView2Loader.x64.dll" `
 Invoke-CheckedCommand "Workspace tests" "cargo" @(
   "test", "--locked", "--workspace", "--target-dir", $TargetDir
 )
+Invoke-CheckedCommand "Workspace fixture validator tests" "cargo" @(
+  "test", "--locked", "-p", "pecofence-core", "--example", "validate_workspace",
+  "--target-dir", $TargetDir
+)
 
 # One release compilation; packaging must consume these exact binaries.
 Invoke-CheckedCommand "Release build" "cargo" @(

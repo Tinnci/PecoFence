@@ -1,7 +1,7 @@
 //! UI-thread command queue: window handlers push commands and poke the control window; the
 //! `App` drains them outside any handler, so no `RefCell` is ever borrowed re-entrantly.
 
-use pecofence_core::{FenceId, ItemId};
+use pecofence_core::{ContainerId, ContentId, ItemId};
 use pecofence_platform::window::Window;
 use pecofence_platform::{HWND, RECT, msg};
 use std::cell::RefCell;
@@ -48,22 +48,22 @@ pub enum TransferMode {
 pub enum Command {
     /// A fence window finished a move/resize; persist its geometry.
     FenceBoundsChanged {
-        fence: FenceId,
+        fence: ContainerId,
         rect: RECT,
     },
-    ToggleRollUp(FenceId),
+    ToggleRollUp(ContainerId),
     /// A hover-peeked fence was double-clicked: keep it expanded.
-    CommitExpanded(FenceId),
+    CommitExpanded(ContainerId),
     LaunchItem(ItemId),
     /// Move `items` into `to` (internal drag or menu).
     MoveItems {
         items: Vec<ItemId>,
-        to: FenceId,
+        to: ContentId,
     },
     /// Internal drag dropped inside its own fence (手动 sort): place `items` before display
     /// index `index`.
     ReorderItems {
-        fence: FenceId,
+        fence: ContentId,
         items: Vec<ItemId>,
         index: usize,
     },
@@ -72,7 +72,7 @@ pub enum Command {
     DropIntoFolder {
         paths: Vec<PathBuf>,
         folder: PathBuf,
-        fence: FenceId,
+        fence: ContentId,
         mode: TransferMode,
     },
     /// An OLE drag out of a fence ended with a Move/Copy performed by a foreign target: resync
@@ -80,10 +80,10 @@ pub enum Command {
     DragOutFinished,
     /// Folder portal: open a subfolder inside the portal / go one level up.
     PortalEnter {
-        fence: FenceId,
+        fence: ContentId,
         path: PathBuf,
     },
-    PortalUp(FenceId),
+    PortalUp(ContentId),
     /// A fence window is being dragged over `target`'s title (null = none): highlight it and,
     /// on a tabbed target, open the insertion gap at pointer screen `x`.
     MergeHint {
@@ -93,36 +93,36 @@ pub enum Command {
     /// A fence window was dropped on another fence's title at pointer screen `x`: merge it
     /// there as a tab, inserted at the slot under the pointer.
     MergeFence {
-        fence: FenceId,
+        fence: ContainerId,
         into: HWND,
         x: i32,
     },
     /// Details header divider dragged: persist the (修改日期, 类型, 大小) widths.
     SetColumnWidths {
-        fence: FenceId,
+        fence: ContentId,
         widths: [f32; 3],
     },
     /// Tab header clicked in `host`'s window.
     SwitchTab {
-        host: FenceId,
-        tab: FenceId,
+        host: ContainerId,
+        tab: ContentId,
     },
     /// A tab header was dragged out of its window (or the menu asked): split it into its own
     /// fence near (x, y). `from_drag` = torn off by dragging; the new window follows the pointer.
     DetachTab {
-        tab: FenceId,
+        tab: ContentId,
         x: i32,
         y: i32,
         from_drag: bool,
     },
-    /// Esc / right button: restore the group's original ownership, order and geometry.
+    /// Esc / right button: apply the gesture's structural inverse, preserving content edits.
     CancelDetach {
         change: Box<pecofence_core::TabDetach>,
     },
     /// Tab header dragged along the strip (or menu 左移 / 右移): place it at index `to`.
     ReorderTab {
-        host: FenceId,
-        tab: FenceId,
+        host: ContainerId,
+        tab: ContentId,
         to: usize,
     },
     /// Internal drag dropped on the bare desktop: back to the inbox.
@@ -133,7 +133,7 @@ pub enum Command {
     /// modifier table: Ctrl copy, Alt / Ctrl+Shift shortcut, otherwise move).
     ExternalDrop {
         paths: Vec<PathBuf>,
-        to: FenceId,
+        to: ContentId,
         mode: TransferMode,
     },
     /// A link dragged from a browser onto a fence: create an Internet Shortcut (.url) like
@@ -141,60 +141,60 @@ pub enum Command {
     ExternalUrlDrop {
         url: String,
         name: Option<String>,
-        to: FenceId,
+        to: ContentId,
     },
     /// Right-click on the Details header: column visibility menu at screen coordinates.
     HeaderMenu {
-        fence: FenceId,
+        fence: ContentId,
         x: i32,
         y: i32,
     },
     /// Ctrl+C / Ctrl+X: the shell's copy / cut verb on the selection (cut items draw dimmed).
     ClipboardVerb {
-        fence: FenceId,
+        fence: ContentId,
         items: Vec<ItemId>,
         cut: bool,
     },
     /// Ctrl+V / menu 粘贴: the clipboard's files land in `fence` (its folder for a portal).
     Paste {
-        fence: FenceId,
+        fence: ContentId,
     },
     /// Ctrl+Shift+N: 新建文件夹 in `fence`.
     NewFolder {
-        fence: FenceId,
+        fence: ContentId,
     },
     /// Ctrl+wheel over the item area: step the active tab's icon size (Explorer/Fences habit).
     StepIconSize {
-        fence: FenceId,
+        fence: ContentId,
         larger: bool,
     },
     /// Alt+Enter / menu: open the shell Properties sheet for the selection.
     ItemProperties {
-        fence: FenceId,
+        fence: ContentId,
         items: Vec<ItemId>,
     },
     /// F5: re-read this fence's contents (desktop or portal folder) and its icons.
-    RefreshFence(FenceId),
+    RefreshFence(ContentId),
     /// Context menu on a fence's title/background at screen coordinates.
     FenceMenu {
-        fence: FenceId,
+        fence: ContentId,
         x: i32,
         y: i32,
     },
     /// Context menu on an item at screen coordinates.
     ItemMenu {
-        fence: FenceId,
+        fence: ContentId,
         items: Vec<ItemId>,
         x: i32,
         y: i32,
     },
     RenameFence {
-        fence: FenceId,
+        fence: ContentId,
         title: String,
     },
     /// F2 / menu on a single selected item: open the inline rename popup.
     RenameItem {
-        fence: FenceId,
+        fence: ContentId,
         item: ItemId,
     },
     /// The rename popup committed a new display name for an item (file gets renamed).
@@ -209,13 +209,13 @@ pub enum Command {
     /// Delete key: hand the selection to the shell's `delete` verb (Recycle Bin, confirmations).
     /// `permanent` = Shift held (Explorer's Shift+Delete skips the Recycle Bin).
     DeleteItems {
-        fence: FenceId,
+        fence: ContentId,
         items: Vec<ItemId>,
         permanent: bool,
     },
     /// A composition surface reported `DXGI_ERROR_DEVICE_REMOVED`: rebuild the render stack.
     DeviceLost,
-    DeleteFence(FenceId),
+    DeleteFence(ContentId),
     NewFence {
         x: i32,
         y: i32,
@@ -229,7 +229,7 @@ pub enum Command {
     ApplyRulesNow,
     OpenSettings,
     /// Settings window on the 「栅栏」 page with this fence selected.
-    OpenOptionsForFence(FenceId),
+    OpenOptionsForFence(ContentId),
     RedrawAll,
     Quit,
     /// A window was destroyed (unregister).
@@ -240,7 +240,7 @@ pub enum Command {
     RaiseFence(HWND),
     /// Details-view header click: sort by that column (again = reverse).
     SortColumn {
-        fence: FenceId,
+        fence: ContentId,
         sort: pecofence_core::SortMode,
     },
     /// JSON message from the settings page.

@@ -1,5 +1,7 @@
 # PecoFence 与 SPM：架构优化与可扩展性分析
 
+历史提案，已由 [应用边界与类型化接口重设计](ARCHITECTURE.md) 和 [ADR-006](decisions/ADR-006-application-boundaries.md) 取代。下文保留当时的源码分析，不作为当前服务框架、兼容策略或迁移顺序的约束。
+
 日期：2026-09-21。状态：供后续实施遵循的架构决策与迁移规范；本文不是实现完成报告。
 
 分析对象：PecoFence Windows 桌面工作区宿主，以及 Sprocomm Multi-Project Delivery Panel（SPM，多项目交付面板）。全文区分**已核对事实**、**静态推导的风险**和**拟实施要求**。性能预算均为验收目标，未经实测的收益不作为结论。

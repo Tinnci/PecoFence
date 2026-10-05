@@ -1,42 +1,61 @@
-//! Config persistence: atomic writes, `.bak` rotation, daily backups, load fallbacks (plan §7.5).
+//! Exact-format workspace storage. Domain validation belongs to Config; this adapter
+//! owns file IO, primary replacement and backup outcomes, not default-workspace policy.
 
 use crate::model::{Config, SCHEMA_VERSION};
 use std::fs;
-use std::io;
+use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 
 pub const MAX_FENCES: usize = 64;
 pub const MAX_ITEMS: usize = 5000;
 pub const DAILY_BACKUPS_KEPT: usize = 7;
+const MAX_DOCUMENT_BYTES: u64 = 16 * 1024 * 1024;
 
 #[derive(Debug)]
 pub enum FreshReason {
     FirstRun,
     CorruptPrimary {
         reason: String,
+        /// Source files are retained in place. No automatic quarantine/migration.
         quarantined: Option<PathBuf>,
     },
     UnreadablePrimary {
         reason: String,
     },
+    UnsupportedFormat {
+        path: PathBuf,
+        schema: Option<u32>,
+    },
 }
 
 #[derive(Debug)]
 pub enum LoadOutcome {
-    /// Loaded from the primary file.
     Primary(Config),
-    /// Primary missing/corrupt; loaded from `.bak` or a daily backup (path given).
+    /// A usable candidate, NOT permission to overwrite the original automatically.
     Recovered(Config, PathBuf),
-    /// Nothing usable: fresh default (first run or total loss).
+    /// Only FirstRun permits default creation; all other reasons require explicit recovery.
     Fresh(Config, FreshReason),
 }
 
-impl LoadOutcome {
-    pub fn into_config(self) -> Config {
-        match self {
-            LoadOutcome::Primary(c) | LoadOutcome::Recovered(c, _) | LoadOutcome::Fresh(c, _) => c,
-        }
-    }
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum BackupStatus {
+    Written,
+    AlreadyExists,
+    Degraded(String),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SaveReceipt {
+    /// A receipt is returned only after the primary has been replaced successfully.
+    pub backup: BackupStatus,
+}
+
+enum Stored {
+    Absent,
+    Valid(Box<Config>),
+    Unsupported(Option<u32>),
+    Corrupt(String),
+    Unavailable(String),
 }
 
 pub struct ConfigStore {
@@ -48,239 +67,376 @@ impl ConfigStore {
         Self { dir: dir.into() }
     }
 
-    /// Reuse an existing installation's data in place. No copying, rewriting or
-    /// renaming of user files is needed just because the product name changed.
-    pub fn with_legacy(preferred: impl Into<PathBuf>, legacy: impl Into<PathBuf>) -> Self {
-        let preferred = Self::new(preferred);
-        let legacy = Self::new(legacy);
-        if !preferred.has_saved_data() && legacy.has_saved_data() {
-            legacy
-        } else {
-            preferred
-        }
-    }
-
-    fn has_saved_data(&self) -> bool {
-        self.primary_path().exists() || self.bak_path().exists() || !self.list_backups().is_empty()
-    }
-
     pub fn dir(&self) -> &Path {
         &self.dir
     }
+
     pub fn primary_path(&self) -> PathBuf {
-        self.dir.join("config.json")
+        self.dir.join("workspace.v2.json")
     }
+
     fn bak_path(&self) -> PathBuf {
-        self.dir.join("config.bak")
+        self.dir.join("workspace.v2.bak")
     }
-    fn tmp_path(&self) -> PathBuf {
-        self.dir.join("config.json.tmp")
-    }
+
     fn backups_dir(&self) -> PathBuf {
-        self.dir.join("backups")
+        self.dir.join("workspace.v2.backups")
     }
 
-    fn parse(path: &Path) -> Option<Config> {
-        Self::parse_file(path).ok()
+    fn read_text(path: &Path) -> io::Result<String> {
+        let mut bytes = Vec::new();
+        fs::File::open(path)?
+            .take(MAX_DOCUMENT_BYTES + 1)
+            .read_to_end(&mut bytes)?;
+        if bytes.len() as u64 > MAX_DOCUMENT_BYTES {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "workspace exceeds the 16 MiB input budget",
+            ));
+        }
+        String::from_utf8(bytes).map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))
     }
 
-    /// Reads and validates any config file (import / backup restore), with the reason on error.
+    fn decode(text: &str) -> Stored {
+        let wire: serde_json::Value = match serde_json::from_str(text) {
+            Ok(wire) => wire,
+            Err(error) => return Stored::Corrupt(error.to_string()),
+        };
+        let schema = wire
+            .get("schemaVersion")
+            .and_then(serde_json::Value::as_u64)
+            .and_then(|version| u32::try_from(version).ok());
+        if schema != Some(SCHEMA_VERSION) {
+            return Stored::Unsupported(schema);
+        }
+        let config: Config = match serde_json::from_value(wire) {
+            Ok(config) => config,
+            Err(error) => return Stored::Corrupt(error.to_string()),
+        };
+        match config.validate() {
+            Ok(()) => Stored::Valid(Box::new(config)),
+            Err(error) => Stored::Corrupt(error),
+        }
+    }
+
+    fn read_stored(path: &Path) -> Stored {
+        match Self::read_text(path) {
+            Ok(text) => Self::decode(&text),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => Stored::Absent,
+            Err(error) if error.kind() == io::ErrorKind::InvalidData => {
+                Stored::Corrupt(error.to_string())
+            }
+            Err(error) => Stored::Unavailable(error.to_string()),
+        }
+    }
+
+    /// Import/restore accepts the exact supported schema. No aliases or migration chain.
     pub fn parse_file(path: &Path) -> Result<Config, String> {
-        let text = fs::read_to_string(path).map_err(|e| e.to_string())?;
-        Self::parse_text(&text)
+        match Self::read_stored(path) {
+            Stored::Valid(config) => Ok(*config),
+            Stored::Unsupported(schema) => Err(format!(
+                "unsupported workspace schema {schema:?}; expected {SCHEMA_VERSION}"
+            )),
+            Stored::Absent => Err(format!("workspace not found: {}", path.display())),
+            Stored::Corrupt(error) | Stored::Unavailable(error) => Err(error),
+        }
     }
 
-    fn parse_text(text: &str) -> Result<Config, String> {
-        let cfg: Config = serde_json::from_str(text).map_err(|e| e.to_string())?;
-        validate(&cfg)?;
-        Ok(migrate(cfg))
+    pub fn export_to(config: &Config, path: &Path) -> io::Result<()> {
+        fs::write(path, Self::encode(config)?)
     }
 
-    /// Writes the config as pretty JSON to an arbitrary path (export).
-    pub fn export_to(cfg: &Config, path: &Path) -> io::Result<()> {
-        let json = serde_json::to_string_pretty(cfg).map_err(io::Error::other)?;
-        fs::write(path, json)
+    fn encode(config: &Config) -> io::Result<String> {
+        config
+            .validate()
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+        let json = serde_json::to_string_pretty(config).map_err(io::Error::other)?;
+        if json.len() as u64 > MAX_DOCUMENT_BYTES {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "workspace exceeds the 16 MiB output budget",
+            ));
+        }
+        Ok(json)
     }
 
-    /// Loads with fallbacks: primary → .bak → newest daily backup → default.
+    fn reason(path: &Path, stored: Stored) -> FreshReason {
+        match stored {
+            Stored::Absent => FreshReason::FirstRun,
+            Stored::Unsupported(schema) => FreshReason::UnsupportedFormat {
+                path: path.to_path_buf(),
+                schema,
+            },
+            Stored::Corrupt(reason) => FreshReason::CorruptPrimary {
+                reason: format!("{}: {reason}", path.display()),
+                quarantined: None,
+            },
+            Stored::Unavailable(reason) => FreshReason::UnreadablePrimary {
+                reason: format!("{}: {reason}", path.display()),
+            },
+            Stored::Valid(_) => unreachable!("valid documents are returned before mapping errors"),
+        }
+    }
+
     pub fn load(&self) -> LoadOutcome {
         let primary = self.primary_path();
-        let reason = match fs::read_to_string(&primary) {
-            Ok(text) => match Self::parse_text(&text) {
-                Ok(c) => return LoadOutcome::Primary(c),
-                Err(reason) => {
-                    let stamp = today_yyyy_mm_dd().replace('-', "");
-                    let seconds = std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .map(|d| d.as_secs() % 86_400)
-                        .unwrap_or(0);
-                    let quarantine = self.dir.join(format!(
-                        "config.corrupt-{stamp}-{:02}{:02}{:02}.json",
-                        seconds / 3600,
-                        seconds / 60 % 60,
-                        seconds % 60
-                    ));
-                    let result = if quarantine.exists() {
-                        Err(io::Error::new(
-                            io::ErrorKind::AlreadyExists,
-                            "quarantine filename already exists",
-                        ))
-                    } else {
-                        fs::rename(&primary, &quarantine)
-                    };
-                    match result {
-                        Ok(()) => FreshReason::CorruptPrimary {
-                            reason,
-                            quarantined: Some(quarantine),
-                        },
-                        Err(e) => FreshReason::CorruptPrimary {
-                            reason: format!("{reason}; quarantine failed: {e}"),
-                            quarantined: None,
-                        },
+        let mut reason = match Self::read_stored(&primary) {
+            Stored::Valid(config) => return LoadOutcome::Primary(*config),
+            stored => Self::reason(&primary, stored),
+        };
+        let backup = self.bak_path();
+        match Self::read_stored(&backup) {
+            Stored::Valid(config) => return LoadOutcome::Recovered(*config, backup),
+            Stored::Absent => {}
+            stored if matches!(reason, FreshReason::FirstRun) => {
+                reason = Self::reason(&backup, stored);
+            }
+            _ => {}
+        }
+        match self.backups() {
+            Ok(mut backups) => {
+                backups.sort();
+                for path in backups.into_iter().rev() {
+                    match Self::read_stored(&path) {
+                        Stored::Valid(config) => return LoadOutcome::Recovered(*config, path),
+                        stored if matches!(reason, FreshReason::FirstRun) => {
+                            reason = Self::reason(&path, stored);
+                        }
+                        _ => {}
                     }
                 }
-            },
-            Err(e) if e.kind() == io::ErrorKind::NotFound => FreshReason::FirstRun,
-            Err(e) => FreshReason::UnreadablePrimary {
-                reason: e.to_string(),
-            },
-        };
-        if let Some(c) = Self::parse(&self.bak_path()) {
-            return LoadOutcome::Recovered(c, self.bak_path());
+            }
+            Err(error) if matches!(reason, FreshReason::FirstRun) => {
+                reason = FreshReason::UnreadablePrimary {
+                    reason: format!("cannot inspect workspace backups: {error}"),
+                };
+            }
+            Err(_) => {}
         }
-        let mut backups = self.list_backups();
-        backups.sort();
-        for p in backups.into_iter().rev() {
-            if let Some(c) = Self::parse(&p) {
-                return LoadOutcome::Recovered(c, p);
+        if matches!(reason, FreshReason::FirstRun) {
+            // Identify old data, but never deserialize it into the new model.
+            for path in [
+                self.dir.join("config.json"),
+                self.dir.join("config.bak"),
+                self.dir.join("backups"),
+            ] {
+                match fs::symlink_metadata(&path) {
+                    Ok(_) => {
+                        reason = FreshReason::UnsupportedFormat { path, schema: None };
+                        break;
+                    }
+                    Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+                    Err(error) => {
+                        reason = FreshReason::UnreadablePrimary {
+                            reason: error.to_string(),
+                        };
+                        break;
+                    }
+                }
+            }
+        }
+        if matches!(reason, FreshReason::FirstRun) {
+            match fs::read_dir(&self.dir) {
+                Ok(entries) => {
+                    for entry in entries {
+                        match entry {
+                            Ok(entry) => {
+                                let name = entry.file_name();
+                                let name = name.to_string_lossy();
+                                if name.starts_with("config.corrupt-")
+                                    || name.starts_with("workspace.v2.replaced-")
+                                {
+                                    reason = FreshReason::UnsupportedFormat {
+                                        path: entry.path(),
+                                        schema: None,
+                                    };
+                                    break;
+                                }
+                            }
+                            Err(error) => {
+                                reason = FreshReason::UnreadablePrimary {
+                                    reason: error.to_string(),
+                                };
+                                break;
+                            }
+                        }
+                    }
+                }
+                Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+                Err(error) => {
+                    reason = FreshReason::UnreadablePrimary {
+                        reason: error.to_string(),
+                    };
+                }
             }
         }
         LoadOutcome::Fresh(Config::default(), reason)
     }
 
-    /// Daily backups (`backups/YYYY-MM-DD.json`), unsorted.
+    fn backups(&self) -> io::Result<Vec<PathBuf>> {
+        let entries = match fs::read_dir(self.backups_dir()) {
+            Ok(entries) => entries,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(error) => return Err(error),
+        };
+        let mut paths = Vec::new();
+        for entry in entries {
+            let path = entry?.path();
+            if path
+                .extension()
+                .is_some_and(|extension| extension == "json")
+            {
+                paths.push(path);
+            }
+        }
+        Ok(paths)
+    }
+
     pub fn list_backups(&self) -> Vec<PathBuf> {
-        fs::read_dir(self.backups_dir())
-            .map(|rd| {
-                rd.filter_map(|e| e.ok().map(|e| e.path()))
-                    .filter(|p| p.extension().is_some_and(|e| e == "json"))
-                    .collect()
-            })
-            .unwrap_or_default()
+        self.backups().unwrap_or_default()
     }
 
-    /// Atomically writes the config: tmp → fsync → rotate old to .bak → rename tmp over primary.
-    pub fn save(&self, cfg: &Config) -> io::Result<()> {
-        validate(cfg).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    /// Normal autosave never replaces an unreadable, corrupt or unsupported primary.
+    pub fn save(&self, config: &Config) -> io::Result<SaveReceipt> {
+        match Self::read_stored(&self.primary_path()) {
+            Stored::Absent | Stored::Valid(_) => self.commit(config),
+            _ => Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "primary workspace needs explicit recovery before it can be replaced",
+            )),
+        }
+    }
+
+    /// Only an explicitly confirmed import/reset/recovery may replace unusable data.
+    /// Preserve raw prior bytes in a unique archive; later .bak rotation cannot erase it.
+    pub fn replace(&self, config: &Config) -> io::Result<SaveReceipt> {
+        // Validate shape AND serialized budget before creating recovery evidence.
+        Self::encode(config)?;
+        match fs::File::open(self.primary_path()) {
+            Ok(mut source) => {
+                let path = self.dir.join(format!(
+                    "workspace.v2.replaced-{}.json",
+                    uuid::Uuid::new_v4()
+                ));
+                let mut archive = fs::OpenOptions::new()
+                    .create_new(true)
+                    .write(true)
+                    .open(path)?;
+                io::copy(&mut source, &mut archive)?;
+                archive.sync_all()?;
+            }
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error),
+        }
+        self.commit(config)
+    }
+
+    fn commit(&self, config: &Config) -> io::Result<SaveReceipt> {
+        let json = Self::encode(config)?;
         fs::create_dir_all(&self.dir)?;
-        let json = serde_json::to_string_pretty(cfg).map_err(io::Error::other)?;
-        {
-            let mut f = fs::File::create(self.tmp_path())?;
-            io::Write::write_all(&mut f, json.as_bytes())?;
-            f.sync_all()?;
+        let temporary = self
+            .dir
+            .join(format!("workspace.v2-{}.tmp", uuid::Uuid::new_v4()));
+        let result = (|| {
+            let mut file = fs::OpenOptions::new()
+                .create_new(true)
+                .write(true)
+                .open(&temporary)?;
+            file.write_all(json.as_bytes())?;
+            file.sync_all()?;
+            drop(file);
+
+            let mut issues = Vec::new();
+            if let Err(error) = self.rotate_backup() {
+                issues.push(format!("previous-version backup: {error}"));
+            }
+            // Same-directory replacement. Never remove/rename the old primary first.
+            // Atomic replacement is not a promise of power-loss durability or external CAS.
+            fs::rename(&temporary, self.primary_path())?;
+            let backup = match self.daily_backup(&json) {
+                Ok(status) => status,
+                Err(error) => {
+                    issues.push(format!("daily backup: {error}"));
+                    BackupStatus::AlreadyExists
+                }
+            };
+            Ok(SaveReceipt {
+                backup: if issues.is_empty() {
+                    backup
+                } else {
+                    BackupStatus::Degraded(issues.join("; "))
+                },
+            })
+        })();
+        if result.is_err() {
+            // Only this commit's private staging file; the primary remains untouched.
+            let _ = fs::remove_file(&temporary);
         }
-        let primary = self.primary_path();
-        if primary.exists() {
-            // Best effort: keep the previous good file as .bak.
-            let _ = fs::remove_file(self.bak_path());
-            let _ = fs::rename(&primary, self.bak_path());
-        }
-        fs::rename(self.tmp_path(), &primary)?;
-        self.daily_backup(&json)?;
-        Ok(())
+        result
     }
 
-    /// Writes at most one backup per day and prunes to `DAILY_BACKUPS_KEPT`.
-    fn daily_backup(&self, json: &str) -> io::Result<()> {
-        let dir = self.backups_dir();
-        fs::create_dir_all(&dir)?;
-        let today = today_yyyy_mm_dd();
-        let path = dir.join(format!("{today}.json"));
-        if !path.exists() {
-            fs::write(&path, json)?;
+    fn rotate_backup(&self) -> io::Result<()> {
+        let primary = self.primary_path();
+        let mut source = match fs::File::open(&primary) {
+            Ok(source) => source,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),
+            Err(error) => return Err(error),
+        };
+        let temporary = self
+            .dir
+            .join(format!("workspace.v2-backup-{}.tmp", uuid::Uuid::new_v4()));
+        let result = (|| {
+            let mut backup = fs::OpenOptions::new()
+                .create_new(true)
+                .write(true)
+                .open(&temporary)?;
+            io::copy(&mut source, &mut backup)?;
+            backup.sync_all()?;
+            drop(backup);
+            fs::rename(&temporary, self.bak_path())
+        })();
+        if result.is_err() {
+            let _ = fs::remove_file(temporary);
         }
-        let mut backups = self.list_backups();
+        result
+    }
+
+    fn daily_backup(&self, json: &str) -> io::Result<BackupStatus> {
+        fs::create_dir_all(self.backups_dir())?;
+        let path = self
+            .backups_dir()
+            .join(format!("{}.json", today_yyyy_mm_dd()));
+        let status = match fs::OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .open(path)
+        {
+            Ok(mut file) => {
+                file.write_all(json.as_bytes())?;
+                file.sync_all()?;
+                BackupStatus::Written
+            }
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
+                BackupStatus::AlreadyExists
+            }
+            Err(error) => return Err(error),
+        };
+        let mut backups = self.backups()?;
         backups.sort();
         while backups.len() > DAILY_BACKUPS_KEPT {
-            let oldest = backups.remove(0);
-            let _ = fs::remove_file(oldest);
+            fs::remove_file(backups.remove(0))?;
         }
-        Ok(())
+        Ok(status)
     }
 }
 
-/// Range checks from plan §7.5.
-pub fn validate(cfg: &Config) -> Result<(), String> {
-    if cfg.schema_version == 0 || cfg.schema_version > SCHEMA_VERSION {
-        return Err(format!(
-            "unsupported schema version {} (supported: {SCHEMA_VERSION})",
-            cfg.schema_version
-        ));
-    }
-    if cfg.items.len() > MAX_ITEMS {
-        return Err(format!("too many items: {}", cfg.items.len()));
-    }
-    for layout in &cfg.layouts {
-        if layout.fences.len() > MAX_FENCES {
-            return Err(format!("too many fences: {}", layout.fences.len()));
-        }
-        let inboxes = layout
-            .fences
-            .iter()
-            .filter(|f| f.kind == crate::model::FenceKind::Inbox)
-            .count();
-        if inboxes > 1 {
-            return Err(format!("layout has {inboxes} inbox fences"));
-        }
-        for f in &layout.fences {
-            if let crate::model::FenceContentSpec::Panel { panel } = &f.content {
-                if panel.provider.trim().is_empty()
-                    || panel.config_version == 0
-                    || f.kind != crate::model::FenceKind::Virtual
-                    || !f.items.is_empty()
-                {
-                    return Err("panels require provider/version and an empty virtual fence".into());
-                }
-            }
-            let g = &f.geometry;
-            if !(g.w.is_finite() && g.h.is_finite() && g.x.is_finite() && g.y.is_finite()) {
-                return Err(format!("fence {} has non-finite geometry", f.title));
-            }
-            if g.w < 1.0 || g.h < 1.0 || g.w > 8192.0 || g.h > 8192.0 {
-                return Err(format!(
-                    "fence {} has out-of-range size {}x{}",
-                    f.title, g.w, g.h
-                ));
-            }
-            // 0.4–1.8: the per-fence menu offers 0.55 ("更透明") and 1.6 ("更厚实" = a veil).
-            if let Some(a) = &f.appearance
-                && let Some(o) = a.opacity
-                && !(0.2..=2.0).contains(&o)
-            {
-                return Err(format!("fence {} opacity {o} out of range", f.title));
-            }
-        }
-    }
-    Ok(())
-}
-
-/// Schema migration chain (currently identity).
-pub fn migrate(mut cfg: Config) -> Config {
-    if cfg.schema_version < SCHEMA_VERSION {
-        cfg.schema_version = SCHEMA_VERSION;
-    }
-    cfg
-}
-
-/// Local-date string without pulling in a date crate (civil-from-days algorithm, UTC-based;
-/// backups are named for humans so the timezone offset is irrelevant).
+/// UTC date for human-readable backup filenames.
 pub fn today_yyyy_mm_dd() -> String {
     let secs = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
+        .map(|duration| duration.as_secs() as i64)
         .unwrap_or(0);
-    let days = secs.div_euclid(86_400);
-    let z = days + 719_468;
+    let z = secs.div_euclid(86_400) + 719_468;
     let era = z.div_euclid(146_097);
     let doe = z - era * 146_097;
     let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
@@ -296,236 +452,175 @@ pub fn today_yyyy_mm_dd() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::*;
 
-    fn tmpdir(name: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!("pecofence-test-{name}-{}", std::process::id()));
-        let _ = fs::remove_dir_all(&d);
-        d
+    struct Fixture(PathBuf);
+    impl Fixture {
+        fn new() -> Self {
+            let path =
+                std::env::temp_dir().join(format!("pecofence-store-{}", uuid::Uuid::new_v4()));
+            fs::create_dir(&path).unwrap();
+            Self(path)
+        }
+        fn store(&self) -> ConfigStore {
+            ConfigStore::new(&self.0)
+        }
     }
-
-    fn sample() -> Config {
-        let mut c = Config::default();
-        c.layouts.push(Layout {
-            fingerprint: vec![],
-            fences: vec![Fence::new(
-                "A",
-                FenceKind::Inbox,
-                NormGeometry {
-                    monitor: "m".into(),
-                    x: 1.0,
-                    y: 2.0,
-                    w: 300.0,
-                    h: 200.0,
-                    work_w: 1920.0,
-                    work_h: 1000.0,
-                    anchor: Anchor::LeftTop,
-                },
-            )],
-        });
-        c
-    }
-
-    #[test]
-    fn save_then_load_primary() {
-        let store = ConfigStore::new(tmpdir("primary"));
-        store.save(&sample()).unwrap();
-        assert!(matches!(store.load(), LoadOutcome::Primary(_)));
-        assert!(store.primary_path().exists());
-        assert!(!store.tmp_path().exists());
-        assert_eq!(store.list_backups().len(), 1);
-    }
-
-    #[test]
-    fn corrupt_primary_falls_back_to_bak() {
-        let store = ConfigStore::new(tmpdir("bak"));
-        store.save(&sample()).unwrap();
-        store.save(&sample()).unwrap(); // creates .bak
-        fs::write(store.primary_path(), "{ not json").unwrap();
-        match store.load() {
-            LoadOutcome::Recovered(c, from) => {
-                assert_eq!(c.layouts[0].fences[0].title, "A");
-                assert_eq!(from, store.bak_path());
-            }
-            other => panic!("unexpected {other:?}"),
+    impl Drop for Fixture {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
         }
     }
 
     #[test]
-    fn nothing_usable_gives_fresh() {
-        let store = ConfigStore::new(tmpdir("fresh"));
+    fn only_absent_data_is_first_run() {
+        let fixture = Fixture::new();
+        let store = fixture.store();
         assert!(matches!(
             store.load(),
             LoadOutcome::Fresh(_, FreshReason::FirstRun)
         ));
+        let old = fixture.0.join("config.json");
+        fs::write(&old, b"{\"schemaVersion\":1}").unwrap();
+        assert!(matches!(
+            store.load(),
+            LoadOutcome::Fresh(_, FreshReason::UnsupportedFormat { .. })
+        ));
+        assert_eq!(fs::read(old).unwrap(), b"{\"schemaVersion\":1}");
+        assert!(!store.primary_path().exists());
     }
 
     #[test]
-    fn truncated_primary_quarantined_and_reason_visible() {
-        let store = ConfigStore::new(tmpdir("truncated"));
-        fs::create_dir_all(store.dir()).unwrap();
-        let damaged = b"{\"schemaVersion\":";
-        fs::write(store.primary_path(), damaged).unwrap();
-        match store.load() {
-            LoadOutcome::Fresh(
-                _,
-                FreshReason::CorruptPrimary {
-                    reason,
-                    quarantined,
-                },
-            ) => {
-                assert!(!reason.is_empty());
-                let path = quarantined.unwrap();
-                assert_eq!(fs::read(path).unwrap(), damaged);
-                assert!(!store.primary_path().exists());
-                assert!(store.list_backups().is_empty());
-            }
-            other => panic!("unexpected {other:?}"),
+    fn exact_schema_required_even_for_empty_document() {
+        let fixture = Fixture::new();
+        let store = fixture.store();
+        let mut wire = serde_json::to_value(Config::default()).unwrap();
+        for version in [0, SCHEMA_VERSION - 1, SCHEMA_VERSION + 1] {
+            wire["schemaVersion"] = version.into();
+            let bytes = serde_json::to_vec(&wire).unwrap();
+            fs::write(store.primary_path(), &bytes).unwrap();
+            assert!(matches!(
+                store.load(),
+                LoadOutcome::Fresh(_, FreshReason::UnsupportedFormat { .. })
+            ));
+            assert!(store.save(&Config::default()).is_err());
+            assert_eq!(fs::read(store.primary_path()).unwrap(), bytes);
         }
     }
 
     #[test]
-    fn syntax_error_primary_quarantined() {
-        let store = ConfigStore::new(tmpdir("syntax"));
-        fs::create_dir_all(store.dir()).unwrap();
-        fs::write(store.primary_path(), "{ bad json").unwrap();
+    fn malformed_and_unreadable_primaries_are_not_defaults_to_save() {
+        let fixture = Fixture::new();
+        let store = fixture.store();
+        fs::write(store.primary_path(), b"{broken").unwrap();
         assert!(matches!(
             store.load(),
-            LoadOutcome::Fresh(
-                _,
-                FreshReason::CorruptPrimary {
-                    quarantined: Some(_),
-                    ..
-                }
-            )
+            LoadOutcome::Fresh(_, FreshReason::CorruptPrimary { .. })
+        ));
+        assert!(store.save(&Config::default()).is_err());
+        assert_eq!(fs::read(store.primary_path()).unwrap(), b"{broken");
+        fs::remove_file(store.primary_path()).unwrap();
+        fs::create_dir(store.primary_path()).unwrap();
+        assert!(matches!(
+            store.load(),
+            LoadOutcome::Fresh(_, FreshReason::UnreadablePrimary { .. })
+        ));
+        assert!(store.save(&Config::default()).is_err());
+    }
+
+    #[test]
+    fn primary_roundtrip_and_atomic_replacement_keep_previous_version() {
+        let fixture = Fixture::new();
+        let store = fixture.store();
+        let original = Config::default();
+        store.save(&original).unwrap();
+        let mut next = original.clone();
+        next.settings.icon_size = 64;
+        store.save(&next).unwrap();
+        let LoadOutcome::Primary(loaded) = store.load() else {
+            panic!("primary must load");
+        };
+        assert_eq!(loaded.settings.icon_size, 64);
+        assert_eq!(
+            ConfigStore::parse_file(&store.bak_path())
+                .unwrap()
+                .settings
+                .icon_size,
+            original.settings.icon_size
+        );
+    }
+
+    #[test]
+    fn recovery_candidate_preserves_primary_until_explicit_acceptance() {
+        let fixture = Fixture::new();
+        let store = fixture.store();
+        store.save(&Config::default()).unwrap();
+        store.save(&Config::default()).unwrap();
+        fs::write(store.primary_path(), b"truncated").unwrap();
+        let LoadOutcome::Recovered(candidate, _) = store.load() else {
+            panic!("expected verified recovery candidate");
+        };
+        assert_eq!(fs::read(store.primary_path()).unwrap(), b"truncated");
+        assert!(store.save(&candidate).is_err());
+        store.replace(&candidate).unwrap();
+        assert!(matches!(store.load(), LoadOutcome::Primary(_)));
+        let archive = fs::read_dir(&fixture.0)
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .find(|path| {
+                path.file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .starts_with("workspace.v2.replaced-")
+            })
+            .unwrap();
+        assert_eq!(fs::read(archive).unwrap(), b"truncated");
+    }
+
+    #[test]
+    fn backup_failure_is_degraded_commit_not_primary_failure() {
+        let fixture = Fixture::new();
+        let store = fixture.store();
+        fs::write(store.backups_dir(), b"blocks a directory").unwrap();
+        let receipt = store.save(&Config::default()).unwrap();
+        assert!(matches!(receipt.backup, BackupStatus::Degraded(_)));
+        assert!(matches!(store.load(), LoadOutcome::Primary(_)));
+    }
+
+    #[test]
+    fn backup_only_failure_does_not_become_first_run() {
+        let fixture = Fixture::new();
+        let store = fixture.store();
+        fs::write(store.bak_path(), b"{invalid").unwrap();
+        assert!(matches!(
+            store.load(),
+            LoadOutcome::Fresh(_, FreshReason::CorruptPrimary { .. })
         ));
     }
 
     #[test]
-    fn future_schema_version_reports_unsupported() {
-        let store = ConfigStore::new(tmpdir("future-schema"));
-        fs::create_dir_all(store.dir()).unwrap();
-        let cfg = Config {
+    fn orphaned_recovery_evidence_is_not_first_run() {
+        let fixture = Fixture::new();
+        let store = fixture.store();
+        let archive = fixture.0.join("config.corrupt-fixture.json");
+        fs::write(&archive, b"old user data").unwrap();
+        assert!(matches!(
+            store.load(),
+            LoadOutcome::Fresh(_, FreshReason::UnsupportedFormat { .. })
+        ));
+        assert_eq!(fs::read(archive).unwrap(), b"old user data");
+    }
+
+    #[test]
+    fn failed_replacement_keeps_existing_primary() {
+        let fixture = Fixture::new();
+        let store = fixture.store();
+        store.save(&Config::default()).unwrap();
+        let bytes = fs::read(store.primary_path()).unwrap();
+        let invalid = Config {
             schema_version: SCHEMA_VERSION + 1,
             ..Config::default()
         };
-        fs::write(store.primary_path(), serde_json::to_vec(&cfg).unwrap()).unwrap();
-        match store.load() {
-            LoadOutcome::Fresh(_, FreshReason::CorruptPrimary { reason, .. }) => {
-                assert!(reason.contains(&format!(
-                    "unsupported schema version {} (supported: {SCHEMA_VERSION})",
-                    cfg.schema_version
-                )));
-            }
-            other => panic!("unexpected {other:?}"),
-        }
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn unreadable_primary_not_first_run() {
-        use std::os::unix::fs::PermissionsExt;
-        let store = ConfigStore::new(tmpdir("unreadable"));
-        fs::create_dir_all(store.dir()).unwrap();
-        fs::write(store.primary_path(), "{}").unwrap();
-        fs::set_permissions(store.primary_path(), fs::Permissions::from_mode(0o000)).unwrap();
-        let outcome = store.load();
-        fs::set_permissions(store.primary_path(), fs::Permissions::from_mode(0o600)).unwrap();
-        assert!(matches!(
-            outcome,
-            LoadOutcome::Fresh(_, FreshReason::UnreadablePrimary { .. })
-        ));
-    }
-
-    #[test]
-    fn save_after_quarantine_writes_clean_primary() {
-        let store = ConfigStore::new(tmpdir("save-quarantine"));
-        fs::create_dir_all(store.dir()).unwrap();
-        fs::write(store.primary_path(), "{").unwrap();
-        let (cfg, quarantine) = match store.load() {
-            LoadOutcome::Fresh(
-                cfg,
-                FreshReason::CorruptPrimary {
-                    quarantined: Some(path),
-                    ..
-                },
-            ) => (cfg, path),
-            other => panic!("unexpected {other:?}"),
-        };
-        store.save(&cfg).unwrap();
-        assert!(matches!(store.load(), LoadOutcome::Primary(_)));
-        assert_eq!(fs::read(quarantine).unwrap(), b"{");
-    }
-
-    #[test]
-    fn missing_everything_is_first_run() {
-        let store = ConfigStore::new(tmpdir("missing-first-run"));
-        assert!(matches!(
-            store.load(),
-            LoadOutcome::Fresh(_, FreshReason::FirstRun)
-        ));
-    }
-
-    #[test]
-    fn renamed_product_reuses_old_configuration_without_changing_it() {
-        let parent = tmpdir("rebrand");
-        let old = ConfigStore::new(parent.join(crate::brand::LEGACY_DATA_DIR));
-        let mut config = sample();
-        config.layouts[0].fences[0].title = "My OpenFence files {1}".into();
-        config.settings.language = crate::i18n::Language::Japanese;
-        old.save(&config).unwrap();
-        let original = fs::read(old.primary_path()).unwrap();
-        let preferred = parent.join(crate::brand::NAME);
-        let selected = ConfigStore::with_legacy(&preferred, old.dir());
-        assert_eq!(selected.dir(), old.dir());
-        let loaded = selected.load().into_config();
-        assert_eq!(
-            serde_json::to_value(loaded).unwrap(),
-            serde_json::to_value(config).unwrap()
-        );
-        assert_eq!(fs::read(old.primary_path()).unwrap(), original);
-        assert!(!preferred.exists());
-    }
-
-    #[test]
-    fn current_product_data_wins_and_old_backup_only_installs_still_load() {
-        let parent = tmpdir("rebrand-precedence");
-        let old = ConfigStore::new(parent.join(crate::brand::LEGACY_DATA_DIR));
-        old.save(&sample()).unwrap();
-        old.save(&sample()).unwrap();
-        fs::remove_file(old.primary_path()).unwrap();
-        let preferred = ConfigStore::new(parent.join(crate::brand::NAME));
-        let selected = ConfigStore::with_legacy(preferred.dir(), old.dir());
-        assert!(matches!(selected.load(), LoadOutcome::Recovered(..)));
-        preferred.save(&sample()).unwrap();
-        // Even a damaged new config belongs to the new installation. Its normal
-        // backup recovery must not silently switch to a stale legacy layout.
-        fs::write(preferred.primary_path(), "{ bad json").unwrap();
-        assert_eq!(
-            ConfigStore::with_legacy(preferred.dir(), old.dir()).dir(),
-            preferred.dir()
-        );
-        assert_eq!(
-            ConfigStore::with_legacy(parent.join("fresh"), parent.join("missing")).dir(),
-            parent.join("fresh")
-        );
-    }
-
-    #[test]
-    fn validation_rejects_two_inboxes() {
-        let mut c = sample();
-        let f = c.layouts[0].fences[0].clone();
-        c.layouts[0].fences.push(Fence {
-            id: uuid::Uuid::new_v4(),
-            ..f
-        });
-        assert!(validate(&c).is_err());
-    }
-
-    #[test]
-    fn date_formatting_is_sane() {
-        let s = today_yyyy_mm_dd();
-        assert_eq!(s.len(), 10);
-        assert!(s.starts_with("20"));
+        assert!(store.save(&invalid).is_err());
+        assert_eq!(fs::read(store.primary_path()).unwrap(), bytes);
     }
 }

@@ -1,5 +1,7 @@
 # PecoFence：Cordis 风格插件内核与 SPM 面板集成设计
 
+历史提案，已由 [应用边界与类型化接口重设计](ARCHITECTURE.md) 和 [ADR-006](decisions/ADR-006-application-boundaries.md) 取代。下文的通用服务内核和依赖图不再是扩展接口的目标。
+
 状态：架构提案。本文规定目标接口、资源契约和迁移顺序，不表示这些接口已经存在于仓库。
 
 核对日期：2026-09-21。PecoFence HEAD：`5d73facf5ec7bb8bf67d0b08ef6cf6e80d7921c3`；SPM HEAD：`5f4b1f70fe9d16b780887cd7d0465b814735a95f`。代码观察包含工作区中尚未提交的 SPM 集成修改，因此不能仅凭这两个提交复现全部现状。

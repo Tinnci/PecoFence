@@ -4,7 +4,7 @@ use super::*;
 
 pub struct FenceViewState {
     #[allow(dead_code)]
-    pub fence_id: FenceId,
+    pub fence_id: ContainerId,
     pub title: String,
     pub(super) plugin_panel: Option<super::plugin_panel::PluginPanelContent>,
     pub rolled_up: bool,
@@ -14,17 +14,17 @@ pub struct FenceViewState {
     pub icon_size: u32,
     pub label_lines: u8,
     pub items: Vec<ItemView>,
-    /// Tabs shown in the title row (the host itself first). One entry = plain title.
+    /// Contents shown in the title row. One entry = plain title.
     pub(super) tabs: Vec<TabView>,
-    /// The fence whose items are displayed (a tab id, or the host's own id).
-    pub(super) active: FenceId,
+    /// The mounted content instance; independent of the window/container identity.
+    pub(super) active: ContentId,
     pub(super) tab_hover: Option<usize>,
     pub(super) tab_drag: Option<TabDrag>,
     /// Tab pills sliding to their slots after a reorder (drag past a neighbour, 左移 / 右移,
     /// cancel): 167 ms point-to-point, keyed by tab id so a strip refresh cannot desync them.
-    pub(super) tab_slide: Vec<(FenceId, Tween)>,
+    pub(super) tab_slide: Vec<(ContentId, Tween)>,
     /// The just-released dragged pill settling from the pointer into its slot (167 ms).
-    pub(super) tab_settle: Option<(FenceId, Tween)>,
+    pub(super) tab_settle: Option<(ContentId, Tween)>,
     /// Slot a fence being dragged over this title would be inserted at (drag-to-merge onto a
     /// tabbed strip): the strip opens a `TAB_MERGE_GAP_W` gap there and the neighbours slide
     /// aside. None = no hint, or a plain (single-tab) title.
@@ -121,6 +121,8 @@ pub struct FenceViewState {
     pub(super) col_drag: Option<ColDrag>,
     /// The fence shown is a folder portal (sort-only: no manual arrangement).
     pub(super) is_portal: bool,
+    /// Read-only projection, not the owner of source health or read scheduling.
+    pub(super) portal_health: Option<pecofence_core::portal::PortalHealth>,
     /// Width the cached labels were fitted for; a change invalidates them.
     pub(super) label_w: f32,
     pub(super) hover: Option<usize>,
@@ -132,7 +134,7 @@ pub struct FenceViewState {
     pub(super) scroll_y: f32,
     /// Last scroll offset per tab of this window (session only, like Explorer): switching
     /// away and back restores where that tab was.
-    pub(super) scroll_memory: HashMap<FenceId, f32>,
+    pub(super) scroll_memory: HashMap<ContentId, f32>,
     /// Offset to re-apply once the new tab's items have arrived (`set_items`); `set_layout`
     /// consumes it, so a tab switch whose tabs differ in layout keeps the restored offset.
     pub(super) scroll_restore: Option<f32>,

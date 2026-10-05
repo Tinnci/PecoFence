@@ -42,7 +42,7 @@
 
 use super::App;
 use crate::commands::Command;
-use pecofence_core::FenceId;
+use pecofence_core::ContentId;
 use pecofence_platform::{RECT, desktop, window};
 use std::time::{Duration, Instant};
 
@@ -116,18 +116,17 @@ impl App {
                 #[cfg(debug_assertions)]
                 ["input", title, action, x, y] => {
                     if let (Some(id), Ok(x), Ok(y)) = (self.test_fence(title), x.parse(), y.parse())
-                        && let Some(w) = self.fences.get(&self.state.host_of(id))
+                        && let Some(host) = self.state.host_of(id)
+                        && let Some(w) = self.fences.get(&host)
                     {
                         w.test_input(action, x, y);
                     }
                 }
                 ["reorder", title, index] => {
-                    if let (Some(tab), Ok(to)) = (self.test_fence(title), index.parse()) {
-                        self.queue.push(Command::ReorderTab {
-                            host: self.state.host_of(tab),
-                            tab,
-                            to,
-                        });
+                    if let (Some(tab), Ok(to)) = (self.test_fence(title), index.parse())
+                        && let Some(host) = self.state.host_of(tab)
+                    {
+                        self.queue.push(Command::ReorderTab { host, tab, to });
                     }
                 }
                 ["housekeeping"] => self.housekeeping(),
@@ -140,7 +139,8 @@ impl App {
                         h.parse::<i32>(),
                     ) && width > 0
                         && height > 0
-                        && let Some(window) = self.fences.get(&self.state.host_of(id))
+                        && let Some(host) = self.state.host_of(id)
+                        && let Some(window) = self.fences.get(&host)
                     {
                         window.set_bounds(RECT {
                             left: x,
@@ -153,6 +153,31 @@ impl App {
                 ["message", ..] => {
                     if let Some(json) = line.strip_prefix("message ") {
                         self.queue.push(Command::SettingsMessage(json.to_string()));
+                    }
+                }
+                ["set-content", content, property, ..] => {
+                    let value = line.splitn(4, ' ').nth(3);
+                    match (
+                        content.parse::<ContentId>(),
+                        value.and_then(|json| serde_json::from_str::<serde_json::Value>(json).ok()),
+                    ) {
+                        (Ok(id), Some(value)) => {
+                            if let Some(snapshot) = self.state.fence(id) {
+                                self.queue.push(Command::SettingsMessage(
+                                    serde_json::json!({
+                                        "type": "setFence",
+                                        "contentId": id,
+                                        "containerId": snapshot.container_id,
+                                        "prop": property,
+                                        "value": value,
+                                    })
+                                    .to_string(),
+                                ));
+                            } else {
+                                tracing::error!(%content, "test property targets deleted content");
+                            }
+                        }
+                        _ => tracing::error!("invalid test content-property command"),
                     }
                 }
                 ["quick-hide"] | ["quick-show"] => {
@@ -183,13 +208,12 @@ impl App {
                 ["end-peek"] => self.queue.push(Command::EndPeek),
                 ["roll", title] | ["unroll", title] => {
                     let want = words[0] == "roll";
-                    if let Some(id) = self.test_fence(title) {
-                        let host = self.state.host_of(id);
-                        if let Some(w) = self.fences.get(&host)
-                            && w.is_rolled() != want
-                        {
-                            self.queue.push(Command::ToggleRollUp(host));
-                        }
+                    if let Some(id) = self.test_fence(title)
+                        && let Some(host) = self.state.host_of(id)
+                        && let Some(w) = self.fences.get(&host)
+                        && w.is_rolled() != want
+                    {
+                        self.queue.push(Command::ToggleRollUp(host));
                     }
                 }
                 ["detach", title] => {
@@ -199,23 +223,23 @@ impl App {
                     }
                 }
                 ["activate", title] => {
-                    if let Some(tab) = self.test_fence(title) {
-                        self.queue.push(Command::SwitchTab {
-                            host: self.state.host_of(tab),
-                            tab,
-                        });
+                    if let Some(tab) = self.test_fence(title)
+                        && let Some(host) = self.state.host_of(tab)
+                    {
+                        self.queue.push(Command::SwitchTab { host, tab });
                     }
                 }
                 ["merge", title, into] => {
-                    if let (Some(a), Some(b)) = (self.test_fence(title), self.test_fence(into)) {
-                        let host = self.state.host_of(b);
-                        if let Some(w) = self.fences.get(&host) {
-                            self.queue.push(Command::MergeFence {
-                                fence: a,
-                                into: w.hwnd(),
-                                x: i32::MIN,
-                            });
-                        }
+                    if let (Some(a), Some(b)) = (self.test_fence(title), self.test_fence(into))
+                        && let Some(source) = self.state.host_of(a)
+                        && let Some(host) = self.state.host_of(b)
+                        && let Some(w) = self.fences.get(&host)
+                    {
+                        self.queue.push(Command::MergeFence {
+                            fence: source,
+                            into: w.hwnd(),
+                            x: i32::MIN,
+                        });
                     }
                 }
                 ["delete", title] => {
@@ -346,7 +370,7 @@ impl App {
                     if let Some(fence) = self.test_fence(title)
                         && let Some(item) = self.state.fence(fence).and_then(|f| {
                             self.state
-                                .items_of(f)
+                                .items_of(&f)
                                 .into_iter()
                                 .find(|it| it.display_name.contains(name))
                                 .map(|it| it.id)
@@ -381,7 +405,7 @@ impl App {
         }
     }
 
-    fn test_fence(&self, title: &str) -> Option<FenceId> {
+    fn test_fence(&self, title: &str) -> Option<ContentId> {
         let id = self
             .state
             .fences()

@@ -244,7 +244,7 @@ mod tests {
     }
 
     #[test]
-    fn saved_languages_round_trip_and_old_settings_stay_chinese() {
+    fn saved_languages_round_trip_and_missing_language_is_rejected() {
         let settings = crate::Settings::default();
         assert_eq!(settings.language, Language::System);
         for &language in SUPPORTED {
@@ -256,8 +256,7 @@ mod tests {
         }
         let mut old = serde_json::to_value(&settings).unwrap();
         old.as_object_mut().unwrap().remove("language");
-        let loaded: crate::Settings = serde_json::from_value(old).unwrap();
-        assert_eq!(loaded.language, Language::SimplifiedChinese);
+        assert!(serde_json::from_value::<crate::Settings>(old).is_err());
         assert_eq!(text_in(Language::English, "不存在的消息"), "不存在的消息");
     }
 

@@ -104,9 +104,10 @@ https://github.com/user-attachments/assets/6320cf28-a791-4720-9659-b4575df021a0
   旧バージョンやマルチディスプレイ構成の網羅的な検証は進行中です。
 - 設定画面には Microsoft Edge WebView2 Runtime が必要です。同梱の `WebView2Loader.dll` と
   `pecofence-watchdog.exe` は、アプリと同じフォルダーに置いたままにしてください。
-- 設定は `%APPDATA%\PecoFence\config.json` に保存されます。`--portable` を付けて起動すると、
+- 設定は `%APPDATA%\PecoFence\workspace.v2.json` に保存されます。`--portable` を付けて起動すると、
   実行ファイルの隣にある `config` フォルダーに保存されます。
-- 既存のインストールでは、以前の設定フォルダーがそのまま使われます。
+- 新しい形式は古い設定の読み込みや移行に対応しません。
+  既存のファイルは保持されます。新しいワークスペースを作成するか、対応形式の文書を読み込んでください。
   詳しくは[アップグレードガイド](../UPGRADING.md)をご覧ください。
 - ガラス効果は静止画の壁紙をもとに描画されます。他のアプリのウィンドウや動画壁紙は
   屈折・透過しません。

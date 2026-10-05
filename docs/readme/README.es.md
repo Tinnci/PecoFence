@@ -108,9 +108,10 @@ en el idioma que elijas. Los iconos del escritorio de Windows se restauran al sa
   en 25H2; la matriz completa de versiones anteriores y hardware multipantalla sigue en curso.
 - La Configuración necesita Microsoft Edge WebView2 Runtime. Mantén `WebView2Loader.dll` y
   `pecofence-watchdog.exe`, incluidos en el ZIP, junto a la aplicación.
-- La configuración se guarda en `%APPDATA%\PecoFence\config.json`. Inicia con `--portable`
+- La configuración se guarda en `%APPDATA%\PecoFence\workspace.v2.json`. Inicia con `--portable`
   para guardarla en una carpeta `config` junto al ejecutable.
-- Las instalaciones existentes conservan su directorio de configuración anterior.
+- El nuevo formato no importa ni migra configuraciones antiguas.
+  Los archivos existentes se conservan; crea un espacio de trabajo nuevo o importa un documento compatible.
   Consulta la [guía de actualización](../UPGRADING.md).
 - El cristal usa el fondo de pantalla estático. No refracta otras aplicaciones ni fondos
   de vídeo en directo.

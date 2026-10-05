@@ -62,7 +62,7 @@ pub(super) fn finish_drag_cancel(cancel: DragCancel, queue: &CommandQueue) {
 /// capture. One instance is moved into the boxed closure; every per-message function receives
 /// it as `h`.
 pub(super) struct HandlerCtx {
-    pub(super) fence_id: FenceId,
+    pub(super) fence_id: ContainerId,
     pub(super) view: ViewCell,
     pub(super) anchor: AnchorCell,
     pub(super) taskbar_created: u32,
@@ -100,7 +100,7 @@ pub(super) struct HandlerCtx {
 impl FenceWindow {
     pub(super) fn make_handler(
         fctx: &FenceContext,
-        fence_id: FenceId,
+        fence_id: ContainerId,
         view: Rc<RefCell<Option<FenceViewState>>>,
     ) -> MessageHandler {
         let ctx = HandlerCtx {

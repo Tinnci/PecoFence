@@ -24,38 +24,42 @@ pub(super) fn work_areas() -> Vec<WorkArea> {
 impl App {
     /// Creates/destroys/updates fence windows to match the state.
     pub(super) fn sync_fence_windows(&mut self) {
-        // Portal folders are re-read by their watchers / on_fs_changed / startup, not here:
-        // enumerating every portal (shell display names per entry) made a tab tear-off take
-        // hundreds of milliseconds before the new window appeared.
+        if !self.state.save_allowed {
+            return;
+        }
+        // Activate new/reconfigured sources without reading filesystem or Shell on the UI.
+        self.state.reconcile_portal_sources();
+        self.pump_portal_reads();
         self.ensure_portal_watchers();
-        self.state.normalize_tabs();
-        // Only host fences own a window; fences hosted as tabs live inside their host's.
+        // Every normalized container owns exactly one HWND, independently of its active tab.
         let hosts = self.state.host_fences();
-        let ids: Vec<FenceId> = hosts.iter().map(|f| f.id).collect();
-        let gone: Vec<FenceId> = self
+        let ids: Vec<ContainerId> = hosts.iter().map(|f| f.container_id).collect();
+        let gone: Vec<ContainerId> = self
             .fences
             .iter()
             .filter(|(id, w)| !ids.contains(id) || !window::is_window(w.hwnd()))
             .map(|(id, _)| *id)
             .collect();
         for id in gone {
+            self.panel_mounts.retain(|_, host| *host != id);
             if let Some(w) = self.fences.remove(&id) {
                 self.retire_window(w);
             }
         }
         for fence in hosts {
-            let active = self.state.active_tab_of(fence.id);
-            let shown = self.state.fence(active).cloned().unwrap_or(fence.clone());
-            let items = self.item_views(&shown);
-            let tabs = self.tab_views(fence.id);
-            if let Some(w) = self.fences.get(&fence.id) {
+            let host = fence.container_id;
+            let active = fence.id;
+            let shown = &fence;
+            let items = self.item_views(shown);
+            let tabs = self.tab_views(host);
+            if let Some(w) = self.fences.get(&host) {
                 w.set_content(&shown.content);
                 w.set_tabs(tabs, active);
                 w.set_group_by_date(shown.view.group_by_date);
                 w.set_items(items);
-                // The window may have been kept across a layout switch (same FenceId, other
+                // The window may have been kept across a layout switch (same ContainerId, other
                 // per-fence view flags): push every persisted flag, not just items/title.
-                self.apply_fence_view_with_snap(fence.id, false);
+                self.apply_fence_view_with_snap(host, false);
                 continue;
             }
             let px = self.state.fence_px_rect(&fence);
@@ -67,13 +71,14 @@ impl App {
             };
             match FenceWindow::create(
                 &self.ctx,
-                fence.id,
+                host,
+                active,
                 &fence.title,
                 shown.kind == FenceKind::Inbox,
                 fence.rolled_up,
                 shown.view.icon_size,
                 shown.view.label_lines,
-                fence.view.auto_height,
+                fence.auto_height,
                 rect,
                 px.height(),
                 items,
@@ -81,19 +86,95 @@ impl App {
                 Ok(w) => {
                     w.set_content(&shown.content);
                     w.set_tabs(tabs, active);
-                    self.fences.insert(fence.id, w);
+                    self.fences.insert(host, w);
                     // Loading/synchronizing a saved fence must preserve its rectangle.
                     // User resizing and explicit icon/spacing changes still snap normally.
-                    self.apply_fence_view_with_snap(fence.id, false);
+                    self.apply_fence_view_with_snap(host, false);
                 }
                 Err(e) => tracing::error!(title = %fence.title, error = %e, "fence window failed"),
             }
         }
+        self.reconcile_panel_mounts();
+    }
+
+    /// Reconcile provider lifetimes against all contents, not only the visible tabs. Moving
+    /// a panel to another HWND ends its physical mount, never its logical instance.
+    fn reconcile_panel_mounts(&mut self) {
+        let specs: Vec<_> = self
+            .state
+            .fences()
+            .into_iter()
+            .filter_map(|f| match f.content {
+                pecofence_core::FenceContentSpec::Panel { panel } => Some(panel),
+                _ => None,
+            })
+            .collect();
+        let mut active: HashMap<_, _> = self
+            .state
+            .host_fences()
+            .into_iter()
+            .filter_map(|f| match f.content {
+                pecofence_core::FenceContentSpec::Panel { panel }
+                    if self.fences.contains_key(&f.container_id) =>
+                {
+                    Some((panel.instance_id.as_u128(), f.container_id))
+                }
+                _ => None,
+            })
+            .collect();
+        let mut manager = self.panel_manager.borrow_mut();
+        for (id, opened) in manager.reconcile_fences(&specs) {
+            if let Err(error) = opened {
+                tracing::warn!(%error, instance = %id, "panel reconciliation failed");
+                active.remove(&id);
+                continue;
+            }
+            if self.panel_mounts.get(&id) == active.get(&id) && self.panel_mounts.contains_key(&id)
+            {
+                continue;
+            }
+            let _ = manager.detach_mount(id);
+            if !active.contains_key(&id) {
+                let _ = manager.set_exposure(id, pecofence_plugin_api::Exposure::Hidden);
+            }
+            if let Some(container) = active.get(&id)
+                && let Some(window) = self.fences.get(container)
+            {
+                let exposure = if self.ctx.behavior.floating.get() {
+                    pecofence_plugin_api::Exposure::Peek
+                } else {
+                    pecofence_plugin_api::Exposure::Desktop
+                };
+                let _ = manager.set_exposure(id, exposure);
+                let rect = window.rect();
+                let dpi = monitors::dpi_for_window(window.hwnd()).max(96);
+                let scale = dpi as f32 / 96.0;
+                let viewport = pecofence_plugin_api::RectDip {
+                    x: 0.0,
+                    y: 0.0,
+                    w: (rect.right - rect.left) as f32 / scale,
+                    h: ((rect.bottom - rect.top) as f32 / scale
+                        - self.ctx.theme.borrow().title_height)
+                        .max(0.0),
+                };
+                if let Err(error) = manager.attach_mount(
+                    id,
+                    viewport,
+                    dpi,
+                    pecofence_plugin_api::Presentation::Workspace,
+                ) {
+                    tracing::warn!(%error, instance = %id, "panel remount failed");
+                    active.remove(&id);
+                }
+            }
+        }
+        self.panel_mounts = active;
     }
 
     /// The window a fence is shown in (its own, or its tab host's).
-    pub(super) fn window_for(&self, fence: FenceId) -> Option<&FenceWindow> {
-        self.fences.get(&self.state.host_of(fence))
+    pub(super) fn window_for(&self, fence: ContentId) -> Option<&FenceWindow> {
+        let content = self.state.fence(fence)?;
+        self.fences.get(&content.container_id)
     }
 
     /// After tabs/fences were added, removed, merged or split: create/destroy windows, put new
@@ -112,9 +193,14 @@ impl App {
         self.push_settings_state();
     }
 
-    pub(super) fn refresh_fence(&mut self, id: FenceId) {
-        let host = self.state.host_of(id);
-        let active = self.state.active_tab_of(host);
+    pub(super) fn refresh_fence(&mut self, id: ContentId) {
+        let Some(content) = self.state.fence(id) else {
+            return;
+        };
+        let host = content.container_id;
+        let Some(active) = self.state.active_tab_of(host) else {
+            return;
+        };
         if let Some(w) = self.fences.get(&host) {
             w.set_tabs(self.tab_views(host), active);
             if active == id
@@ -123,19 +209,19 @@ impl App {
                 // Grouping first: the layout glide must target the new sections.
                 w.set_group_by_date(f.view.group_by_date);
                 w.set_content(&f.content);
-                w.set_items(self.item_views(f));
+                w.set_items(self.item_views(&f));
                 w.set_sort_indicator(f.view.sort, f.view.reverse);
             }
         }
         self.apply_portal_deco(host);
         self.apply_auto_height(host);
+        self.reconcile_panel_mounts();
     }
 
     /// Pushes the persisted per-fence flags (lock, quick-hide exclusion, appearance override)
     /// into the window and the anchor.
-    pub(super) fn apply_fence_appearance(&mut self, id: FenceId) {
-        let id = self.state.host_of(id);
-        let Some(f) = self.state.fence(id).cloned() else {
+    pub(super) fn apply_fence_appearance(&mut self, id: ContainerId) {
+        let Some(f) = self.state.window_content(id) else {
             return;
         };
         let Some(w) = self.fences.get(&id) else {
@@ -158,22 +244,17 @@ impl App {
     /// rolled state) into an existing window and re-applies the derived geometry rules. This is
     /// the one place that makes a window agree with its `Fence`, whatever path changed the
     /// state (startup, layout switch, display change).
-    pub(super) fn apply_fence_view(&mut self, id: FenceId) {
+    pub(super) fn apply_fence_view(&mut self, id: ContainerId) {
         self.apply_fence_view_with_snap(id, true);
     }
 
-    pub(super) fn apply_fence_view_with_snap(&mut self, id: FenceId, snap_geometry: bool) {
+    pub(super) fn apply_fence_view_with_snap(&mut self, id: ContainerId, snap_geometry: bool) {
         // Geometry-ish flags (rolled, auto height, lock, appearance) belong to the host window;
         // content flags (icon size, layout, sort) to the tab being shown.
-        let id = self.state.host_of(id);
-        let Some(f) = self.state.fence(id).cloned() else {
+        let Some(f) = self.state.window_content(id) else {
             return;
         };
-        let shown = self
-            .state
-            .fence(self.state.active_tab_of(id))
-            .cloned()
-            .unwrap_or_else(|| f.clone());
+        let shown = &f;
         {
             let Some(w) = self.fences.get(&id) else {
                 return;
@@ -195,7 +276,7 @@ impl App {
             w.set_columns_visible(shown.view.columns_visible.unwrap_or([true; 3]));
             w.set_group_by_date(shown.view.group_by_date);
             w.set_sort_indicator(shown.view.sort, shown.view.reverse);
-            w.set_auto_height(f.view.auto_height && shown.content.is_files());
+            w.set_auto_height(f.auto_height && shown.content.is_files());
             if w.is_rolled() != f.rolled_up {
                 w.set_rolled(f.rolled_up);
             }
@@ -209,16 +290,18 @@ impl App {
     }
 
     pub(super) fn refresh_all(&mut self) {
-        let ids: Vec<FenceId> = self.fences.keys().copied().collect();
+        let ids: Vec<ContainerId> = self.fences.keys().copied().collect();
         for id in ids {
-            let active = self.state.active_tab_of(id);
+            let Some(active) = self.state.active_tab_of(id) else {
+                continue;
+            };
             if let Some(f) = self.state.fence(active)
                 && let Some(w) = self.fences.get(&id)
             {
                 w.set_tabs(self.tab_views(id), active);
                 w.set_group_by_date(f.view.group_by_date);
                 w.set_content(&f.content);
-                w.set_items(self.item_views(f));
+                w.set_items(self.item_views(&f));
             }
             self.apply_auto_height(id);
         }
@@ -234,8 +317,10 @@ impl App {
     /// Column snapping (Fences): the width is a whole number of icon columns. Interactive
     /// resizing snaps in WM_SIZING; this applies the same rule to loaded fences, icon-size
     /// changes and DPI drift so a fence never sits at an unaligned width.
-    pub(super) fn apply_column_snap(&mut self, id: FenceId) {
-        let active = self.state.active_tab_of(self.state.host_of(id));
+    pub(super) fn apply_column_snap(&mut self, id: ContainerId) {
+        let Some(active) = self.state.active_tab_of(id) else {
+            return;
+        };
         if self
             .state
             .fence(active)
@@ -244,15 +329,10 @@ impl App {
             return;
         }
 
-        let id = self.state.host_of(id);
-        let Some(f) = self.state.fence(id).cloned() else {
+        let Some(f) = self.state.window_content(id) else {
             return;
         };
-        let shown = self
-            .state
-            .fence(self.state.active_tab_of(id))
-            .cloned()
-            .unwrap_or_else(|| f.clone());
+        let shown = &f;
         let Some(w) = self.fences.get(&id) else {
             return;
         };
@@ -294,7 +374,7 @@ impl App {
         // fences keep their title-only height).
         let rolled = w.is_rolled();
         let mut bottom = r.bottom;
-        if !rolled && !f.view.auto_height {
+        if !rolled && !f.auto_height {
             let title_h = (self.ctx.theme.borrow().title_height * scale).round();
             let (row, fixed) = match rows_layout {
                 Some(rm) => (
@@ -331,8 +411,10 @@ impl App {
         self.schedule_save();
     }
 
-    pub(super) fn apply_auto_height(&mut self, id: FenceId) {
-        let active = self.state.active_tab_of(self.state.host_of(id));
+    pub(super) fn apply_auto_height(&mut self, id: ContainerId) {
+        let Some(active) = self.state.active_tab_of(id) else {
+            return;
+        };
         if self
             .state
             .fence(active)
@@ -341,7 +423,6 @@ impl App {
             return;
         }
 
-        let id = self.state.host_of(id);
         let Some(w) = self.fences.get(&id) else {
             return;
         };
@@ -350,23 +431,23 @@ impl App {
         if r.bottom - r.top == h {
             return;
         }
-        // is_rolled() = rolled_up || peeking: during a hover peek this keeps f.rolled_up = true
-        // (only the expanded height is recorded), so an auto-height pass can never persist a
-        // transient peek as "expanded".
-        let rolled = w.is_rolled();
-        let rect = w.apply_height(h, true);
-        self.state.set_fence_bounds(id, rect, rolled, h);
-        self.schedule_save();
+        // Auto-height is a projection of current contents, not a user geometry edit. Keep
+        // the document's manually chosen bounds; observations must not schedule persistence.
+        // Animation completion likewise publishes geometry only for explicit roll changes.
+        w.apply_height(h, true);
     }
 
     pub(super) fn on_display_changed(&mut self) {
         self.end_peek_now();
         self.state.work_areas = work_areas();
+        if !self.state.save_allowed {
+            return;
+        }
         self.state.ensure_layout();
         // A different monitor set may select a different layout: sync windows first.
         self.sync_fence_windows();
-        for fence in self.state.fences().to_vec() {
-            if let Some(w) = self.fences.get(&fence.id) {
+        for fence in self.state.host_fences() {
+            if let Some(w) = self.fences.get(&fence.container_id) {
                 let px = self.state.fence_px_rect(&fence);
                 // State, not the window: sync_fence_windows has just made the window agree, and
                 // a fence rolled in the old layout but expanded in the new one needs px.height().
@@ -433,10 +514,13 @@ impl App {
 
     /// Re-applies every fence's saved geometry to its window (after a swap / restore / import).
     pub(super) fn relayout_from_state(&mut self) {
+        if !self.state.save_allowed {
+            return;
+        }
         self.state.ensure_layout();
         self.resync_windows();
         for fence in self.state.host_fences() {
-            if let Some(w) = self.fences.get(&fence.id) {
+            if let Some(w) = self.fences.get(&fence.container_id) {
                 let px = self.state.fence_px_rect(&fence);
                 let h = if fence.rolled_up {
                     window::window_rect_size(w.hwnd()).1
@@ -450,13 +534,13 @@ impl App {
                     bottom: px.top + h,
                 });
             }
-            self.apply_fence_view(fence.id);
+            self.apply_fence_view(fence.container_id);
         }
         self.refresh_all();
         self.push_settings_state();
     }
 
-    pub(super) fn fence_of_hwnd(&self, hwnd: HWND) -> Option<FenceId> {
+    pub(super) fn fence_of_hwnd(&self, hwnd: HWND) -> Option<ContainerId> {
         self.fences
             .iter()
             .find(|(_, w)| w.hwnd() == hwnd)
@@ -465,21 +549,24 @@ impl App {
 
     /// Menu / Ctrl+wheel: one place that changes a fence's icon size and everything derived
     /// from it (window redraw, column snap, auto height, save).
-    pub(super) fn apply_icon_size(&mut self, fence: FenceId, size: u32) {
+    pub(super) fn apply_icon_size(&mut self, fence: ContentId, size: u32) {
         self.state.set_icon_size(fence, size);
         if let Some(w) = self.window_for(fence)
             && w.active_fence() == fence
         {
             w.set_icon_size(size);
         }
-        self.apply_column_snap(fence);
-        self.apply_auto_height(fence);
+        let Some(host) = self.state.host_of(fence) else {
+            return;
+        };
+        self.apply_column_snap(host);
+        self.apply_auto_height(host);
         self.schedule_save();
     }
 
     /// Ctrl+wheel: 32 → 48 → 64 → 96, stopping at the ends. 32 / 48 / 96 are the desktop's
     /// small / medium / large; 64 stays as an intermediate step for existing configs.
-    pub(super) fn step_icon_size(&mut self, fence: FenceId, larger: bool) {
+    pub(super) fn step_icon_size(&mut self, fence: ContentId, larger: bool) {
         let Some(cur) = self.state.fence(fence).map(|f| f.view.icon_size) else {
             return;
         };
@@ -494,7 +581,7 @@ impl App {
         }
     }
 
-    pub(super) fn begin_rename(&mut self, fence: FenceId) {
+    pub(super) fn begin_rename(&mut self, fence: ContentId) {
         // Inline rename lands with the FocusSession task; until then use the tray notification
         // to explain. Kept as a queue command so the UI is already wired.
         if let Some(w) = self.window_for(fence) {
@@ -516,7 +603,7 @@ impl App {
     /// applied to the desktop right away. A template added before just gets shown.
     pub(super) fn add_template(&mut self, template: pecofence_core::rules::Template) {
         // The inbox may be a tab: its window is the host's.
-        let inbox = self.state.inbox_id().map(|id| self.state.host_of(id));
+        let inbox = self.state.inbox_id().and_then(|id| self.state.host_of(id));
         let centre = |r: RECT| ((r.left + r.right) / 2, (r.top + r.bottom) / 2);
         let (x, y) = inbox
             .and_then(|id| self.fences.get(&id))
@@ -532,7 +619,7 @@ impl App {
         match self.state.add_template(template, rect) {
             Ok(id) => {
                 self.resync_windows();
-                if let Some(w) = self.fences.get(&id) {
+                if let Some(w) = self.window_for(id) {
                     w.show(true);
                 }
                 let entries = shell::enumerate_desktop();
@@ -563,19 +650,16 @@ impl App {
             .new_fence(pecofence_core::i18n::text("新栅栏"), rect)
         {
             self.resync_windows();
-            if let Some(w) = self.fences.get(&id) {
+            if let Some(w) = self.window_for(id) {
                 w.show(true);
             }
             self.schedule_save();
         }
     }
 
-    /// Deletes a fence (or a tab); a host's tabs become windows of their own again.
-    pub(super) fn delete_fence(&mut self, fence: FenceId) {
+    /// Deletes a content instance. Only deleting a container's last tab removes its window.
+    pub(super) fn delete_fence(&mut self, fence: ContentId) {
         if self.state.delete_fence(fence) {
-            if let Some(w) = self.fences.remove(&fence) {
-                self.retire_window(w);
-            }
             self.resync_windows();
             self.refresh_all();
             self.schedule_save();
@@ -584,7 +668,7 @@ impl App {
 
     /// Fences "dock to the top of the screen": the fence moves flush against the top of its
     /// work area, rolls up and expands on hover — a pull-down shelf.
-    pub(super) fn dock_to_top(&mut self, fence: FenceId) {
+    pub(super) fn dock_to_top(&mut self, fence: ContainerId) {
         let Some(w) = self.fences.get(&fence) else {
             return;
         };
@@ -645,7 +729,7 @@ impl App {
         h_dip: f32,
         x: i32,
         y: i32,
-        near: Option<FenceId>,
+        near: Option<ContainerId>,
     ) -> RECT {
         let view = pecofence_core::FenceView::default();
         let w_dip = crate::layout::GridMetrics::for_icon_size(
@@ -682,7 +766,7 @@ impl App {
         h_dip: f32,
         x: i32,
         y: i32,
-        near: Option<FenceId>,
+        near: Option<ContainerId>,
     ) -> RECT {
         let Some(work) = self.work_area_at(x, y) else {
             return RECT {
@@ -732,12 +816,11 @@ impl App {
         at(left, top)
     }
 
-    pub(super) fn toggle_roll(&mut self, fence: FenceId) {
-        let fence = self.state.host_of(fence);
+    pub(super) fn toggle_roll(&mut self, fence: ContainerId) {
         if let Some(w) = self.fences.get(&fence) {
             let rolled = !w.is_rolled();
             w.set_rolled(rolled);
-            if let Some(f) = self.state.fence_mut(fence) {
+            if let Some(f) = self.state.container_mut(fence) {
                 f.rolled_up = rolled;
             }
             self.state.mark_dirty();

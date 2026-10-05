@@ -155,7 +155,7 @@ pub(super) fn on_mousemove(
             td.moved = true;
             td.pointer_x = pointer_x;
         }
-        let prev: Vec<(FenceId, f32)> = v
+        let prev: Vec<(ContentId, f32)> = v
             .tabs
             .iter()
             .map(|t| t.id)
