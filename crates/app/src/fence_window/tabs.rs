@@ -97,7 +97,7 @@ pub(super) enum WindowDragOrigin {
 /// The original window keeps capture and moves the detached HWND (which can be itself).
 pub(super) struct RemoteDrag {
     pub(super) hwnd: HWND,
-    pub(super) fence: FenceId,
+    pub(super) fence: ContainerId,
     /// Cursor position relative to the dragged window's top-left.
     pub(super) offset: (i32, i32),
     /// Merge target currently highlighted (0 = none).
@@ -270,7 +270,7 @@ impl FenceViewState {
     pub(super) fn cancel_tab_or_remote_drag(&mut self) -> Option<DragCancel> {
         if self.tab_drag.is_some() {
             let now = Instant::now();
-            let prev: Vec<(FenceId, f32)> = self
+            let prev: Vec<(ContentId, f32)> = self
                 .tabs
                 .iter()
                 .map(|t| t.id)
@@ -416,7 +416,7 @@ impl FenceViewState {
             return false;
         }
         let now = Instant::now();
-        let prev: Vec<(FenceId, f32)> = self
+        let prev: Vec<(ContentId, f32)> = self
             .tabs
             .iter()
             .map(|t| t.id)
@@ -456,7 +456,7 @@ impl FenceViewState {
         // `rects` is empty for a single tab (no strip), while a slide keyed by id could in
         // principle outlive a shrink: index by `get_mut`, never by position.
         let mut xs: Vec<f32> = rects.iter().map(|(x, _)| *x).collect();
-        let index_of = |id: FenceId| self.tabs.iter().position(|t| t.id == id);
+        let index_of = |id: ContentId| self.tabs.iter().position(|t| t.id == id);
         for (id, t) in &self.tab_slide {
             if let Some(x) = index_of(*id).and_then(|i| xs.get_mut(i)) {
                 *x = t.value_at(now);
@@ -493,7 +493,7 @@ impl FenceViewState {
     /// animations are off. PointToPoint (the plan's layout-motion curve) rather than the
     /// Decelerate its tab row names: a pill moving a full slot is a translation between two
     /// resting places, and Decelerate reads as a snap-then-drift over 60 DIP.
-    pub(super) fn sync_tab_slides(&mut self, prev: &[(FenceId, f32)], now: Instant) {
+    pub(super) fn sync_tab_slides(&mut self, prev: &[(ContentId, f32)], now: Instant) {
         let rects = self.tab_rects();
         let dragged = self.tab_drag.as_ref().map(|d| d.index);
         let dur = self.anim_dur(motion::FAST);

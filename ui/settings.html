@@ -33,6 +33,7 @@
     --preview-panel: #f5ffffa8; --preview-border: #ffffffa8;
   }
   * { box-sizing: border-box; }
+  #recoveryPanel[hidden], #recoveryAccept[hidden] { display: none; }
   html, body { margin: 0; height: 100%; color: var(--text); background: transparent;
     font: 14px/1.5 "Segoe UI Variable Text", "Segoe UI", "Yu Gothic UI", "Microsoft YaHei UI", "Malgun Gothic", sans-serif; user-select: none; }
   html.no-mica body { background: var(--sheet); }
@@ -282,6 +283,14 @@
     </div>
   </nav>
   <main>
+    <div id="recoveryPanel" class="card" hidden role="status">
+      <p id="recoveryIssue"></p>
+      <div class="actions">
+        <button id="recoveryImport">导入 PecoFence 配置</button>
+        <button id="recoveryAccept">接受恢复的工作区</button>
+        <button id="recoveryNew">新建工作区</button>
+      </div>
+    </div>
     <section class="page on" id="page-general">
       <header class="page-header"><div><div class="eyebrow">你的桌面，由你做主</div><h2>常规</h2><p class="page-description">从外观到习惯，让桌面更适合你。</p></div><span class="page-badge"><span class="ic">&#xE73E;</span>更改即时生效</span></header>
       <div class="hero">
@@ -625,7 +634,8 @@
   let fenceSel = null;
   const fenceById = (id) => (state.fences || []).find(f => f.id === id);
   const fenceOption = (f) => f.title + (f.kind === 'portal' ? t("（门户）") : f.kind === 'inbox' ? t("（桌面）") : '') + (f.host ? tf("（{0} 的标签页）", f.host) : '');
-  const setFence = (id, prop, value) => send({ type: 'setFence', id, prop, value });
+  // Capture the rendered pair: a later tab move must not silently retarget a draft.
+  const setFence = (f, prop, value) => send({ type: 'setFence', contentId: f.contentId, containerId: f.containerId, prop, value });
   function ensureOption(sel, value, label) {
     sel.querySelector('[data-custom]')?.remove();
     if (value && ![...sel.options].some(o => o.value === value)) {
@@ -658,21 +668,21 @@
       const cur = prop === 'portalNavigate' ? !!(f.portal && f.portal.navigate) : prop === 'portalTitleIcon' ? !!(f.portal && f.portal.titleIcon) : f[prop];
       if (el.classList.contains('toggle')) {
         el.classList.toggle('on', !!cur); el.setAttribute('aria-checked', String(!!cur));
-        el.onclick = () => { const on = !el.classList.contains('on'); el.classList.toggle('on', on); el.setAttribute('aria-checked', String(on)); setFence(f.id, prop, on); };
+        el.onclick = () => { const on = !el.classList.contains('on'); el.classList.toggle('on', on); el.setAttribute('aria-checked', String(on)); setFence(f, prop, on); };
         keyToggle(el);
       } else if (el.tagName === 'SELECT') {
         const value = cur == null ? '' : String(cur);
         if (prop === 'tint') ensureOption(el, value, t("自定义 #") + value);
         if (prop === 'titleColor') { ensureOption(el, /^[0-9A-F]{6}$/i.test(value) ? value : '', t("自定义 #") + value); el.querySelector('[value=tint]').disabled = !f.tint; }
         el.value = value;
-        el.onchange = () => setFence(f.id, prop, prop === 'iconSize' ? Number(el.value) : prop === 'tint' ? (el.value || null) : el.value);
+        el.onchange = () => setFence(f, prop, prop === 'iconSize' ? Number(el.value) : prop === 'tint' ? (el.value || null) : el.value);
       } else if (el.tagName === 'INPUT') {
         if (document.activeElement !== el) el.value = cur;
-        el.onchange = () => { const v = el.value.trim(); if (v && v !== f.title) setFence(f.id, prop, v); else el.value = f.title; };
+        el.onchange = () => { const v = el.value.trim(); if (v && v !== f.title) setFence(f, prop, v); else el.value = f.title; };
         el.onkeydown = (e) => { if (e.key === 'Enter') el.blur(); if (e.key === 'Escape') { el.value = f.title; el.blur(); } };
       }
     });
-    document.getElementById('fenceDock').onclick = () => { setFence(f.id, 'dockTop', null); toast(t("已停靠到屏幕顶部")); };
+    document.getElementById('fenceDock').onclick = () => setFence(f, 'dockTop', null);
   }
   function showFence(id) {
     fenceSel = id;
@@ -684,7 +694,7 @@
   function inboxTitle() { const f = (state.fences || []).find(f => f.kind === 'inbox'); return f ? f.title : t("桌面"); }
   // A portal cannot hold routed items (the app routes such rules to the inbox), so it is shown as one.
   function fenceTitle(id) { const f = (state.fences || []).find(f => f.id === id); return !f ? t("已删除的栅栏") : f.kind === 'portal' ? inboxTitle() : f.title; }
-  function targetLabel(t) { return '“' + (t === 'inbox' ? inboxTitle() : (t && t.fence) ? fenceTitle(t.fence) : '?') + '”'; }
+  function targetLabel(t) { return '“' + (t === 'inbox' ? inboxTitle() : (t && t.collection) ? fenceTitle(t.collection) : '?') + '”'; }
   const OPS = () => ({contains:t("包含"),notContains:t("不包含"),startsWith:t("开头是"),endsWith:t("结尾是"),is:t("等于")});
   const WEEK = () => [t("周一"),t("周二"),t("周三"),t("周四"),t("周五"),t("周六"),t("周日")]; // 0 = Monday
   const hm = (m) => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
@@ -759,7 +769,7 @@
     restoreFocus(list, focus);
     const tgt = document.getElementById('nrTarget');
     const selected = tgt.value;
-    const options = state.fences.filter(f => f.kind !== 'portal').map(f => `<option value="${esc(f.id)}">${esc(f.title)}</option>`).join('');
+    const options = state.fences.filter(f => f.isCollection).map(f => `<option value="${esc(f.contentId)}">${esc(f.title)}</option>`).join('');
     if (tgt.innerHTML !== options) {
       tgt.innerHTML = options;
       if ([...tgt.options].some(o => o.value === selected)) tgt.value = selected;
@@ -828,7 +838,7 @@
     else if (kind === 'files') cond = { cond: 'filesOnly', value: null };
     else cond = { cond: 'foldersOnly', value: null };
     const fence = state.fences.find(f => f.id === target);
-    state.rules.list.push({ id: crypto.randomUUID(), name, enabled: true, target: fence && fence.kind === 'inbox' ? 'inbox' : { fence: target }, allOf: [cond], priorityClass: cls });
+    state.rules.list.push({ id: crypto.randomUUID(), name, enabled: true, target: fence && fence.kind === 'inbox' ? 'inbox' : { collection: target }, allOf: [cond], priorityClass: cls });
     send({ type: 'setRules', rules: state.rules }); renderRules(); toast(t("已添加规则"));
     document.getElementById('nrName').value = ''; document.getElementById('nrValue').value = '';
   };
@@ -836,7 +846,11 @@
   document.querySelectorAll('#templates [data-template]').forEach(b => { b.onclick = () => send({ type: 'action', name: 'addTemplate', template: b.dataset.template }); });
   document.getElementById('snapSave').onclick = () => { const n = document.getElementById('snapName').value; send({ type: 'action', name: 'saveSnapshot', snapshotName: n }); document.getElementById('snapName').value = ''; };
   document.getElementById('cfgExport').onclick = () => send({ type: 'action', name: 'exportConfig' });
-  document.getElementById('cfgImport').onclick = () => send({ type: 'action', name: 'importConfig' });
+  const confirmReplacement = () => confirm(t("替换当前工作区？原配置文件将保留。"));
+  document.getElementById('cfgImport').onclick = () => { if (confirmReplacement()) send({ type: 'action', name: 'importConfig', confirmed: true }); };
+  document.getElementById('recoveryImport').onclick = document.getElementById('cfgImport').onclick;
+  document.getElementById('recoveryAccept').onclick = () => { if (confirmReplacement()) send({ type: 'action', name: 'acceptRecovery', confirmed: true }); };
+  document.getElementById('recoveryNew').onclick = () => { if (confirmReplacement()) send({ type: 'action', name: 'newWorkspace', confirmed: true }); };
   document.getElementById('swapDo').onclick = () => { const a = document.getElementById('swapA').value, b = document.getElementById('swapB').value; if (a && b && a !== b) send({ type: 'action', name: 'swapMonitors', a, b }); else toast(t("请选择两个不同的显示器"), true); };
   function renderLayout() {
     const sl = document.getElementById('snapList');
@@ -872,7 +886,7 @@
       div.dataset.rowId = bk.path;
       div.innerHTML = `<div class="l"><span class="ic" aria-hidden="true">&#xE787;</span><div><div class="t">${esc(bk.name)}</div><div class="s">${esc(t("每日自动备份"))}</div></div></div>
         <div class="actions"><button data-act="restore">${esc(t("恢复"))}</button></div>`;
-      div.querySelector('[data-act=restore]').onclick = () => send({ type: 'action', name: 'restoreBackup', path: bk.path });
+      div.querySelector('[data-act=restore]').onclick = () => { if (confirmReplacement()) send({ type: 'action', name: 'restoreBackup', path: bk.path, confirmed: true }); };
       div.querySelector('[data-act=restore]').setAttribute('aria-label', t("恢复备份：") + bk.name);
       bl.appendChild(div);
     });
@@ -925,6 +939,14 @@
       renderWorkspaceSummary(m.fences.length, m.itemCount);
       document.getElementById('cfgPath').textContent = m.configPath;
       bindAll(); bindIconTint(); renderFences(); renderRules(); renderLayout(); updateKind(); renderAppearance(); renderDesktopIconsStatus();
+      document.getElementById('recoveryPanel').hidden = !m.loadIssue && !m.saveHealth;
+      document.getElementById('recoveryIssue').textContent = [m.loadIssue, m.saveHealth].filter(Boolean).join('\n');
+      document.getElementById('recoveryAccept').hidden = !m.recoveredFrom;
+      document.querySelectorAll('[data-bind], [data-fence], #fenceDock, #snapSave, #swapDo').forEach(el => {
+        el.disabled = !m.saveAllowed;
+        el.setAttribute('aria-disabled', String(!m.saveAllowed));
+        if (!m.saveAllowed && el.classList.contains('toggle')) el.onclick = null;
+      });
     } else if (m.type === 'workspaceSummary') {
       if (!state) return;
       state.itemCount = m.itemCount;

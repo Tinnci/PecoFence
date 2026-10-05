@@ -1,7 +1,7 @@
 //! PecoFence — open-source Fences-style desktop organizer for Windows 11.
 // GUI subsystem: no console window when launched from Explorer. Logs go to a file (see
 // `init_logging`); stderr is still used when a console is attached (e.g. `cargo run`).
-#![windows_subsystem = "windows"]
+#![cfg_attr(not(test), windows_subsystem = "windows")]
 
 mod anchor;
 mod app;
@@ -10,6 +10,7 @@ mod fence_window;
 mod icons;
 mod layout;
 mod peek;
+mod portal_runtime;
 mod rename;
 mod settings_host;
 mod shadow;

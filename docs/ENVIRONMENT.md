@@ -73,7 +73,7 @@ PecoFence-lab\
   instances\     # 每场景一个实例目录（构建快照）
     normal-local-001\
       *.exe + WebView2Loader.dll     # 从仓内 target 拷贝（快照，非链接）
-      config\config.json             # 播种或首跑生成；应用会重写 → 归 Windows 侧
+      config\workspace.v2.json       # schema 2 播种或首跑生成；应用写入归 Windows 侧
       data\                          # DB 模式预留
       logs\                          # spmd/pecofence 的 stdout/stderr + pid
       appdata\{Roaming,Local}\       # 实例专属 APPDATA/LOCALAPPDATA（WebView2 profile、崩溃日志）
@@ -83,7 +83,8 @@ PecoFence-lab\
 ```
 
 - 创建：WSL 侧 `scripts/lab/new-instance.sh --name <n> --fixture <catalog.json>
-  [--seed-config <config.json>]`（fixture 拷贝整个父目录——catalog 引用
+  [--seed-config <workspace.v2.json>]`（seed 先经实际 core 校验，不迁移旧格式；
+  fixture 拷贝整个父目录——catalog 引用
   `snapshots/*.json` 相对路径）
 - 启停：Windows 侧 `scripts/lab/run-instance.ps1 -Name <n>` /
   `stop-instance.ps1 -Name <n>`（spmd 走 fixture 模式 + 实例内绝对路径日志；

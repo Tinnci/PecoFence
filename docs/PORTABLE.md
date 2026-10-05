@@ -1,7 +1,7 @@
 # PecoFence portable edition
 
-Upgrading from the previous name? Exit the old application first and keep your
-existing `config` directory. See the included [upgrade guide](UPGRADING.md).
+Upgrading from an older workspace format? Exit the old application first and keep
+your files. The new format does not migrate them. See the [upgrade guide](UPGRADING.md).
 
 Extract the complete ZIP and run `pecofence.exe`. Keep these files together:
 
@@ -15,8 +15,10 @@ Right-click the tray icon to open Settings or exit. Under General, choose your
 display language: English, Simplified/Traditional Chinese, Japanese, Korean,
 German, French, Spanish, Portuguese (Brazil), Russian or Follow system.
 
-By default, settings are saved in `%APPDATA%\PecoFence\config.json`. Launch with
+By default, settings are saved in `%APPDATA%\PecoFence\workspace.v2.json`. Launch with
 `--portable` to use a `config` folder beside the executable.
+Old `config.json` data is retained but not imported. Settings offers an explicit
+new-workspace action or import of a supported schema-2 document.
 Portable startup does not synchronize Windows' autostart entry; changing the
 autostart toggle in Settings remains an explicit opt-in/out.
 

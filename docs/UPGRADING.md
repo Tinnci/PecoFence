@@ -1,38 +1,46 @@
-# Upgrading to PecoFence
+# Opening the new workspace format
 
-PecoFence is the new name of this project. The executable is now `pecofence.exe`,
-with `pecofence-watchdog.exe` beside it.
+This edition uses a deliberately breaking **schema-2 workspace**. Containers own
+window geometry and ordered tabs; content instances own file collections, folder
+portals or extension configuration. Old flat-fence documents are not supported.
 
 ## Existing installations
 
-Exit the older openFence application before starting PecoFence. Both names share
-a compatibility instance lock so two versions cannot manage the same desktop at once.
+Exit the old application before starting this version. Keep your original files
+and backups; there is no automatic import, field alias or migration chain.
 
-New installations save configuration in `%APPDATA%\PecoFence`. If that location
-has no configuration or backups and `%APPDATA%\OpenFence` contains an existing
-installation, PecoFence continues using the old directory **in place**. Nothing
-is copied or rewritten simply to change the product name. Existing PecoFence data
-always takes priority.
+New configuration lives in `%APPDATA%\PecoFence\workspace.v2.json`. Portable mode
+uses `config\workspace.v2.json` beside the executable. This version does not fall
+back to `%APPDATA%\OpenFence`, `config.json` or old backup directories.
 
-This preserves fence layouts, rules, language preferences, snapshots and backups.
-Filenames and custom fence/rule names are not renamed. Portable mode continues
-using the `config` directory beside the executable.
+When old data is detected in the selected directory, Settings shows the loading
+issue instead of silently creating defaults. Explicitly choose **Create workspace**
+or import a supported schema-2 document. Old files remain untouched.
 
-New logs and WebView2 profiles use `%LOCALAPPDATA%\PecoFence`. An outstanding
-desktop-icon recovery marker from the older name is recognized.
+Unreadable, corrupt or unsupported primary documents are not overwritten by
+ordinary autosave. A verified backup is offered as a read-only recovery candidate.
+Only explicitly accepting recovery, importing or creating a new workspace enables
+replacement. Existing primary bytes are retained in a unique
+`workspace.v2.replaced-<UUID>.json` archive before that replacement.
 
-## Windows startup
+## Saving and backups
 
-A normal release launch registers the `PecoFence` startup entry when required.
-The legacy `openFence` entry is removed only after a replacement was registered
-successfully, or when startup is disabled. A working PecoFence entry pointing to
-another copy is preserved.
+The primary filename is `workspace.v2.json`; the previous version is
+`workspace.v2.bak`, and daily backups use `workspace.v2.backups`.
 
-Portable and development launches do not change startup entries. Changing the
-autostart switch in Settings remains an explicit opt-in/out.
+Saving returns success only after primary replacement. An optional backup failure
+is shown as degraded persistence, not as a failed primary save. This distinction
+does not promise power-loss durability, asynchronous revision-based saving or
+atomic protection against arbitrary external editors.
 
-## Environment overrides
+## Desktop integration
 
-Use the `PECOFENCE_` prefix for application overrides, for example `PECOFENCE_INSTANCE` and
-`PECOFENCE_ACRYLIC`. Existing `OPENFENCE_` overrides are still accepted; when both
-are defined, the `PECOFENCE_` value wins.
+The executable remains `pecofence.exe`, with `pecofence-watchdog.exe` and
+`WebView2Loader.dll` beside it. Exit older versions first: instance-lock and
+desktop-icon recovery mechanisms still protect Explorer ownership independently
+of workspace format compatibility.
+
+Portable and development launches do not automatically synchronize startup
+entries. Changing the autostart switch in Settings is an explicit opt-in/out.
+Existing OS-level environment aliases and recovery markers have not all been
+removed by this workspace-model change.

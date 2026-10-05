@@ -5,33 +5,38 @@ use super::*;
 impl App {
     /// Pushes the shown fence's portal decorations (folder glyph, up button, navigate flag) and
     /// its display title into the host window.
-    pub(super) fn apply_portal_deco(&self, host: FenceId) {
+    pub(super) fn apply_portal_deco(&self, host: pecofence_core::ContainerId) {
         let Some(w) = self.fences.get(&host) else {
             return;
         };
-        let active = self.state.active_tab_of(host);
+        let Some(active) = self.state.active_tab_of(host) else {
+            return;
+        };
         let Some(f) = self.state.fence(active) else {
             return;
         };
         let is_portal = f.kind == FenceKind::FolderPortal;
         w.set_portal_deco(
-            is_portal,
+            is_portal.then(|| {
+                self.state
+                    .portals
+                    .snapshot(active)
+                    .map(|s| s.health.clone())
+                    .unwrap_or(pecofence_core::portal::PortalHealth::Loading)
+            }),
             is_portal && !f.hide_title_icon,
             is_portal && self.state.portal_navigated(active),
             is_portal && f.portal_navigate,
         );
-        if let Some(h) = self.state.fence(host) {
-            let title = if active == host {
-                self.state.display_title(h)
-            } else {
-                h.title.clone()
-            };
-            w.set_title(&title);
-        }
+        w.set_title(&self.state.display_title(&f));
     }
 
     /// Starts/stops folder watchers so every portal fence follows its folder.
     pub(super) fn ensure_portal_watchers(&mut self) {
+        if !self.state.save_allowed {
+            self.portal_watchers.clear();
+            return;
+        }
         let portals: Vec<(FenceId, PathBuf)> = self
             .state
             .fences()
@@ -69,27 +74,7 @@ impl App {
 
     /// Item menu "作为栅栏窗口显示": a new fence that mirrors `folder` (plan §12 文件夹门户).
     pub(super) fn create_portal(&mut self, folder: PathBuf, x: i32, y: i32, near: Option<FenceId>) {
-        if !folder.is_dir() {
-            tracing::warn!(folder = %folder.display(), "portal: not a directory");
-            if let Some(t) = &self.tray {
-                t.show_info(
-                    "PecoFence",
-                    &pecofence_core::i18n::format(
-                        "无法创建文件夹门户：{0} 不是文件夹",
-                        &[format!("{}", folder.display())],
-                    ),
-                    true,
-                );
-            }
-            return;
-        }
-        // Item keys are case-folded; store the folder with its real casing.
-        let folder = std::fs::canonicalize(&folder)
-            .map(|c| {
-                let s = c.to_string_lossy().to_string();
-                PathBuf::from(s.strip_prefix(r"\\?\").unwrap_or(&s))
-            })
-            .unwrap_or(folder);
+        // The background read validates availability. A failed probe is not an empty folder.
         if let Some(existing) = self
             .state
             .fences()
@@ -102,8 +87,10 @@ impl App {
             .map(|f| f.id)
         {
             // Already shown: just bring attention to it (switch to its tab if hosted).
-            let host = self.state.host_of(existing);
-            if host != existing {
+            let Some(host) = self.state.host_of(existing) else {
+                return;
+            };
+            if self.state.active_tab_of(host) != Some(existing) {
                 self.switch_tab(host, existing);
             }
             if let Some(w) = self.fences.get(&host) {
@@ -111,11 +98,17 @@ impl App {
             }
             return;
         }
-        let rect = self.place_new_fence(4, 260.0, x, y, near);
+        let rect = self.place_new_fence(
+            4,
+            260.0,
+            x,
+            y,
+            near.and_then(|content| self.state.host_of(content)),
+        );
         if let Some(id) = self.state.new_portal_fence(&folder, rect) {
             tracing::info!(folder = %folder.display(), %id, "folder portal created");
             self.resync_windows();
-            if let Some(w) = self.fences.get(&id) {
+            if let Some(w) = self.window_for(id) {
                 w.show(true);
             }
             self.schedule_save();
@@ -126,6 +119,9 @@ impl App {
     /// folders it saw; a file operation names its source and destination folders). Folder
     /// comparison is case-insensitive, like NTFS names.
     pub(super) fn refresh_portals_in(&mut self, dirs: &[PathBuf]) {
+        if !self.state.save_allowed {
+            return;
+        }
         let wanted: Vec<String> = dirs
             .iter()
             .map(|d| d.to_string_lossy().to_lowercase())
@@ -138,27 +134,68 @@ impl App {
             .filter(|(_, p)| wanted.contains(&p.to_string_lossy().to_lowercase()))
             .map(|(id, _)| id)
             .collect();
-        let mut changed = Vec::new();
         for id in ids {
-            if self.state.refresh_portal(id) {
+            self.state.request_portal_read(id);
+            self.refresh_fence(id);
+        }
+        self.pump_portal_reads();
+        self.ensure_portal_watchers();
+    }
+
+    /// Requests every portal folder (overflow, layout/settings changes), never reads inline.
+    pub(super) fn refresh_portals(&mut self) {
+        if !self.state.save_allowed {
+            return;
+        }
+        self.state.reconcile_portal_sources();
+        let ids: Vec<_> = self
+            .state
+            .fences()
+            .iter()
+            .filter(|f| self.state.portal_path(f.id).is_some())
+            .map(|f| f.id)
+            .collect();
+        for id in ids {
+            self.state.request_portal_read(id);
+            self.refresh_fence(id);
+        }
+        self.pump_portal_reads();
+        self.ensure_portal_watchers();
+    }
+
+    /// Native host drives the pure coordinator and bounded adapter. Polling is deliberate:
+    /// workers never hold a control HWND, including during shutdown or a modal message loop.
+    pub(super) fn pump_portal_reads(&mut self) {
+        if !self.state.save_allowed {
+            window::kill_timer(self.control.hwnd(), TIMER_PORTALS);
+            return;
+        }
+        let mut changed = self.state.reconcile_portal_sources();
+        while let Some(result) = self.portal_reader.try_result() {
+            if let Some(id) = self.state.accept_portal_result(result) {
                 changed.push(id);
             }
         }
-        self.ensure_portal_watchers();
-        for id in changed {
-            self.refresh_fence(id);
+        while let Some(request) = self.state.next_portal_read() {
+            match self.portal_reader.submit(request) {
+                None => break,
+                Some(failed) => {
+                    if let Some(id) = self.state.accept_portal_result(failed) {
+                        changed.push(id);
+                    }
+                }
+            }
         }
-    }
-
-    /// Re-reads every portal folder (startup, overflow, layout changes) and redraws the ones
-    /// that changed.
-    pub(super) fn refresh_portals(&mut self) {
-        let changed = self.state.refresh_all_portals();
-        // refresh_portal may have reset a vanished subfolder back to the root: drop the stale
-        // watcher on the old path and start one on the folder now shown.
-        self.ensure_portal_watchers();
-        for id in changed {
-            self.refresh_fence(id);
+        if self.state.portals.has_work() {
+            window::set_timer(self.control.hwnd(), TIMER_PORTALS, 50);
+        } else {
+            window::kill_timer(self.control.hwnd(), TIMER_PORTALS);
+        }
+        if !changed.is_empty() {
+            for id in changed {
+                self.refresh_fence(id);
+            }
+            self.push_workspace_summary();
         }
     }
 
@@ -175,9 +212,12 @@ impl App {
     }
 
     pub(super) fn after_portal_navigation(&mut self, fence: FenceId) {
+        self.pump_portal_reads();
         self.ensure_portal_watchers();
         self.refresh_fence(fence);
-        let host = self.state.host_of(fence);
+        let Some(host) = self.state.host_of(fence) else {
+            return;
+        };
         self.apply_portal_deco(host);
         self.push_workspace_summary();
     }

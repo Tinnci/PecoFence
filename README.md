@@ -104,9 +104,10 @@ in your selected language. Windows desktop icons are restored when you exit.
   the full older-version and multi-display hardware matrix is still in progress.
 - Microsoft Edge WebView2 Runtime is required for Settings. Keep the bundled
   `WebView2Loader.dll` and `pecofence-watchdog.exe` beside the app.
-- Configuration lives in `%APPDATA%\PecoFence\config.json`. Launch with
+- Configuration lives in `%APPDATA%\PecoFence\workspace.v2.json`. Launch with
   `--portable` to keep it in a `config` folder beside the executable.
-- Existing installations keep their previous configuration directory.
+- The new workspace format does not import or migrate old configurations.
+  Existing files are retained; create a new workspace or import a supported document.
   See the [upgrade guide](docs/UPGRADING.md).
 - Glass uses the static desktop wallpaper. It does not refract other applications
   or live video wallpaper.

@@ -34,6 +34,11 @@ done
 case "$NAME" in
   */*|*..*|*[\\:]*) echo "instance name must be a plain directory name: $NAME" >&2; exit 1 ;;
 esac
+if [ -n "$SEED_CONFIG" ]; then
+  [ -f "$SEED_CONFIG" ] || { echo "seed config not found: $SEED_CONFIG" >&2; exit 1; }
+  # Validate the exact workspace format before creating directories/copying artifacts.
+  cargo run --quiet --locked -p pecofence-core --example validate_workspace -- "$SEED_CONFIG"
+fi
 
 SPM_REPO="${SPM_REPO:-$(cd ../spm 2>/dev/null && pwd)}"
 [ -d "$SPM_REPO" ] || { echo "spm repo not found next to PecoFence (set SPM_REPO)" >&2; exit 1; }
@@ -80,7 +85,7 @@ cp "$SPM_BIN/spmd.exe" "$SPM_BIN/spm.exe" "$INST/"
 SEED_NOTE="first-run defaults"
 if [ -n "$SEED_CONFIG" ]; then
   [ -f "$SEED_CONFIG" ] || { echo "seed config not found: $SEED_CONFIG" >&2; exit 1; }
-  cp "$SEED_CONFIG" "$INST/config/config.json"
+  cp "$SEED_CONFIG" "$INST/config/workspace.v2.json"
   SEED_NOTE="seeded from $SEED_CONFIG"
 fi
 

@@ -434,5 +434,16 @@
   "天": "days",
   "请输入闲置天数": "Enter the number of idle days",
   "已添加“{0}”，整理了 {1} 个项目": "Added “{0}” and organized {1} items",
-  "“{0}”已存在": "“{0}” already exists"
+  "“{0}”已存在": "“{0}” already exists",
+  "正在读取文件夹": "Reading folder",
+  "文件夹不可用，内容可能已过期": "Folder unavailable; contents may be stale",
+  "内容已移动，请刷新设置后再编辑。": "The content has moved. Refresh Settings before editing.",
+  "属性值无效。": "Invalid property value.",
+  "工作区未保存。": "The workspace was not saved.",
+  "此工作区为只读，请先解决加载问题再编辑。": "This workspace is read-only. Resolve the loading issue before editing.",
+  "已保存新工作区。": "The new workspace has been saved.",
+  "已保存恢复的工作区。": "The recovered workspace has been saved.",
+  "接受恢复的工作区": "Accept recovered workspace",
+  "新建工作区": "Create workspace",
+  "替换当前工作区？原配置文件将保留。": "Replace the current workspace? The original configuration will be retained."
 }

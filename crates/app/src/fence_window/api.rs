@@ -4,7 +4,7 @@ use super::*;
 
 pub struct FenceWindow {
     #[allow(dead_code)]
-    pub id: FenceId,
+    pub id: ContainerId,
     pub(super) window: Window,
     pub(super) view: Rc<RefCell<Option<FenceViewState>>>,
     pub(super) anchor: AnchorCell,
@@ -32,7 +32,8 @@ impl FenceWindow {
     #[allow(clippy::too_many_arguments)]
     pub fn create(
         ctx: &FenceContext,
-        fence_id: FenceId,
+        fence_id: ContainerId,
+        content_id: ContentId,
         title: &str,
         is_inbox: bool,
         rolled_up: bool,
@@ -116,7 +117,7 @@ impl FenceWindow {
             label_lines,
             items,
             tabs: Vec::new(),
-            active: fence_id,
+            active: content_id,
             tab_hover: None,
             tab_drag: None,
             tab_slide: Vec::new(),
@@ -170,6 +171,7 @@ impl FenceWindow {
             columns_visible: [true; 3],
             col_drag: None,
             is_portal: false,
+            portal_health: None,
             label_w: 0.0,
             hover: None,
             title_hover: false,
@@ -483,6 +485,10 @@ impl FenceWindow {
         }
     }
 
+    pub fn release_panel_view(&self) {
+        self.with_view(|view| view.plugin_panel = None);
+    }
+
     pub fn set_content(&self, content: &pecofence_core::FenceContentSpec) {
         let panel = match content {
             pecofence_core::FenceContentSpec::Panel { panel } => {
@@ -683,8 +689,8 @@ impl FenceWindow {
         });
     }
 
-    /// Replaces the tab strip. `active` is the fence whose items the window shows.
-    pub fn set_tabs(&self, mut tabs: Vec<TabView>, active: FenceId) {
+    /// Replaces the container's tab strip and selects the mounted content.
+    pub fn set_tabs(&self, mut tabs: Vec<TabView>, active: ContentId) {
         self.with_view(|v| {
             // A tab drag in progress shows its own provisional order: a refresh with the same set
             // of tabs (the SwitchTab pushed on button-down) keeps that order, updating titles only.
@@ -692,7 +698,7 @@ impl FenceWindow {
                 && v.tabs.len() == tabs.len()
                 && v.tabs.iter().all(|t| tabs.iter().any(|n| n.id == t.id))
             {
-                let order: Vec<FenceId> = v.tabs.iter().map(|t| t.id).collect();
+                let order: Vec<ContentId> = v.tabs.iter().map(|t| t.id).collect();
                 tabs.sort_by_key(|t| order.iter().position(|id| *id == t.id).unwrap_or(0));
             }
             let same_titles = v.tabs.len() == tabs.len()
@@ -713,13 +719,13 @@ impl FenceWindow {
             let now = Instant::now();
             // Painted x per tab before the change: a reorder (左移 / 右移, or a width change)
             // slides the pills from there to their new slots (167 ms point-to-point).
-            let prev: Vec<(FenceId, f32)> = v
+            let prev: Vec<(ContentId, f32)> = v
                 .tabs
                 .iter()
                 .map(|t| t.id)
                 .zip(v.tab_draw_xs(now))
                 .collect();
-            let old_ids: Vec<FenceId> = v.tabs.iter().map(|t| t.id).collect();
+            let old_ids: Vec<ContentId> = v.tabs.iter().map(|t| t.id).collect();
             let had_strip = v.tabs.len() > 1;
             v.tabs = tabs;
             v.active = active;
@@ -738,7 +744,7 @@ impl FenceWindow {
             if !same_set {
                 // Per-id state of tabs that left goes with them; index-keyed hover fades
                 // would otherwise replay on whichever neighbour inherited the index.
-                let ids: Vec<FenceId> = v.tabs.iter().map(|t| t.id).collect();
+                let ids: Vec<ContentId> = v.tabs.iter().map(|t| t.id).collect();
                 v.tab_slide.retain(|(id, _)| ids.contains(id));
                 if v.tab_settle.is_some_and(|(id, _)| !ids.contains(&id)) {
                     v.tab_settle = None;
@@ -846,7 +852,7 @@ impl FenceWindow {
             v.detach_pending = false;
             v.remote_drag = Some(RemoteDrag {
                 hwnd,
-                fence: change.tab,
+                fence: change.detached,
                 offset: (pt.x - r.left, pt.y - r.top),
                 merge_target: 0,
                 merge_x: i32::MIN,
@@ -918,7 +924,7 @@ impl FenceWindow {
 
     pub fn set_portal_deco(
         &self,
-        is_portal: bool,
+        health: Option<pecofence_core::portal::PortalHealth>,
         folder_icon: bool,
         up_button: bool,
         navigate_folders: bool,
@@ -929,10 +935,11 @@ impl FenceWindow {
                 up_button,
             };
             let changed = v.deco != deco || v.navigate_folders != navigate_folders;
-            let portal_changed = v.is_portal != is_portal;
+            let portal_changed = v.portal_health != health;
             v.deco = deco;
             v.navigate_folders = navigate_folders;
-            v.is_portal = is_portal;
+            v.is_portal = health.is_some();
+            v.portal_health = health;
             if !up_button {
                 v.up_hovered = false;
                 if v.pressed == Some(PressTarget::Up) {
@@ -944,19 +951,19 @@ impl FenceWindow {
                 let _ = v.redraw_chrome_only();
             }
             if portal_changed && v.items.is_empty() && !v.rolled_up {
-                // The empty-state wording differs for a folder portal.
+                // Empty, loading and unavailable are different facts even with zero items.
                 let _ = v.redraw_content();
             }
         });
     }
 
-    /// The fence whose items this window currently shows (host or active tab).
-    pub fn active_fence(&self) -> FenceId {
+    /// The content instance currently mounted in this container window.
+    pub fn active_fence(&self) -> ContentId {
         self.view
             .borrow()
             .as_ref()
             .map(|v| v.active)
-            .unwrap_or(self.id)
+            .expect("live container window has initialized content")
     }
 
     /// Item whose inline rename edit this window currently shows (see `set_renaming`).
@@ -1163,8 +1170,9 @@ impl FenceWindow {
     /// Applies a new expanded height. `animate` (auto-height following an item change) glides
     /// the bottom edge there over 250 ms; otherwise, or when the animation declines (hidden
     /// window, animations off, roll in progress), the window snaps. The returned rectangle is
-    /// the final geometry either way, so the state persists it immediately. The borrow is
-    /// released before SetWindowPos because WM_SIZE re-enters the handler.
+    /// the final geometry either way; the caller decides whether it is a user edit or only
+    /// a derived projection. The borrow is released before SetWindowPos because WM_SIZE
+    /// re-enters the handler.
     pub fn apply_height(&self, height_px: i32, animate: bool) -> RECT {
         let animated = {
             let mut guard = self.view.borrow_mut();

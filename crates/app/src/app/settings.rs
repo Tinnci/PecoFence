@@ -8,7 +8,19 @@ impl App {
     pub(super) fn adopt_config(&mut self, cfg: pecofence_core::Config, what: &str) {
         self.end_peek_now();
         let old_settings = self.state.config.settings.clone();
-        self.state.replace_config(cfg);
+        if let Err(issue) = self.state.replace_config(cfg) {
+            self.settings_error(&issue);
+            self.push_settings_state();
+            return;
+        }
+        self.reconcile_adopted_workspace(old_settings);
+        self.settings_commit(&pecofence_core::i18n::format("已{0}", &[what.to_string()]));
+    }
+
+    /// Reset, import and recovery reconcile through one path. Capture prior settings
+    /// before replacing the document, rather than temporarily restoring an old root.
+    fn reconcile_adopted_workspace(&mut self, old_settings: pecofence_core::Settings) {
+        self.end_peek_now();
         if let Some(desk) = shell::user_desktop() {
             self.state.migrate_desktop_path(&desk);
         }
@@ -19,16 +31,14 @@ impl App {
         // Re-apply the settings through the diff path so the anchor / Run-key side effects
         // (hide_real_icons, quick_hide.enabled, show_desktop, autostart) and the ctx.behavior
         // cells update exactly as if the user had changed them on the page.
-        self.state.config.settings = old_settings;
-        self.apply_settings(new_settings);
+        self.apply_settings_from(old_settings, new_settings, true);
+        self.apply_desktop_icons_hidden(self.state.config.settings.hide_real_icons);
         // apply_settings only refreshes on a visual / icon diff; a wholesale swap (per-fence
         // tint, layouts) needs these regardless.
         self.sync_peek_hotkey();
         self.apply_icon_variant();
         self.refresh_visuals(true);
-        self.state.save_if_dirty();
         self.push_settings_state();
-        self.settings_toast(&pecofence_core::i18n::format("已{0}", &[what.to_string()]));
     }
 
     pub(super) fn export_config(&mut self) {
@@ -170,7 +180,7 @@ impl App {
                     "name": s.name,
                     "ts": s.ts,
                     "date": pecofence_platform::fileinfo::format_local_datetime(s.ts),
-                    "fenceCount": s.layouts.iter().map(|l| l.fences.len()).sum::<usize>(),
+                    "fenceCount": s.layouts.iter().map(|l| l.contents.len()).sum::<usize>(),
                 })
             })
             .collect();
@@ -199,6 +209,11 @@ impl App {
             "locale": localization["locale"],
             "translations": localization["translations"],
             "settings": self.state.config.settings,
+            "loadIssue": self.state.load_issue,
+            "saveAllowed": self.state.save_allowed,
+            "writable": self.state.save_allowed,
+            "saveHealth": self.state.persistence_issue,
+            "recoveredFrom": self.state.recovered_from,
             "desktopIconsHidden": pecofence_platform::shell_icons::desktop_icons_hidden(),
             "rules": self.state.config.rules,
             "fences": fences,
@@ -252,7 +267,22 @@ impl App {
         }
     }
 
-    fn settings_error(&self, text: &str) {
+    /// A queued write is not a saved workspace. Report the actual primary commit.
+    fn settings_commit(&mut self, success: &str) {
+        if self.state.save_if_dirty() {
+            self.settings_toast(success);
+            if let Some(issue) = &self.state.persistence_issue {
+                self.settings_error(issue);
+            }
+        } else if let Some(issue) = &self.state.persistence_issue {
+            self.settings_error(issue);
+        } else {
+            self.settings_error(pecofence_core::i18n::text("工作区未保存。"));
+        }
+        self.push_settings_state();
+    }
+
+    pub(super) fn settings_error(&self, text: &str) {
         if let Some(h) = &self.settings {
             h.post_json(
                 &serde_json::json!({ "type": "toast", "text": text, "error": true }).to_string(),
@@ -264,6 +294,30 @@ impl App {
         let Ok(v) = serde_json::from_str::<serde_json::Value>(json) else {
             return;
         };
+        if !self.state.save_allowed {
+            let kind = v.get("type").and_then(|t| t.as_str());
+            let action = v.get("name").and_then(|n| n.as_str());
+            let permitted = kind == Some("ready")
+                || (kind == Some("action")
+                    && matches!(
+                        action,
+                        Some(
+                            "importConfig"
+                                | "restoreBackup"
+                                | "openConfigFolder"
+                                | "exportConfig"
+                                | "newWorkspace"
+                                | "acceptRecovery"
+                        )
+                    ));
+            if !permitted {
+                self.settings_error(pecofence_core::i18n::text(
+                    "此工作区为只读，请先解决加载问题再编辑。",
+                ));
+                self.push_settings_state();
+                return;
+            }
+        }
         match v.get("type").and_then(|t| t.as_str()) {
             Some("ready") => {
                 tracing::info!("settings: page ready");
@@ -278,27 +332,33 @@ impl App {
                     return;
                 };
                 match serde_json::from_value::<pecofence_core::Settings>(new_settings) {
-                    Ok(new_settings) => self.apply_settings(new_settings),
-                    Err(e) => tracing::warn!(error = %e, "bad settings from page"),
+                    Ok(new_settings) => {
+                        let mut candidate = self.state.config.clone();
+                        candidate.settings = new_settings.clone();
+                        match candidate.validate() {
+                            Ok(()) => self.apply_settings(new_settings),
+                            Err(issue) => {
+                                self.settings_error(&issue);
+                                self.push_settings_state();
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        self.settings_error(&e.to_string());
+                        self.push_settings_state();
+                    }
                 }
             }
             Some("setRules") => {
                 if let Some(rules) = v.get("rules").cloned()
-                    && let Ok(mut rules) = serde_json::from_value::<pecofence_core::RuleSet>(rules)
+                    && let Ok(rules) = serde_json::from_value::<pecofence_core::RuleSet>(rules)
                 {
-                    // A folder portal never shows `fence.items`: a rule routing into one would
-                    // make matched items vanish from every fence. Fall back to the inbox.
-                    let targets = std::iter::once(&mut rules.default_target)
-                        .chain(rules.list.iter_mut().map(|r| &mut r.target));
-                    for t in targets {
-                        if let Target::Fence(id) = *t
-                            && self
-                                .state
-                                .fence(id)
-                                .is_some_and(|f| f.kind == FenceKind::FolderPortal)
-                        {
-                            *t = Target::Inbox;
-                        }
+                    let mut candidate = self.state.config.clone();
+                    candidate.rules = rules.clone();
+                    if let Err(issue) = candidate.validate() {
+                        self.settings_error(&issue);
+                        self.push_settings_state();
+                        return;
                     }
                     self.state.config.rules = rules;
                     self.state.mark_dirty();
@@ -336,7 +396,7 @@ impl App {
                     self.state.save_snapshot(name);
                     self.schedule_save();
                     self.push_settings_state();
-                    self.settings_toast(pecofence_core::i18n::text("已保存快照"));
+                    self.settings_commit(pecofence_core::i18n::text("已保存快照"));
                 }
                 Some("restoreSnapshot") => {
                     if let Some(id) = v
@@ -357,7 +417,7 @@ impl App {
                             self.refresh_portals();
                             self.schedule_save();
                             self.push_settings_state();
-                            self.settings_toast(pecofence_core::i18n::text("已恢复快照"));
+                            self.settings_commit(pecofence_core::i18n::text("已恢复快照"));
                         }
                     }
                 }
@@ -388,9 +448,41 @@ impl App {
                     }
                 }
                 Some("exportConfig") => self.export_config(),
-                Some("importConfig") => self.import_config(),
+                Some("newWorkspace")
+                    if v.get("confirmed").and_then(|c| c.as_bool()) == Some(true) =>
+                {
+                    let old_settings = self.state.config.settings.clone();
+                    match self.state.reset_workspace() {
+                        Ok(()) => {
+                            self.reconcile_adopted_workspace(old_settings);
+                            self.settings_commit(pecofence_core::i18n::text("已保存新工作区。"));
+                        }
+                        Err(issue) => self.settings_error(&issue),
+                    }
+                }
+                Some("acceptRecovery")
+                    if v.get("confirmed").and_then(|c| c.as_bool()) == Some(true) =>
+                {
+                    let old_settings = self.state.config.settings.clone();
+                    match self.state.accept_recovery() {
+                        Ok(()) => {
+                            self.reconcile_adopted_workspace(old_settings);
+                            self.settings_commit(pecofence_core::i18n::text(
+                                "已保存恢复的工作区。",
+                            ));
+                        }
+                        Err(issue) => self.settings_error(&issue),
+                    }
+                }
+                Some("importConfig")
+                    if v.get("confirmed").and_then(|c| c.as_bool()) == Some(true) =>
+                {
+                    self.import_config()
+                }
                 Some("restoreBackup") => {
-                    if let Some(p) = v.get("path").and_then(|p| p.as_str()) {
+                    if v.get("confirmed").and_then(|c| c.as_bool()) == Some(true)
+                        && let Some(p) = v.get("path").and_then(|p| p.as_str())
+                    {
                         let path = PathBuf::from(p);
                         // Only files from our own backups folder.
                         if self.state.backup_files().contains(&path) {
@@ -456,13 +548,24 @@ impl App {
     }
 
     /// Applies a full settings object from the page, reacting to what changed.
-    pub(super) fn apply_settings(&mut self, mut new: pecofence_core::Settings) {
+    pub(super) fn apply_settings(&mut self, new: pecofence_core::Settings) {
         let old = self.state.config.settings.clone();
-        if new == old {
+        self.apply_settings_from(old, new, false);
+    }
+
+    fn apply_settings_from(
+        &mut self,
+        old: pecofence_core::Settings,
+        mut new: pecofence_core::Settings,
+        force_integrations: bool,
+    ) {
+        if !force_integrations && new == old {
             return;
         }
-        if new.autostart != old.autostart {
-            let _ = pecofence_platform::autostart::set_product_enabled(new.autostart);
+        if force_integrations || new.autostart != old.autostart {
+            if let Err(issue) = pecofence_platform::autostart::set_product_enabled(new.autostart) {
+                self.settings_error(&issue.to_string());
+            }
             if pecofence_platform::process::is_packaged() {
                 // Store installs: Windows owns the startup task, so hand the user the switch.
                 let _ = shell::shell_execute(
@@ -472,7 +575,7 @@ impl App {
                 );
             }
         }
-        if new.hide_real_icons != old.hide_real_icons
+        if (force_integrations || new.hide_real_icons != old.hide_real_icons)
             && !self.apply_desktop_icons_hidden(new.hide_real_icons)
         {
             new.hide_real_icons = old.hide_real_icons;
@@ -481,12 +584,12 @@ impl App {
             ));
         }
         let icons_toggled = new.hide_real_icons != old.hide_real_icons;
-        if new.quick_hide.enabled != old.quick_hide.enabled
+        if (force_integrations || new.quick_hide.enabled != old.quick_hide.enabled)
             && let Some(a) = self.anchor.borrow_mut().as_mut()
         {
             a.quick_hide_enabled = new.quick_hide.enabled;
         }
-        if new.show_desktop != old.show_desktop
+        if (force_integrations || new.show_desktop != old.show_desktop)
             && let Some(a) = self.anchor.borrow_mut().as_mut()
         {
             a.behavior = match new.show_desktop {

@@ -2,6 +2,31 @@
 
 use super::*;
 
+fn portal_empty_text(health: &pecofence_core::portal::PortalHealth) -> &'static str {
+    use pecofence_core::portal::PortalHealth;
+    match health {
+        PortalHealth::Loading => pecofence_core::i18n::text("正在读取文件夹"),
+        PortalHealth::Ready => pecofence_core::i18n::text("此文件夹为空。"),
+        PortalHealth::Stale(_) => pecofence_core::i18n::text("文件夹不可用，内容可能已过期"),
+    }
+}
+
+#[cfg(test)]
+mod portal_presentation_tests {
+    use super::portal_empty_text;
+    use pecofence_core::portal::{PortalHealth, ReadFailure};
+
+    #[test]
+    fn unavailable_or_loading_is_not_reported_as_empty() {
+        let empty = portal_empty_text(&PortalHealth::Ready);
+        assert_ne!(portal_empty_text(&PortalHealth::Loading), empty);
+        assert_ne!(
+            portal_empty_text(&PortalHealth::Stale(ReadFailure::Open("offline".into()))),
+            empty
+        );
+    }
+}
+
 pub(super) fn header_column(c: DetailColumn) -> HeaderColumn {
     match c {
         DetailColumn::Name => HeaderColumn::Name,
@@ -46,7 +71,7 @@ pub(super) enum ChromeKey {
     TabDrop(usize),
     /// A tab that just joined the strip (merge, re-attach): 1 → 0 is its fade-in remainder,
     /// so the pill draws at alpha `1 - value` (Fluent Fade In, 83 ms linear).
-    TabNew(FenceId),
+    TabNew(ContentId),
 }
 
 /// The selected anchor's unfolded label: `text` is the full name fitted to `MAX_UNFOLD_LINES`
@@ -207,7 +232,11 @@ impl FenceViewState {
         } else if self.drop_hover {
             pecofence_core::i18n::text("松开以放入")
         } else if self.is_portal {
-            pecofence_core::i18n::text("此文件夹为空。")
+            portal_empty_text(
+                self.portal_health
+                    .as_ref()
+                    .unwrap_or(&pecofence_core::portal::PortalHealth::Loading),
+            )
         } else {
             pecofence_core::i18n::text("将项目拖到此处")
         }

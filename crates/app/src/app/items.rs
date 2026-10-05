@@ -4,7 +4,7 @@
 use super::*;
 
 impl App {
-    pub(super) fn item_views(&self, fence: &pecofence_core::Fence) -> Vec<ItemView> {
+    pub(super) fn item_views(&self, fence: &pecofence_core::FenceSnapshot) -> Vec<ItemView> {
         if !fence.content.is_files() {
             return Vec::new();
         }
@@ -31,6 +31,13 @@ impl App {
     /// Fence menu "新建 ▸": create the file/folder on the real desktop and remember which fence
     /// asked for it; the watcher's next Added event routes it there and opens rename.
     pub(super) fn create_desktop_item(&mut self, fence: FenceId, folder: bool) {
+        if !self
+            .state
+            .fence(fence)
+            .is_some_and(|f| f.content.is_files())
+        {
+            return;
+        }
         let portal_dir = self.state.portal_path(fence);
         let Some(dir) = portal_dir.clone().or_else(shell::user_desktop) else {
             return;
@@ -61,7 +68,7 @@ impl App {
                     let key = ItemKey::from_path(&path.to_string_lossy());
                     let item = self.state.fence(fence).and_then(|f| {
                         self.state
-                            .items_of(f)
+                            .items_of(&f)
                             .into_iter()
                             .find(|it| it.key == key)
                             .map(|it| it.id)
@@ -162,7 +169,9 @@ impl App {
         };
         if w.active_fence() != fence {
             // The item's tab is not the one on screen: switch first so the label has a rect.
-            let host = self.state.host_of(fence);
+            let Some(host) = self.state.host_of(fence) else {
+                return;
+            };
             self.switch_tab(host, fence);
         }
         let Some(w) = self.window_for(fence) else {
@@ -280,9 +289,11 @@ impl App {
                 if self.state.is_portal_item(item) {
                     // Portal ids are path hashes. Update the old view's identity before
                     // the folder refresh so rename does not clear selection and focus.
-                    let new_id = crate::state::portal_item_id(&new.to_string_lossy());
-                    for w in self.fences.values() {
-                        w.rekey_item(item, new_id);
+                    if let Some(portal) = self.state.portal_of_item(item) {
+                        let new_id = crate::state::portal_item_id(portal, &new.to_string_lossy());
+                        for w in self.fences.values() {
+                            w.rekey_item(item, new_id);
+                        }
                     }
                     self.refresh_portals_in(&[parent.to_path_buf()]);
                 } else if self.state.rename_item(&old, &new) {
@@ -423,6 +434,13 @@ impl App {
     /// into the folder they already live in makes Explorer's "xxx - 副本" duplicates (routed by
     /// the rules, since their names are only known to the shell).
     pub(super) fn paste_into(&mut self, fence: FenceId) {
+        if !self
+            .state
+            .fence(fence)
+            .is_some_and(|f| f.content.is_files())
+        {
+            return;
+        }
         let Some((paths, cut)) = clipboard::file_list() else {
             return;
         };
@@ -504,6 +522,12 @@ impl App {
     /// Moves items into `to`. Virtual fences only change membership (files stay put); a portal
     /// as source or target means a real file move (portal = folder view).
     pub(super) fn move_items(&mut self, items: &[ItemId], to: FenceId) {
+        let Some(destination) = self.state.fence(to) else {
+            return;
+        };
+        if !destination.content.is_files() {
+            return;
+        }
         if self.state.portal_path(to).is_some() {
             // Namespace items cannot be moved into a folder; they stay where they are.
             let paths: Vec<PathBuf> = items

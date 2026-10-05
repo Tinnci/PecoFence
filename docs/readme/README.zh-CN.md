@@ -104,9 +104,9 @@ https://github.com/user-attachments/assets/6320cf28-a791-4720-9659-b4575df021a0
   旧版本 Windows 和多显示器硬件组合的完整回归仍在进行。
 - 设置面板需要 Microsoft Edge WebView2 Runtime。
   请将压缩包里的 `WebView2Loader.dll`、`pecofence-watchdog.exe` 与主程序放在一起。
-- 配置保存在 `%APPDATA%\PecoFence\config.json`。
+- 配置保存在 `%APPDATA%\PecoFence\workspace.v2.json`。
   用 `--portable` 启动，可改为保存在程序旁的 `config` 文件夹。
-- 已有安装会继续使用旧配置目录，保留布局、规则和备份。详见[升级说明](../UPGRADING.md)。
+- 新格式不读取或自动迁移旧配置。原文件保留；请明确新建工作区或导入受支持文档。详见[升级说明](../UPGRADING.md)。
 - 玻璃效果采样静态桌面壁纸，不会折射其他应用窗口或视频壁纸。
 - Windows 自带对话框和第三方资源管理器菜单仍使用系统语言。
 - 便携版未做代码签名。首次运行若出现 Windows SmartScreen 提示，仅在信任构建来源时点击**更多信息 → 仍要运行**。

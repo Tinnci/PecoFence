@@ -1,5 +1,8 @@
 # Documentation
 
+- [Application architecture and typed interfaces, in Chinese](ARCHITECTURE.md)
+- [Architecture implementation roadmap, in Chinese](ROADMAP.md)
+- [Architecture decisions](decisions/)
 - [Upgrading to PecoFence](UPGRADING.md)
 - [Development and verification](DEVELOPMENT.md)
 - [Languages and translation contributions](LOCALIZATION.md)
@@ -11,6 +14,11 @@
 - [Complete feature list, in Chinese](FEATURES.md)
 - [README in other languages](readme/) — the root README is English; translations live in `docs/readme/`
 
-The development checkout may retain historical design proposals and implementation
-reports under `history/`. These local archives are excluded from public source
-exports. Current behavior is documented above and in the source.
+`ARCHITECTURE.md` is the target design, not a claim that the rewrite is complete.
+The roadmap distinguishes implemented slices from planned work. Older Cordis,
+P0–P2a, and cross-repository planning documents under `docs/` are historical
+proposals; they do not override the new design.
+
+The development checkout may also retain implementation reports under `history/`.
+These local archives are excluded from public source exports. Current behavior
+is documented in the feature/development guides and the source.

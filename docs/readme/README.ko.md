@@ -105,9 +105,10 @@ https://github.com/user-attachments/assets/6320cf28-a791-4720-9659-b4575df021a0
   이전 버전과 다중 디스플레이 하드웨어 조합에 대한 전체 검증은 아직 진행 중입니다.
 - 설정 화면에는 Microsoft Edge WebView2 Runtime이 필요합니다. 함께 제공되는
   `WebView2Loader.dll`과 `pecofence-watchdog.exe`는 앱 옆에 그대로 두세요.
-- 설정은 `%APPDATA%\PecoFence\config.json`에 저장됩니다. `--portable`로 실행하면
+- 설정은 `%APPDATA%\PecoFence\workspace.v2.json`에 저장됩니다. `--portable`로 실행하면
   실행 파일 옆의 `config` 폴더에 보관합니다.
-- 기존 설치는 이전 설정 디렉터리를 그대로 사용합니다.
+- 새 형식은 이전 설정을 가져오거나 마이그레이션하지 않습니다.
+  기존 파일은 보존됩니다. 새 작업 공간을 만들거나 지원되는 문서를 가져오세요.
   [업그레이드 안내](../UPGRADING.md)를 참고하세요.
 - 유리 효과는 정적 바탕 화면 배경을 사용합니다. 다른 앱 창이나 동영상 배경 화면은
   굴절하지 않습니다.

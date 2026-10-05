@@ -109,9 +109,10 @@ et Bureau dans la langue de votre choix. Les icônes du Bureau Windows réappara
   est encore en cours.
 - Microsoft Edge WebView2 Runtime est nécessaire pour les Paramètres. Conservez
   `WebView2Loader.dll` et `pecofence-watchdog.exe` fournis dans le ZIP à côté de l’application.
-- La configuration est enregistrée dans `%APPDATA%\PecoFence\config.json`. Lancez l’application
+- La configuration est enregistrée dans `%APPDATA%\PecoFence\workspace.v2.json`. Lancez l’application
   avec `--portable` pour la garder dans un dossier `config` à côté de l’exécutable.
-- Les installations existantes conservent leur ancien dossier de configuration.
+- Le nouveau format n’importe ni ne migre les anciennes configurations.
+  Les fichiers existants sont conservés ; créez un espace de travail ou importez un document pris en charge.
   Consultez le [guide de mise à niveau](../UPGRADING.md).
 - Le verre s’appuie sur le fond d’écran statique. Il ne réfracte ni les autres applications
   ni les fonds d’écran vidéo.

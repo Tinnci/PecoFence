@@ -434,5 +434,16 @@
   "天": "dias",
   "请输入闲置天数": "Informe os dias sem uso",
   "已添加“{0}”，整理了 {1} 个项目": "“{0}” adicionado; {1} itens organizados",
-  "“{0}”已存在": "“{0}” já existe"
+  "“{0}”已存在": "“{0}” já existe",
+  "正在读取文件夹": "Lendo pasta",
+  "文件夹不可用，内容可能已过期": "Pasta indisponível; o conteúdo pode estar desatualizado",
+  "内容已移动，请刷新设置后再编辑。": "O conteúdo foi movido. Atualize as configurações antes de editar.",
+  "属性值无效。": "Valor de propriedade inválido.",
+  "工作区未保存。": "O espaço de trabalho não foi salvo.",
+  "此工作区为只读，请先解决加载问题再编辑。": "Este espaço de trabalho é somente leitura. Resolva o problema de carregamento antes de editar.",
+  "已保存新工作区。": "O novo espaço de trabalho foi salvo.",
+  "已保存恢复的工作区。": "O espaço de trabalho recuperado foi salvo.",
+  "接受恢复的工作区": "Aceitar espaço de trabalho recuperado",
+  "新建工作区": "Criar espaço de trabalho",
+  "替换当前工作区？原配置文件将保留。": "Substituir o espaço de trabalho atual? A configuração original será preservada."
 }

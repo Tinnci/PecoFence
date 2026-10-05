@@ -1,10 +1,13 @@
 //! Application state: config + layout selection + desktop item catalog + rule routing.
 
 use pecofence_core::geometry::{self, PxRect, WorkArea};
+use pecofence_core::portal::{PortalHealth, PortalOutcome, PortalRead, PortalResult};
 use pecofence_core::rules::{Cond, Decision, RuleSet, Target, Template};
 use pecofence_core::{
-    AssignedBy, Config, ConfigStore, Fence, FenceId, FenceKind, FreshReason, IconKey, Item, ItemId,
-    ItemKey, ItemRef, ItemSourceSpec, Layout, LoadOutcome, MonitorIdentity, Origin, SortMode,
+    AssignedBy, Config, ConfigStore, Container, ContainerId, ContentInstance, ContentSpec, FenceId,
+    FenceKind, FenceSnapshot as Fence, FreshReason, IconKey, Item, ItemId, ItemKey, ItemRef,
+    ItemSourceSpec, Layout, LoadOutcome, MonitorIdentity, NormGeometry, Origin, SortMode,
+    TabDetach, Transition, Workspace, WorkspaceError,
 };
 use pecofence_platform::RECT;
 use pecofence_platform::shell::{self, DesktopEntry, EntryOrigin};
@@ -25,10 +28,16 @@ pub struct AppState {
     portal_members: HashMap<FenceId, Vec<ItemId>>,
     /// Portal fence → subfolder it has navigated into (absent = its root folder).
     portal_cwd: HashMap<FenceId, PathBuf>,
+    pub(crate) portals: crate::portal_runtime::PortalRuntime,
+    portal_sources: HashMap<FenceId, ItemSourceSpec>,
+    portal_layout: usize,
     pub work_areas: Vec<WorkArea>,
     pub first_run: bool,
     pub recovered_from: Option<PathBuf>,
     pub load_issue: Option<String>,
+    pub save_allowed: bool,
+    pub persistence_issue: Option<String>,
+    pending_explicit_replacement: bool,
 }
 
 /// Summary of a desktop sync pass.
@@ -62,18 +71,13 @@ fn config_dir(portable: bool) -> PathBuf {
 impl AppState {
     pub fn load(work_areas: Vec<WorkArea>, portable: bool) -> Self {
         let directory = config_dir(portable);
-        let store = if portable {
-            ConfigStore::new(&directory)
-        } else {
-            ConfigStore::with_legacy(
-                &directory,
-                directory.with_file_name(pecofence_core::brand::LEGACY_DATA_DIR),
-            )
-        };
-        if store.dir() != directory {
-            tracing::info!(path = %store.dir().display(), "reusing pre-rename configuration");
-        }
-        let (config, first_run, recovered_from, load_issue) = match store.load() {
+        let store = ConfigStore::new(&directory);
+        let outcome = store.load();
+        Self::from_load(work_areas, store, outcome)
+    }
+
+    fn from_load(work_areas: Vec<WorkArea>, store: ConfigStore, outcome: LoadOutcome) -> Self {
+        let (config, first_run, recovered_from, load_issue) = match outcome {
             LoadOutcome::Primary(c) => (c, false, None, None),
             LoadOutcome::Recovered(c, from) => (c, false, Some(from), None),
             LoadOutcome::Fresh(c, FreshReason::FirstRun) => (c, true, None, None),
@@ -96,6 +100,16 @@ impl AppState {
             LoadOutcome::Fresh(c, FreshReason::UnreadablePrimary { reason }) => {
                 (c, false, None, Some(format!("Unreadable config: {reason}")))
             }
+            LoadOutcome::Fresh(c, FreshReason::UnsupportedFormat { path, schema }) => (
+                c,
+                false,
+                None,
+                Some(format!(
+                    "Unsupported workspace format {:?}: {}",
+                    schema,
+                    path.display()
+                )),
+            ),
         };
         if let Some(issue) = &load_issue {
             tracing::warn!(load_issue = %issue, "config.load_issue");
@@ -106,6 +120,7 @@ impl AppState {
                 .language
                 .resolve(pecofence_platform::locale::ui_language()),
         );
+        let save_allowed = load_issue.is_none() && recovered_from.is_none();
         let mut state = Self {
             config,
             store,
@@ -115,14 +130,21 @@ impl AppState {
             portal_items: HashMap::new(),
             portal_members: HashMap::new(),
             portal_cwd: HashMap::new(),
+            portals: Default::default(),
+            portal_sources: HashMap::new(),
+            portal_layout: 0,
             work_areas,
             first_run,
             recovered_from,
             load_issue,
+            save_allowed,
+            persistence_issue: None,
+            pending_explicit_replacement: false,
         };
         state.rebuild_catalog();
-        state.ensure_layout();
-        state.normalize_tabs();
+        if state.save_allowed || !state.config.layouts.is_empty() {
+            state.ensure_layout();
+        }
         if state.load_issue.is_some() {
             state.dirty = false;
         }
@@ -143,15 +165,11 @@ impl AppState {
     /// Replaces the whole configuration (import / backup restore) and re-derives the runtime
     /// state. Fence windows must be resynced by the caller. (Snapshot restore goes through
     /// `restore_snapshot`, which only swaps layouts.)
-    pub fn replace_config(&mut self, mut config: Config) {
-        // Keep the current item table when the file has none for this desktop (a snapshot
-        // only carries layouts); memberships reference item ids either way.
-        if config.items.is_empty() {
-            config.items = std::mem::take(&mut self.config.items);
-        }
+    pub fn replace_config(&mut self, mut config: Config) -> Result<(), String> {
+        config.validate()?;
         // Snapshots are local history, including the "…前" undo snapshot the caller just took:
         // never let an import / backup file wipe them. Merge the file's by id, oldest first.
-        let mut snaps = std::mem::take(&mut self.config.snapshots);
+        let mut snaps = self.config.snapshots.clone();
         for s in std::mem::take(&mut config.snapshots) {
             if !snaps.iter().any(|x| x.id == s.id) {
                 snaps.push(s);
@@ -162,13 +180,33 @@ impl AppState {
             snaps.remove(0);
         }
         config.snapshots = snaps;
+        config.validate()?;
         self.config = config;
+        self.save_allowed = true;
+        self.pending_explicit_replacement = true;
+        self.load_issue = None;
+        self.recovered_from = None;
         self.rebuild_catalog();
         self.layout = 0;
         self.ensure_layout();
-        self.normalize_tabs();
-        self.portal_cwd.clear();
+        self.first_run = false;
+        self.reset_portal_runtime();
         self.dirty = true;
+        Ok(())
+    }
+
+    /// Explicit acknowledgement promotes a supported recovered document, not a fresh error fallback.
+    pub fn accept_recovery(&mut self) -> Result<(), String> {
+        if self.recovered_from.is_none() {
+            return Err("No recovered workspace is available".into());
+        }
+        self.replace_config(self.config.clone())
+    }
+
+    /// Explicit user reset is the only error-state path that builds the first-run defaults.
+    pub fn reset_workspace(&mut self) -> Result<(), String> {
+        self.first_run = true;
+        self.replace_config(Config::default())
     }
 
     // ---- snapshots ---------------------------------------------------------------------------
@@ -206,17 +244,35 @@ impl AppState {
         let Some(snap) = self.config.snapshots.iter().find(|s| s.id == id).cloned() else {
             return false;
         };
+        // History can outlive catalog GC. Restore the layout, not references to records
+        // that no longer exist in the active document.
+        let mut layouts = snap.layouts;
+        for layout in &mut layouts {
+            for content in &mut layout.contents {
+                if let ContentSpec::FileCollection { items, .. } = &mut content.content {
+                    items.retain(|r| self.config.items.contains_key(&r.item_id));
+                }
+            }
+        }
+        let mut candidate = self.config.clone();
+        candidate.layouts = layouts.clone();
+        if candidate.validate().is_err() {
+            return false;
+        }
         self.save_snapshot(backup_name);
-        self.apply_snapshot_layouts(snap.layouts);
+        self.apply_snapshot_layouts(layouts);
         true
     }
 
     fn apply_snapshot_layouts(&mut self, layouts: Vec<pecofence_core::Layout>) {
         self.config.layouts = layouts;
+        self.save_allowed = true;
+        self.pending_explicit_replacement = true;
+        self.load_issue = None;
+        self.recovered_from = None;
         self.layout = 0;
         self.ensure_layout();
-        self.normalize_tabs();
-        self.portal_cwd.clear();
+        self.reset_portal_runtime();
         self.dirty = true;
     }
 
@@ -240,7 +296,7 @@ impl AppState {
         let layout = self.layout;
         let areas = self.work_areas.clone();
         let mut n = 0;
-        for f in &mut self.config.layouts[layout].fences {
+        for f in &mut self.config.layouts[layout].containers {
             let to = if f.geometry.monitor == a {
                 b
             } else if f.geometry.monitor == b {
@@ -328,15 +384,25 @@ impl AppState {
 
     /// Selects the layout for the current monitors, creating the default one on first use.
     pub fn ensure_layout(&mut self) {
+        if !self.save_allowed {
+            self.layout = self.config.layout_for(&self.device_paths()).unwrap_or(0);
+            return;
+        }
+        if self.config.layouts.is_empty() && !self.first_run {
+            return;
+        }
         let paths = self.device_paths();
         if let Some(i) = self.config.layout_for(&paths) {
             self.layout = i;
+            if self.portal_layout != self.layout {
+                self.reset_portal_runtime();
+            }
             return;
         }
         // Reuse the first existing layout's fences if monitors changed (best effort), else
         // build the wizard default.
-        let fences = if let Some(existing) = self.config.layouts.first() {
-            existing.fences.clone()
+        let (containers, contents) = if let Some(existing) = self.config.layouts.first() {
+            (existing.containers.clone(), existing.contents.clone())
         } else {
             self.default_fences()
         };
@@ -351,14 +417,16 @@ impl AppState {
             .collect();
         self.config.layouts.push(Layout {
             fingerprint,
-            fences,
+            containers,
+            contents,
         });
         self.layout = self.config.layouts.len() - 1;
+        self.reset_portal_runtime();
         self.dirty = true;
     }
 
     /// Stardock-style first-run layout: right column 程序 / 文件夹 / 文件与文档 / 桌面(inbox).
-    fn default_fences(&mut self) -> Vec<Fence> {
+    fn default_fences(&mut self) -> (Vec<Container>, Vec<ContentInstance>) {
         let work = self
             .work_areas
             .iter()
@@ -395,7 +463,11 @@ impl AppState {
             pecofence_core::i18n::text("文件与文档"),
         ];
         let mut y = gap;
-        let mut fences = Vec::new();
+        let mut layout = Layout {
+            fingerprint: Vec::new(),
+            containers: Vec::new(),
+            contents: Vec::new(),
+        };
         let mut ids = Vec::new();
         for (title, h) in titles.iter().zip(heights) {
             let h = h.min((wh - gap * 2.0) / 4.0).max(120.0);
@@ -408,10 +480,11 @@ impl AppState {
                 },
                 &work,
             );
-            let mut f = Fence::new(title, FenceKind::Virtual, geo);
+            let mut f = ContentInstance::collection(title, false);
             f.view.icon_size = icon;
             ids.push(f.id);
-            fences.push(f);
+            layout.containers.push(Container::new(f.id, geo));
+            layout.contents.push(f);
             y += h + gap;
         }
         let inbox_h = (wh - gap - y).max(160.0);
@@ -424,131 +497,138 @@ impl AppState {
             },
             &work,
         );
-        let mut inbox = Fence::new(
-            pecofence_core::i18n::text("桌面"),
-            FenceKind::Inbox,
-            inbox_geo,
-        );
+        let mut inbox = ContentInstance::collection(pecofence_core::i18n::text("桌面"), true);
         inbox.view.icon_size = icon;
-        fences.push(inbox);
+        layout.containers.push(Container::new(inbox.id, inbox_geo));
+        layout.contents.push(inbox);
         self.config.rules = RuleSet::default_presets(ids[0], ids[1], ids[2]);
-        fences
+        (layout.containers, layout.contents)
     }
 
-    pub fn fences(&self) -> &[Fence] {
-        &self.config.layouts[self.layout].fences
+    pub fn fences(&self) -> Vec<Fence> {
+        self.config
+            .layouts
+            .get(self.layout)
+            .map(|l| l.contents.iter().filter_map(|c| l.project(c.id)).collect())
+            .unwrap_or_default()
     }
 
-    fn layout_ref(&self) -> &Layout {
-        &self.config.layouts[self.layout]
+    fn layout_mut(&mut self) -> Result<&mut Layout, WorkspaceError> {
+        self.config
+            .layouts
+            .get_mut(self.layout)
+            .ok_or_else(|| WorkspaceError::InvalidLayout("No active workspace layout".into()))
     }
 
     // ---- tabbed fences ----------------------------------------------------------------------
 
-    /// The window (host fence) a fence is shown in.
-    pub fn host_of(&self, id: FenceId) -> FenceId {
-        self.layout_ref().host_of(id)
+    /// Unknown/deleted identities are normal for queued native events, not panics.
+    pub fn host_of(&self, id: FenceId) -> Option<ContainerId> {
+        self.config.layouts.get(self.layout)?.owner_of(id)
     }
 
     /// Fences that own a window (not hosted as tabs), in layout order.
     pub fn host_fences(&self) -> Vec<Fence> {
-        self.fences()
-            .iter()
-            .filter(|f| f.tab_host.is_none())
-            .cloned()
-            .collect()
+        self.config
+            .layouts
+            .get(self.layout)
+            .map(|l| {
+                l.containers
+                    .iter()
+                    .filter_map(|c| l.project(c.active_tab))
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 
-    pub fn tabs_of(&self, host: FenceId) -> Vec<FenceId> {
-        self.layout_ref().tabs_of(host)
+    pub fn tabs_of(&self, host: ContainerId) -> Vec<FenceId> {
+        self.container(host)
+            .map(|c| c.tabs.clone())
+            .unwrap_or_default()
     }
 
-    pub fn active_tab_of(&self, host: FenceId) -> FenceId {
-        self.layout_ref().active_tab_of(host)
+    pub fn active_tab_of(&self, host: ContainerId) -> Option<FenceId> {
+        self.container(host).map(|container| container.active_tab)
     }
 
-    /// Repairs tab links (call after load / layout switch / delete). Returns true if changed.
-    pub fn normalize_tabs(&mut self) -> bool {
-        let layout = self.layout;
-        let changed = self.config.layouts[layout].normalize_tabs();
-        if changed {
-            self.dirty = true;
-        }
-        changed
+    pub fn attach_tab(
+        &mut self,
+        content: FenceId,
+        host: ContainerId,
+    ) -> Result<Transition, WorkspaceError> {
+        let before = self.tabs_of(host);
+        let active = self.container(host).map(|c| c.active_tab);
+        let index = self.tabs_of(host).len();
+        let change = Workspace::new(self.layout_mut()?)?.attach(content, host, index)?;
+        self.dirty |=
+            before != self.tabs_of(host) || active != self.container(host).map(|c| c.active_tab);
+        Ok(change)
     }
 
-    /// Makes `fence` a tab of `host`'s window (and moves any tabs `fence` hosted along). No-op
-    /// when the two are the same window already.
-    pub fn attach_tab(&mut self, fence: FenceId, host: FenceId) -> bool {
-        let host = self.host_of(host);
-        if fence == host || self.fence(fence).is_none() || self.fence(host).is_none() {
-            return false;
-        }
-        let layout = self.layout;
-        for f in &mut self.config.layouts[layout].fences {
-            if f.id == fence {
-                f.tab_host = Some(host);
-                f.active_tab = None;
-            } else if f.tab_host == Some(fence) {
-                f.tab_host = Some(host);
-            }
-        }
-        if let Some(h) = self.fence_mut(host) {
-            h.active_tab = Some(fence);
-        }
-        self.normalize_tabs();
+    /// Live native drag uses a guarded structural inverse, never a cloned content rollback.
+    pub fn detach_tab_with_plan(
+        &mut self,
+        content: FenceId,
+        geometry: NormGeometry,
+    ) -> Result<(Transition, TabDetach), WorkspaceError> {
+        let result = Workspace::new(self.layout_mut()?)?.detach_with_plan(content, geometry)?;
         self.dirty = true;
-        true
+        Ok(result)
     }
 
-    pub fn detach_tab(&mut self, fence: FenceId) -> Option<pecofence_core::TabDetach> {
-        let change = self.config.layouts[self.layout].detach_tab(fence)?;
+    pub fn cancel_tab_detach(&mut self, plan: &TabDetach) -> Result<Transition, WorkspaceError> {
+        let result = Workspace::new(self.layout_mut()?)?.cancel_detach(plan)?;
         self.dirty = true;
-        Some(change)
+        Ok(result)
     }
 
-    pub fn cancel_tab_detach(&mut self, change: &pecofence_core::TabDetach) -> bool {
-        let restored = self.config.layouts[self.layout].cancel_tab_detach(change);
-        self.dirty |= restored;
-        restored
+    pub fn reorder_tab(
+        &mut self,
+        host: ContainerId,
+        tab: FenceId,
+        to: usize,
+    ) -> Result<Transition, WorkspaceError> {
+        let before = self.tabs_of(host);
+        let change = Workspace::new(self.layout_mut()?)?.reorder(host, tab, to)?;
+        self.dirty |= before != self.tabs_of(host);
+        Ok(change)
     }
 
-    /// Places `tab` at strip index `to` in `host`'s window (drag along the strip / 左移 右移).
-    pub fn reorder_tab(&mut self, host: FenceId, tab: FenceId, to: usize) -> bool {
-        let host = self.host_of(host);
-        let layout = self.layout;
-        let changed = self.config.layouts[layout].reorder_tab(host, tab, to);
-        if changed {
-            self.dirty = true;
-        }
-        changed
+    pub fn set_active_tab(
+        &mut self,
+        host: ContainerId,
+        tab: FenceId,
+    ) -> Result<Transition, WorkspaceError> {
+        let changed = self.container(host).is_none_or(|c| c.active_tab != tab);
+        let transition = Workspace::new(self.layout_mut()?)?.select(host, tab)?;
+        self.dirty |= changed;
+        Ok(transition)
     }
 
-    pub fn set_active_tab(&mut self, host: FenceId, tab: FenceId) {
-        let host = self.host_of(host);
-        let value = (tab != host).then_some(tab);
-        if let Some(h) = self.fence_mut(host)
-            && h.active_tab != value
-        {
-            h.active_tab = value;
-            self.dirty = true;
-        }
+    pub fn fence(&self, id: FenceId) -> Option<Fence> {
+        self.config.layouts.get(self.layout)?.project(id)
     }
 
-    pub fn fence(&self, id: FenceId) -> Option<&Fence> {
-        self.fences().iter().find(|f| f.id == id)
+    pub fn window_content(&self, id: ContainerId) -> Option<Fence> {
+        self.fence(self.container(id)?.active_tab)
     }
 
-    pub fn fence_mut(&mut self, id: FenceId) -> Option<&mut Fence> {
-        let layout = self.layout;
-        self.config.fence_mut(layout, id)
+    pub fn container(&self, id: ContainerId) -> Option<&Container> {
+        self.config.layouts.get(self.layout)?.container(id)
+    }
+
+    /// Raw domain edits must be followed by `mark_dirty` by the caller.
+    pub fn container_mut(&mut self, id: ContainerId) -> Option<&mut Container> {
+        self.config.layouts.get_mut(self.layout)?.container_mut(id)
+    }
+
+    /// Raw domain edits must be followed by `mark_dirty` by the caller.
+    pub fn content_mut(&mut self, id: FenceId) -> Option<&mut ContentInstance> {
+        self.config.layouts.get_mut(self.layout)?.content_mut(id)
     }
 
     pub fn inbox_id(&self) -> Option<FenceId> {
-        self.fences()
-            .iter()
-            .find(|f| f.kind == FenceKind::Inbox)
-            .map(|f| f.id)
+        self.config.layouts.get(self.layout)?.inbox()
     }
 
     pub fn mark_dirty(&mut self) {
@@ -560,16 +640,27 @@ impl AppState {
     }
 
     pub fn save_if_dirty(&mut self) -> bool {
-        if !self.dirty {
+        if !self.dirty || !self.save_allowed {
             return false;
         }
-        match self.store.save(&self.config) {
-            Ok(()) => {
+        let result = if self.pending_explicit_replacement {
+            self.store.replace(&self.config)
+        } else {
+            self.store.save(&self.config)
+        };
+        match result {
+            Ok(receipt) => {
                 self.dirty = false;
+                self.pending_explicit_replacement = false;
+                self.persistence_issue = match receipt.backup {
+                    pecofence_core::BackupStatus::Degraded(reason) => Some(reason),
+                    _ => None,
+                };
                 tracing::debug!(path = %self.store.primary_path().display(), "config saved");
                 true
             }
             Err(e) => {
+                self.persistence_issue = Some(e.to_string());
                 tracing::error!(error = %e, "config save failed");
                 false
             }
@@ -596,9 +687,8 @@ impl AppState {
     /// `fence.items` (its content comes from the folder), so routing into one would make the
     /// item vanish from every fence.
     pub fn routable_fence(&self, id: FenceId) -> Option<FenceId> {
-        self.fence(id)
-            .filter(|f| f.kind != FenceKind::FolderPortal)
-            .map(|f| f.id)
+        let content = self.config.layouts.get(self.layout)?.content(id)?;
+        matches!(content.content, ContentSpec::FileCollection { .. }).then_some(id)
     }
 
     fn target_fence(&self, decision: Decision) -> Option<(FenceId, AssignedBy)> {
@@ -608,18 +698,18 @@ impl AppState {
             Decision::Route { target, rule } => {
                 let fence = match target {
                     Target::Inbox => inbox?,
-                    Target::Fence(id) if self.routable_fence(id).is_some() => id,
-                    Target::Fence(_) => inbox?,
+                    Target::Collection(id) if self.routable_fence(id).is_some() => id,
+                    Target::Collection(_) => inbox?,
                 };
                 Some((fence, AssignedBy::Rule(rule)))
             }
             Decision::Default(target) => {
                 let fence = match target {
                     Target::Inbox => inbox?,
-                    Target::Fence(id) if self.routable_fence(id).is_some() => id,
-                    Target::Fence(_) => inbox?,
+                    Target::Collection(id) if self.routable_fence(id).is_some() => id,
+                    Target::Collection(_) => inbox?,
                 };
-                Some((fence, AssignedBy::Migration))
+                Some((fence, AssignedBy::Default))
             }
         }
     }
@@ -711,7 +801,7 @@ impl AppState {
                     }
                 }
                 // An item that exists but is in no fence (e.g. its fence was deleted) → route.
-                if self.config.fence_of_item(self.layout, id).is_none() {
+                if self.config.content_of_item(self.layout, id).is_none() {
                     let decision = self.route_decision(entry);
                     if let Some((fence, by)) = self.target_fence(decision) {
                         self.config.assign(self.layout, id, fence, by);
@@ -783,8 +873,12 @@ impl AppState {
             if let Some(item) = self.config.items.remove(&id) {
                 self.catalog.remove(&item.key);
             }
-            for f in &mut self.config.layouts[self.layout].fences {
-                f.items.retain(|r| r.item_id != id);
+            for layout in &mut self.config.layouts {
+                for content in &mut layout.contents {
+                    if let ContentSpec::FileCollection { items, .. } = &mut content.content {
+                        items.retain(|r| r.item_id != id);
+                    }
+                }
             }
             self.dirty = true;
         }
@@ -898,11 +992,9 @@ impl AppState {
 
     /// The folder a portal was created for.
     pub fn portal_root(&self, id: FenceId) -> Option<PathBuf> {
-        let f = self.fence(id)?;
-        match (&f.kind, &f.source) {
-            (FenceKind::FolderPortal, ItemSourceSpec::Folder { path, .. }) => {
-                Some(PathBuf::from(path))
-            }
+        let content = self.config.layouts.get(self.layout)?.content(id)?;
+        match &content.content {
+            ContentSpec::FolderPortal { root, .. } => Some(PathBuf::from(root)),
             _ => None,
         }
     }
@@ -914,10 +1006,17 @@ impl AppState {
 
     /// Navigates a portal into `dir` (must be inside its root). Returns false if refused.
     pub fn portal_enter(&mut self, id: FenceId, dir: &Path) -> bool {
+        self.reconcile_portal_sources();
         let Some(root) = self.portal_root(id) else {
             return false;
         };
-        if !dir.is_dir() {
+        // Lexical navigation policy, not a junction/symlink security sandbox.
+        // Split explicitly: Path::components normalizes interior "." away.
+        if dir
+            .to_string_lossy()
+            .split(['/', '\\'])
+            .any(|part| part == "." || part == "..")
+        {
             return false;
         }
         let root_key = ItemKey::from_path(&root.to_string_lossy());
@@ -928,16 +1027,28 @@ impl AppState {
         if dk == rk {
             self.portal_cwd.remove(&id);
         } else if dk.starts_with(&dir_prefix(rk)) {
-            self.portal_cwd.insert(id, folder_path_with_real_case(dir));
+            // Preserve casing from the committed read, not another UI-thread directory scan.
+            let actual = self
+                .portals
+                .snapshot(id)
+                .and_then(|s| {
+                    s.entries
+                        .iter()
+                        .find(|entry| ItemKey::from_path(&entry.path.to_string_lossy()) == dir_key)
+                })
+                .map(|entry| entry.path.clone())
+                .unwrap_or_else(|| dir.to_path_buf());
+            self.portal_cwd.insert(id, actual);
         } else {
             return false;
         }
-        self.refresh_portal(id);
+        self.request_portal_read(id);
         true
     }
 
     /// One folder up (never above the root). Returns false when already at the root.
     pub fn portal_up(&mut self, id: FenceId) -> bool {
+        self.reconcile_portal_sources();
         let Some(cur) = self.portal_cwd.get(&id).cloned() else {
             return false;
         };
@@ -945,7 +1056,7 @@ impl AppState {
             Some(parent) => self.portal_enter(id, parent),
             None => {
                 self.portal_cwd.remove(&id);
-                self.refresh_portal(id);
+                self.request_portal_read(id);
                 true
             }
         }
@@ -953,8 +1064,9 @@ impl AppState {
 
     /// Back to the root folder.
     pub fn portal_home(&mut self, id: FenceId) -> bool {
+        self.reconcile_portal_sources();
         if self.portal_cwd.remove(&id).is_some() {
-            self.refresh_portal(id);
+            self.request_portal_read(id);
             true
         } else {
             false
@@ -970,176 +1082,184 @@ impl AppState {
     }
 
     pub fn set_portal_navigate(&mut self, id: FenceId, on: bool) {
-        if let Some(f) = self.fence_mut(id)
-            && f.portal_navigate != on
+        if let Some(f) = self.content_mut(id)
+            && let ContentSpec::FolderPortal { navigate, .. } = &mut f.content
+            && *navigate != on
         {
-            f.portal_navigate = on;
+            *navigate = on;
             self.dirty = true;
         }
     }
 
     pub fn set_hide_title_icon(&mut self, id: FenceId, on: bool) {
-        if let Some(f) = self.fence_mut(id)
-            && f.hide_title_icon != on
+        if let Some(f) = self.content_mut(id)
+            && let ContentSpec::FolderPortal {
+                hide_title_icon, ..
+            } = &mut f.content
+            && *hide_title_icon != on
         {
-            f.hide_title_icon = on;
+            *hide_title_icon = on;
             self.dirty = true;
         }
     }
 
     /// Title shown for a fence: a navigated portal shows the current folder's name.
     pub fn display_title(&self, f: &Fence) -> String {
-        match self.portal_cwd.get(&f.id) {
+        let title = match self.portal_cwd.get(&f.id) {
             Some(cwd) => cwd
                 .file_name()
                 .map(|n| n.to_string_lossy().to_string())
                 .unwrap_or_else(|| f.title.clone()),
             None => f.title.clone(),
+        };
+        match self.portals.snapshot(f.id).map(|s| &s.health) {
+            Some(PortalHealth::Loading) => {
+                format!("{title} · {}", pecofence_core::i18n::text("正在读取文件夹"))
+            }
+            Some(PortalHealth::Stale(_)) => format!(
+                "{title} · {}",
+                pecofence_core::i18n::text("文件夹不可用，内容可能已过期")
+            ),
+            _ => title,
         }
     }
 
     /// Creates a folder-portal fence (plan §12 "文件夹门户", pulled into the MVP on request): a
     /// fence whose items are the folder's entries. Files are never moved.
     pub fn new_portal_fence(&mut self, folder: &Path, rect: RECT) -> Option<FenceId> {
-        let title = shell::display_name(folder).unwrap_or_else(|| {
-            folder
-                .file_name()
-                .map(|n| n.to_string_lossy().to_string())
-                .unwrap_or_else(|| folder.to_string_lossy().to_string())
-        });
+        let title = folder
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| folder.to_string_lossy().to_string());
         let id = self.new_fence(&title, rect)?;
-        if let Some(f) = self.fence_mut(id) {
-            f.kind = FenceKind::FolderPortal;
-            f.set_file_source(ItemSourceSpec::Folder {
-                path: folder.to_string_lossy().to_string(),
+        if let Some(f) = self.content_mut(id) {
+            f.content = ContentSpec::FolderPortal {
+                root: folder.to_string_lossy().to_string(),
                 recursive: false,
                 filter: None,
-            });
+                navigate: true,
+                hide_title_icon: false,
+            };
             f.view.sort = SortMode::Name;
         }
-        self.refresh_portal(id);
+        self.reconcile_portal_sources();
         Some(id)
     }
 
-    /// Forgets portal `id`'s runtime items. Ids are path hashes, so another portal showing the
-    /// same folder (navigated into it, or rooted inside the first) shares them: only items no
-    /// other portal references leave `portal_items`. Returns the old items for diffing.
-    fn evict_portal_members(&mut self, id: FenceId) -> Vec<Item> {
+    /// Forgets only this portal's projection. Item ids include the fence identity.
+    fn evict_portal_members(&mut self, id: FenceId) {
         let old_ids = self.portal_members.remove(&id).unwrap_or_default();
-        let mut old = Vec::with_capacity(old_ids.len());
         for i in &old_ids {
-            let shared = self.portal_members.values().any(|v| v.contains(i));
-            let item = if shared {
-                self.portal_items.get(i).cloned()
-            } else {
-                self.portal_items.remove(i)
-            };
-            old.extend(item);
+            self.portal_items.remove(i);
         }
-        old
     }
 
-    /// Re-reads a portal's folder. Returns true when the items changed (set, order or content:
-    /// a case-only rename or a size/mtime change must redraw a Details view too).
-    pub fn refresh_portal(&mut self, id: FenceId) -> bool {
-        if let Some(cwd) = self.portal_cwd.get(&id)
-            && !cwd.is_dir()
-        {
-            tracing::info!(%id, folder = %cwd.display(), "portal subfolder vanished; back to root");
-            self.portal_cwd.remove(&id);
-        }
-        let Some(dir) = self.portal_path(id) else {
-            return false;
-        };
-        let started = std::time::Instant::now();
-        let old_items = self.evict_portal_members(id);
-        // Display names survive a re-read: asking the shell costs several ms per item on a
-        // OneDrive folder, and an unchanged file (same path, same mtime) has the same name.
-        let known: HashMap<(ItemKey, i64), String> = old_items
-            .iter()
-            .map(|it| ((it.key.clone(), it.mtime), it.display_name.clone()))
-            .collect();
-        let mut ids = Vec::new();
-        let mut new_items = Vec::new();
-        for entry in shell::enumerate_folder(&dir) {
-            let path_str = entry.path.to_string_lossy().to_string();
-            let item_id = portal_item_id(&path_str);
-            let (icon_key, _) =
-                crate::icons::icon_key_for(&entry.path, entry.is_folder, entry.mtime);
-            let key = ItemKey::from_path(&path_str);
-            let display_name = known
-                .get(&(key.clone(), entry.mtime))
-                // ItemKey ignores case. A case-only rename leaves that key and mtime
-                // unchanged, but the old display spelling must not be reused.
-                .filter(|name| entry.file_name.starts_with(name.as_str()))
-                .cloned()
-                .unwrap_or_else(|| {
-                    shell::display_name(&entry.path).unwrap_or_else(|| {
-                        if entry.is_folder {
-                            entry.file_name.clone()
-                        } else {
-                            Path::new(&entry.file_name)
-                                .file_stem()
-                                .map(|s| s.to_string_lossy().to_string())
-                                .unwrap_or_else(|| entry.file_name.clone())
-                        }
-                    })
-                });
-            let item = Item {
-                id: item_id,
-                key,
-                origin: Origin::Namespace,
-                display_name,
-                file_id: None,
-                mtime: entry.mtime,
-                is_folder: entry.is_folder,
-                attrs: entry.attributes,
-                icon_key,
-                orphaned_since: None,
-                size: entry.size,
-                open_count: 0,
-                last_opened: None,
-            };
-            new_items.push(item.clone());
-            self.portal_items.insert(item_id, item);
-            ids.push(item_id);
-        }
-        let changed = old_items != new_items;
-        let ms = started.elapsed().as_secs_f32() * 1000.0;
-        if changed {
-            tracing::info!(%id, folder = %dir.display(), count = ids.len(), ms, "portal refreshed");
-        } else {
-            tracing::debug!(%id, count = ids.len(), ms, "portal re-read, unchanged");
-        }
-        self.portal_members.insert(id, ids);
-        changed
+    fn reset_portal_runtime(&mut self) {
+        self.portals.reset();
+        self.portal_sources.clear();
+        self.portal_items.clear();
+        self.portal_members.clear();
+        self.portal_cwd.clear();
+        self.portal_layout = self.layout;
     }
 
-    /// Re-reads every portal folder (startup, watcher batches). Returns the fences that changed.
-    pub fn refresh_all_portals(&mut self) -> Vec<FenceId> {
-        let portals: Vec<FenceId> = self
+    /// Reconcile activations before issuing requests or accepting results. No filesystem IO.
+    pub(crate) fn reconcile_portal_sources(&mut self) -> Vec<FenceId> {
+        if self.portal_layout != self.layout {
+            self.reset_portal_runtime();
+        }
+        let sources: HashMap<_, _> = self
             .fences()
             .iter()
-            .filter(|f| f.kind == FenceKind::FolderPortal)
-            .map(|f| f.id)
+            .filter(|f| self.portal_root(f.id).is_some())
+            .map(|f| (f.id, f.source.clone()))
             .collect();
-        // Drop runtime state for portals that no longer exist in the current layout (import /
-        // snapshot restore / layout switch): their item ids are path hashes and would otherwise
-        // collide with a new portal on the same folder in portal_of_item.
-        let stale: Vec<FenceId> = self
-            .portal_members
+        let gone: Vec<_> = self
+            .portal_sources
             .keys()
-            .filter(|id| !portals.contains(id))
+            .filter(|id| !sources.contains_key(id))
             .copied()
             .collect();
-        for id in stale {
+        for id in gone {
+            self.portals.remove(id);
             self.evict_portal_members(id);
             self.portal_cwd.remove(&id);
         }
-        portals
-            .into_iter()
-            .filter(|id| self.refresh_portal(*id))
-            .collect()
+        let mut changed = Vec::new();
+        for (id, source) in &sources {
+            if self.portal_sources.get(id) != Some(source) {
+                self.portals.remove(*id);
+                self.evict_portal_members(*id);
+                self.portal_cwd.remove(id);
+                if let Some(path) = self.portal_path(*id) {
+                    self.portals.request(*id, path);
+                    changed.push(*id);
+                }
+            }
+        }
+        self.portal_sources = sources;
+        changed
+    }
+
+    pub(crate) fn request_portal_read(&mut self, id: FenceId) {
+        self.reconcile_portal_sources();
+        if let Some(path) = self.portal_path(id) {
+            if self
+                .portals
+                .snapshot(id)
+                .is_some_and(|s| s.request.path != path)
+            {
+                self.evict_portal_members(id);
+            }
+            self.portals.request(id, path);
+        }
+    }
+
+    pub(crate) fn next_portal_read(&mut self) -> Option<PortalRead> {
+        self.reconcile_portal_sources();
+        self.portals.next_read()
+    }
+
+    /// Atomic snapshot commit followed by legacy Item conversion at the native boundary.
+    /// Neither runtime reads nor health changes mark durable configuration dirty.
+    pub(crate) fn accept_portal_result(&mut self, result: PortalResult) -> Option<FenceId> {
+        self.reconcile_portal_sources();
+        let complete = matches!(result.outcome, PortalOutcome::Complete(_));
+        let id = self.portals.complete(result)?;
+        if complete {
+            let items: Vec<_> = self
+                .portals
+                .snapshot(id)?
+                .entries
+                .iter()
+                .map(|entry| {
+                    let path_str = entry.path.to_string_lossy();
+                    let (icon_key, _) =
+                        crate::icons::icon_key_for(&entry.path, entry.is_folder, entry.mtime);
+                    Item {
+                        id: portal_item_id(id, &path_str),
+                        key: ItemKey::from_path(&path_str),
+                        origin: Origin::Namespace,
+                        display_name: entry.display_name.clone(),
+                        file_id: None,
+                        mtime: entry.mtime,
+                        is_folder: entry.is_folder,
+                        attrs: entry.attributes,
+                        icon_key,
+                        orphaned_since: None,
+                        size: entry.size,
+                        open_count: 0,
+                        last_opened: None,
+                    }
+                })
+                .collect();
+            self.evict_portal_members(id);
+            self.portal_members
+                .insert(id, items.iter().map(|it| it.id).collect());
+            self.portal_items
+                .extend(items.into_iter().map(|it| (it.id, it)));
+        }
+        Some(id)
     }
 
     pub fn item_by_path(&self, path: &Path) -> Option<ItemId> {
@@ -1178,8 +1298,10 @@ impl AppState {
         {
             self.config.items.remove(&other);
             for layout in &mut self.config.layouts {
-                for f in &mut layout.fences {
-                    f.items.retain(|r| r.item_id != other);
+                for f in &mut layout.contents {
+                    if let ContentSpec::FileCollection { items, .. } = &mut f.content {
+                        items.retain(|r| r.item_id != other);
+                    }
                 }
             }
         }
@@ -1191,7 +1313,7 @@ impl AppState {
     pub fn move_items(&mut self, items: &[ItemId], to: FenceId) -> usize {
         // Portal fences show a folder, not desktop membership: nothing can be moved into them,
         // and their (runtime) items cannot be moved out.
-        if self.portal_path(to).is_some() {
+        if self.routable_fence(to).is_none() {
             return 0;
         }
         let mut n = 0;
@@ -1217,7 +1339,7 @@ impl AppState {
     /// `index` of `fence`. Only for 手动-sorted virtual fences (portals are sort-only; a sorted
     /// fence snaps back, like Explorer with auto-arrange on). Returns true when the order changed.
     pub fn reorder_items(&mut self, fence: FenceId, items: &[ItemId], index: usize) -> bool {
-        if self.portal_path(fence).is_some() {
+        if self.routable_fence(fence).is_none() {
             return false;
         }
         let Some(f) = self.fence(fence) else {
@@ -1227,7 +1349,7 @@ impl AppState {
             return false;
         }
         let reverse = f.view.reverse;
-        let mut order: Vec<ItemId> = self.items_of(f).iter().map(|it| it.id).collect();
+        let mut order: Vec<ItemId> = self.items_of(&f).iter().map(|it| it.id).collect();
         let before_order = order.clone();
         let moved: Vec<ItemId> = order
             .iter()
@@ -1251,11 +1373,14 @@ impl AppState {
             // manual_index is stored in forward order; the view reverses it on display.
             order.reverse();
         }
-        let Some(fm) = self.fence_mut(fence) else {
+        let Some(fm) = self.content_mut(fence) else {
+            return false;
+        };
+        let ContentSpec::FileCollection { items, .. } = &mut fm.content else {
             return false;
         };
         for (i, id) in order.iter().enumerate() {
-            if let Some(r) = fm.items.iter_mut().find(|r| r.item_id == *id) {
+            if let Some(r) = items.iter_mut().find(|r| r.item_id == *id) {
                 r.manual_index = Some(i as u32);
             }
         }
@@ -1284,7 +1409,10 @@ impl AppState {
             let Some(&id) = self.catalog.get(&key) else {
                 continue;
             };
-            let current = self.fences().iter().find(|f| f.contains_item(id));
+            let snapshots = self.fences();
+            let current = snapshots
+                .iter()
+                .find(|f| f.items.iter().any(|r| r.item_id == id));
             if let Some(f) = current
                 && f.items
                     .iter()
@@ -1339,7 +1467,7 @@ impl AppState {
             let from = self
                 .fences()
                 .iter()
-                .find(|f| f.contains_item(id))
+                .find(|f| f.items.iter().any(|r| r.item_id == id))
                 .map(|f| f.id);
             let decision = self.config.rules.evaluate(&self.facts_for(entry));
             if let Some((fence, by)) = self.target_fence(decision)
@@ -1360,7 +1488,13 @@ impl AppState {
 
     // ---- fences -----------------------------------------------------------------------------
 
-    pub fn set_fence_bounds(&mut self, id: FenceId, rect: RECT, rolled: bool, expanded_h_px: i32) {
+    pub fn set_fence_bounds(
+        &mut self,
+        id: ContainerId,
+        rect: RECT,
+        rolled: bool,
+        expanded_h_px: i32,
+    ) {
         let px = PxRect {
             left: rect.left,
             top: rect.top,
@@ -1380,7 +1514,7 @@ impl AppState {
             .cloned();
         let Some(work) = work else { return };
         let geo = geometry::normalize(px, &work);
-        if let Some(f) = self.fence_mut(id) {
+        if let Some(f) = self.container_mut(id) {
             if f.geometry != geo || f.rolled_up != rolled {
                 f.expanded_h = geo.h;
                 f.geometry = geo;
@@ -1410,9 +1544,9 @@ impl AppState {
     }
 
     #[allow(dead_code)]
-    pub fn toggle_rolled(&mut self, id: FenceId) -> Option<bool> {
+    pub fn toggle_rolled(&mut self, id: ContainerId) -> Option<bool> {
         let rolled = {
-            let f = self.fence_mut(id)?;
+            let f = self.container_mut(id)?;
             f.rolled_up = !f.rolled_up;
             f.rolled_up
         };
@@ -1421,7 +1555,7 @@ impl AppState {
     }
 
     pub fn rename_fence(&mut self, id: FenceId, title: &str) {
-        if let Some(f) = self.fence_mut(id)
+        if let Some(f) = self.content_mut(id)
             && f.title != title
         {
             f.title = title.to_string();
@@ -1430,7 +1564,7 @@ impl AppState {
     }
 
     pub fn set_icon_size(&mut self, id: FenceId, size: u32) {
-        if let Some(f) = self.fence_mut(id)
+        if let Some(f) = self.content_mut(id)
             && f.view.icon_size != size
         {
             f.view.icon_size = size;
@@ -1438,11 +1572,11 @@ impl AppState {
         }
     }
 
-    pub fn set_auto_height(&mut self, id: FenceId, on: bool) {
-        if let Some(f) = self.fence_mut(id)
-            && f.view.auto_height != on
+    pub fn set_auto_height(&mut self, id: ContainerId, on: bool) {
+        if let Some(f) = self.container_mut(id)
+            && f.auto_height != on
         {
-            f.view.auto_height = on;
+            f.auto_height = on;
             self.dirty = true;
         }
     }
@@ -1455,7 +1589,7 @@ impl AppState {
     }
 
     pub fn set_reverse(&mut self, id: FenceId, on: bool) {
-        if let Some(f) = self.fence_mut(id)
+        if let Some(f) = self.content_mut(id)
             && f.view.reverse != on
         {
             f.view.reverse = on;
@@ -1463,8 +1597,8 @@ impl AppState {
         }
     }
 
-    pub fn set_locked(&mut self, id: FenceId, on: bool) {
-        if let Some(f) = self.fence_mut(id)
+    pub fn set_locked(&mut self, id: ContainerId, on: bool) {
+        if let Some(f) = self.container_mut(id)
             && f.locked != on
         {
             f.locked = on;
@@ -1472,8 +1606,8 @@ impl AppState {
         }
     }
 
-    pub fn set_exclude_from_quick_hide(&mut self, id: FenceId, on: bool) {
-        if let Some(f) = self.fence_mut(id)
+    pub fn set_exclude_from_quick_hide(&mut self, id: ContainerId, on: bool) {
+        if let Some(f) = self.container_mut(id)
             && f.exclude_from_quick_hide != on
         {
             f.exclude_from_quick_hide = on;
@@ -1484,11 +1618,11 @@ impl AppState {
     /// Per-fence appearance override (None = follow the global settings).
     pub fn set_appearance(
         &mut self,
-        id: FenceId,
+        id: ContainerId,
         backdrop: Option<pecofence_core::Backdrop>,
         opacity: Option<f32>,
     ) {
-        if let Some(f) = self.fence_mut(id) {
+        if let Some(f) = self.container_mut(id) {
             let mut next = f.appearance.clone().unwrap_or_default();
             next.backdrop = backdrop;
             next.opacity = opacity;
@@ -1503,12 +1637,12 @@ impl AppState {
     /// Per-fence colour wash / title colour / title size (None fields = theme defaults).
     pub fn set_style(
         &mut self,
-        id: FenceId,
+        id: ContainerId,
         tint_rgb: Option<[u8; 3]>,
         title_rgb: Option<[u8; 3]>,
         title_size: Option<pecofence_core::TitleSize>,
     ) {
-        if let Some(f) = self.fence_mut(id) {
+        if let Some(f) = self.container_mut(id) {
             let mut next = f.appearance.clone().unwrap_or_default();
             next.tint_rgb = tint_rgb;
             next.title_rgb = title_rgb;
@@ -1522,7 +1656,7 @@ impl AppState {
     }
 
     pub fn set_spacing(&mut self, id: FenceId, spacing: pecofence_core::Spacing) {
-        if let Some(f) = self.fence_mut(id)
+        if let Some(f) = self.content_mut(id)
             && f.view.spacing != spacing
         {
             f.view.spacing = spacing;
@@ -1532,7 +1666,7 @@ impl AppState {
 
     pub fn set_columns_visible(&mut self, id: FenceId, visible: [bool; 3]) {
         let next = (visible != [true; 3]).then_some(visible);
-        if let Some(f) = self.fence_mut(id)
+        if let Some(f) = self.content_mut(id)
             && f.view.columns_visible != next
         {
             f.view.columns_visible = next;
@@ -1542,7 +1676,7 @@ impl AppState {
 
     pub fn set_column_widths(&mut self, id: FenceId, widths: [f32; 3]) {
         let next = (widths != crate::layout::DetailColumns::DEFAULT_WIDTHS).then_some(widths);
-        if let Some(f) = self.fence_mut(id)
+        if let Some(f) = self.content_mut(id)
             && f.view.column_widths != next
         {
             f.view.column_widths = next;
@@ -1551,7 +1685,7 @@ impl AppState {
     }
 
     pub fn set_layout(&mut self, id: FenceId, layout: pecofence_core::ViewLayout) {
-        if let Some(f) = self.fence_mut(id)
+        if let Some(f) = self.content_mut(id)
             && f.view.layout != layout
         {
             f.view.layout = layout;
@@ -1561,7 +1695,7 @@ impl AppState {
 
     /// Any order but by date ends "按时间分组" (sections only make sense in date order).
     pub fn set_sort(&mut self, id: FenceId, sort: SortMode) {
-        let Some(f) = self.fence_mut(id) else {
+        let Some(f) = self.content_mut(id) else {
             return;
         };
         let mut changed = false;
@@ -1580,7 +1714,7 @@ impl AppState {
 
     /// "按时间分组"; turning it on also sorts by date.
     pub fn set_group_by_date(&mut self, id: FenceId, on: bool) {
-        let Some(f) = self.fence_mut(id) else {
+        let Some(f) = self.content_mut(id) else {
             return;
         };
         let mut changed = false;
@@ -1598,6 +1732,9 @@ impl AppState {
     }
 
     pub fn new_fence(&mut self, title: &str, rect: RECT) -> Option<FenceId> {
+        if !self.save_allowed || self.config.layouts.get(self.layout).is_none() {
+            return None;
+        }
         let px = PxRect {
             left: rect.left,
             top: rect.top,
@@ -1612,10 +1749,13 @@ impl AppState {
             .or(self.work_areas.first())
             .cloned()?;
         let geo = geometry::normalize(px, &work);
-        let mut fence = Fence::new(title, FenceKind::Virtual, geo);
+        let mut fence = ContentInstance::collection(title, false);
         fence.view.icon_size = self.config.settings.icon_size;
         let id = fence.id;
-        self.config.layouts[self.layout].fences.push(fence);
+        Workspace::new(&mut self.config.layouts[self.layout])
+            .ok()?
+            .create(fence, geo)
+            .ok()?;
         self.dirty = true;
         Some(id)
     }
@@ -1638,7 +1778,7 @@ impl AppState {
             .find(|r| r.template.as_deref() == Some(key))
         {
             let existing = match rule.target {
-                Target::Fence(id) => self.routable_fence(id),
+                Target::Collection(id) => self.routable_fence(id),
                 Target::Inbox => self.inbox_id(),
             };
             return Err(existing);
@@ -1676,23 +1816,31 @@ impl AppState {
         if inbox == id {
             return false;
         }
-        let Some(pos) = self.fences().iter().position(|f| f.id == id) else {
+        let Some(removed) = self.fence(id) else {
             return false;
         };
-        let removed = self.config.layouts[self.layout].fences.remove(pos);
+        if Workspace::new(&mut self.config.layouts[self.layout])
+            .and_then(|mut w| w.delete(id))
+            .is_err()
+        {
+            return false;
+        }
+        self.portals.remove(id);
+        self.portal_sources.remove(&id);
         self.portal_cwd.remove(&id);
         self.evict_portal_members(id);
         let ids: Vec<ItemId> = removed.items.iter().map(|r| r.item_id).collect();
         for item in ids {
             self.config
-                .assign(self.layout, item, inbox, AssignedBy::Migration);
+                .assign(self.layout, item, inbox, AssignedBy::Default);
         }
         self.config
             .rules
             .list
-            .retain(|r| r.target != Target::Fence(id));
-        // Its tabs (if it hosted any) become windows again; a deleted tab leaves its host.
-        self.normalize_tabs();
+            .retain(|r| r.target != Target::Collection(id));
+        if self.config.rules.default_target == Target::Collection(id) {
+            self.config.rules.default_target = Target::Inbox;
+        }
         self.dirty = true;
         true
     }
@@ -1750,28 +1898,13 @@ fn dir_prefix(key: &str) -> String {
     }
 }
 
-/// Restore the displayed component from its directory entry. Do not canonicalize:
-/// resolving a junction could replace the portal's navigable path with an outside target.
-fn folder_path_with_real_case(path: &Path) -> PathBuf {
-    let actual = (|| {
-        let name = path.file_name()?.to_string_lossy().to_lowercase();
-        std::fs::read_dir(path.parent()?)
-            .ok()?
-            .filter_map(Result::ok)
-            .find(|entry| entry.file_name().to_string_lossy().to_lowercase() == name)
-            .map(|entry| entry.path())
-    })();
-    actual.unwrap_or_else(|| path.to_path_buf())
-}
-
-/// Stable id for a portal item derived from its (case-folded) path, so selections and pending
-/// icon lookups survive a folder refresh.
-pub(crate) fn portal_item_id(path: &str) -> ItemId {
+/// Stable per-portal item identity: shared paths never overwrite another source's snapshot.
+pub(crate) fn portal_item_id(fence: FenceId, path: &str) -> ItemId {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
     let key = path.to_lowercase().replace('/', "\\");
     let mut h1 = DefaultHasher::new();
-    key.hash(&mut h1);
+    (fence, &key).hash(&mut h1);
     let mut h2 = DefaultHasher::new();
     (&key, 0x5eedu16).hash(&mut h2);
     uuid::Uuid::from_u128(((h1.finish() as u128) << 64) | h2.finish() as u128)
@@ -1798,7 +1931,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!(
             "pecofence-state-test-{}-{}",
             std::process::id(),
-            pecofence_core::now_unix()
+            uuid::Uuid::new_v4()
         ));
         let mut state = AppState {
             config: Config::default(),
@@ -1809,10 +1942,16 @@ mod tests {
             portal_items: HashMap::new(),
             portal_members: HashMap::new(),
             portal_cwd: HashMap::new(),
+            portals: Default::default(),
+            portal_sources: HashMap::new(),
+            portal_layout: 0,
             work_areas: vec![work],
             first_run: true,
             recovered_from: None,
             load_issue: None,
+            save_allowed: true,
+            persistence_issue: None,
+            pending_explicit_replacement: false,
         };
         state.ensure_layout();
         state
@@ -1844,7 +1983,7 @@ mod tests {
     fn names(state: &AppState, fence: FenceId) -> Vec<String> {
         let f = state.fence(fence).unwrap();
         state
-            .items_of(f)
+            .items_of(&f)
             .iter()
             .map(|i| i.display_name.clone())
             .collect()
@@ -1861,26 +2000,210 @@ mod tests {
         add_item(&mut state, a, "first");
         add_item(&mut state, b, "second");
         add_item(&mut state, c, "third");
-        state.attach_tab(b, a);
-        state.attach_tab(c, a);
-        let before = state.fences().to_vec();
-        assert!(state.fence(a).unwrap().tab_host.is_none());
+        let host = state.host_of(a).unwrap();
+        state.attach_tab(b, host).unwrap();
+        state.attach_tab(c, host).unwrap();
+        let before = state.tabs_of(host);
         state.dirty = false;
-        let change = state
-            .detach_tab(a)
+        let geometry = state.container(host).unwrap().geometry.clone();
+        let (transition, change) = state
+            .detach_tab_with_plan(a, geometry)
             .expect("the host must be detachable too");
         assert!(state.dirty);
-        assert_eq!(change.remaining_host, b);
-        assert_eq!(state.host_of(a), a);
-        assert_eq!(state.host_of(c), b);
-        assert_eq!(state.active_tab_of(b), c);
+        assert_eq!(state.host_of(a), Some(transition.created_containers[0]));
+        assert_eq!(state.host_of(c), Some(host));
+        assert_eq!(state.active_tab_of(host), Some(c));
         assert_eq!(names(&state, a), vec!["first"]);
         assert_eq!(names(&state, b), vec!["second"]);
         assert_eq!(names(&state, c), vec!["third"]);
+        state.rename_fence(a, "edited during drag");
         state.dirty = false;
-        assert!(state.cancel_tab_detach(&change));
+        state.cancel_tab_detach(&change).unwrap();
         assert!(state.dirty);
-        assert_eq!(state.fences(), before.as_slice());
+        assert_eq!(state.tabs_of(host), before);
+        assert_eq!(state.fence(a).unwrap().title, "edited during drag");
+    }
+
+    #[test]
+    fn rejected_and_recovered_loads_do_not_create_or_autosave_defaults() {
+        let baseline = test_state();
+        let areas = baseline.work_areas.clone();
+        for reason in [
+            FreshReason::CorruptPrimary {
+                reason: "bad graph".into(),
+                quarantined: None,
+            },
+            FreshReason::UnreadablePrimary {
+                reason: "denied".into(),
+            },
+            FreshReason::UnsupportedFormat {
+                path: "workspace.v3.json".into(),
+                schema: Some(3),
+            },
+        ] {
+            let dir =
+                std::env::temp_dir().join(format!("pecofence-gated-{}", uuid::Uuid::new_v4()));
+            let mut state = AppState::from_load(
+                areas.clone(),
+                ConfigStore::new(&dir),
+                LoadOutcome::Fresh(Config::default(), reason),
+            );
+            assert!(!state.first_run);
+            assert!(!state.save_allowed);
+            assert!(state.load_issue.is_some());
+            state.ensure_layout();
+            assert!(state.config.layouts.is_empty());
+            state.mark_dirty();
+            assert!(!state.save_if_dirty());
+            assert!(!dir.exists());
+            state.reset_workspace().unwrap();
+            assert!(state.save_allowed);
+            assert_eq!(state.fences().len(), 4);
+            assert!(state.config.validate().is_ok());
+        }
+        let dir =
+            std::env::temp_dir().join(format!("pecofence-recovered-{}", uuid::Uuid::new_v4()));
+        let mut state = AppState::from_load(
+            areas,
+            ConfigStore::new(&dir),
+            LoadOutcome::Recovered(baseline.config.clone(), "backup.json".into()),
+        );
+        assert!(!state.save_allowed);
+        assert!(state.recovered_from.is_some());
+        assert!(!state.is_dirty());
+        state.mark_dirty();
+        assert!(!state.save_if_dirty());
+        assert!(!dir.exists());
+        state.accept_recovery().unwrap();
+        assert!(state.save_allowed);
+        assert!(state.recovered_from.is_none());
+    }
+
+    #[test]
+    fn rejected_import_preserves_document_and_gate() {
+        let mut state = test_state();
+        state.save_allowed = false;
+        let before = state.config.clone();
+        let mut invalid = before.clone();
+        invalid.layouts[0].containers[0].active_tab = FenceId::new_v4();
+        assert!(state.replace_config(invalid).is_err());
+        assert_eq!(
+            serde_json::to_value(&state.config).unwrap(),
+            serde_json::to_value(&before).unwrap()
+        );
+        assert!(!state.save_allowed);
+    }
+
+    #[test]
+    fn tab_errors_and_noops_do_not_dirty_and_stale_cancel_is_rejected() {
+        let mut state = test_state();
+        let a = state.fences()[0].id;
+        let b = state.fences()[1].id;
+        let c = state.fences()[2].id;
+        let host = state.host_of(a).unwrap();
+        state.dirty = false;
+        state.set_active_tab(host, a).unwrap();
+        state.reorder_tab(host, a, 0).unwrap();
+        assert!(!state.is_dirty());
+        assert!(state.set_active_tab(host, b).is_err());
+        assert!(!state.is_dirty());
+        state.attach_tab(b, host).unwrap();
+        state.attach_tab(c, host).unwrap();
+        let geometry = state.container(host).unwrap().geometry.clone();
+        let (_, plan) = state.detach_tab_with_plan(b, geometry).unwrap();
+        state.reorder_tab(host, c, 0).unwrap();
+        state.dirty = false;
+        assert!(state.cancel_tab_detach(&plan).is_err());
+        assert!(!state.is_dirty());
+        assert_ne!(state.host_of(b), Some(host));
+    }
+
+    #[test]
+    fn late_container_events_after_delete_or_merge_are_not_panics_or_edits() {
+        for deleted in [true, false] {
+            let mut state = test_state();
+            let victim = state.fences()[0].id;
+            let retired = state.host_of(victim).unwrap();
+            if deleted {
+                assert!(state.delete_fence(victim));
+                assert_eq!(state.host_of(victim), None);
+            } else {
+                let target = state.fences()[1].container_id;
+                state.attach_tab(victim, target).unwrap();
+                assert_eq!(state.host_of(victim), Some(target));
+            }
+            assert_eq!(state.active_tab_of(retired), None);
+            state.dirty = false;
+            let before = serde_json::to_value(&state.config).unwrap();
+            state.set_fence_bounds(retired, RECT::default(), false, 100);
+            assert_eq!(state.toggle_rolled(retired), None);
+            state.set_auto_height(retired, true);
+            assert!(!state.is_dirty());
+            assert_eq!(serde_json::to_value(&state.config).unwrap(), before);
+        }
+        let mut state = test_state();
+        state.config.layouts.clear();
+        assert_eq!(state.host_of(FenceId::new_v4()), None);
+        assert_eq!(state.active_tab_of(ContainerId::new()), None);
+    }
+
+    #[test]
+    fn portal_read_and_identity_survive_container_remount() {
+        let mut state = test_state();
+        let portal = state
+            .new_portal_fence(Path::new(r"C:\Portal"), RECT::default())
+            .unwrap();
+        let request = state.next_portal_read().unwrap();
+        let host = state.host_of(state.fences()[0].id).unwrap();
+        state.attach_tab(portal, host).unwrap();
+        state.set_active_tab(host, portal).unwrap();
+        let geometry = state.container(host).unwrap().geometry.clone();
+        let (_, plan) = state.detach_tab_with_plan(portal, geometry).unwrap();
+        state.cancel_tab_detach(&plan).unwrap();
+        state.dirty = false;
+        let path = PathBuf::from(r"C:\Portal\kept");
+        assert_eq!(
+            state.accept_portal_result(PortalResult {
+                request,
+                outcome: PortalOutcome::Complete(vec![portal_entry(path.clone())]),
+            }),
+            Some(portal)
+        );
+        let item = state.items_of(&state.fence(portal).unwrap())[0].id;
+        assert_eq!(item, portal_item_id(portal, &path.to_string_lossy()));
+        assert!(!state.is_dirty());
+        assert!(state.next_portal_read().is_none());
+    }
+
+    #[test]
+    fn wrong_role_targets_never_receive_desktop_memberships() {
+        let mut state = test_state();
+        let source = state.fences()[0].id;
+        let item = add_item(&mut state, source, "desktop");
+        let portal = state
+            .new_portal_fence(Path::new(r"C:\Portal"), RECT::default())
+            .unwrap();
+        assert_eq!(state.routable_fence(portal), None);
+        assert_eq!(state.move_items(&[item], portal), 0);
+        assert!(!state.reorder_items(portal, &[item], 0));
+        assert_eq!(state.config.content_of_item(0, item), Some(source));
+        assert_eq!(
+            state
+                .target_fence(Decision::Default(Target::Collection(portal)))
+                .unwrap()
+                .0,
+            state.inbox_id().unwrap()
+        );
+        state.content_mut(portal).unwrap().content = ContentSpec::Panel {
+            panel: pecofence_core::PanelSpec {
+                provider: "test".into(),
+                instance_id: uuid::Uuid::new_v4(),
+                config_version: 1,
+                config: serde_json::Value::Null,
+            },
+        };
+        assert_eq!(state.routable_fence(portal), None);
+        assert_eq!(state.move_items(&[item], portal), 0);
     }
 
     #[test]
@@ -1905,27 +2228,228 @@ mod tests {
 
     #[test]
     fn portal_navigation_preserves_folder_case_from_folded_item_keys() {
-        let root = std::env::temp_dir().join(format!("pecofence-portal-{}", uuid::Uuid::new_v4()));
+        let root = PathBuf::from(r"C:\Portal");
         let nested = root.join("Nested Target").join("日本語 Folder");
-        std::fs::create_dir_all(&nested).unwrap();
         let mut state = test_state();
         let fence = state.new_portal_fence(&root, RECT::default()).unwrap();
         let root_title = state.fence(fence).unwrap().title.clone();
+        finish_portal(
+            &mut state,
+            PortalOutcome::Complete(vec![portal_entry(nested.clone())]),
+        );
         let folded = PathBuf::from(nested.to_string_lossy().to_lowercase());
         assert!(state.portal_enter(fence, &folded));
-        assert_eq!(
-            state.display_title(state.fence(fence).unwrap()),
-            "日本語 Folder"
+        assert_eq!(state.portal_path(fence), Some(nested));
+        assert!(
+            state
+                .display_title(&state.fence(fence).unwrap())
+                .starts_with("日本語 Folder")
         );
         assert!(state.portal_up(fence));
-        assert_eq!(
-            state.display_title(state.fence(fence).unwrap()),
-            "Nested Target"
+        assert!(
+            state
+                .display_title(&state.fence(fence).unwrap())
+                .starts_with("Nested Target")
         );
         assert!(state.portal_up(fence));
-        assert_eq!(state.display_title(state.fence(fence).unwrap()), root_title);
+        assert!(
+            state
+                .display_title(&state.fence(fence).unwrap())
+                .starts_with(&root_title)
+        );
         assert!(!state.portal_up(fence));
-        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    fn portal_entry(path: PathBuf) -> pecofence_core::portal::PortalEntry {
+        pecofence_core::portal::PortalEntry {
+            display_name: path.file_name().unwrap().to_string_lossy().into_owned(),
+            path,
+            is_folder: true,
+            attributes: 0,
+            mtime: 1,
+            size: 0,
+        }
+    }
+
+    fn finish_portal(state: &mut AppState, outcome: PortalOutcome) -> Option<FenceId> {
+        let request = state.next_portal_read().unwrap();
+        state.accept_portal_result(PortalResult { request, outcome })
+    }
+
+    #[test]
+    fn portal_snapshot_health_projection_and_dirty_boundary() {
+        use pecofence_core::portal::ReadFailure;
+        let mut state = test_state();
+        let root = PathBuf::from(r"C:\Portal");
+        let id = state.new_portal_fence(&root, RECT::default()).unwrap();
+        state.dirty = false;
+        finish_portal(
+            &mut state,
+            PortalOutcome::Complete(vec![portal_entry(root.join("kept"))]),
+        );
+        assert_eq!(names(&state, id), ["kept"]);
+        for outcome in [
+            PortalOutcome::Unavailable(ReadFailure::Open("offline".into())),
+            PortalOutcome::Partial {
+                entries: vec![portal_entry(root.join("partial"))],
+                failure: ReadFailure::Traversal("failed".into()),
+            },
+        ] {
+            state.request_portal_read(id);
+            finish_portal(&mut state, outcome);
+            assert_eq!(names(&state, id), ["kept"]);
+            assert!(matches!(
+                state.portals.snapshot(id).unwrap().health,
+                PortalHealth::Stale(_)
+            ));
+        }
+        state.request_portal_read(id);
+        finish_portal(&mut state, PortalOutcome::Complete(vec![]));
+        assert!(names(&state, id).is_empty());
+        assert!(!state.is_dirty());
+        state.request_portal_read(id);
+        finish_portal(
+            &mut state,
+            PortalOutcome::Complete(vec![portal_entry(root.join("old"))]),
+        );
+        let old = state.items_of(&state.fence(id).unwrap())[0].id;
+        state.request_portal_read(id);
+        let late = state.next_portal_read().unwrap();
+        assert!(state.portal_enter(id, &root.join("missing")));
+        assert!(names(&state, id).is_empty());
+        assert!(state.item(old).is_none());
+        assert_eq!(
+            state.accept_portal_result(PortalResult {
+                request: late,
+                outcome: PortalOutcome::Complete(vec![portal_entry(root.join("late"))])
+            }),
+            None
+        );
+        finish_portal(
+            &mut state,
+            PortalOutcome::Unavailable(ReadFailure::Open("missing".into())),
+        );
+        assert_eq!(state.portal_path(id), Some(root.join("missing")));
+        assert!(!state.is_dirty());
+    }
+
+    #[test]
+    fn portal_lifecycle_reconfiguration_import_layout_and_reused_id() {
+        for mode in 0..6 {
+            let mut state = test_state();
+            let id = state
+                .new_portal_fence(Path::new(r"C:\Portal"), RECT::default())
+                .unwrap();
+            let request = state.next_portal_read().unwrap();
+            match mode {
+                0 => {
+                    state.content_mut(id).unwrap().content = ContentSpec::FolderPortal {
+                        root: r"C:\Other".into(),
+                        recursive: false,
+                        filter: None,
+                        navigate: true,
+                        hide_title_icon: false,
+                    };
+                }
+                1 => state.replace_config(state.config.clone()).unwrap(),
+                2 => state.apply_snapshot_layouts(state.config.layouts.clone()),
+                3 => {
+                    let content = state.config.layouts[0].content(id).unwrap().clone();
+                    let geometry = state.fence(id).unwrap().geometry;
+                    assert!(state.delete_fence(id));
+                    Workspace::new(&mut state.config.layouts[0])
+                        .unwrap()
+                        .create(content, geometry)
+                        .unwrap();
+                }
+                4 => {
+                    // A source option change must invalidate even with the same id/path.
+                    state.content_mut(id).unwrap().content = ContentSpec::FolderPortal {
+                        root: r"C:\Portal".into(),
+                        recursive: true,
+                        filter: None,
+                        navigate: true,
+                        hide_title_icon: false,
+                    };
+                }
+                _ => {
+                    let mut other = state.config.layouts[0].clone();
+                    other.fingerprint[0].device_path = "other-monitor".into();
+                    state.config.layouts.push(other);
+                    state.work_areas[0].device_path = "other-monitor".into();
+                    state.ensure_layout();
+                    // Switching back before the completion still cannot revive the old read.
+                    state.work_areas[0].device_path =
+                        state.config.layouts[0].fingerprint[0].device_path.clone();
+                    state.ensure_layout();
+                }
+            }
+            assert_eq!(
+                state.accept_portal_result(PortalResult {
+                    request,
+                    outcome: PortalOutcome::Complete(vec![portal_entry(r"C:\Portal\late".into())])
+                }),
+                None,
+                "mode {mode}"
+            );
+            assert!(names(&state, id).is_empty());
+            finish_portal(
+                &mut state,
+                PortalOutcome::Complete(vec![portal_entry(r"C:\Portal\current".into())]),
+            );
+            assert_eq!(names(&state, id), ["current"]);
+        }
+    }
+
+    #[test]
+    fn portals_on_same_path_have_independent_actionable_items() {
+        let mut state = test_state();
+        let root = Path::new(r"C:\Portal");
+        let a = state.new_portal_fence(root, RECT::default()).unwrap();
+        finish_portal(
+            &mut state,
+            PortalOutcome::Complete(vec![portal_entry(root.join("kept"))]),
+        );
+        let b = state.new_portal_fence(root, RECT::default()).unwrap();
+        finish_portal(
+            &mut state,
+            PortalOutcome::Complete(vec![portal_entry(root.join("kept"))]),
+        );
+        let a_item = state.items_of(&state.fence(a).unwrap())[0].id;
+        let b_item = state.items_of(&state.fence(b).unwrap())[0].id;
+        assert_ne!(a_item, b_item);
+        assert_eq!(state.portal_of_item(b_item), Some(b));
+        state.request_portal_read(a);
+        finish_portal(&mut state, PortalOutcome::Complete(vec![]));
+        assert!(state.item(a_item).is_none());
+        assert!(state.item(b_item).is_some());
+        assert_eq!(names(&state, b), ["kept"]);
+        assert!(state.delete_fence(a));
+        assert_eq!(names(&state, b), ["kept"]);
+    }
+
+    #[test]
+    fn portal_navigation_rejects_dot_components_without_reading() {
+        let mut state = test_state();
+        let root = Path::new(r"C:\Portal");
+        let id = state.new_portal_fence(root, RECT::default()).unwrap();
+        finish_portal(
+            &mut state,
+            PortalOutcome::Complete(vec![portal_entry(root.join("kept"))]),
+        );
+        state.dirty = false;
+        for path in [
+            r"C:\Portal\..\Outside",
+            r"C:\Portal\.\Child",
+            "C:/Portal/Child/../../Outside",
+            r"C:\PortalElsewhere",
+        ] {
+            assert!(!state.portal_enter(id, Path::new(path)));
+            assert_eq!(state.portal_path(id), Some(root.to_path_buf()));
+            assert_eq!(names(&state, id), ["kept"]);
+        }
+        assert!(state.next_portal_read().is_none());
+        assert!(!state.is_dirty());
     }
 
     #[test]

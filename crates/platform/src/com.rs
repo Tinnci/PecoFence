@@ -24,6 +24,31 @@ impl Drop for OleGuard {
     }
 }
 
+/// Dedicated Shell metadata worker apartment. It must pump its own thread messages
+/// between tasks; it is never the interactive UI apartment and cannot move between threads.
+pub struct StaGuard(std::marker::PhantomData<std::rc::Rc<()>>);
+
+impl StaGuard {
+    pub fn init() -> Result<Self> {
+        // SAFETY: initializes COM on this calling thread; S_FALSE is also success.
+        unsafe {
+            CoInitializeEx(
+                None,
+                COINIT_APARTMENTTHREADED as u32 | COINIT_DISABLE_OLE1DDE as u32,
+            )
+            .ok()?;
+        }
+        Ok(Self(std::marker::PhantomData))
+    }
+}
+
+impl Drop for StaGuard {
+    fn drop(&mut self) {
+        // SAFETY: same-thread balance of the successful CoInitializeEx in init.
+        unsafe { CoUninitialize() };
+    }
+}
+
 /// Initializes a multithreaded apartment on a worker thread (icon extraction etc.).
 pub struct MtaGuard(());
 

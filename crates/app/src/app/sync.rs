@@ -4,6 +4,12 @@ use super::*;
 
 impl App {
     pub(super) fn on_fs_changed(&mut self) {
+        if !self.state.save_allowed {
+            if let Ok(mut pending) = self.fs_pending.lock() {
+                pending.clear();
+            }
+            return;
+        }
         let events: Vec<FsEvent> = self
             .fs_pending
             .lock()
@@ -93,6 +99,9 @@ impl App {
     /// Reconciles the item table with the desktop — unless the desktop folder is unreachable
     /// (removable / network drive), in which case nothing is orphaned and we retry later.
     pub(super) fn sync_desktop_if_available(&mut self, reason: &str) -> crate::state::SyncReport {
+        if !self.state.save_allowed {
+            return crate::state::SyncReport::default();
+        }
         if !shell::desktop_available() {
             if !self.desktop_unavailable {
                 tracing::warn!(reason, "desktop folder unavailable; keeping item records");
@@ -128,10 +137,16 @@ impl App {
     /// F5: re-read what this fence shows (portal folder or desktop) and its icons, like
     /// Explorer's refresh.
     pub(super) fn manual_refresh(&mut self, fence: FenceId) {
-        let host = self.state.host_of(fence);
-        let active = self.state.active_tab_of(host);
+        if !self.state.save_allowed {
+            return;
+        }
+        let Some(host) = self.state.host_of(fence) else {
+            return;
+        };
+        let active = fence;
         if self.state.portal_path(active).is_some() {
-            self.state.refresh_portal(active);
+            self.state.request_portal_read(active);
+            self.pump_portal_reads();
             self.ensure_portal_watchers();
         } else {
             let report = self.sync_desktop_if_available("manual refresh");
@@ -143,7 +158,7 @@ impl App {
         if let Some(f) = self.state.fence(active) {
             let keys: Vec<_> = self
                 .state
-                .items_of(f)
+                .items_of(&f)
                 .iter()
                 .map(|it| it.icon_key.clone())
                 .collect();

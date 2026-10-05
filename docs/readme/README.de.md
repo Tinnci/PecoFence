@@ -107,9 +107,10 @@ in der gewählten Sprache angelegt. Beim Beenden erscheinen die Windows-Desktops
   die vollständige Matrix aus älteren Versionen und Multi-Monitor-Hardware ist noch in Arbeit.
 - Für die Einstellungen wird die Microsoft Edge WebView2 Runtime benötigt. Lassen Sie die
   mitgelieferten `WebView2Loader.dll` und `pecofence-watchdog.exe` neben der App liegen.
-- Die Konfiguration liegt in `%APPDATA%\PecoFence\config.json`. Mit `--portable` gestartet,
+- Die Konfiguration liegt in `%APPDATA%\PecoFence\workspace.v2.json`. Mit `--portable` gestartet,
   bleibt sie in einem Ordner `config` neben der ausführbaren Datei.
-- Bestehende Installationen behalten ihr bisheriges Konfigurationsverzeichnis.
+- Das neue Format importiert oder migriert alte Konfigurationen nicht.
+  Vorhandene Dateien bleiben erhalten; erstellen Sie einen neuen Arbeitsbereich oder importieren Sie ein unterstütztes Dokument.
   Siehe [Upgrade-Anleitung](../UPGRADING.md).
 - Das Glas verwendet das statische Desktop-Hintergrundbild. Andere Anwendungen oder
   Video-Hintergründe werden nicht gebrochen.

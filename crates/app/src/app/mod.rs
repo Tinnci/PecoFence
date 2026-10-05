@@ -15,8 +15,8 @@ use crate::shadow::{ShadowStyle, ShadowWindow};
 use crate::state::AppState;
 use pecofence_core::geometry::WorkArea;
 use pecofence_core::{
-    FenceId, FenceKind, ItemId, ItemKey, PeekHotkey, ShowDesktopSetting, SortMode, Spacing, Target,
-    ThemeSetting, TitleSize, ViewLayout, ZOrderSetting,
+    ContainerId, ContentId, FenceId, FenceKind, ItemId, ItemKey, PeekHotkey, ShowDesktopSetting,
+    SortMode, Spacing, ThemeSetting, TitleSize, ViewLayout, ZOrderSetting,
 };
 use pecofence_platform::clipboard;
 use pecofence_platform::frameclock::FrameClock;
@@ -95,6 +95,8 @@ const TIMER_PEEK_FOCUS_RETRY: usize = 49;
 const TIMER_WALLPAPER_POLL: usize = 50;
 /// Read only the 16-byte desktop identity, never images/COM, while otherwise idle.
 const TIMER_DESKTOP_ID: usize = 51;
+/// Poll owned portal completions only while a read is outstanding.
+const TIMER_PORTALS: usize = 52;
 const SPI_SETDESKWALLPAPER: usize = 0x0014;
 const SPI_SETWORKAREA: usize = 0x002F;
 const TRAY_ID: u32 = 1;
@@ -116,7 +118,7 @@ struct FrameRun {
 /// Runtime-only: a desktop path we expect to appear shortly (created from a fence's "新建" menu,
 /// or moved out of a folder portal) goes straight into `fence`, bypassing the rules.
 struct PendingRoute {
-    fence: FenceId,
+    fence: ContentId,
     path: PathBuf,
     since: Instant,
     /// Open the inline rename popup once it lands ("新建").
@@ -140,8 +142,11 @@ pub struct Args {
 
 pub struct App {
     state: AppState,
+    portal_reader: pecofence_platform::portal_reader::PortalReader,
     ctx: Rc<FenceContext>,
-    fences: HashMap<FenceId, FenceWindow>,
+    fences: HashMap<ContainerId, FenceWindow>,
+    /// Physical panel mounts follow active containers; logical provider instances do not.
+    panel_mounts: HashMap<u128, ContainerId>,
     /// Windows of deleted / merged fences, kept alive while they fade out; dropped (destroyed)
     /// on `Command::FadeOutDone`.
     dying: Vec<FenceWindow>,
@@ -157,13 +162,13 @@ pub struct App {
     _shell_watch: Option<ShellChangeWatch>,
     /// One watcher per folder-portal fence on the folder it currently shows (kept in sync by
     /// `ensure_portal_watchers`; navigating swaps the watcher).
-    portal_watchers: HashMap<FenceId, (PathBuf, DirWatcher)>,
+    portal_watchers: HashMap<ContentId, (PathBuf, DirWatcher)>,
     fs_pending: Arc<Mutex<Vec<FsEvent>>>,
     /// Finished shell file operations from the worker threads (see `fileops.rs`).
     fileops_done: fileops::FileOpResults,
     settings: Option<SettingsHost>,
     /// Fence to select on the settings page once it reports `ready` (opened via 栅栏选项…).
-    settings_focus_fence: Option<FenceId>,
+    settings_focus_fence: Option<ContentId>,
     web_env: Option<WebEnvironment>,
     settings_class: WindowClass,
     theme_mode: ThemeMode,
@@ -364,6 +369,13 @@ impl App {
                         }
                         msg::WM_TIMER => {
                             match wparam {
+                                TIMER_PORTALS => {
+                                    if let Ok(mut guard) = cell.try_borrow_mut()
+                                        && let Some(app) = guard.as_mut()
+                                    {
+                                        app.pump_portal_reads();
+                                    }
+                                }
                                 TIMER_SAVE => {
                                     if let Ok(mut guard) = cell.try_borrow_mut()
                                         && let Some(app) = guard.as_mut()
@@ -693,8 +705,10 @@ impl App {
 
         let mut app = App {
             state,
+            portal_reader: Default::default(),
             ctx,
             fences: HashMap::new(),
+            panel_mounts: HashMap::new(),
             anchor: anchor_cell,
             control,
             queue,
@@ -772,7 +786,9 @@ impl App {
 
         // Desktop folder moved since last run? Re-point the item records before syncing, or
         // every item would be orphaned and re-routed by the rules.
-        if let Some(desk) = shell::user_desktop() {
+        if app.state.save_allowed
+            && let Some(desk) = shell::user_desktop()
+        {
             let n = app.state.migrate_desktop_path(&desk);
             if n > 0 {
                 tracing::info!(count = n, to = %desk.display(), "desktop folder moved; records migrated");
@@ -789,10 +805,13 @@ impl App {
             }
         }
         // Initial desktop sync + windows.
-        app.sync_desktop_if_available("startup");
-        app.state.refresh_all_portals();
-        app.sync_fence_windows();
-        if let Some(folder) = args.portal.as_deref() {
+        if app.state.save_allowed {
+            app.sync_desktop_if_available("startup");
+            app.sync_fence_windows();
+        }
+        if app.state.save_allowed
+            && let Some(folder) = args.portal.as_deref()
+        {
             let (cx, cy) = app
                 .state
                 .work_areas
@@ -828,7 +847,10 @@ impl App {
                     );
                 }
             }
-            if app.state.config.settings.hide_real_icons && !app.no_hide_icons {
+            if app.state.save_allowed
+                && app.state.config.settings.hide_real_icons
+                && !app.no_hide_icons
+            {
                 // At logon Explorer's desktop may not be ready yet: retried from the anchor's
                 // periodic check; housekeeping resets the setting if it never succeeds.
                 a.request_hide_desktop_icons();
@@ -836,7 +858,7 @@ impl App {
         }
         // Portable/development runs do not change login startup. Normal releases
         // adopt the renamed entry while keeping an existing working PecoFence copy.
-        if !args.portable {
+        if app.state.save_allowed && !args.portable {
             if let Err(error) = pecofence_platform::autostart::reconcile_product(
                 app.state.config.settings.autostart,
                 cfg!(debug_assertions),
@@ -851,7 +873,7 @@ impl App {
         // Close the gap between the startup snapshot and installing the registry watchers.
         window::post_message(app.control.hwnd(), WM_APP_WALLPAPER, 0, 0);
 
-        if args.open_settings {
+        if args.open_settings || !app.state.save_allowed {
             app.queue.push(Command::OpenSettings);
         }
         if let Some(path) = args.test_script.as_deref() {
@@ -872,10 +894,15 @@ impl App {
     }
 
     fn schedule_save(&self) {
-        window::set_timer(self.control.hwnd(), TIMER_SAVE, 800);
+        if self.state.save_allowed {
+            window::set_timer(self.control.hwnd(), TIMER_SAVE, 800);
+        }
     }
 
     fn housekeeping(&mut self) {
+        if !self.state.save_allowed {
+            return;
+        }
         self.check_cut_clipboard();
         if self.state.is_dirty() {
             self.state.save_if_dirty();
@@ -913,7 +940,7 @@ impl App {
                 self.schedule_save();
             }
         }
-        let changed_dpi: Vec<FenceId> = self
+        let changed_dpi: Vec<ContainerId> = self
             .fences
             .iter()
             .filter_map(|(&id, window)| window.check_dpi().then_some(id))
@@ -980,6 +1007,19 @@ impl App {
     }
 
     fn handle(&mut self, cmd: Command) {
+        if !self.state.save_allowed
+            && !matches!(
+                &cmd,
+                Command::OpenSettings
+                    | Command::SettingsMessage(_)
+                    | Command::Quit
+                    | Command::WindowGone(_)
+                    | Command::FadeOutDone(_)
+                    | Command::RedrawAll
+            )
+        {
+            return;
+        }
         match cmd {
             Command::FenceBoundsChanged { fence, rect } => {
                 let (rolled, expanded) = self
@@ -996,7 +1036,7 @@ impl App {
                 if let Some(w) = self.fences.get(&fence) {
                     w.commit_expanded();
                 }
-                if let Some(f) = self.state.fence_mut(fence) {
+                if let Some(f) = self.state.container_mut(fence) {
                     f.rolled_up = false;
                 }
                 self.state.mark_dirty();
@@ -1058,11 +1098,33 @@ impl App {
                 }
                 if let Some(host) = host
                     && host != fence
-                    && self.state.attach_tab(fence, host)
                 {
-                    if let Some(index) = index {
-                        // Land where the gap was, so the neighbours do not move again.
-                        self.state.reorder_tab(host, fence, index);
+                    if self.state.container(fence).is_none() || self.state.container(host).is_none()
+                    {
+                        return;
+                    }
+                    let tabs = self.state.tabs_of(fence);
+                    let Some(active) = self.state.active_tab_of(fence) else {
+                        return;
+                    };
+                    let start = index.unwrap_or(self.state.tabs_of(host).len());
+                    for (slot, content) in (start..).zip(tabs) {
+                        if let Err(error) = self.state.attach_tab(content, host) {
+                            self.settings_error(&error.to_string());
+                            break;
+                        }
+                        // Land where the insertion gap was, preserving the source tab order.
+                        if let Err(error) = self.state.reorder_tab(host, content, slot) {
+                            self.settings_error(&error.to_string());
+                            break;
+                        }
+                    }
+                    if self
+                        .state
+                        .fence(active)
+                        .is_some_and(|f| f.container_id == host)
+                    {
+                        let _ = self.state.set_active_tab(host, active);
                     }
                     self.resync_windows();
                     self.apply_fence_view_with_snap(host, false);
@@ -1290,6 +1352,10 @@ impl App {
     }
 
     pub fn shutdown(&mut self) {
+        // Disconnect before control HWND destruction; never join a blocked OS read.
+        self.portal_reader.close();
+        self.state.portals.close();
+        window::kill_timer(self.control.hwnd(), TIMER_PORTALS);
         self.end_peek_now();
         self.state.save_if_dirty();
         self.fences.clear();

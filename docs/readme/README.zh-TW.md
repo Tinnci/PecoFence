@@ -104,9 +104,9 @@ https://github.com/user-attachments/assets/6320cf28-a791-4720-9659-b4575df021a0
   舊版 Windows 與多顯示器硬體組合的完整回歸測試仍在進行中。
 - 設定面板需要 Microsoft Edge WebView2 Runtime。
   請將壓縮檔內的 `WebView2Loader.dll`、`pecofence-watchdog.exe` 與主程式放在同一個資料夾。
-- 設定儲存在 `%APPDATA%\PecoFence\config.json`。
+- 設定儲存在 `%APPDATA%\PecoFence\workspace.v2.json`。
   以 `--portable` 啟動，可改為儲存在程式旁的 `config` 資料夾。
-- 既有安裝會沿用原本的設定目錄，保留配置、規則與備份。詳見[升級說明](../UPGRADING.md)。
+- 新格式不讀取或自動遷移舊設定。原檔案保留；請明確新增工作區或匯入支援的文件。詳見[升級說明](../UPGRADING.md)。
 - 玻璃效果取樣的是靜態桌布，不會折射其他應用程式的視窗或動態桌布。
 - Windows 內建的對話方塊與第三方的檔案總管選單項目仍使用系統語言。
 - 免安裝版尚未進行程式碼簽署。首次執行若出現 Windows SmartScreen 提示，僅在信任建置來源時點選**其他資訊 → 仍要執行**。

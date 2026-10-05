@@ -316,7 +316,7 @@ impl FenceViewState {
         let now = Instant::now();
         // Painted x per tab before the target state changes: the pills slide the 64 DIP the
         // item-count reserve takes (or frees) instead of jumping there.
-        let prev: Vec<(FenceId, f32)> = self
+        let prev: Vec<(ContentId, f32)> = self
             .tabs
             .iter()
             .map(|t| t.id)

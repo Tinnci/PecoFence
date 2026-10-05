@@ -54,7 +54,8 @@ mod endpoint_tests {
 struct InstanceRecord {
     provider: String,
     config: serde_json::Value,
-    activation: u64,
+    // Logical provider identity survives changes to the native container and mount generation.
+    instance_key: InstanceKey,
     scope: ScopeId,
     handle: PanelHandle,
     mount_scope: Option<ScopeId>,
@@ -176,7 +177,7 @@ impl PanelManager {
             && record.config == spec.config
             && record.drain_started.is_none()
         {
-            debug_assert_eq!(record.activation, record.handle.key().activation);
+            debug_assert_eq!(record.instance_key, record.handle.key());
             return Ok(record.handle.clone());
         }
         if let Some(old) = self.instances.get_mut(&id) {
@@ -295,7 +296,7 @@ impl PanelManager {
             InstanceRecord {
                 provider: spec.provider.clone(),
                 config: spec.config.clone(),
-                activation,
+                instance_key: key,
                 scope: instance_scope,
                 handle: handle.clone(),
                 mount_scope: Some(mount_scope),
@@ -372,7 +373,7 @@ impl PanelManager {
             .checked_add(1)
             .ok_or(Error::Exhausted)?;
         let key = MountKey {
-            instance: record.handle.key(),
+            instance: record.instance_key,
             generation,
         };
         if let Err(error) = record.handle.mount(MountContext {
