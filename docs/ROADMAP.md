@@ -42,18 +42,19 @@
 
 实现：[模型与校验](../crates/core/src/model.rs)、[工作区协调器](../crates/core/src/workspace.rs)、[存储](../crates/core/src/config_store.rs)、[应用状态](../crates/app/src/state.rs)、[组件验收](../crates/core/tests/workspace_model.rs)。
 
-尚未实现：把桌面 metadata 从 `Config.items` 全部移出、文档修订与异步串行提交、合作写入者锁/外部修改 stamp、关闭时重试/明确放弃流程。现有保存仍同步且使用 dirty 标记，不能用 B1 结果宣称 r8/r9 并发提交保证。
+文档修订时钟已接入状态和真实主文件提交，dirty 从当前/已提交修订推导。尚未实现：把桌面 metadata 从 `Config.items` 全部移出、异步串行提交、合作写入者锁/外部修改 stamp、关闭时重试/明确放弃流程。现有保存仍同步，不能用 clock 的 r8/r9 单测宣称异步提交和关闭保证。
 
 ## C：类型化 Settings 用例
 
-状态：容器/内容配对、属性校验、集合规则目标、只读恢复 UI 和真实提交 toast 已实现；完整版本化/修订协议待实现，依赖 B2。
+状态：C1 类型化协议、修订/会话接纳、真实保存通知和规则编辑已实现并通过自动化；C2 OS 集成期望/实际/失败投影与 Windows 人工验收未完成。精确当前协议见 [SETTINGS_PROTOCOL.md](SETTINGS_PROTOCOL.md)。
 
-- 精确版本、workspace activation/client/request sequence、expected document revision、细粒度 change；旧会话和重复/已淘汰请求不重复执行。
-- 删除整 Settings/Rules 替换和 raw JSON Value switch。
-- Accepted 与 Committed 分开；草稿不被服务器推送覆盖。
-- 规则编辑支持领域已有的多条件；OS 设置通过真实操作终态反馈。
+- 已实现精确版本、page/client/workspace 身份、request sequence、expected document revision；最近 32 个决定可重放，已淘汰请求不重新执行。
+- 已删除整 Settings/Rules 替换和 raw JSON Value 命令 switch；属性、目标、规则和操作使用闭合枚举。
+- 内存接纳 receipt 与 persistence 分开；客户端有界单飞队列保留冲突草稿，明确重试/放弃，不因推送自动覆盖。
+- 页面可编辑已有规则、添加/移除 AND 条件及来源条件；文件导入/规则编辑共享验证，通配符不再递归指数展开。
+- C2 仍需将 OS 设置的期望、实际、错误与重试建模为真实操作结果，不能把文档接纳当作注册/隐藏成功。
 
-验收：错版本/无效数值/冲突/草稿保留/保存失败/OS 注册失败，以及 WebView 实际流程。
+自动化覆盖错版本/未知字段/无效数值、重复/跳号/过期请求、跨工作区修订、冲突草稿、晚到保存通知、规则编辑、只读恢复和多语言浏览器布局。真实 WebView、OS 注册失败及 B2 关闭/持久化流程待验收。
 
 ## D：静态 provider 与类型化 SPM 端口
 

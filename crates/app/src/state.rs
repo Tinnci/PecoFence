@@ -3,6 +3,7 @@
 use pecofence_core::geometry::{self, PxRect, WorkArea};
 use pecofence_core::portal::{PortalHealth, PortalOutcome, PortalRead, PortalResult};
 use pecofence_core::rules::{Cond, Decision, RuleSet, Target, Template};
+use pecofence_core::settings_protocol::{DocumentClock, DocumentStamp};
 use pecofence_core::{
     AssignedBy, Config, ConfigStore, Container, ContainerId, ContentInstance, ContentSpec, FenceId,
     FenceKind, FenceSnapshot as Fence, FreshReason, IconKey, Item, ItemId, ItemKey, ItemRef,
@@ -20,7 +21,7 @@ pub struct AppState {
     pub config: Config,
     store: ConfigStore,
     pub layout: usize,
-    dirty: bool,
+    document: DocumentClock,
     catalog: HashMap<ItemKey, ItemId>,
     /// Runtime-only items of folder portals (never persisted; rebuilt from the folder).
     portal_items: HashMap<ItemId, Item>,
@@ -77,6 +78,7 @@ impl AppState {
     }
 
     fn from_load(work_areas: Vec<WorkArea>, store: ConfigStore, outcome: LoadOutcome) -> Self {
+        let committed = matches!(&outcome, LoadOutcome::Primary(_));
         let (config, first_run, recovered_from, load_issue) = match outcome {
             LoadOutcome::Primary(c) => (c, false, None, None),
             LoadOutcome::Recovered(c, from) => (c, false, Some(from), None),
@@ -125,7 +127,7 @@ impl AppState {
             config,
             store,
             layout: 0,
-            dirty: false,
+            document: DocumentClock::new(committed),
             catalog: HashMap::new(),
             portal_items: HashMap::new(),
             portal_members: HashMap::new(),
@@ -146,7 +148,7 @@ impl AppState {
             state.ensure_layout();
         }
         if state.load_issue.is_some() {
-            state.dirty = false;
+            state.document = DocumentClock::new(false);
         }
         state
     }
@@ -182,6 +184,7 @@ impl AppState {
         config.snapshots = snaps;
         config.validate()?;
         self.config = config;
+        self.document.replace();
         self.save_allowed = true;
         self.pending_explicit_replacement = true;
         self.load_issue = None;
@@ -191,7 +194,7 @@ impl AppState {
         self.ensure_layout();
         self.first_run = false;
         self.reset_portal_runtime();
-        self.dirty = true;
+        self.mark_dirty();
         Ok(())
     }
 
@@ -232,7 +235,7 @@ impl AppState {
         while self.config.snapshots.len() > pecofence_core::MAX_SNAPSHOTS {
             self.config.snapshots.remove(0);
         }
-        self.dirty = true;
+        self.mark_dirty();
         id
     }
 
@@ -273,7 +276,7 @@ impl AppState {
         self.layout = 0;
         self.ensure_layout();
         self.reset_portal_runtime();
-        self.dirty = true;
+        self.mark_dirty();
     }
 
     pub fn delete_snapshot(&mut self, id: uuid::Uuid) -> bool {
@@ -281,7 +284,7 @@ impl AppState {
         self.config.snapshots.retain(|s| s.id != id);
         let removed = self.config.snapshots.len() != before;
         if removed {
-            self.dirty = true;
+            self.mark_dirty();
         }
         removed
     }
@@ -318,7 +321,7 @@ impl AppState {
             n += 1;
         }
         if n > 0 {
-            self.dirty = true;
+            self.mark_dirty();
         }
         n
     }
@@ -331,7 +334,7 @@ impl AppState {
             Some(o) => o.clone(),
             None => {
                 self.config.settings.desktop_path = Some(new_s);
-                self.dirty = true;
+                self.mark_dirty();
                 return 0;
             }
         };
@@ -362,7 +365,7 @@ impl AppState {
         }
         self.config.settings.desktop_path = Some(new_s);
         self.rebuild_catalog();
-        self.dirty = true;
+        self.mark_dirty();
         n
     }
 
@@ -422,7 +425,7 @@ impl AppState {
         });
         self.layout = self.config.layouts.len() - 1;
         self.reset_portal_runtime();
-        self.dirty = true;
+        self.mark_dirty();
     }
 
     /// Stardock-style first-run layout: right column 程序 / 文件夹 / 文件与文档 / 桌面(inbox).
@@ -560,8 +563,9 @@ impl AppState {
         let active = self.container(host).map(|c| c.active_tab);
         let index = self.tabs_of(host).len();
         let change = Workspace::new(self.layout_mut()?)?.attach(content, host, index)?;
-        self.dirty |=
-            before != self.tabs_of(host) || active != self.container(host).map(|c| c.active_tab);
+        if before != self.tabs_of(host) || active != self.container(host).map(|c| c.active_tab) {
+            self.mark_dirty();
+        }
         Ok(change)
     }
 
@@ -572,13 +576,13 @@ impl AppState {
         geometry: NormGeometry,
     ) -> Result<(Transition, TabDetach), WorkspaceError> {
         let result = Workspace::new(self.layout_mut()?)?.detach_with_plan(content, geometry)?;
-        self.dirty = true;
+        self.mark_dirty();
         Ok(result)
     }
 
     pub fn cancel_tab_detach(&mut self, plan: &TabDetach) -> Result<Transition, WorkspaceError> {
         let result = Workspace::new(self.layout_mut()?)?.cancel_detach(plan)?;
-        self.dirty = true;
+        self.mark_dirty();
         Ok(result)
     }
 
@@ -590,7 +594,9 @@ impl AppState {
     ) -> Result<Transition, WorkspaceError> {
         let before = self.tabs_of(host);
         let change = Workspace::new(self.layout_mut()?)?.reorder(host, tab, to)?;
-        self.dirty |= before != self.tabs_of(host);
+        if before != self.tabs_of(host) {
+            self.mark_dirty();
+        }
         Ok(change)
     }
 
@@ -601,7 +607,9 @@ impl AppState {
     ) -> Result<Transition, WorkspaceError> {
         let changed = self.container(host).is_none_or(|c| c.active_tab != tab);
         let transition = Workspace::new(self.layout_mut()?)?.select(host, tab)?;
-        self.dirty |= changed;
+        if changed {
+            self.mark_dirty();
+        }
         Ok(transition)
     }
 
@@ -632,17 +640,26 @@ impl AppState {
     }
 
     pub fn mark_dirty(&mut self) {
-        self.dirty = true;
+        self.document.change();
+    }
+
+    pub fn document_stamp(&self) -> DocumentStamp {
+        self.document.stamp()
+    }
+
+    pub fn committed_revision(&self) -> Option<u64> {
+        self.document.committed()
     }
 
     pub fn is_dirty(&self) -> bool {
-        self.dirty
+        self.document.dirty()
     }
 
     pub fn save_if_dirty(&mut self) -> bool {
-        if !self.dirty || !self.save_allowed {
+        if !self.is_dirty() || !self.save_allowed {
             return false;
         }
+        let saved = self.document_stamp();
         let result = if self.pending_explicit_replacement {
             self.store.replace(&self.config)
         } else {
@@ -650,7 +667,7 @@ impl AppState {
         };
         match result {
             Ok(receipt) => {
-                self.dirty = false;
+                self.document.commit(saved);
                 self.pending_explicit_replacement = false;
                 self.persistence_issue = match receipt.backup {
                     pecofence_core::BackupStatus::Degraded(reason) => Some(reason),
@@ -797,7 +814,7 @@ impl AppState {
                     }
                     if changed {
                         report.updated += 1;
-                        self.dirty = true;
+                        self.mark_dirty();
                     }
                 }
                 // An item that exists but is in no fence (e.g. its fence was deleted) → route.
@@ -805,7 +822,7 @@ impl AppState {
                     let decision = self.route_decision(entry);
                     if let Some((fence, by)) = self.target_fence(decision) {
                         self.config.assign(self.layout, id, fence, by);
-                        self.dirty = true;
+                        self.mark_dirty();
                     }
                 }
                 continue;
@@ -850,7 +867,7 @@ impl AppState {
                 self.config.assign(self.layout, id, fence, by);
             }
             report.added += 1;
-            self.dirty = true;
+            self.mark_dirty();
         }
 
         // Orphans.
@@ -863,7 +880,7 @@ impl AppState {
                 None => {
                     item.orphaned_since = Some(now);
                     report.removed += 1;
-                    self.dirty = true;
+                    self.document.change();
                 }
                 Some(since) if now - since > ORPHAN_GC_SECS => to_remove.push(*id),
                 Some(_) => {}
@@ -880,7 +897,7 @@ impl AppState {
                     }
                 }
             }
-            self.dirty = true;
+            self.mark_dirty();
         }
         report
     }
@@ -968,7 +985,7 @@ impl AppState {
         if let Some(it) = self.config.items.get_mut(&id) {
             it.open_count = it.open_count.saturating_add(1);
             it.last_opened = Some(pecofence_core::now_unix());
-            self.dirty = true;
+            self.mark_dirty();
         }
     }
 
@@ -1087,7 +1104,7 @@ impl AppState {
             && *navigate != on
         {
             *navigate = on;
-            self.dirty = true;
+            self.mark_dirty();
         }
     }
 
@@ -1099,7 +1116,7 @@ impl AppState {
             && *hide_title_icon != on
         {
             *hide_title_icon = on;
-            self.dirty = true;
+            self.mark_dirty();
         }
     }
 
@@ -1306,7 +1323,7 @@ impl AppState {
             }
         }
         self.catalog.insert(new_key, id);
-        self.dirty = true;
+        self.mark_dirty();
         true
     }
 
@@ -1330,7 +1347,7 @@ impl AppState {
             }
         }
         if n > 0 {
-            self.dirty = true;
+            self.mark_dirty();
         }
         n
     }
@@ -1384,7 +1401,7 @@ impl AppState {
                 r.manual_index = Some(i as u32);
             }
         }
-        self.dirty = true;
+        self.mark_dirty();
         true
     }
 
@@ -1442,7 +1459,7 @@ impl AppState {
             }
         }
         if moved > 0 {
-            self.dirty = true;
+            self.mark_dirty();
         }
         moved
     }
@@ -1479,7 +1496,7 @@ impl AppState {
             }
         }
         if !touched.is_empty() {
-            self.dirty = true;
+            self.mark_dirty();
             touched.sort_unstable();
             touched.dedup();
         }
@@ -1519,7 +1536,7 @@ impl AppState {
                 f.expanded_h = geo.h;
                 f.geometry = geo;
                 f.rolled_up = rolled;
-                self.dirty = true;
+                self.mark_dirty();
             }
         }
     }
@@ -1550,7 +1567,7 @@ impl AppState {
             f.rolled_up = !f.rolled_up;
             f.rolled_up
         };
-        self.dirty = true;
+        self.mark_dirty();
         Some(rolled)
     }
 
@@ -1559,7 +1576,7 @@ impl AppState {
             && f.title != title
         {
             f.title = title.to_string();
-            self.dirty = true;
+            self.mark_dirty();
         }
     }
 
@@ -1568,7 +1585,7 @@ impl AppState {
             && f.view.icon_size != size
         {
             f.view.icon_size = size;
-            self.dirty = true;
+            self.mark_dirty();
         }
     }
 
@@ -1577,7 +1594,7 @@ impl AppState {
             && f.auto_height != on
         {
             f.auto_height = on;
-            self.dirty = true;
+            self.mark_dirty();
         }
     }
 
@@ -1593,7 +1610,7 @@ impl AppState {
             && f.view.reverse != on
         {
             f.view.reverse = on;
-            self.dirty = true;
+            self.mark_dirty();
         }
     }
 
@@ -1602,7 +1619,7 @@ impl AppState {
             && f.locked != on
         {
             f.locked = on;
-            self.dirty = true;
+            self.mark_dirty();
         }
     }
 
@@ -1611,7 +1628,7 @@ impl AppState {
             && f.exclude_from_quick_hide != on
         {
             f.exclude_from_quick_hide = on;
-            self.dirty = true;
+            self.mark_dirty();
         }
     }
 
@@ -1629,7 +1646,7 @@ impl AppState {
             let next = (next != pecofence_core::AppearanceOverride::default()).then_some(next);
             if f.appearance != next {
                 f.appearance = next;
-                self.dirty = true;
+                self.mark_dirty();
             }
         }
     }
@@ -1650,7 +1667,7 @@ impl AppState {
             let next = (next != pecofence_core::AppearanceOverride::default()).then_some(next);
             if f.appearance != next {
                 f.appearance = next;
-                self.dirty = true;
+                self.mark_dirty();
             }
         }
     }
@@ -1660,7 +1677,7 @@ impl AppState {
             && f.view.spacing != spacing
         {
             f.view.spacing = spacing;
-            self.dirty = true;
+            self.mark_dirty();
         }
     }
 
@@ -1670,7 +1687,7 @@ impl AppState {
             && f.view.columns_visible != next
         {
             f.view.columns_visible = next;
-            self.dirty = true;
+            self.mark_dirty();
         }
     }
 
@@ -1680,7 +1697,7 @@ impl AppState {
             && f.view.column_widths != next
         {
             f.view.column_widths = next;
-            self.dirty = true;
+            self.mark_dirty();
         }
     }
 
@@ -1689,7 +1706,7 @@ impl AppState {
             && f.view.layout != layout
         {
             f.view.layout = layout;
-            self.dirty = true;
+            self.mark_dirty();
         }
     }
 
@@ -1708,7 +1725,7 @@ impl AppState {
             changed = true;
         }
         if changed {
-            self.dirty = true;
+            self.mark_dirty();
         }
     }
 
@@ -1727,7 +1744,7 @@ impl AppState {
             changed = true;
         }
         if changed {
-            self.dirty = true;
+            self.mark_dirty();
         }
     }
 
@@ -1756,7 +1773,7 @@ impl AppState {
             .ok()?
             .create(fence, geo)
             .ok()?;
-        self.dirty = true;
+        self.mark_dirty();
         Some(id)
     }
 
@@ -1798,7 +1815,7 @@ impl AppState {
                 .count()
         };
         self.config.rules.list.insert(at, rule);
-        self.dirty = true;
+        self.mark_dirty();
         Ok(id)
     }
 
@@ -1841,7 +1858,7 @@ impl AppState {
         if self.config.rules.default_target == Target::Collection(id) {
             self.config.rules.default_target = Target::Inbox;
         }
-        self.dirty = true;
+        self.mark_dirty();
         true
     }
 }
@@ -1937,7 +1954,7 @@ mod tests {
             config: Config::default(),
             store: ConfigStore::new(dir),
             layout: 0,
-            dirty: false,
+            document: DocumentClock::new(true),
             catalog: HashMap::new(),
             portal_items: HashMap::new(),
             portal_members: HashMap::new(),
@@ -2004,12 +2021,12 @@ mod tests {
         state.attach_tab(b, host).unwrap();
         state.attach_tab(c, host).unwrap();
         let before = state.tabs_of(host);
-        state.dirty = false;
+        state.document.commit(state.document_stamp());
         let geometry = state.container(host).unwrap().geometry.clone();
         let (transition, change) = state
             .detach_tab_with_plan(a, geometry)
             .expect("the host must be detachable too");
-        assert!(state.dirty);
+        assert!(state.is_dirty());
         assert_eq!(state.host_of(a), Some(transition.created_containers[0]));
         assert_eq!(state.host_of(c), Some(host));
         assert_eq!(state.active_tab_of(host), Some(c));
@@ -2017,9 +2034,9 @@ mod tests {
         assert_eq!(names(&state, b), vec!["second"]);
         assert_eq!(names(&state, c), vec!["third"]);
         state.rename_fence(a, "edited during drag");
-        state.dirty = false;
+        state.document.commit(state.document_stamp());
         state.cancel_tab_detach(&change).unwrap();
-        assert!(state.dirty);
+        assert!(state.is_dirty());
         assert_eq!(state.tabs_of(host), before);
         assert_eq!(state.fence(a).unwrap().title, "edited during drag");
     }
@@ -2101,7 +2118,7 @@ mod tests {
         let b = state.fences()[1].id;
         let c = state.fences()[2].id;
         let host = state.host_of(a).unwrap();
-        state.dirty = false;
+        state.document.commit(state.document_stamp());
         state.set_active_tab(host, a).unwrap();
         state.reorder_tab(host, a, 0).unwrap();
         assert!(!state.is_dirty());
@@ -2112,7 +2129,7 @@ mod tests {
         let geometry = state.container(host).unwrap().geometry.clone();
         let (_, plan) = state.detach_tab_with_plan(b, geometry).unwrap();
         state.reorder_tab(host, c, 0).unwrap();
-        state.dirty = false;
+        state.document.commit(state.document_stamp());
         assert!(state.cancel_tab_detach(&plan).is_err());
         assert!(!state.is_dirty());
         assert_ne!(state.host_of(b), Some(host));
@@ -2133,7 +2150,7 @@ mod tests {
                 assert_eq!(state.host_of(victim), Some(target));
             }
             assert_eq!(state.active_tab_of(retired), None);
-            state.dirty = false;
+            state.document.commit(state.document_stamp());
             let before = serde_json::to_value(&state.config).unwrap();
             state.set_fence_bounds(retired, RECT::default(), false, 100);
             assert_eq!(state.toggle_rolled(retired), None);
@@ -2160,7 +2177,7 @@ mod tests {
         let geometry = state.container(host).unwrap().geometry.clone();
         let (_, plan) = state.detach_tab_with_plan(portal, geometry).unwrap();
         state.cancel_tab_detach(&plan).unwrap();
-        state.dirty = false;
+        state.document.commit(state.document_stamp());
         let path = PathBuf::from(r"C:\Portal\kept");
         assert_eq!(
             state.accept_portal_result(PortalResult {
@@ -2282,7 +2299,7 @@ mod tests {
         let mut state = test_state();
         let root = PathBuf::from(r"C:\Portal");
         let id = state.new_portal_fence(&root, RECT::default()).unwrap();
-        state.dirty = false;
+        state.document.commit(state.document_stamp());
         finish_portal(
             &mut state,
             PortalOutcome::Complete(vec![portal_entry(root.join("kept"))]),
@@ -2437,7 +2454,7 @@ mod tests {
             &mut state,
             PortalOutcome::Complete(vec![portal_entry(root.join("kept"))]),
         );
-        state.dirty = false;
+        state.document.commit(state.document_stamp());
         for path in [
             r"C:\Portal\..\Outside",
             r"C:\Portal\.\Child",

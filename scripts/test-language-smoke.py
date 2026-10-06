@@ -78,7 +78,7 @@ def main():
     for language in LANGUAGES:
         settings["language"] = language
         lines.extend((
-            "message " + json.dumps({"type": "patchSettings", "settings": settings}, ensure_ascii=False),
+            "set-setting language " + json.dumps(language),
             "sleep 180",
         ))
     lines.extend(("sleep 700", "exit"))

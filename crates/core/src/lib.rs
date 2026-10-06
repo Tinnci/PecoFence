@@ -9,6 +9,7 @@ pub mod i18n;
 pub mod model;
 pub mod portal;
 pub mod rules;
+pub mod settings_protocol;
 pub mod workspace;
 
 pub use config_store::{BackupStatus, ConfigStore, FreshReason, LoadOutcome, SaveReceipt};

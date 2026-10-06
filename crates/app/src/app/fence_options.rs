@@ -1,6 +1,6 @@
 //! Per-fence options shared by the fence context menu and the settings page's 「栅栏」 tab:
 //! one setter per property (state + window + anchor + save) and the page protocol
-//! (`fences[]` details in the state JSON, `setFence` messages, `showFence` navigation).
+//! (read-only `fences[]` projection, typed content/container edits, `showFence` navigation).
 //!
 //! Window-level properties (appearance, lock, quick-hide exclusion, auto height, dock) act on
 //! the fence's host window when the fence is a tab; content properties (icon size, spacing,
@@ -8,6 +8,7 @@
 
 use super::*;
 use pecofence_core::{ContainerId, ContentId, FenceSnapshot};
+use std::result::Result;
 
 /// Fences-style colour choices for the per-fence tint (name, rgb); the settings page builds
 /// its 色调 options from this list (`tintPalette` in the state JSON).
@@ -30,21 +31,8 @@ pub(super) fn tint_palette_json() -> serde_json::Value {
         .collect()
 }
 
-/// "更透明" / "更厚实" opacity presets (the menu's former values).
-const OPACITY_CLEAR: f32 = 0.55;
-const OPACITY_SOLID: f32 = 1.6;
-
 fn hex(rgb: [u8; 3]) -> String {
     format!("{:02X}{:02X}{:02X}", rgb[0], rgb[1], rgb[2])
-}
-
-fn parse_hex(s: &str) -> Option<[u8; 3]> {
-    let s = s.trim_start_matches('#');
-    if s.len() != 6 {
-        return None;
-    }
-    let v = u32::from_str_radix(s, 16).ok()?;
-    Some([(v >> 16) as u8, (v >> 8) as u8, v as u8])
 }
 
 impl App {
@@ -263,144 +251,104 @@ impl App {
         })
     }
 
-    /// `{"type":"setFence","id":…,"prop":…,"value":…}` from the page.
-    pub(super) fn on_set_fence(&mut self, v: &serde_json::Value) {
-        let Some(fence) = v
-            .get("contentId")
-            .and_then(|i| i.as_str())
-            .and_then(|i| uuid::Uuid::parse_str(i).ok())
-            .map(ContentId)
-        else {
-            return;
-        };
-        let Some(snapshot) = self.state.fence(fence) else {
-            return;
-        };
-        let supplied_container = v
-            .get("containerId")
-            .and_then(|i| i.as_str())
-            .and_then(|i| uuid::Uuid::parse_str(i).ok())
-            .map(ContainerId);
-        if !matches_container(snapshot.container_id, supplied_container) {
-            self.settings_error(pecofence_core::i18n::text(
-                "内容已移动，请刷新设置后再编辑。",
-            ));
-            self.push_settings_state();
-            return;
+    /// Reject edits captured before the content moved to another container.
+    fn check_settings_pair(
+        &self,
+        content: ContentId,
+        container: ContainerId,
+    ) -> Result<FenceSnapshot, String> {
+        let snapshot = self
+            .state
+            .fence(content)
+            .ok_or("content no longer exists")?;
+        if !matches_container(snapshot.container_id, Some(container)) {
+            return Err(pecofence_core::i18n::text("内容已移动，请刷新设置后再编辑。").into());
         }
-        let Some(prop) = v.get("prop").and_then(|p| p.as_str()) else {
-            return;
-        };
-        let value = v.get("value").cloned().unwrap_or(serde_json::Value::Null);
-        if !valid_property_value(prop, &value) {
-            self.settings_error(pecofence_core::i18n::text("属性值无效。"));
-            self.push_settings_state();
-            return;
+        Ok(snapshot)
+    }
+
+    pub(super) fn apply_content_change(
+        &mut self,
+        content: ContentId,
+        container: ContainerId,
+        change: pecofence_core::settings_protocol::ContentChange,
+    ) -> Result<(), String> {
+        use pecofence_core::settings_protocol::ContentChange as C;
+        let snapshot = self.check_settings_pair(content, container)?;
+        match change {
+            C::Title(title) if !title.trim().is_empty() && title.len() <= 1024 => {
+                self.state.rename_fence(content, title.trim());
+                self.refresh_fence(content);
+                self.schedule_save();
+            }
+            C::Title(_) => return Err("invalid title".into()),
+            C::IconSize(size)
+                if snapshot.content.is_files() && matches!(size, 32 | 48 | 64 | 96) =>
+            {
+                self.apply_icon_size(content, size)
+            }
+            C::IconSize(_) => return Err("invalid file-view icon size".into()),
+            C::Spacing(spacing) if snapshot.content.is_files() => {
+                self.set_fence_spacing(content, spacing)
+            }
+            C::Spacing(_) => return Err("content has no file view".into()),
+            C::PortalNavigate(value) if snapshot.kind == FenceKind::FolderPortal => {
+                self.set_fence_portal_navigate(content, value)
+            }
+            C::PortalTitleIcon(value) if snapshot.kind == FenceKind::FolderPortal => {
+                self.set_fence_title_icon(content, value)
+            }
+            _ => return Err("content is not a folder portal".into()),
         }
-        let as_bool = || value.as_bool().unwrap_or(false);
-        let as_str = || value.as_str().unwrap_or("");
-        match prop {
-            "title" => {
-                let title = as_str().trim();
-                if !title.is_empty() {
-                    self.state.rename_fence(fence, title);
-                    self.refresh_fence(fence);
-                    if let Some(w) = self.window_for(fence) {
-                        w.redraw();
-                    }
-                    self.schedule_save();
-                }
+        Ok(())
+    }
+
+    pub(super) fn apply_container_change(
+        &mut self,
+        content: ContentId,
+        container: ContainerId,
+        change: pecofence_core::settings_protocol::ContainerChange,
+    ) -> Result<(), String> {
+        use pecofence_core::settings_protocol::{ContainerChange as C, TitleColor};
+        self.check_settings_pair(content, container)?;
+        match change {
+            C::AutoHeight(value) => self.set_fence_auto_height(content, value),
+            C::Locked(value) => self.set_fence_locked(container, value),
+            C::ExcludeFromQuickHide(value) => self.set_fence_quick_hide_excluded(content, value),
+            C::Opacity(value)
+                if value.is_none_or(|v| v.is_finite() && (0.2..=2.0).contains(&v)) =>
+            {
+                self.set_fence_opacity(content, value)
             }
-            "iconSize" => {
-                if let Some(size) = value.as_u64()
-                    && matches!(size, 32 | 48 | 64 | 96)
-                {
-                    self.apply_icon_size(fence, size as u32);
-                }
-            }
-            "spacing" => {
-                let spacing = match as_str() {
-                    "compact" => Spacing::Compact,
-                    "loose" => Spacing::Loose,
-                    _ => Spacing::Normal,
+            C::Opacity(_) => return Err("invalid opacity".into()),
+            C::Tint(value) => self.set_fence_tint(content, value),
+            C::TitleColor(value) => {
+                let (tint, _, size) = self.style_of(container);
+                let color = match value {
+                    TitleColor::Theme => None,
+                    TitleColor::Tint => tint,
+                    TitleColor::White => Some([255; 3]),
+                    TitleColor::Black => Some([0; 3]),
+                    TitleColor::Custom(rgb) => Some(rgb),
                 };
-                self.set_fence_spacing(fence, spacing);
+                self.set_fence_title_style(content, color, size);
             }
-            "autoHeight" => self.set_fence_auto_height(fence, as_bool()),
-            "locked" => self.set_fence_locked(snapshot.container_id, as_bool()),
-            "excludeFromQuickHide" => self.set_fence_quick_hide_excluded(fence, as_bool()),
-            "opacity" => {
-                let op = match as_str() {
-                    "clear" => Some(OPACITY_CLEAR),
-                    "solid" => Some(OPACITY_SOLID),
-                    _ => None,
-                };
-                self.set_fence_opacity(fence, op);
+            C::TitleSize(value) => {
+                let (_, color, _) = self.style_of(container);
+                self.set_fence_title_style(
+                    content,
+                    color,
+                    (value != TitleSize::Normal).then_some(value),
+                );
             }
-            "tint" => {
-                let tint = value.as_str().and_then(parse_hex);
-                self.set_fence_tint(fence, tint);
-            }
-            "titleColor" => {
-                let Some(host) = self.state.host_of(fence) else {
-                    return;
-                };
-                let (tint, _, _) = self.style_of(host);
-                let (_, _, title_size) = self.style_of(host);
-                let title_rgb = match as_str() {
-                    "theme" => None,
-                    "tint" => tint,
-                    "white" => Some([0xFF, 0xFF, 0xFF]),
-                    "black" => Some([0x00, 0x00, 0x00]),
-                    other => parse_hex(other),
-                };
-                self.set_fence_title_style(fence, title_rgb, title_size);
-            }
-            "titleSize" => {
-                let (_, title_rgb, _) = self.style_of(snapshot.container_id);
-                let size = match as_str() {
-                    "small" => Some(TitleSize::Small),
-                    "large" => Some(TitleSize::Large),
-                    _ => None,
-                };
-                self.set_fence_title_style(fence, title_rgb, size);
-            }
-            "portalNavigate" => self.set_fence_portal_navigate(fence, as_bool()),
-            "portalTitleIcon" => self.set_fence_title_icon(fence, as_bool()),
-            "dockTop" => self.dock_to_top(snapshot.container_id),
-            _ => {
-                tracing::warn!(prop, "unknown fence property from settings page");
-                return;
-            }
+            C::DockTop => self.dock_to_top(container),
         }
-        self.push_settings_state();
+        Ok(())
     }
 }
 
 fn matches_container(actual: ContainerId, supplied: Option<ContainerId>) -> bool {
     supplied == Some(actual)
-}
-
-fn valid_property_value(prop: &str, value: &serde_json::Value) -> bool {
-    match prop {
-        "autoHeight" | "locked" | "excludeFromQuickHide" | "portalNavigate" | "portalTitleIcon" => {
-            value.is_boolean()
-        }
-        "title" => value.as_str().is_some_and(|s| !s.trim().is_empty()),
-        "iconSize" => value
-            .as_u64()
-            .is_some_and(|n| matches!(n, 32 | 48 | 64 | 96)),
-        "spacing" => matches!(value.as_str(), Some("compact" | "normal" | "loose")),
-        "opacity" => matches!(value.as_str(), Some("default" | "clear" | "solid")),
-        "tint" => value.is_null() || value.as_str().and_then(parse_hex).is_some(),
-        "titleColor" => {
-            matches!(value.as_str(), Some("theme" | "tint" | "white" | "black"))
-                || value.as_str().and_then(parse_hex).is_some()
-        }
-        "titleSize" => matches!(value.as_str(), Some("small" | "normal" | "large")),
-        "dockTop" => value.is_null(),
-        _ => false,
-    }
 }
 
 #[cfg(test)]
@@ -418,14 +366,18 @@ mod tests {
 
     #[test]
     fn property_values_are_not_coerced() {
-        assert!(!valid_property_value("locked", &serde_json::json!("true")));
-        assert!(!valid_property_value(
-            "spacing",
-            &serde_json::json!("invalid")
-        ));
-        assert!(!valid_property_value("iconSize", &serde_json::json!(49)));
-        assert!(!valid_property_value("tint", &serde_json::json!("oops")));
-        assert!(valid_property_value("locked", &serde_json::json!(false)));
-        assert!(valid_property_value("tint", &serde_json::Value::Null));
+        use pecofence_core::settings_protocol::ContainerChange;
+        assert!(
+            serde_json::from_str::<ContainerChange>(r#"{"property":"locked","value":"true"}"#)
+                .is_err()
+        );
+        assert!(
+            serde_json::from_str::<ContainerChange>(r#"{"property":"locked","value":false}"#)
+                .is_ok()
+        );
+        assert!(
+            serde_json::from_str::<ContainerChange>(r#"{"property":"tint","value":"oops"}"#)
+                .is_err()
+        );
     }
 }

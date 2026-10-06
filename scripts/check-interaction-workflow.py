@@ -93,7 +93,8 @@ def prepare(seed, root):
         lines.append(f"set-content {ids[index]} {key} " + json.dumps(value, ensure_ascii=False))
 
     def patch_settings():
-        lines.append("message " + json.dumps({"type": "patchSettings", "settings": settings}))
+        lines.append("set-setting themeStyle " + json.dumps(settings["themeStyle"]))
+        lines.append("set-setting clickToExpand " + json.dumps(settings["rollUp"]["clickToExpand"]))
 
     snap("initial")
     drag(80, 320, "two-right")
@@ -204,7 +205,7 @@ def prepare(seed, root):
     for i in range(2):
         for action, label in [("repairIcons", "shown"), ("hideDesktopIcons", "hidden"),
                               ("hideDesktopIcons", "hidden-again"), ("repairIcons", "restored")]:
-            lines.append("message " + json.dumps({"type": "action", "name": action}))
+            lines.append("settings-action " + json.dumps({"action": action}))
             snap(f"icons-{i}-{label}", 200)
     snap("final", 1000)
     lines.append("exit")

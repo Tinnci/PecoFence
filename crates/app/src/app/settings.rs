@@ -2,19 +2,31 @@
 //! import / export / restore, settings diff application.
 
 use super::*;
+use pecofence_core::settings_protocol::{
+    self as protocol, Action, Admission, ClientMessage, Rejection, ServerMessage, SettingsCommand,
+};
+use std::result::Result;
 
 impl App {
     /// Replaces the configuration wholesale (import / backup) and rebuilds everything.
-    pub(super) fn adopt_config(&mut self, cfg: pecofence_core::Config, what: &str) {
+    fn adopt_config(&mut self, mut cfg: pecofence_core::Config, what: &str) -> Result<(), String> {
         self.end_peek_now();
         let old_settings = self.state.config.settings.clone();
-        if let Err(issue) = self.state.replace_config(cfg) {
-            self.settings_error(&issue);
-            self.push_settings_state();
-            return;
+        if !self.state.config.layouts.is_empty() {
+            cfg.snapshots.push(pecofence_core::Snapshot {
+                id: uuid::Uuid::new_v4(),
+                name: pecofence_core::i18n::format("{0}前", &[what.to_string()]),
+                ts: pecofence_core::now_unix(),
+                layouts: self.state.config.layouts.clone(),
+            });
+            while cfg.snapshots.len() > pecofence_core::MAX_SNAPSHOTS {
+                cfg.snapshots.remove(0);
+            }
         }
+        self.state.replace_config(cfg)?;
         self.reconcile_adopted_workspace(old_settings);
         self.settings_commit(&pecofence_core::i18n::format("已{0}", &[what.to_string()]));
+        Ok(())
     }
 
     /// Reset, import and recovery reconcile through one path. Capture prior settings
@@ -41,66 +53,47 @@ impl App {
         self.push_settings_state();
     }
 
-    pub(super) fn export_config(&mut self) {
+    fn export_config(&mut self) -> Result<bool, String> {
         let owner = self.settings.as_ref().map(|h| h.hwnd());
         let name = format!(
             "pecofence-{}.json",
             pecofence_core::config_store::today_yyyy_mm_dd()
         );
-        match pecofence_platform::filedialog::save_json(
+        let path = pecofence_platform::filedialog::save_json(
             owner,
             pecofence_core::i18n::text("导出 PecoFence 配置"),
             &name,
-        ) {
-            Ok(Some(path)) => {
-                self.state.save_if_dirty();
-                match pecofence_core::ConfigStore::export_to(&self.state.config, &path) {
-                    Ok(()) => self.settings_toast(&pecofence_core::i18n::format(
-                        "已导出到 {0}",
-                        &[format!("{}", path.display())],
-                    )),
-                    Err(e) => self.settings_error(&pecofence_core::i18n::format(
-                        "导出失败：{0}",
-                        &[e.to_string()],
-                    )),
-                }
-            }
-            Ok(None) => {}
-            Err(e) => self.settings_error(&pecofence_core::i18n::format(
-                "无法打开保存对话框：{0}",
-                &[e.to_string()],
-            )),
-        }
+        )
+        .map_err(|e| e.to_string())?;
+        let Some(path) = path else {
+            return Ok(false);
+        };
+        pecofence_core::ConfigStore::export_to(&self.state.config, &path)
+            .map_err(|e| e.to_string())?;
+        self.settings_toast(&pecofence_core::i18n::format(
+            "已导出到 {0}",
+            &[format!("{}", path.display())],
+        ));
+        Ok(true)
     }
 
-    pub(super) fn import_config(&mut self) {
+    fn import_config(&mut self) -> Result<bool, String> {
         let owner = self.settings.as_ref().map(|h| h.hwnd());
-        match pecofence_platform::filedialog::open_json(
+        let path = pecofence_platform::filedialog::open_json(
             owner,
             pecofence_core::i18n::text("导入 PecoFence 配置"),
-        ) {
-            Ok(Some(path)) => self.restore_from_file(&path, pecofence_core::i18n::text("导入配置")),
-            Ok(None) => {}
-            Err(e) => self.settings_error(&pecofence_core::i18n::format(
-                "无法打开文件对话框：{0}",
-                &[e.to_string()],
-            )),
-        }
+        )
+        .map_err(|e| e.to_string())?;
+        let Some(path) = path else {
+            return Ok(false);
+        };
+        self.restore_from_file(&path, pecofence_core::i18n::text("导入配置"))?;
+        Ok(true)
     }
 
-    pub(super) fn restore_from_file(&mut self, path: &std::path::Path, what: &str) {
-        match pecofence_core::ConfigStore::parse_file(path) {
-            Ok(cfg) => {
-                // Keep a snapshot of what we are replacing so the step can be undone.
-                self.state
-                    .save_snapshot(&pecofence_core::i18n::format("{0}前", &[what.to_string()]));
-                self.adopt_config(cfg, what);
-            }
-            Err(e) => self.settings_error(&pecofence_core::i18n::format(
-                "文件无法使用：{0}",
-                std::slice::from_ref(&e),
-            )),
-        }
+    fn restore_from_file(&mut self, path: &std::path::Path, what: &str) -> Result<(), String> {
+        let cfg = pecofence_core::ConfigStore::parse_file(path)?;
+        self.adopt_config(cfg, what)
     }
 
     pub(super) fn open_settings(&mut self) {
@@ -158,7 +151,7 @@ impl App {
         }
     }
 
-    pub(super) fn settings_state_json(&self) -> String {
+    fn settings_view(&self) -> serde_json::Value {
         let localization = pecofence_core::i18n::ui_payload();
         let fences: Vec<serde_json::Value> = self
             .state
@@ -228,12 +221,42 @@ impl App {
             "themeMode": if self.theme_mode == ThemeMode::Dark { "dark" } else { "light" },
             "accent": accent,
         })
-        .to_string()
     }
 
     pub(super) fn push_settings_state(&self) {
-        if let Some(h) = &self.settings {
-            h.post_json(&self.settings_state_json());
+        if let (Some(page), Some(client)) =
+            (self.settings_session.page(), self.settings_session.client())
+        {
+            let sequence = self
+                .settings_view_sequence
+                .get()
+                .checked_add(1)
+                .expect("settings view sequence exhausted");
+            self.settings_view_sequence.set(sequence);
+            self.post_settings_message(ServerMessage::Snapshot {
+                protocol: protocol::VERSION,
+                page,
+                client,
+                stamp: self.state.document_stamp(),
+                sequence,
+                view: self.settings_view(),
+            });
+            self.post_settings_message(ServerMessage::Persistence {
+                page,
+                client,
+                stamp: self.state.document_stamp(),
+                committed_revision: self.state.committed_revision(),
+                issue: self.state.persistence_issue.clone(),
+            });
+        }
+    }
+
+    fn post_settings_message(&self, message: ServerMessage) {
+        if let Some(host) = &self.settings {
+            match serde_json::to_string(&message) {
+                Ok(json) => host.post_json(&json),
+                Err(error) => tracing::error!(%error, "settings response serialization failed"),
+            }
         }
     }
 
@@ -244,6 +267,8 @@ impl App {
             h.post_json(
                 &serde_json::json!({
                     "type": "workspaceSummary",
+                    "page": self.settings_session.page(),
+                    "workspace": self.state.document_stamp().workspace,
                     "fenceCount": self.state.fences().len(),
                     "itemCount": self.state.workspace_item_count(),
                 })
@@ -253,8 +278,7 @@ impl App {
     }
 
     /// Call after mutating `self.state.config.settings` anywhere other than apply_settings:
-    /// persists the change and keeps an open settings page in sync so its next
-    /// whole-object patchSettings does not revert it.
+    /// records a document revision and keeps the read-only projection in sync.
     pub(super) fn settings_mutated(&mut self) {
         self.state.mark_dirty();
         self.schedule_save();
@@ -291,211 +315,215 @@ impl App {
     }
 
     pub(super) fn on_settings_message(&mut self, json: &str) {
-        let Ok(v) = serde_json::from_str::<serde_json::Value>(json) else {
-            return;
+        let message = if json.len() > protocol::MAX_REQUEST_BYTES {
+            Err("settings request exceeds 64 KiB".to_string())
+        } else {
+            serde_json::from_str::<ClientMessage>(json).map_err(|error| error.to_string())
         };
-        if !self.state.save_allowed {
-            let kind = v.get("type").and_then(|t| t.as_str());
-            let action = v.get("name").and_then(|n| n.as_str());
-            let permitted = kind == Some("ready")
-                || (kind == Some("action")
-                    && matches!(
-                        action,
-                        Some(
-                            "importConfig"
-                                | "restoreBackup"
-                                | "openConfigFolder"
-                                | "exportConfig"
-                                | "newWorkspace"
-                                | "acceptRecovery"
-                        )
-                    ));
-            if !permitted {
-                self.settings_error(pecofence_core::i18n::text(
-                    "此工作区为只读，请先解决加载问题再编辑。",
-                ));
-                self.push_settings_state();
+        let message = match message {
+            Ok(message) => message,
+            Err(detail) => {
+                self.post_settings_message(ServerMessage::ProtocolError { detail });
                 return;
             }
-        }
-        match v.get("type").and_then(|t| t.as_str()) {
-            Some("ready") => {
+        };
+        match message {
+            ClientMessage::Ready {
+                protocol: version,
+                page,
+            } if version == protocol::VERSION => {
+                self.settings_session.open(page);
                 tracing::info!("settings: page ready");
                 self.push_settings_state();
                 if let Some(fence) = self.settings_focus_fence.take() {
                     self.post_show_fence(fence);
                 }
             }
-            Some("setFence") => self.on_set_fence(&v),
-            Some("patchSettings") => {
-                let Some(new_settings) = v.get("settings").cloned() else {
-                    return;
-                };
-                match serde_json::from_value::<pecofence_core::Settings>(new_settings) {
-                    Ok(new_settings) => {
-                        let mut candidate = self.state.config.clone();
-                        candidate.settings = new_settings.clone();
-                        match candidate.validate() {
-                            Ok(()) => self.apply_settings(new_settings),
-                            Err(issue) => {
-                                self.settings_error(&issue);
-                                self.push_settings_state();
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        self.settings_error(&e.to_string());
-                        self.push_settings_state();
-                    }
-                }
+            ClientMessage::Ready { .. } => {
+                self.post_settings_message(ServerMessage::ProtocolError {
+                    detail: format!(
+                        "unsupported settings protocol; expected {}",
+                        protocol::VERSION
+                    ),
+                })
             }
-            Some("setRules") => {
-                if let Some(rules) = v.get("rules").cloned()
-                    && let Ok(rules) = serde_json::from_value::<pecofence_core::RuleSet>(rules)
-                {
-                    let mut candidate = self.state.config.clone();
-                    candidate.rules = rules.clone();
-                    if let Err(issue) = candidate.validate() {
-                        self.settings_error(&issue);
+            ClientMessage::Request(request) => {
+                let result = match self.settings_session.admit(
+                    &request,
+                    self.state.document_stamp(),
+                    self.state.save_allowed,
+                ) {
+                    Admission::Replay(receipt) => {
+                        self.post_settings_message(ServerMessage::Receipt(receipt));
                         self.push_settings_state();
                         return;
                     }
-                    self.state.config.rules = rules;
+                    Admission::Reject(reason) => Err(reason),
+                    Admission::Apply => self.apply_settings_command(request.command.clone()),
+                };
+                let (rejected, cancelled) = match result {
+                    Ok(cancelled) => (None, cancelled),
+                    Err(reason) => (Some(reason), false),
+                };
+                let receipt = self.settings_session.record(
+                    *request,
+                    self.state.document_stamp(),
+                    rejected,
+                    cancelled,
+                );
+                self.post_settings_message(ServerMessage::Receipt(receipt));
+                self.push_settings_state();
+            }
+        }
+    }
+
+    /// The same typed use cases serve the page and opt-in native test intents.
+    /// Success means the command was applied, not that a deferred write already committed.
+    pub(super) fn apply_settings_command(
+        &mut self,
+        command: SettingsCommand,
+    ) -> Result<bool, Rejection> {
+        if !self.state.save_allowed && !command.permitted_read_only() {
+            return Err(Rejection::ReadOnly);
+        }
+        match command {
+            SettingsCommand::SetSetting { change } => {
+                let mut candidate = self.state.config.clone();
+                change
+                    .apply(&mut candidate.settings)
+                    .map_err(Rejection::Invalid)?;
+                candidate.validate().map_err(Rejection::Invalid)?;
+                let expected = candidate.settings.clone();
+                self.apply_settings(candidate.settings);
+                if self.state.config.settings != expected {
+                    return Err(Rejection::Backend("setting could not be applied".into()));
+                }
+            }
+            SettingsCommand::SetContent {
+                content_id,
+                container_id,
+                change,
+            } => {
+                self.apply_content_change(content_id, container_id, change)
+                    .map_err(Rejection::Invalid)?;
+            }
+            SettingsCommand::SetContainer {
+                content_id,
+                container_id,
+                change,
+            } => {
+                self.apply_container_change(content_id, container_id, change)
+                    .map_err(Rejection::Invalid)?;
+            }
+            SettingsCommand::Rule { change } => {
+                if change
+                    .apply(&mut self.state.config)
+                    .map_err(Rejection::Invalid)?
+                {
                     self.state.mark_dirty();
                     self.schedule_save();
                 }
             }
-            Some("action") => match v.get("name").and_then(|n| n.as_str()) {
-                Some("applyRules") => {
-                    let entries = shell::enumerate_desktop();
-                    let moved = self.state.apply_rules_all(&entries);
-                    self.refresh_all();
-                    self.schedule_save();
-                    self.settings_toast(&pecofence_core::i18n::format(
-                        "已按规则整理 {0} 个项目",
-                        &[moved.to_string()],
-                    ));
-                }
-                Some("addTemplate") => {
-                    if let Some(template) = v
-                        .get("template")
-                        .and_then(|t| t.as_str())
-                        .and_then(pecofence_core::rules::Template::parse)
-                    {
-                        self.add_template(template);
+            SettingsCommand::Action { action } => {
+                action.validate().map_err(Rejection::Invalid)?;
+                match action {
+                    Action::ApplyRules => {
+                        let entries = shell::enumerate_desktop();
+                        let moved = self.state.apply_rules_all(&entries);
+                        self.refresh_all();
+                        self.schedule_save();
+                        self.settings_toast(&pecofence_core::i18n::format(
+                            "已按规则整理 {0} 个项目",
+                            &[moved.to_string()],
+                        ));
                     }
-                }
-                Some("openConfigFolder") => {
-                    let dir = self.state.config_path();
-                    if let Some(dir) = dir.parent() {
-                        let _ = std::process::Command::new("explorer.exe").arg(dir).spawn();
+                    Action::AddTemplate { template } => self.add_template(
+                        pecofence_core::rules::Template::parse(&template)
+                            .ok_or_else(|| Rejection::Invalid("unknown template".into()))?,
+                    ),
+                    Action::OpenConfigFolder => {
+                        let path = self.state.config_path();
+                        let directory = path.parent().ok_or_else(|| {
+                            Rejection::Invalid("workspace has no parent directory".into())
+                        })?;
+                        std::process::Command::new("explorer.exe")
+                            .arg(directory)
+                            .spawn()
+                            .map_err(|e| Rejection::Backend(e.to_string()))?;
                     }
-                }
-                Some("saveSnapshot") => {
-                    let name = v.get("snapshotName").and_then(|n| n.as_str()).unwrap_or("");
-                    self.state.save_snapshot(name);
-                    self.schedule_save();
-                    self.push_settings_state();
-                    self.settings_commit(pecofence_core::i18n::text("已保存快照"));
-                }
-                Some("restoreSnapshot") => {
-                    if let Some(id) = v
-                        .get("id")
-                        .and_then(|i| i.as_str())
-                        .and_then(|i| uuid::Uuid::parse_str(i).ok())
-                    {
-                        // Snapshot of the current state first, so "restore" is reversible
-                        // (the target is looked up before the backup can evict it).
-                        if self
+                    Action::SaveSnapshot { name } => {
+                        self.state.save_snapshot(&name);
+                        self.settings_commit(pecofence_core::i18n::text("已保存快照"));
+                    }
+                    Action::RestoreSnapshot { id } => {
+                        if !self
                             .state
                             .restore_snapshot_with_backup(id, pecofence_core::i18n::text("恢复前"))
                         {
-                            self.end_peek_now();
-                            self.relayout_from_state();
-                            // Portals restored with the snapshot need enumerating; stale
-                            // runtime state of the replaced ones is pruned on the way.
-                            self.refresh_portals();
-                            self.schedule_save();
-                            self.push_settings_state();
-                            self.settings_commit(pecofence_core::i18n::text("已恢复快照"));
+                            return Err(Rejection::Invalid("snapshot not found".into()));
                         }
+                        self.end_peek_now();
+                        self.relayout_from_state();
+                        self.refresh_portals();
+                        self.settings_commit(pecofence_core::i18n::text("已恢复快照"));
                     }
-                }
-                Some("deleteSnapshot") => {
-                    if let Some(id) = v
-                        .get("id")
-                        .and_then(|i| i.as_str())
-                        .and_then(|i| uuid::Uuid::parse_str(i).ok())
-                        && self.state.delete_snapshot(id)
-                    {
+                    Action::DeleteSnapshot { id } => {
+                        if !self.state.delete_snapshot(id) {
+                            return Err(Rejection::Invalid("snapshot not found".into()));
+                        }
                         self.schedule_save();
-                        self.push_settings_state();
                     }
-                }
-                Some("swapMonitors") => {
-                    let a = v
-                        .get("a")
-                        .and_then(|x| x.as_str())
-                        .unwrap_or("")
-                        .to_string();
-                    let b = v
-                        .get("b")
-                        .and_then(|x| x.as_str())
-                        .unwrap_or("")
-                        .to_string();
-                    if !a.is_empty() && !b.is_empty() {
-                        self.swap_monitors(&a, &b);
-                    }
-                }
-                Some("exportConfig") => self.export_config(),
-                Some("newWorkspace")
-                    if v.get("confirmed").and_then(|c| c.as_bool()) == Some(true) =>
-                {
-                    let old_settings = self.state.config.settings.clone();
-                    match self.state.reset_workspace() {
-                        Ok(()) => {
-                            self.reconcile_adopted_workspace(old_settings);
-                            self.settings_commit(pecofence_core::i18n::text("已保存新工作区。"));
+                    Action::SwapMonitors { first, second } => {
+                        let monitors = self.monitor_labels();
+                        if !monitors.iter().any(|(id, _)| id == &first)
+                            || !monitors.iter().any(|(id, _)| id == &second)
+                        {
+                            return Err(Rejection::Invalid("monitor not found".into()));
                         }
-                        Err(issue) => self.settings_error(&issue),
+                        self.swap_monitors(&first, &second);
                     }
-                }
-                Some("acceptRecovery")
-                    if v.get("confirmed").and_then(|c| c.as_bool()) == Some(true) =>
-                {
-                    let old_settings = self.state.config.settings.clone();
-                    match self.state.accept_recovery() {
-                        Ok(()) => {
-                            self.reconcile_adopted_workspace(old_settings);
-                            self.settings_commit(pecofence_core::i18n::text(
-                                "已保存恢复的工作区。",
+                    Action::ExportConfig => {
+                        if !self.state.save_allowed && self.state.recovered_from.is_none() {
+                            return Err(Rejection::ReadOnly);
+                        }
+                        return self
+                            .export_config()
+                            .map(|completed| !completed)
+                            .map_err(Rejection::Backend);
+                    }
+                    Action::NewWorkspace { .. } => {
+                        let old = self.state.config.settings.clone();
+                        self.state.reset_workspace().map_err(Rejection::Invalid)?;
+                        self.reconcile_adopted_workspace(old);
+                        self.settings_commit(pecofence_core::i18n::text("已保存新工作区。"));
+                    }
+                    Action::AcceptRecovery { .. } => {
+                        let old = self.state.config.settings.clone();
+                        self.state.accept_recovery().map_err(Rejection::Invalid)?;
+                        self.reconcile_adopted_workspace(old);
+                        self.settings_commit(pecofence_core::i18n::text("已保存恢复的工作区。"));
+                    }
+                    Action::ImportConfig { .. } => {
+                        return self
+                            .import_config()
+                            .map(|completed| !completed)
+                            .map_err(Rejection::Backend);
+                    }
+                    Action::RestoreBackup { path, .. } => {
+                        if !self.state.backup_files().contains(&path) {
+                            return Err(Rejection::Invalid(
+                                "backup is not in this workspace".into(),
                             ));
                         }
-                        Err(issue) => self.settings_error(&issue),
+                        self.restore_from_file(&path, pecofence_core::i18n::text("恢复备份"))
+                            .map_err(Rejection::Backend)?;
                     }
+                    Action::RepairIcons => self.set_desktop_icons_hidden(false),
+                    Action::HideDesktopIcons => self.set_desktop_icons_hidden(true),
                 }
-                Some("importConfig")
-                    if v.get("confirmed").and_then(|c| c.as_bool()) == Some(true) =>
-                {
-                    self.import_config()
-                }
-                Some("restoreBackup") => {
-                    if v.get("confirmed").and_then(|c| c.as_bool()) == Some(true)
-                        && let Some(p) = v.get("path").and_then(|p| p.as_str())
-                    {
-                        let path = PathBuf::from(p);
-                        // Only files from our own backups folder.
-                        if self.state.backup_files().contains(&path) {
-                            self.restore_from_file(&path, pecofence_core::i18n::text("恢复备份"));
-                        }
-                    }
-                }
-                Some("repairIcons") => self.set_desktop_icons_hidden(false),
-                Some("hideDesktopIcons") => self.set_desktop_icons_hidden(true),
-                _ => {}
-            },
-            _ => {}
+            }
         }
+        Ok(false)
     }
 
     /// Both rescue buttons and the tray use the same idempotent operation. A second

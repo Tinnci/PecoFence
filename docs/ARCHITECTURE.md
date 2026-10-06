@@ -257,44 +257,46 @@ struct CommitReceipt {
 
 ```rust
 struct SettingsRequest {
-    protocol: SettingsProtocolVersion,
-    workspace: WorkspaceActivation,
-    client: SettingsClientId,
-    request: RequestSequence,
-    expected: DocumentRevision,
-    change: SettingsChange,
+    protocol: u16,
+    client: Uuid, // page handshake identity
+    sequence: u64,
+    base: DocumentStamp, // activation UUID + expected revision
+    command: SettingsCommand,
 }
 
-enum SettingsChange {
-    SetAppearance(Appearance),
-    SetAutoStart(bool),
-    AddRule(NewRule),
-    EditRule { rule: RuleId, change: RuleChange },
-    ReorderRule { rule: RuleId, before: Option<RuleId> },
+enum SettingsCommand {
+    SetSetting { change: SettingChange },
+    SetContent { content_id: ContentId, container_id: ContainerId, change: ContentChange },
+    SetContainer { content_id: ContentId, container_id: ContainerId, change: ContainerChange },
+    Rule { change: RuleChange },
+    Action { action: Action },
 }
 
-enum SettingsReply {
-    Accepted { request: RequestSequence, revision: DocumentRevision },
-    Rejected { request: RequestSequence, reason: Rejection },
+struct Receipt {
+    client: Uuid,
+    sequence: u64,
+    base: DocumentStamp,
+    current: DocumentStamp,
+    rejected: Option<Rejection>,
+    cancelled: bool,
 }
 
-struct SettingsEnvelope<T> {
-    workspace: WorkspaceActivation,
-    client: SettingsClientId,
-    payload: T,
-}
-
-enum PersistenceNotice {
-    Committed { through: DocumentRevision },
-    CommitFailed { revision: DocumentRevision, reason: PersistenceIssue },
+struct PersistenceNotice {
+    page: Uuid,
+    client: Uuid,
+    stamp: DocumentStamp,
+    committed_revision: Option<u64>,
+    issue: Option<String>,
 }
 ```
 
+以上为已实现 C1 的契约形状，精确 wire、去重容量和测试见 [SETTINGS_PROTOCOL.md](SETTINGS_PROTOCOL.md)。原生接线使用这些枚举；ViewSnapshot 的 JSON 是只读投影，不是权威可写对象。后文 OS 操作健康和异步存储为后续目标，不应理解为当前全部完成。
+
 细粒度操作防止无关字段被覆盖；文档修订冲突则明确拒绝，返回新 snapshot 供客户端重试。`Accepted` 只表示内存中的文档已更新，`Committed` 表示该修订及之前的修改已落盘。每个请求只作一次接纳决定，持久化通知不是第二个命令回复。
 
-WorkspaceActivation 含文档 ID 和本次激活 nonce；导入/恢复/新建/重新打开均改变 nonce。revision 和视图序号只在该 activation 内比较，不假设跨文档全局唯一。所有 snapshot、回复、提交请求和 PersistenceNotice 绑定 activation；旧 activation 消息即使 revision 相同也拒绝，旧提交不能确认新文档已保存。
+当前 `DocumentStamp.workspace` 是本次激活 UUID，导入/恢复接受/新建/重新载入都会改变它；它不是持久文档 ID。revision 只在该 activation 内比较，不假设跨文档全局唯一。所有 snapshot、回复、提交确认和 PersistenceNotice 绑定 activation；旧 activation 消息即使 revision 相同也拒绝，旧提交不能确认新文档已保存。若 B2 引入持久文档 ID，必须与激活身份分别建模。
 
-`ready` 为 WebView 会话分配新的 SettingsClientId，返回协议版本、WorkspaceActivation、完整 ViewSnapshot、文档修订、可用操作和保存健康。客户端 request sequence 单调递增；宿主有界保存最近请求摘要与接纳决定。相同序号/相同内容重试返回原决定，内容不同拒绝；已淘汰的旧序号拒绝 ExpiredRequest，绝不重新执行。乱序/跳号拒绝并返回期望序号；更换 client 后不能重发旧未决修改当作新请求，需核对最新视图。此去重只覆盖活动会话，不声称跨重启操作恰好一次。
+`ready` 带 page UUID，为新 WebView 会话分配 client UUID，返回协议版本、激活、完整 ViewSnapshot、文档修订和保存健康；同 page 的重试保持 client。客户端 request sequence 单调递增；宿主有界保存最近 32 个请求与接纳决定。相同序号/相同内容重试返回原决定，内容不同拒绝；已淘汰的旧序号拒绝，绝不重新执行。乱序/跳号拒绝并要求重新打开页面；更换 client 后不能重发旧未决修改当作新请求。此去重只覆盖活动会话，不声称跨重启操作恰好一次。
 
 推送视图有独立序号；前端丢弃旧 activation/旧推送。前端草稿与服务器投影分开：新状态只更新未编辑字段，脏草稿显示冲突；不能收到 state 后整页覆盖用户输入。
 
@@ -503,4 +505,4 @@ Root 仍名为 `Config`，且还保存部分桌面观测字段；不是已经完
 
 实验夹具使用 `core` 的 `validate_workspace` 示例程序生成和校验精确格式，不维护第二套 Python schema，也不自动迁移旧 seeds。真实桌面交互脚本的容器在 tear-off 中可能更换，属性命令在执行时从稳定内容 ID 解析当前配对。
 
-未改造的组件必须继续明确标记：文件操作逐项结果/journal、桌面来源异步化、完整 Settings 修订/会话协议、类型化 SPM 端口与操作完成、渲染恢复/帧发布、日志轮转。源码和 roadmap 的状态比“重构完成”这一笼统标签更重要。
+C1 已接入类型化 Settings 修订/会话协议、细粒度操作、多条件规则编辑和保存通知。未改造的组件必须继续明确标记：文件操作逐项结果/journal、桌面来源异步化、异步文档提交/关闭保证、Settings OS 集成健康、类型化 SPM 端口与操作完成、渲染恢复/帧发布、日志轮转。源码和 roadmap 的状态比“重构完成”这一笼统标签更重要。

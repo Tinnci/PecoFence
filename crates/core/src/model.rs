@@ -914,6 +914,7 @@ impl Config {
             if rule.id.is_nil() || !rules.insert(rule.id) {
                 return Err("duplicate or nil rule identity".into());
             }
+            crate::rules::Rule::validate_definition(&rule.name, &rule.all_of)?;
         }
         let check_target = |target: crate::rules::Target| -> Result<(), String> {
             if let crate::rules::Target::Collection(id) = target {

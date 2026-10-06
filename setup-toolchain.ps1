@@ -136,13 +136,17 @@ if (-not $uvCommand) {
 if ($LASTEXITCODE -ne 0) { throw "Python >=3.11 setup failed." }
 Write-Host "  [OK] Use uv run --no-project --python '>=3.11' python scripts/<script>.py" -ForegroundColor Green
 
-# 5. Check Node.js (Optional, used for Settings browser UI tests)
+# 5. Node is not needed for cargo alone, but is required by the complete verification script.
 Write-Host "`n[4/5] Checking Node.js..." -ForegroundColor Yellow
 if (Get-Command node -ErrorAction SilentlyContinue) {
     $nodeVer = & node --version
-    Write-Host "  [OK] Node.js $nodeVer" -ForegroundColor Green
+    if ([int]($nodeVer.TrimStart("v").Split(".")[0]) -lt 22) {
+        Write-Warning "Node.js >=22 is required for Settings protocol tests; install a supported release before full verification."
+    } else {
+        Write-Host "  [OK] Node.js $nodeVer" -ForegroundColor Green
+    }
 } else {
-    Write-Host "  Node.js not in PATH (desktop app builds without Node, but UI test scripts use it)." -ForegroundColor Gray
+    Write-Warning "Node.js >=22 is required by scripts/build-and-verify.ps1. Cargo alone builds without Node."
 }
 
 # 6. Summary and Build Instructions

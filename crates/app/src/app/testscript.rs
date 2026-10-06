@@ -163,21 +163,83 @@ impl App {
                     ) {
                         (Ok(id), Some(value)) => {
                             if let Some(snapshot) = self.state.fence(id) {
-                                self.queue.push(Command::SettingsMessage(
-                                    serde_json::json!({
-                                        "type": "setFence",
-                                        "contentId": id,
-                                        "containerId": snapshot.container_id,
-                                        "prop": property,
-                                        "value": value,
+                                use pecofence_core::settings_protocol::{
+                                    ContainerChange, ContentChange, SettingsCommand,
+                                };
+                                let wire =
+                                    serde_json::json!({ "property": property, "value": value });
+                                let command = if let Ok(change) =
+                                    serde_json::from_value::<ContentChange>(wire.clone())
+                                {
+                                    Some(SettingsCommand::SetContent {
+                                        content_id: id,
+                                        container_id: snapshot.container_id,
+                                        change,
                                     })
-                                    .to_string(),
-                                ));
+                                } else if let Ok(change) =
+                                    serde_json::from_value::<ContainerChange>(wire)
+                                {
+                                    Some(SettingsCommand::SetContainer {
+                                        content_id: id,
+                                        container_id: snapshot.container_id,
+                                        change,
+                                    })
+                                } else {
+                                    None
+                                };
+                                match command {
+                                    Some(command) => {
+                                        if let Err(error) = self.apply_settings_command(command) {
+                                            tracing::error!(
+                                                ?error,
+                                                "test content-property rejected"
+                                            );
+                                        }
+                                    }
+                                    None => tracing::error!("invalid typed content-property value"),
+                                }
                             } else {
                                 tracing::error!(%content, "test property targets deleted content");
                             }
                         }
                         _ => tracing::error!("invalid test content-property command"),
+                    }
+                }
+                ["set-setting", property, ..] => {
+                    use pecofence_core::settings_protocol::{SettingChange, SettingsCommand};
+                    let value = line
+                        .splitn(3, ' ')
+                        .nth(2)
+                        .and_then(|json| serde_json::from_str::<serde_json::Value>(json).ok());
+                    let change = value.and_then(|value| {
+                        serde_json::from_value::<SettingChange>(
+                            serde_json::json!({ "property": property, "value": value }),
+                        )
+                        .ok()
+                    });
+                    if let Some(change) = change {
+                        if let Err(error) =
+                            self.apply_settings_command(SettingsCommand::SetSetting { change })
+                        {
+                            tracing::error!(?error, "test setting rejected");
+                        }
+                    } else {
+                        tracing::error!("invalid typed setting command");
+                    }
+                }
+                ["settings-action", ..] => {
+                    use pecofence_core::settings_protocol::{Action, SettingsCommand};
+                    let action = line
+                        .strip_prefix("settings-action ")
+                        .and_then(|json| serde_json::from_str::<Action>(json).ok());
+                    if let Some(action) = action {
+                        if let Err(error) =
+                            self.apply_settings_command(SettingsCommand::Action { action })
+                        {
+                            tracing::error!(?error, "test settings action rejected");
+                        }
+                    } else {
+                        tracing::error!("invalid typed settings action");
                     }
                 }
                 ["quick-hide"] | ["quick-show"] => {

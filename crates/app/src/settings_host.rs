@@ -1,8 +1,9 @@
 //! On-demand WebView2 settings window (plan §9): created when opened, destroyed when closed so
 //! the browser processes go away and nothing stays resident.
 //!
-//! IPC: the page posts JSON (`{"type": "ready" | "patchSettings" | "setRules" | "action"}`);
-//! the host pushes `{"type": "state", ...}` / `{"type": "toast", ...}` with `post_json`.
+//! IPC: closed `settings_protocol` ready/request messages enter the application;
+//! versioned snapshots, decision receipts and persistence notices leave it.
+//! The browser owns drafts only, not a mutable copy of the workspace.
 
 use crate::commands::{Command, CommandQueue};
 use pecofence_platform::window::{
@@ -19,6 +20,7 @@ use windows_webview::{Controller, Environment, EnvironmentOptions, WebView};
 pub const SETTINGS_CLASS: &str = "PecoFence.Settings";
 const SETTINGS_HTML: &str = include_str!("../../../ui/settings.html");
 const I18N_JS: &str = include_str!("../../../ui/i18n.js");
+const SETTINGS_CLIENT_JS: &str = include_str!("../../../ui/settings-client.js");
 
 fn profile_name(instance: Option<&str>) -> String {
     use std::hash::{Hash, Hasher};
@@ -214,6 +216,10 @@ impl SettingsHost {
             .replace(
                 "<script src=\"i18n.js\"></script>",
                 &format!("<script>{I18N_JS}</script>"),
+            )
+            .replace(
+                "<script src=\"settings-client.js\"></script>",
+                &format!("<script>{SETTINGS_CLIENT_JS}</script>"),
             );
         let html = if mica {
             document
