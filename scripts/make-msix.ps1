@@ -12,8 +12,7 @@ param(
   [string]$Python = "python",
   [string]$Identity = "packaging/msix/identity.json",
   [switch]$SkipBuild,
-  [switch]$TestSign,
-  [string]$TestCertPassword = "pecofence-test"
+  [switch]$TestSign
 )
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
@@ -46,33 +45,27 @@ if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
   $env:PATH = (Join-Path $env:USERPROFILE ".cargo\bin") + ";" + $env:PATH
 }
 if (-not $SkipBuild) {
-  cargo build --locked --release -p pecofence -p pecofence-watchdog --target-dir $TargetDir
-  if ($LASTEXITCODE -ne 0) { throw "cargo build failed" }
+  & (Join-Path $PSScriptRoot "build-desktop.ps1") -TargetDir $TargetDir -Python $Python
 }
 
 if (-not $Version) {
   $Version = (Select-String -Path "Cargo.toml" -Pattern '^version = "([^"]+)"').Matches[0].Groups[1].Value
 }
-if ($Version -notmatch '^(\d+)\.(\d+)\.(\d+)(?:-[0-9A-Za-z.-]+)?$') { throw "Invalid version: $Version" }
+if ($Version -notmatch '^(\d+)\.(\d+)\.(\d+)$') { throw "Store MSIX requires a stable workspace version: $Version" }
+foreach ($part in $Matches[1], $Matches[2], $Matches[3]) {
+  if ([long]$part -gt 65535) { throw "MSIX version components cannot exceed 65535." }
+}
 # MSIX needs four parts; the Store requires the revision (last part) to be 0.
 $packageVersion = "$($Matches[1]).$($Matches[2]).$($Matches[3]).0"
 
 $distRoot = [IO.Path]::GetFullPath((Join-Path $root "dist"))
-$stage = [IO.Path]::GetFullPath((Join-Path $distRoot "pecofence-$Version-msix"))
+$stage = [IO.Path]::GetFullPath((Join-Path $distRoot (".msix-" + [guid]::NewGuid().ToString("N"))))
 if (-not $stage.StartsWith($distRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { throw "Unsafe package destination" }
-if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force }
-New-Item -ItemType Directory -Path $stage | Out-Null
-
-# Payload: identical to the portable ZIP minus the portable README.
-$release = Join-Path $TargetDir "release"
-Copy-Item -LiteralPath (Join-Path $release "pecofence.exe") -Destination $stage
-Copy-Item -LiteralPath (Join-Path $release "pecofence-watchdog.exe") -Destination $stage
-Copy-Item -LiteralPath "third_party/webview2/WebView2Loader.x64.dll" -Destination (Join-Path $stage "WebView2Loader.dll")
-Copy-Item -LiteralPath "third_party/webview2/LICENSE.txt" -Destination (Join-Path $stage "LICENSE-WebView2Loader.txt")
-Copy-Item -LiteralPath "LICENSE" -Destination (Join-Path $stage "LICENSE.txt")
-Copy-Item -LiteralPath "NOTICE" -Destination $stage
-& $Python scripts/write-license-notices.py (Join-Path $stage "THIRD-PARTY-LICENSES.txt")
-if ($LASTEXITCODE -ne 0) { throw "License notice generation failed" }
+$priConfig = Join-Path $distRoot (".priconfig-" + [guid]::NewGuid().ToString("N") + ".xml")
+try {
+# Same verified PE-aware payload implementation as the portable ZIP.
+& $Python scripts/package_desktop.py stage-msix --release (Join-Path $TargetDir "release") --version $Version --out $stage
+if ($LASTEXITCODE -ne 0) { throw "Verified MSIX payload generation failed" }
 
 # Tile and Store logos rendered from site/assets/mark.svg.
 & $Python scripts/make-msix-assets.py (Join-Path $stage "Assets")
@@ -89,8 +82,6 @@ $manifestPath = Join-Path $stage "AppxManifest.xml"
 [IO.File]::WriteAllText($manifestPath, $manifest, (New-Object Text.UTF8Encoding $false))
 
 # Resource index so scale-qualified assets resolve.
-$priConfig = Join-Path $distRoot "pecofence-$Version-priconfig.xml"
-if (Test-Path -LiteralPath $priConfig) { Remove-Item -LiteralPath $priConfig }
 & $makepri createconfig /cf $priConfig /dq en-US /pv 10.0.0 /o
 if ($LASTEXITCODE -ne 0) { throw "makepri createconfig failed" }
 & $makepri new /pr $stage /cf $priConfig /of (Join-Path $stage "resources.pri") /mn $manifestPath /o
@@ -102,7 +93,7 @@ if (Test-Path -LiteralPath $msix) { Remove-Item -LiteralPath $msix }
 & $makeappx pack /d $stage /p $msix /o
 if ($LASTEXITCODE -ne 0) { throw "makeappx pack failed" }
 $hash = (Get-FileHash $msix -Algorithm SHA256).Hash
-"$hash  $(Split-Path $msix -Leaf)" | Set-Content "$msix.sha256"
+"$hash  $(Split-Path $msix -Leaf)" | Set-Content "$msix.sha256" -Encoding ascii
 Write-Output "packed $msix (unsigned; the Store signs it after certification)"
 Write-Output "SHA256 $hash"
 
@@ -110,20 +101,28 @@ if ($TestSign) {
   # Self-signed certificate whose subject equals the package Publisher, for local
   # Add-AppxPackage tests only. Install the .cer into Trusted People first.
   $signtool = Find-SdkTool "signtool.exe"
-  $cert = New-SelfSignedCertificate -Type Custom -Subject ([string]$id.publisher) `
-    -KeyUsage DigitalSignature -FriendlyName "PecoFence MSIX test signing" `
-    -CertStoreLocation "Cert:\CurrentUser\My" `
-    -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3", "2.5.29.19={text}")
-  $pfx = Join-Path $distRoot "pecofence-test-signing.pfx"
-  $cer = Join-Path $distRoot "pecofence-test-signing.cer"
-  $secure = ConvertTo-SecureString -String $TestCertPassword -Force -AsPlainText
-  Export-PfxCertificate -Cert $cert -FilePath $pfx -Password $secure | Out-Null
-  Export-Certificate -Cert $cert -FilePath $cer | Out-Null
-  Remove-Item -LiteralPath ("Cert:\CurrentUser\My\" + $cert.Thumbprint)
-  $signed = $msix -replace '\.msix$', '-testsigned.msix'
-  Copy-Item -LiteralPath $msix -Destination $signed -Force
-  & $signtool sign /fd SHA256 /f $pfx /p $TestCertPassword $signed
-  if ($LASTEXITCODE -ne 0) { throw "signtool failed" }
-  Write-Output "test-signed $signed"
-  Write-Output "install the certificate once: Import-Certificate -FilePath `"$cer`" -CertStoreLocation Cert:\LocalMachine\TrustedPeople (admin)"
+  $cert = $null
+  try {
+    $cert = New-SelfSignedCertificate -Type Custom -Subject ([string]$id.publisher) `
+      -KeyUsage DigitalSignature -KeyExportPolicy NonExportable -FriendlyName "PecoFence MSIX test signing" `
+      -CertStoreLocation "Cert:\CurrentUser\My" `
+      -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3", "2.5.29.19={text}")
+    # Export only the public certificate. Never write a private key/PFX into artifacts.
+    $cer = Join-Path $distRoot "pecofence-test-signing.cer"
+    Export-Certificate -Cert $cert -FilePath $cer | Out-Null
+    $signed = $msix -replace '\.msix$', '-testsigned.msix'
+    Copy-Item -LiteralPath $msix -Destination $signed -Force
+    & $signtool sign /fd SHA256 /s My /sha1 $cert.Thumbprint $signed
+    if ($LASTEXITCODE -ne 0) { throw "signtool failed" }
+    $signedHash = (Get-FileHash $signed -Algorithm SHA256).Hash
+    "$signedHash  $(Split-Path $signed -Leaf)" | Set-Content "$signed.sha256" -Encoding ascii
+    Write-Output "test-signed $signed"
+    Write-Output "The .cer is public and for local tests only; neither it nor the test-signed MSIX is a production release."
+  } finally {
+    if ($cert) { Remove-Item -LiteralPath ("Cert:\CurrentUser\My\" + $cert.Thumbprint) -DeleteKey -Force }
+  }
+}
+} finally {
+  if (Test-Path -LiteralPath $priConfig) { Remove-Item -LiteralPath $priConfig -Force }
+  if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force }
 }

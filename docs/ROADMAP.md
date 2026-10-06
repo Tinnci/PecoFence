@@ -86,6 +86,16 @@
 
 动态 ABI、插件市场、热卸载 DLL、沙箱、共享内存总线、事件溯源、通用微内核和盲目拆 crate。不重写 SPM 业务判断、不以本地一次终态承诺远端副作用恰好一次，不为体积牺牲诊断和正确性。
 
+## 构建维护与后续原生设置
+
+Actions 使用已核验的 Node 24/复合 action SHA，Dependabot 显式覆盖工作流与本地 action；
+源码检查先于私有凭据。打包/安装使用共用 PE、构建 receipt、payload manifest 校验，
+不删除旧解压目录的用户配置。见 [DEPENDENCIES](DEPENDENCIES.md) 和 [PACKAGING](PACKAGING.md)。
+
+原生设置方向见 [ADR-007](decisions/ADR-007-native-settings.md)：SPM/栅栏本来就是原生，
+首先替换 Settings WebView host；复用类型化用例/提交状态，原生键盘与可访问性验收通过后
+才删 web 依赖。当前未实现原生 Settings，也没有提前关闭 web 测试。
+
 ## 每次交付需附
 
 具体替换链路与已删除入口；测试命令和实际结果；未验证的 Windows/daemon 行为；来源/配置文件处理政策；若涉及协议，则列双方 SHA 和支持的精确组合。提交/发布与架构验收是不同动作。
