@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- PECOFENCE_LOCALE -->
 <script src="i18n.js"></script>
+<script src="settings-client.js"></script>
 <title>PecoFence 设置</title>
 <style>
   /* Self-contained: the WebView document is embedded in the executable and works offline. */
@@ -291,6 +292,12 @@
         <button id="recoveryNew">新建工作区</button>
       </div>
     </div>
+    <p id="saveState" class="s" role="status"></p>
+    <div id="draftPanel" class="card" hidden>
+      <span>修改冲突，草稿已保留。</span>
+      <button id="draftRetry">重试未提交的修改</button>
+      <button id="draftDiscard">放弃未提交的修改</button>
+    </div>
     <section class="page on" id="page-general">
       <header class="page-header"><div><div class="eyebrow">你的桌面，由你做主</div><h2>常规</h2><p class="page-description">从外观到习惯，让桌面更适合你。</p></div><span class="page-badge"><span class="ic">&#xE73E;</span>更改即时生效</span></header>
       <div class="hero">
@@ -401,7 +408,7 @@
       </div>
       <h3>规则列表</h3>
       <div id="ruleList"></div>
-      <h3>新建规则</h3>
+      <h3 id="nrHeading">新建规则</h3>
       <div class="card rule">
         <div class="newrule">
           <label>规则名称<input type="text" id="nrName" placeholder="例如：截图"></label>
@@ -411,7 +418,7 @@
             <option value="contains">名称包含</option><option value="notContains">名称不包含</option><option value="startsWith">名称开头是</option><option value="endsWith">名称结尾是</option><option value="exact">名称恰好是 (含扩展名，逗号分隔)</option>
             <option value="glob">通配符 (*.png)</option><option value="target">快捷方式目标包含</option>
             <option value="time">创建时间在某个时段</option><option value="weekday">创建于星期</option><option value="size">大小范围 (MB)</option>
-            <option value="idle">闲置天数 (未修改也未打开)</option>
+            <option value="idle">闲置天数 (未修改也未打开)</option><option value="origin">来源：</option>
             <option value="folders">仅文件夹</option><option value="files">仅文件</option></select></label>
           <label id="nrValueWrap">条件值<input type="text" id="nrValue" placeholder="png, jpg"></label>
           <div class="cats" id="nrCats" style="grid-column: 1 / -1"></div>
@@ -419,8 +426,11 @@
           <div class="cats" id="nrWeek" style="grid-column: 1 / -1; display:none"></div>
           <div class="cats" id="nrIdle" style="grid-column: 1 / -1; display:none"><label>闲置至少 <input type="number" id="nrIdleDays" value="30" min="1" style="min-width:80px"> 天</label></div>
           <div class="cats" id="nrSize" style="grid-column: 1 / -1; display:none"><label>至少 <input type="text" inputmode="decimal" id="nrMin" placeholder="0" style="min-width:80px"> MB</label><label>至多 <input type="text" inputmode="decimal" id="nrMax" placeholder="不限" style="min-width:80px"> MB</label></div>
+          <label id="nrOriginWrap" style="display:none">来源：<select id="nrOrigin"><option value="userDesktop">用户桌面</option><option value="publicDesktop">公共桌面</option><option value="namespace">系统项目</option></select></label>
         </div>
-        <div class="row" style="justify-content:flex-end;margin-top:12px"><button class="accent" id="nrAdd" style="min-width:96px">添加规则</button></div>
+        <p class="s">所有条件都必须匹配；未添加条件时，保存会使用当前条件。</p>
+        <div id="nrConditions"></div>
+        <div class="row" style="justify-content:flex-end;margin-top:12px"><button id="nrCondition">添加条件</button><button id="nrCancel" hidden>取消编辑</button><button class="accent" id="nrAdd" style="min-width:96px">添加规则</button></div>
       </div>
     </section>
 
@@ -458,8 +468,46 @@
   const translateStatic = i18n.capture(document);
   translateStatic();
   const wv = window.chrome && window.chrome.webview;
-  const send = (m) => wv && wv.postMessage(m);
   let state = null;
+  const client = new window.PecoFenceSettings.Client({
+    send: message => wv && wv.postMessage(message),
+    onSnapshot: (view, stamp, drafts) => {
+      if (ruleBase && ruleBase.workspace !== stamp.workspace) resetRuleEditor();
+      renderState(view);
+      document.getElementById('draftPanel').hidden = drafts === 0;
+      renderSaveState(client.persistence);
+    },
+    onError: (kind, detail) => {
+      const text = kind === 'workspace' ? t("工作区已更换，旧请求已丢弃。")
+        : kind === 'conflict' ? t("修改冲突，草稿已保留。")
+        : kind === 'readOnly' ? t("此工作区为只读，请先解决加载问题再编辑。")
+        : detail || t("属性值无效。");
+      toast(text, true);
+    },
+    onAccepted: (receipt, command) => {
+      document.getElementById('saveState').textContent = t("修改已接受，尚未确认保存。");
+      if (command.kind === 'rule' && command.change.kind === 'create') toast(t("已添加规则"));
+    },
+    onDecision: (receipt, command) => {
+      if (command.kind === 'rule') {
+        if (command.change.id === ruleSubmission) ruleSubmission = null;
+        if (!receipt.rejected && JSON.stringify(command) === JSON.stringify(ruleLastSubmitted)) resetRuleEditor();
+      }
+    },
+    onPersistence: renderSaveState,
+  });
+  function renderSaveState(message) {
+    const current = message?.stamp.workspace === client.stamp?.workspace
+      && message?.stamp.revision === client.stamp?.revision;
+    const pending = client.inFlight || client.queue.length || client.failed.length || client.accepted.length;
+    document.getElementById('saveState').textContent = message?.issue
+      || (current && !pending && message.committedRevision != null && message.committedRevision >= message.stamp.revision
+        ? t("所有更改已保存。") : t("工作区未保存。"));
+  }
+  const send = command => client.submit(command);
+  const action = value => send({ kind: 'action', action: value });
+  document.getElementById('draftRetry').onclick = () => client.retryDrafts();
+  document.getElementById('draftDiscard').onclick = () => client.discardDrafts();
   const CATS = () => [["programs",t("程序")],["shortcuts",t("快捷方式")],["folders",t("文件夹")],["documents",t("文档")],["images",t("图片")],["music",t("音乐")],["video",t("视频")],["archives",t("压缩包")],["installers",t("安装包")]];
 
   // Appearance comes first, beside the preview; controls keep their existing host bindings.
@@ -620,13 +668,17 @@
     str.disabled = !tint;
     const s = state.settings.icons.tintStrength;
     str.value = s < 0.5 ? '0.35' : (s < 0.75 ? '0.6' : '0.9');
-    sel.onchange = () => { state.settings.icons.tintRgb = sel.value ? hexToRgb(sel.value) : null; str.disabled = !sel.value; commit('icons'); };
-    str.onchange = () => { state.settings.icons.tintStrength = Number(str.value); commit('icons'); };
+    sel.onchange = () => { state.settings.icons.tintRgb = sel.value ? hexToRgb(sel.value) : null; str.disabled = !sel.value; commit('icons.tintRgb'); };
+    str.onchange = () => { state.settings.icons.tintStrength = Number(str.value); commit('icons.tintStrength'); };
   }
   function commit(path) {
     renderAppearance();
-    if (path.startsWith('rules.')) send({ type: 'setRules', rules: state.rules });
-    else send({ type: 'patchSettings', settings: state.settings });
+    if (path === 'rules.keepUpdated') send({ kind: 'rule', change: { kind: 'keepUpdated', value: state.rules.keepUpdated } });
+    else {
+      const property = Object.keys(window.PecoFenceSettings.paths).find(key => window.PecoFenceSettings.paths[key] === path);
+      if (!property) throw new Error('Unknown setting path: ' + path);
+      send({ kind: 'setSetting', change: { property, value: get(state.settings, path) } });
+    }
   }
 
   // 「栅栏」 page: one fence at a time; every control posts a single setFence and the host
@@ -635,7 +687,14 @@
   const fenceById = (id) => (state.fences || []).find(f => f.id === id);
   const fenceOption = (f) => f.title + (f.kind === 'portal' ? t("（门户）") : f.kind === 'inbox' ? t("（桌面）") : '') + (f.host ? tf("（{0} 的标签页）", f.host) : '');
   // Capture the rendered pair: a later tab move must not silently retarget a draft.
-  const setFence = (f, prop, value) => send({ type: 'setFence', contentId: f.contentId, containerId: f.containerId, prop, value });
+  const setFence = (f, property, value) => {
+    const content = ['title', 'iconSize', 'spacing', 'portalNavigate', 'portalTitleIcon'].includes(property);
+    if (property === 'tint') value = value ? hexToRgb(value) : null;
+    if (property === 'titleColor' && !['theme', 'tint', 'white', 'black'].includes(value)) value = { custom: hexToRgb(value) };
+    if (property === 'opacity') value = ({ clear: 0.55, solid: 1.6 })[value] ?? null;
+    const change = property === 'dockTop' ? { property } : { property, value };
+    send({ kind: content ? 'setContent' : 'setContainer', contentId: f.contentId, containerId: f.containerId, change });
+  };
   function ensureOption(sel, value, label) {
     sel.querySelector('[data-custom]')?.remove();
     if (value && ![...sel.options].some(o => o.value === value)) {
@@ -712,7 +771,7 @@
       case 'sizeMb': return t("大小") + (v.min != null ? ' ≥ ' + v.min + ' MB' : '') + (v.max != null ? ' ≤ ' + v.max + ' MB' : '');
       case 'createdTime': return t("创建时间 ") + hm(v.fromMin) + '–' + hm(v.toMin);
       case 'createdWeekday': return t("创建于 ") + v.map(d => WEEK()[d] || d).join('、');
-      case 'origin': return t("来源：") + (v === 'publicDesktop' ? t("公共桌面") : t("用户桌面"));
+      case 'origin': return t("来源：") + (v === 'publicDesktop' ? t("公共桌面") : v === 'namespace' ? t("系统项目") : t("用户桌面"));
       case 'idleDays': return tf("闲置 ≥ {0} 天", v.min);
       default: return c.cond;
     }
@@ -750,17 +809,17 @@
       div.className = 'card rule' + (r.enabled ? '' : ' disabled');
       div.dataset.rowId = r.id;
       div.innerHTML = `<div class="row"><div style="min-width:0"><div class="t">${esc(r.name)}</div><div class="conds">${r.allOf.map(condLabel).map(esc).join(t("，且 "))} ${esc(t("→ 放入"))} ${esc(targetLabel(r.target))}</div></div>
-        <div class="actions"><button class="iconbtn" title="${esc(t("上移"))}" data-act="up" ${i===0?'disabled':''}>&#xE70E;</button><button class="iconbtn" title="${esc(t("下移"))}" data-act="down" ${i===rules.length-1?'disabled':''}>&#xE70D;</button><div class="toggle ${r.enabled?'on':''}" role="switch" tabindex="0" aria-checked="${r.enabled}" data-act="toggle"></div><button class="iconbtn" title="${esc(t("删除"))}" data-act="del">&#xE74D;</button></div></div>`;
+        <div class="actions"><button class="iconbtn" title="${esc(t("编辑规则"))}" data-act="edit">&#xE70F;</button><button class="iconbtn" title="${esc(t("上移"))}" data-act="up" ${i===0?'disabled':''}>&#xE70E;</button><button class="iconbtn" title="${esc(t("下移"))}" data-act="down" ${i===rules.length-1?'disabled':''}>&#xE70D;</button><div class="toggle ${r.enabled?'on':''}" role="switch" tabindex="0" aria-checked="${r.enabled}" data-act="toggle"></div><button class="iconbtn" title="${esc(t("删除"))}" data-act="del">&#xE74D;</button></div></div>`;
       div.querySelectorAll('[data-act]').forEach(b => {
-        const labels = { up: t("上移"), down: t("下移"), toggle: t("启用规则"), del: t("删除规则") };
+        const labels = { edit: t("编辑规则"), up: t("上移"), down: t("下移"), toggle: t("启用规则"), del: t("删除规则") };
         b.setAttribute('aria-label', labels[b.dataset.act] + '：' + r.name);
         b.onclick = () => {
           const act = b.dataset.act;
-          if (act === 'toggle') r.enabled = !r.enabled;
-          if (act === 'del') rules.splice(i, 1);
-          if (act === 'up' && i > 0) { rules.splice(i - 1, 0, rules.splice(i, 1)[0]); }
-          if (act === 'down' && i < rules.length - 1) { rules.splice(i + 1, 0, rules.splice(i, 1)[0]); }
-          send({ type: 'setRules', rules: state.rules }); renderRules();
+          if (act === 'edit') editRule(r);
+          if (act === 'toggle') send({ kind: 'rule', change: { kind: 'setEnabled', id: r.id, value: !r.enabled } });
+          if (act === 'del') send({ kind: 'rule', change: { kind: 'delete', id: r.id } });
+          if (act === 'up' && i > 0) send({ kind: 'rule', change: { kind: 'move', id: r.id, before: rules[i - 1].id } });
+          if (act === 'down' && i < rules.length - 1) send({ kind: 'rule', change: { kind: 'move', id: r.id, before: rules[i + 2]?.id || null } });
         };
         if (b.classList.contains('toggle')) keyToggle(b);
       });
@@ -772,10 +831,11 @@
     const options = state.fences.filter(f => f.isCollection).map(f => `<option value="${esc(f.contentId)}">${esc(f.title)}</option>`).join('');
     if (tgt.innerHTML !== options) {
       tgt.innerHTML = options;
-      if ([...tgt.options].some(o => o.value === selected)) tgt.value = selected;
+      if (selected) tgt.value = selected; // A removed target must not silently become the first collection.
     }
     const cats = document.getElementById('nrCats');
     if (!cats.children.length) cats.innerHTML = CATS().map(([k, l]) => `<label><input type="checkbox" value="${k}">${l}</label>`).join('');
+    renderRuleConditions();
   }
   const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
@@ -783,13 +843,14 @@
   const WEEKDAYS = () => [['0',t("周一")],['1',t("周二")],['2',t("周三")],['3',t("周四")],['4',t("周五")],['5',t("周六")],['6',t("周日")]];
   function updateKind() {
     const k = document.getElementById('nrKind').value;
-    const noValue = ['type','folders','files','time','weekday','size','idle'];
+    const noValue = ['type','folders','files','time','weekday','size','idle','origin'];
     document.getElementById('nrValueWrap').style.display = noValue.includes(k) ? 'none' : '';
     document.getElementById('nrCats').style.display = k === 'type' ? '' : 'none';
     document.getElementById('nrTime').style.display = k === 'time' ? '' : 'none';
     document.getElementById('nrWeek').style.display = k === 'weekday' ? '' : 'none';
     document.getElementById('nrSize').style.display = k === 'size' ? '' : 'none';
     document.getElementById('nrIdle').style.display = k === 'idle' ? '' : 'none';
+    document.getElementById('nrOriginWrap').style.display = k === 'origin' ? '' : 'none';
     const ph = { ext: 'png, jpg', contains: t("截图"), notContains: t("备份"), startsWith: 'IMG_', endsWith: '_final', exact: 'todo.txt, notes.md', glob: '*.png', target: 'steam' };
     document.getElementById('nrValue').placeholder = ph[k] || '';
     const wk = document.getElementById('nrWeek');
@@ -800,10 +861,43 @@
     toast(text, true);
     document.getElementById(id)?.focus();
   }
-  document.getElementById('nrAdd').onclick = () => {
-    const name = document.getElementById('nrName').value.trim() || t("新规则");
-    const target = document.getElementById('nrTarget').value;
-    if (!target) return ruleError(t("没有可用的目标栅栏"), 'nrTarget');
+  let ruleEditing = null, ruleBase = null, ruleConditions = [], ruleSubmission = null, ruleLastSubmitted = null;
+  const ruleForm = document.getElementById('nrName').closest('.card');
+  const changedRuleDraft = () => { ruleBase ||= structuredClone(client.stamp); ruleLastSubmitted = null; };
+  ruleForm.addEventListener('input', changedRuleDraft);
+  ruleForm.addEventListener('change', changedRuleDraft);
+  function renderRuleConditions() {
+    const list = document.getElementById('nrConditions');
+    list.replaceChildren();
+    ruleConditions.forEach((condition, index) => {
+      const row = document.createElement('div'); row.className = 'row';
+      const label = document.createElement('span'); label.textContent = condLabel(condition);
+      const remove = document.createElement('button'); remove.textContent = t("删除");
+      remove.setAttribute('aria-label', t("删除") + '：' + label.textContent);
+      remove.onclick = () => { changedRuleDraft(); ruleConditions.splice(index, 1); renderRuleConditions(); };
+      row.append(label, remove); list.append(row);
+    });
+    document.getElementById('nrHeading').textContent = t(ruleEditing ? "编辑规则" : "新建规则");
+    document.getElementById('nrAdd').textContent = t(ruleEditing ? "保存规则" : "添加规则");
+    document.getElementById('nrCancel').hidden = !ruleEditing && !ruleConditions.length && !ruleBase;
+  }
+  function resetRuleEditor() {
+    ruleEditing = null; ruleBase = null; ruleConditions = []; ruleSubmission = null; ruleLastSubmitted = null;
+    document.getElementById('nrName').value = ''; document.getElementById('nrValue').value = '';
+    renderRuleConditions();
+  }
+  function editRule(rule) {
+    if (ruleSubmission) return;
+    ruleEditing = structuredClone(rule); ruleBase = structuredClone(client.stamp);
+    ruleConditions = structuredClone(rule.allOf);
+    document.getElementById('nrName').value = rule.name;
+    document.getElementById('nrTarget').value = rule.target === 'inbox'
+      ? state.fences.find(f => f.kind === 'inbox')?.contentId || '' : rule.target.collection;
+    renderRuleConditions();
+    document.getElementById('nrName').focus();
+  }
+  document.getElementById('nrCancel').onclick = resetRuleEditor;
+  function readRuleCondition() {
     const kind = document.getElementById('nrKind').value;
     const value = document.getElementById('nrValue').value.trim();
     let cond, cls = 'custom';
@@ -835,23 +929,45 @@
       if (!Number.isFinite(days) || days < 1) return ruleError(t("请输入闲置天数"), 'nrIdleDays');
       cond = { cond: 'idleDays', value: { min: Math.floor(days) } }; cls = 'time';
     }
+    else if (kind === 'origin') cond = { cond: 'origin', value: document.getElementById('nrOrigin').value };
     else if (kind === 'files') cond = { cond: 'filesOnly', value: null };
     else cond = { cond: 'foldersOnly', value: null };
-    const fence = state.fences.find(f => f.id === target);
-    state.rules.list.push({ id: crypto.randomUUID(), name, enabled: true, target: fence && fence.kind === 'inbox' ? 'inbox' : { collection: target }, allOf: [cond], priorityClass: cls });
-    send({ type: 'setRules', rules: state.rules }); renderRules(); toast(t("已添加规则"));
-    document.getElementById('nrName').value = ''; document.getElementById('nrValue').value = '';
+    return { cond, cls };
+  }
+  document.getElementById('nrCondition').onclick = () => {
+    if (ruleConditions.length >= 32) return ruleError(t("最多添加 32 个条件。"), 'nrKind');
+    const condition = readRuleCondition();
+    if (!condition) return;
+    changedRuleDraft();
+    ruleConditions.push(condition.cond); renderRuleConditions();
   };
-  document.getElementById('applyRules').onclick = () => send({ type: 'action', name: 'applyRules' });
-  document.querySelectorAll('#templates [data-template]').forEach(b => { b.onclick = () => send({ type: 'action', name: 'addTemplate', template: b.dataset.template }); });
-  document.getElementById('snapSave').onclick = () => { const n = document.getElementById('snapName').value; send({ type: 'action', name: 'saveSnapshot', snapshotName: n }); document.getElementById('snapName').value = ''; };
-  document.getElementById('cfgExport').onclick = () => send({ type: 'action', name: 'exportConfig' });
+  document.getElementById('nrAdd').onclick = () => {
+    if (ruleSubmission) return;
+    const name = document.getElementById('nrName').value.trim() || t("新规则");
+    const target = document.getElementById('nrTarget').value;
+    const fence = state.fences.find(f => f.contentId === target && f.isCollection);
+    if (!fence) return ruleError(t("没有可用的目标栅栏"), 'nrTarget');
+    const current = ruleConditions.length ? null : readRuleCondition();
+    if (!ruleConditions.length && !current) return;
+    const allOf = ruleConditions.length ? structuredClone(ruleConditions) : [current.cond];
+    const id = ruleEditing?.id || window.PecoFenceSettings.uuid();
+    const command = { kind: 'rule', change: { kind: ruleEditing ? 'edit' : 'create', id, draft: {
+      name, enabled: ruleEditing?.enabled ?? true, target: fence.kind === 'inbox' ? 'inbox' : { collection: target },
+      allOf, priorityClass: allOf.some(c => c.cond === 'shortcutTarget') ? 'target' : ruleEditing?.priorityClass || current?.cls || 'custom',
+    } } };
+    ruleSubmission = id; ruleLastSubmitted = structuredClone(command);
+    if (!client.submit(command, ruleBase || client.stamp)) ruleSubmission = null;
+  };
+  document.getElementById('applyRules').onclick = () => action({ action: 'applyRules' });
+  document.querySelectorAll('#templates [data-template]').forEach(b => { b.onclick = () => action({ action: 'addTemplate', template: b.dataset.template }); });
+  document.getElementById('snapSave').onclick = () => { const n = document.getElementById('snapName').value; action({ action: 'saveSnapshot', name: n }); document.getElementById('snapName').value = ''; };
+  document.getElementById('cfgExport').onclick = () => action({ action: 'exportConfig' });
   const confirmReplacement = () => confirm(t("替换当前工作区？原配置文件将保留。"));
-  document.getElementById('cfgImport').onclick = () => { if (confirmReplacement()) send({ type: 'action', name: 'importConfig', confirmed: true }); };
+  document.getElementById('cfgImport').onclick = () => { if (confirmReplacement()) action({ action: 'importConfig', confirmed: true }); };
   document.getElementById('recoveryImport').onclick = document.getElementById('cfgImport').onclick;
-  document.getElementById('recoveryAccept').onclick = () => { if (confirmReplacement()) send({ type: 'action', name: 'acceptRecovery', confirmed: true }); };
-  document.getElementById('recoveryNew').onclick = () => { if (confirmReplacement()) send({ type: 'action', name: 'newWorkspace', confirmed: true }); };
-  document.getElementById('swapDo').onclick = () => { const a = document.getElementById('swapA').value, b = document.getElementById('swapB').value; if (a && b && a !== b) send({ type: 'action', name: 'swapMonitors', a, b }); else toast(t("请选择两个不同的显示器"), true); };
+  document.getElementById('recoveryAccept').onclick = () => { if (confirmReplacement()) action({ action: 'acceptRecovery', confirmed: true }); };
+  document.getElementById('recoveryNew').onclick = () => { if (confirmReplacement()) action({ action: 'newWorkspace', confirmed: true }); };
+  document.getElementById('swapDo').onclick = () => { const first = document.getElementById('swapA').value, second = document.getElementById('swapB').value; if (first && second && first !== second) action({ action: 'swapMonitors', first, second }); else toast(t("请选择两个不同的显示器"), true); };
   function renderLayout() {
     const sl = document.getElementById('snapList');
     const focus = focusBookmark(sl);
@@ -863,8 +979,8 @@
       div.dataset.rowId = sn.id;
       div.innerHTML = `<div class="l"><span class="ic" aria-hidden="true">&#xE81C;</span><div><div class="t">${esc(sn.name)}</div><div class="s">${esc(sn.date)} · ${sn.fenceCount} ${esc(t("个栅栏"))}</div></div></div>
         <div class="actions" style="display:flex;gap:8px"><button data-act="restore">${esc(t("恢复"))}</button><button class="iconbtn" title="${esc(t("删除"))}" data-act="del">&#xE74D;</button></div>`;
-      div.querySelector('[data-act=restore]').onclick = () => send({ type: 'action', name: 'restoreSnapshot', id: sn.id });
-      div.querySelector('[data-act=del]').onclick = () => send({ type: 'action', name: 'deleteSnapshot', id: sn.id });
+      div.querySelector('[data-act=restore]').onclick = () => action({ action: 'restoreSnapshot', id: sn.id });
+      div.querySelector('[data-act=del]').onclick = () => action({ action: 'deleteSnapshot', id: sn.id });
       div.querySelector('[data-act=restore]').setAttribute('aria-label', t("恢复快照：") + sn.name);
       div.querySelector('[data-act=del]').setAttribute('aria-label', t("删除快照：") + sn.name);
       sl.appendChild(div);
@@ -886,15 +1002,15 @@
       div.dataset.rowId = bk.path;
       div.innerHTML = `<div class="l"><span class="ic" aria-hidden="true">&#xE787;</span><div><div class="t">${esc(bk.name)}</div><div class="s">${esc(t("每日自动备份"))}</div></div></div>
         <div class="actions"><button data-act="restore">${esc(t("恢复"))}</button></div>`;
-      div.querySelector('[data-act=restore]').onclick = () => { if (confirmReplacement()) send({ type: 'action', name: 'restoreBackup', path: bk.path, confirmed: true }); };
+      div.querySelector('[data-act=restore]').onclick = () => { if (confirmReplacement()) action({ action: 'restoreBackup', path: bk.path, confirmed: true }); };
       div.querySelector('[data-act=restore]').setAttribute('aria-label', t("恢复备份：") + bk.name);
       bl.appendChild(div);
     });
     restoreFocus(bl, backupFocus);
   }
-  document.getElementById('openCfg').onclick = () => send({ type: 'action', name: 'openConfigFolder' });
-  document.getElementById('repairIcons').onclick = () => send({ type: 'action', name: 'repairIcons' });
-  document.getElementById('hideIconsAgain').onclick = () => send({ type: 'action', name: 'hideDesktopIcons' });
+  document.getElementById('openCfg').onclick = () => action({ action: 'openConfigFolder' });
+  document.getElementById('repairIcons').onclick = () => action({ action: 'repairIcons' });
+  document.getElementById('hideIconsAgain').onclick = () => action({ action: 'hideDesktopIcons' });
   function renderDesktopIconsStatus() {
     const hidden = !!(state.desktopIconsHidden ?? state.settings.hideRealIcons);
     document.getElementById('hideIconsAgain').disabled = hidden && !!state.settings.hideRealIcons;
@@ -911,9 +1027,7 @@
     document.getElementById('memDetail').textContent = tf("当前占用内存 {0} MB，{1} 个栅栏，{2} 个项目。", state.memoryMb.toFixed(1), fenceCount, itemCount);
   }
 
-  if (wv) wv.addEventListener('message', e => {
-    const m = e.data;
-    if (m.type === 'state') {
+  function renderState(m) {
       state = m;
       state.settings.language ||= 'zh-CN';
       const languageChanged = i18n.set(m.locale || 'zh-CN', m.translations);
@@ -942,19 +1056,33 @@
       document.getElementById('recoveryPanel').hidden = !m.loadIssue && !m.saveHealth;
       document.getElementById('recoveryIssue').textContent = [m.loadIssue, m.saveHealth].filter(Boolean).join('\n');
       document.getElementById('recoveryAccept').hidden = !m.recoveredFrom;
-      document.querySelectorAll('[data-bind], [data-fence], #fenceDock, #snapSave, #swapDo').forEach(el => {
-        el.disabled = !m.saveAllowed;
-        el.setAttribute('aria-disabled', String(!m.saveAllowed));
-        if (!m.saveAllowed && el.classList.contains('toggle')) el.onclick = null;
+      ruleForm.querySelectorAll('input, select, button').forEach(el => {
+        el.disabled = !m.saveAllowed || !client.healthy || !!ruleSubmission;
       });
-    } else if (m.type === 'workspaceSummary') {
+      document.querySelectorAll('#ruleList button').forEach(el => {
+        el.disabled = el.disabled || !m.saveAllowed || !client.healthy;
+      });
+      document.querySelectorAll('#templates button, #applyRules').forEach(el => {
+        el.disabled = !m.saveAllowed || !client.healthy;
+      });
+      document.querySelectorAll('[data-bind], [data-fence], #fenceDock, #snapSave, #swapDo').forEach(el => {
+        el.disabled = !m.saveAllowed || !client.healthy;
+        el.setAttribute('aria-disabled', String(el.disabled));
+        if (el.disabled && el.classList.contains('toggle')) el.onclick = null;
+      });
+  }
+  if (wv) wv.addEventListener('message', e => {
+    const m = e.data;
+    if (client.receive(m)) return;
+    if (m.type === 'workspaceSummary') {
+      if (m.page !== client.page || m.workspace !== client.stamp?.workspace) return;
       if (!state) return;
       state.itemCount = m.itemCount;
       renderWorkspaceSummary(m.fenceCount, m.itemCount);
     } else if (m.type === 'showFence') showFence(m.id);
     else if (m.type === 'toast') toast(m.text, !!m.error);
   });
-  send({ type: 'ready' });
+  client.start();
 })();
 </script>
 </body>

@@ -12,7 +12,7 @@ pub enum Target {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RuleSet {
     pub default_target: Target,
     pub keep_updated: bool,
@@ -42,7 +42,7 @@ pub enum Class {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Rule {
     pub id: RuleId,
     pub name: String,
@@ -58,6 +58,46 @@ pub struct Rule {
 }
 
 impl Rule {
+    pub(crate) fn validate_definition(name: &str, conditions: &[Cond]) -> Result<(), String> {
+        if name.trim().is_empty()
+            || name.len() > 1024
+            || conditions.is_empty()
+            || conditions.len() > 32
+        {
+            return Err("rule needs a name and 1–32 conditions".into());
+        }
+        for condition in conditions {
+            let valid = match condition {
+                Cond::Type(v) => !v.is_empty() && v.len() <= 64,
+                Cond::Ext(v) | Cond::ExactName(v) => {
+                    !v.is_empty()
+                        && v.len() <= 64
+                        && v.iter().all(|s| !s.trim().is_empty() && s.len() <= 1024)
+                }
+                Cond::Name { value, .. } | Cond::ShortcutTarget { value, .. } => {
+                    !value.trim().is_empty() && value.len() <= 1024
+                }
+                Cond::Glob(v) => !v.trim().is_empty() && v.len() <= 256,
+                Cond::CreatedTime { from_min, to_min } => *from_min < 1440 && *to_min < 1440,
+                Cond::CreatedWeekday(v) => {
+                    !v.is_empty() && v.len() <= 7 && v.iter().all(|d| *d < 7)
+                }
+                Cond::SizeMb { min, max } => {
+                    (min.is_some() || max.is_some())
+                        && min.is_none_or(|v| v.is_finite() && v >= 0.0)
+                        && max.is_none_or(|v| v.is_finite() && v >= 0.0)
+                        && min.zip(*max).is_none_or(|(a, b)| a <= b)
+                }
+                Cond::IdleDays { min } => *min > 0,
+                _ => true,
+            };
+            if !valid {
+                return Err("invalid rule condition".into());
+            }
+        }
+        Ok(())
+    }
+
     pub fn new(name: &str, target: Target, all_of: Vec<Cond>) -> Self {
         let priority_class = if all_of
             .iter()
@@ -124,7 +164,13 @@ pub enum StrOp {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", tag = "cond", content = "value")]
+#[serde(
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    tag = "cond",
+    content = "value",
+    deny_unknown_fields
+)]
 pub enum Cond {
     Type(Vec<TypeCategory>),
     Ext(Vec<String>),
@@ -315,24 +361,27 @@ fn str_op(op: StrOp, haystack: &str, needle: &str) -> bool {
     }
 }
 
-/// Minimal glob: `*` and `?`, case-insensitive.
+/// Minimal glob: `*` and `?`, case-insensitive, O(pattern × text) with no recursion.
 pub fn glob_match(pattern: &str, text: &str) -> bool {
-    fn rec(p: &[char], t: &[char]) -> bool {
-        match (p.first(), t.first()) {
-            (None, None) => true,
-            (Some('*'), _) => rec(&p[1..], t) || (!t.is_empty() && rec(p, &t[1..])),
-            (Some('?'), Some(_)) => rec(&p[1..], &t[1..]),
-            (Some(a), Some(b))
-                if a.eq_ignore_ascii_case(b) || a.to_lowercase().eq(b.to_lowercase()) =>
-            {
-                rec(&p[1..], &t[1..])
-            }
-            _ => false,
+    let text: Vec<char> = text.chars().collect();
+    let mut previous = vec![false; text.len() + 1];
+    let mut current = vec![false; text.len() + 1];
+    previous[0] = true;
+    for pattern_char in pattern.chars() {
+        current[0] = pattern_char == '*' && previous[0];
+        for (index, text_char) in text.iter().enumerate() {
+            current[index + 1] = if pattern_char == '*' {
+                previous[index + 1] || current[index]
+            } else {
+                previous[index]
+                    && (pattern_char == '?'
+                        || pattern_char.eq_ignore_ascii_case(text_char)
+                        || pattern_char.to_lowercase().eq(text_char.to_lowercase()))
+            };
         }
+        std::mem::swap(&mut previous, &mut current);
     }
-    let p: Vec<char> = pattern.chars().collect();
-    let t: Vec<char> = text.chars().collect();
-    rec(&p, &t)
+    previous[text.len()]
 }
 
 pub fn cond_matches(cond: &Cond, facts: &ItemFacts) -> bool {

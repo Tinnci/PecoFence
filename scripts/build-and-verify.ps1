@@ -27,6 +27,8 @@ function Invoke-CheckedCommand([string]$Name, [string]$Program, [string[]]$Argum
 Invoke-CheckedCommand "Format" "cargo" @("fmt", "--all", "--check")
 Invoke-CheckedCommand "Translations" $Python @("scripts/check-locales.py")
 Invoke-CheckedCommand "README translations" $Python @("scripts/check-readme-translations.py")
+Invoke-CheckedCommand "Settings client protocol" "node" @("--test", "scripts/test-settings-client.cjs")
+Invoke-CheckedCommand "Settings browser UI" "pwsh" @("-NoProfile", "-File", "scripts/test-settings-browser.ps1")
 Invoke-CheckedCommand "Website publication tests" $Python @("scripts/test-build-site.py")
 Invoke-CheckedCommand "Website" $Python @("scripts/build-site.py", "--strict", "--out", ".cache/site-check")
 

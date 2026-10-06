@@ -65,6 +65,11 @@ panic = "abort"
 strip = false
 debug = "line-tables-only"
 
+# Model/protocol validation is not a render hot path. Keep its generated serde
+# code compact without changing the renderer/platform optimization or symbols.
+[profile.release.package.pecofence-core]
+opt-level = "s"
+
 [profile.dev]
 opt-level = 1
 # Tests inherit this profile. Keep local builds small; enable symbols/incremental

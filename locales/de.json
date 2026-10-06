@@ -445,5 +445,18 @@
   "已保存恢复的工作区。": "Der wiederhergestellte Arbeitsbereich wurde gespeichert.",
   "接受恢复的工作区": "Wiederhergestellten Arbeitsbereich übernehmen",
   "新建工作区": "Arbeitsbereich erstellen",
-  "替换当前工作区？原配置文件将保留。": "Aktuellen Arbeitsbereich ersetzen? Die ursprüngliche Konfiguration bleibt erhalten."
+  "替换当前工作区？原配置文件将保留。": "Aktuellen Arbeitsbereich ersetzen? Die ursprüngliche Konfiguration bleibt erhalten.",
+  "修改冲突，草稿已保留。": "Die Änderung steht im Konflikt. Ihr Entwurf bleibt erhalten.",
+  "修改已接受，尚未确认保存。": "Änderungen angenommen; das Speichern ist noch nicht bestätigt.",
+  "取消编辑": "Bearbeitung abbrechen",
+  "工作区已更换，旧请求已丢弃。": "Der Arbeitsbereich wurde gewechselt. Alte Anfragen wurden verworfen.",
+  "所有更改已保存。": "Alle Änderungen wurden gespeichert.",
+  "所有条件都必须匹配；未添加条件时，保存会使用当前条件。": "Alle Bedingungen müssen zutreffen. Ohne hinzugefügte Bedingungen wird die aktuelle Bedingung gespeichert.",
+  "放弃未提交的修改": "Nicht übermittelte Änderungen verwerfen",
+  "最多添加 32 个条件。": "Es sind höchstens 32 Bedingungen möglich.",
+  "添加条件": "Bedingung hinzufügen",
+  "系统项目": "Systemelemente",
+  "编辑规则": "Regel bearbeiten",
+  "保存规则": "Regel speichern",
+  "重试未提交的修改": "Nicht übermittelte Änderungen erneut senden"
 }

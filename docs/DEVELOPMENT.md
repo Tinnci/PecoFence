@@ -6,7 +6,8 @@
 - Rust stable (MSVC toolchain); the workspace's minimum Rust version is in `Cargo.toml`.
 - Visual Studio Build Tools with the Desktop development with C++ workload and Windows SDK.
 - Microsoft Edge WebView2 Runtime to use Settings.
-- Python >=3.11 for catalog checks/source packaging; Node.js for the settings browser tests.
+- Python >=3.11 for catalog checks/source packaging.
+- Node.js >=22 (CI uses 24), PowerShell 7 and Chrome or Edge for complete Settings verification.
 
 Python is not pinned to a minor version. The validation, site-build and
 source-packaging scripts use the standard library, including `tomllib` (available
@@ -41,7 +42,9 @@ configuration. Portable startup leaves the Windows autostart entry alone.
 Development and test builds disable debug symbols and incremental compilation
 to keep `target/` smaller. Debug assertions and overflow checks remain enabled;
 the tradeoffs are less detailed debugger/backtrace information and slower rebuilds.
-Release builds retain line-table symbols for crash diagnosis.
+Release builds retain line-table symbols for crash diagnosis. Only `pecofence-core`
+uses size optimization for model/protocol code; renderer/platform/application keep
+performance optimization. The 4.5 MiB executable gate is unchanged.
 
 For a debugger session, temporarily set `CARGO_PROFILE_DEV_DEBUG=2` (or
 `CARGO_PROFILE_TEST_DEBUG=2` for tests). Incremental compilation can likewise be
@@ -65,7 +68,8 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 python scripts/check-locales.py
 python scripts/check-readme-translations.py
-node scripts/test-settings-ui.mjs
+node --test scripts/test-settings-client.cjs
+pwsh -NoProfile -File scripts/test-settings-browser.ps1
 ```
 
 For the complete native CI/release gates and a portable ZIP, run
@@ -74,16 +78,22 @@ both workflows, prints per-command timings and compiles release binaries only
 once. See [RELEASING.md](RELEASING.md#ci-and-deployment-flow) for authentication,
 cache boundaries and deployment triggers.
 
-Open the address printed by the last command. The browser suite uses a mock host
-bridge and does not change the running desktop application's settings. It covers
+The browser command launches headless Chrome/Edge against the production Settings
+page with a local mock bridge; it does not start PecoFence or change desktop settings.
+Use `-Browser <path>` if needed. It covers rule editing/AND conditions, conflicts,
 language switching, draft/user data preservation and narrow-window layout.
+To inspect it interactively instead, run `node scripts/test-settings-ui.mjs` and
+open the printed loopback URL. See [SETTINGS_PROTOCOL.md](SETTINGS_PROTOCOL.md) for
+the current protocol and remaining OS/persistence boundaries.
 
 Some platform tests use real Windows APIs and a desktop session. They are not a
 substitute for testing native menus, multiple monitors and supported Windows builds.
 
 After building the package binaries, `python scripts/test-language-smoke.py`
 opens an isolated portable Settings window, changes all ten languages through the
-real IPC handler, and checks saved preferences and preservation of names/autostart.
+typed Settings application handler, and checks saved preferences and preservation
+of names/autostart. This native test intent bypasses the page/session handshake;
+the protocol and browser suites above verify that boundary separately.
 It keeps its generated configuration and report under `.cache/`.
 
 ## Architecture

@@ -56,69 +56,129 @@ fixture.fences.push({ ...fixture.fences[0], id: 'panel', contentId: 'panel',
 function bridge() {
   const state = JSON.parse(document.getElementById('fixture').textContent);
   const catalogs = JSON.parse(document.getElementById('fixture-catalogs').textContent);
+  const RealClient = window.PecoFenceSettings.Client;
+  window.PecoFenceSettings.Client = class extends RealClient {
+    constructor(options) { super(options); window.testClient = this; }
+  };
   window.testMessages = [];
-  let receive;
-  window.testSummary = (itemCount) => receive({ data: { type: 'workspaceSummary', fenceCount: state.fences.length, itemCount } });
-  window.testRefresh = () => receive({ data: structuredClone(state) });
+  let receive, page, client;
+  let stamp = { workspace: crypto.randomUUID(), revision: 0 }, viewSequence = 0, next = 1, committed = 0;
+  let last = JSON.stringify(state);
+  const receipts = new Map();
+  const settingPaths = {
+    language: 'language', theme: 'theme', themeStyle: 'themeStyle', iconSize: 'iconSize',
+    autostart: 'autostart', hideRealIcons: 'hideRealIcons', quickHideEnabled: 'quickHide.enabled',
+    showDesktop: 'showDesktop', hoverPeek: 'rollUp.hoverPeek', clickToExpand: 'rollUp.clickToExpand',
+    titleOnHover: 'rollUp.titleOnHover', hideInactiveScrollbar: 'rollUp.hideInactiveScrollbar',
+    snappingEnabled: 'snapping.enabled', peekEnabled: 'peek.enabled', peekDim: 'peek.dim',
+    peekHotkey: 'peek.hotkey', iconTint: 'icons.tintRgb', iconTintStrength: 'icons.tintStrength',
+    chameleon: 'icons.chameleon',
+  };
+  const hex = rgb => rgb ? rgb.map(v => v.toString(16).padStart(2, '0')).join('').toUpperCase() : null;
+  const persist = () => receive({ data: { type: 'persistence', page, client, stamp: structuredClone(stamp), committedRevision: committed, issue: state.saveHealth } });
+  window.testSummary = itemCount => receive({ data: { type: 'workspaceSummary', page, workspace: stamp.workspace, fenceCount: state.fences.length, itemCount } });
+  window.testRefresh = () => {
+    if (!client) return;
+    const current = JSON.stringify(state);
+    if (current !== last) { stamp.revision++; last = current; }
+    receive({ data: { type: 'snapshot', protocol: 1, page, client, stamp: structuredClone(stamp), sequence: ++viewSequence, view: structuredClone(state) } });
+    persist();
+  };
+  window.testShowFence = id => receive({ data: { type: 'showFence', id } });
   window.testState = state;
+  const apply = command => {
+    const replacement = command.kind === 'action'
+      && ['newWorkspace', 'acceptRecovery'].includes(command.action.action) && command.action.confirmed === true;
+    if (!state.saveAllowed && !replacement) return 'readOnly';
+    if (replacement) {
+      state.saveAllowed = state.writable = true;
+      state.loadIssue = state.recoveredFrom = state.saveHealth = null;
+      stamp = { workspace: crypto.randomUUID(), revision: 0 }; committed = null;
+    }
+    if (command.kind === 'setSetting') {
+      const change = command.change, path = settingPaths[change.property];
+      if (!path) return { invalid: 'unknown setting' };
+      const keys = path.split('.'), key = keys.pop();
+      let object = state.settings; for (const part of keys) object = object[part];
+      object[key] = structuredClone(change.value);
+      state.locale = state.settings.language === 'system' ? 'en' : state.settings.language;
+      state.translations = catalogs[state.locale] || {};
+      state.desktopIconsHidden = state.settings.hideRealIcons;
+      state.themeMode = state.settings.theme === 'light' ? 'light' : 'dark';
+      state.accent = state.themeMode === 'light' ? '#005FB8' : '#60CDFF';
+    }
+    if (command.kind === 'setContent' || command.kind === 'setContainer') {
+      const content = state.fences.find(f => f.contentId === command.contentId && f.containerId === command.containerId);
+      if (!content) return { invalid: 'Content/container pair no longer matches' };
+      const change = command.change;
+      const rows = command.kind === 'setContainer' ? state.fences.filter(f => f.containerId === content.containerId) : [content];
+      for (const row of rows) {
+        if (change.property === 'portalNavigate') row.portal.navigate = change.value;
+        else if (change.property === 'portalTitleIcon') row.portal.titleIcon = change.value;
+        else if (change.property === 'tint') row.tint = hex(change.value);
+        else if (change.property === 'titleColor') row.titleColor = typeof change.value === 'string' ? change.value : hex(change.value.custom);
+        else if (change.property === 'opacity') row.opacity = change.value == null ? 'default' : change.value < 0.8 ? 'clear' : 'solid';
+        else if (change.property !== 'dockTop') row[change.property] = structuredClone(change.value);
+      }
+    }
+    if (command.kind === 'rule') {
+      const change = command.change, list = state.rules.list;
+      const index = list.findIndex(r => r.id === change.id);
+      if (change.kind === 'create') list.push({ id: change.id, ...structuredClone(change.draft) });
+      if (change.kind === 'edit') list[index] = { ...list[index], ...structuredClone(change.draft) };
+      if (change.kind === 'setEnabled') list[index].enabled = change.value;
+      if (change.kind === 'delete') list.splice(index, 1);
+      if (change.kind === 'keepUpdated') state.rules.keepUpdated = change.value;
+      if (change.kind === 'defaultTarget') state.rules.defaultTarget = structuredClone(change.target);
+      if (change.kind === 'move') {
+        const row = list.splice(index, 1)[0];
+        const before = change.before == null ? list.length : list.findIndex(r => r.id === change.before);
+        list.splice(before, 0, row);
+      }
+    }
+    if (command.kind === 'action') {
+      const action = command.action;
+      if (['repairIcons', 'hideDesktopIcons'].includes(action.action)) {
+        state.settings.hideRealIcons = action.action === 'hideDesktopIcons';
+        state.desktopIconsHidden = state.settings.hideRealIcons;
+      }
+      if (action.action === 'deleteSnapshot') state.snapshots = state.snapshots.filter(s => s.id !== action.id);
+      if (action.action === 'addTemplate' && !state.rules.list.some(r => r.template === action.template)) {
+        const id = 'tpl-' + action.template;
+        state.fences.push({ id, contentId: id, containerId: 'container-' + id, isCollection: true, title: action.template, kind: 'virtual', host: null, iconSize: 48, spacing: 'normal', autoHeight: false, locked: false, excludeFromQuickHide: false, opacity: 'default', tint: null, titleColor: 'theme', titleSize: 'normal', portal: null });
+        const idle = action.template === 'cleanup';
+        const allOf = idle ? [{ cond: 'type', value: ['installers', 'archives'] }, { cond: 'idleDays', value: { min: 30 } }] : [{ cond: 'type', value: [action.template] }];
+        const at = idle ? 0 : state.rules.list.findIndex(r => !r.allOf.some(c => c.cond === 'idleDays'));
+        state.rules.list.splice(at < 0 ? state.rules.list.length : at, 0, { id: 'rule-' + id, name: action.template, enabled: true, target: { collection: id }, allOf, priorityClass: 'type', template: action.template });
+      }
+    }
+    return null;
+  };
   window.chrome = {
     webview: {
       addEventListener(_type, handler) { receive = handler; },
       postMessage(message) {
         window.testMessages.push(structuredClone(message));
-        const replacement = message.type === 'action'
-          && ['newWorkspace', 'acceptRecovery'].includes(message.name) && message.confirmed === true;
-        if (!state.saveAllowed && !replacement
-          && (['patchSettings', 'setRules', 'setFence'].includes(message.type) || message.type === 'action')) {
-          receive({ data: { type: 'toast', text: '此工作区为只读，请先解决加载问题再编辑。', error: true } });
+        if (message.type === 'ready') {
+          page = message.page; client = crypto.randomUUID();
           setTimeout(window.testRefresh, 0);
           return;
         }
-        if (replacement) {
-          state.saveAllowed = state.writable = true;
-          state.loadIssue = state.recoveredFrom = state.saveHealth = null;
-        }
-        if (message.type === 'patchSettings') {
-          state.settings = structuredClone(message.settings);
-          state.locale = state.settings.language === 'system' ? 'en' : state.settings.language;
-          state.translations = catalogs[state.locale] || {};
-          state.desktopIconsHidden = state.settings.hideRealIcons;
-          state.themeMode = message.settings.theme === 'light' ? 'light' : 'dark';
-          // The native host also switches to the corresponding system accent shade.
-          state.accent = state.themeMode === 'light' ? '#005FB8' : '#60CDFF';
-        }
-        if (message.name === 'repairIcons' || message.name === 'hideDesktopIcons') {
-          state.settings.hideRealIcons = message.name === 'hideDesktopIcons';
-          state.desktopIconsHidden = state.settings.hideRealIcons;
-        }
-        if (message.type === 'setRules') state.rules = structuredClone(message.rules);
-        if (message.name === 'addTemplate' && !state.rules.list.some(r => r.template === message.template)) {
-          // Mirror the host: a new fence plus its rule at the top of the list.
-          const id = 'tpl-' + message.template;
-          state.fences.push({ id, contentId: id, containerId: 'container-' + id, isCollection: true, title: message.template, kind: 'virtual', host: null, iconSize: 48, spacing: 'normal', autoHeight: false, locked: false, excludeFromQuickHide: false, opacity: 'default', tint: null, titleColor: 'theme', titleSize: 'normal', portal: null });
-          const idle = message.template === 'cleanup';
-          const allOf = idle ? [{ cond: 'type', value: ['installers', 'archives'] }, { cond: 'idleDays', value: { min: 30 } }] : [{ cond: 'type', value: [message.template] }];
-          const at = idle ? 0 : state.rules.list.findIndex(r => !r.allOf.some(c => c.cond === 'idleDays'));
-          state.rules.list.splice(at < 0 ? state.rules.list.length : at, 0, { id: 'rule-' + id, name: message.template, enabled: true, target: { collection: id }, allOf, priorityClass: 'type', template: message.template });
-        }
-        if (message.type === 'setFence') {
-          const fence = state.fences.find(f => f.contentId === message.contentId && f.containerId === message.containerId);
-          if (!fence) {
-            receive({ data: { type: 'toast', text: '内容已移动，请刷新设置后再编辑。', error: true } });
-            setTimeout(window.testRefresh, 0);
-            return;
-          }
-          if (message.prop === 'portalNavigate') fence.portal.navigate = message.value;
-          else if (message.prop === 'portalTitleIcon') fence.portal.titleIcon = message.value;
-          else if (['autoHeight', 'locked', 'excludeFromQuickHide', 'opacity', 'tint', 'titleColor', 'titleSize'].includes(message.prop)) {
-            for (const row of state.fences.filter(f => f.containerId === fence.containerId)) row[message.prop] = message.value;
-          } else if (message.prop !== 'dockTop') fence[message.prop] = message.value;
-        }
-        window.testShowFence = (id) => receive({ data: { type: 'showFence', id } });
-        if (message.name === 'deleteSnapshot') state.snapshots = state.snapshots.filter(s => s.id !== message.id);
-        if (['ready', 'patchSettings', 'setRules', 'setFence'].includes(message.type) || message.type === 'action') {
-          setTimeout(window.testRefresh, 0);
-        }
+        if (message.type !== 'request') throw new Error('Only versioned requests are supported');
+        const cached = receipts.get(message.sequence);
+        if (cached) { receive({ data: structuredClone(cached) }); window.testRefresh(); return; }
+        let rejected = message.protocol !== 1 ? 'protocol' : message.client !== client ? 'client'
+          : message.sequence !== next ? 'sequence' : message.base.workspace !== stamp.workspace ? 'workspace'
+          : message.base.revision !== stamp.revision ? 'conflict' : null;
+        if (!rejected) rejected = apply(message.command);
+        const current = JSON.stringify(state);
+        if (current !== last) { stamp.revision++; last = current; }
+        const receipt = { type: 'receipt', client: message.client, sequence: message.sequence,
+          base: message.base, current: structuredClone(stamp), rejected, cancelled: false };
+        if (message.sequence === next) { next++; receipts.set(message.sequence, receipt); }
+        const saved = structuredClone(stamp);
+        setTimeout(() => { receive({ data: receipt }); window.testRefresh(); }, 0);
+        setTimeout(() => { if (saved.workspace === stamp.workspace) { committed = Math.max(committed || 0, saved.revision); persist(); } }, 20);
       },
     },
   };
@@ -216,7 +276,7 @@ async function runTests() {
     assert(doc.querySelector('[data-fence=iconSize]').value === '32' && doc.querySelector('[data-fence=spacing]').value === 'compact' && doc.querySelector('[data-fence=opacity]').value === 'clear', 'Layout values not shown');
   });
   await test('Fence controls post setFence and keep the selection across a host refresh', async () => {
-    const messages = () => frame.contentWindow.testMessages.filter(m => m.type === 'setFence');
+    const messages = () => frame.contentWindow.testMessages.filter(m => m.type === 'request' && ['setContent', 'setContainer'].includes(m.command.kind)).map(m => m.command);
     change(doc, 'fenceSel', 'fence-a');
     const before = messages().length;
     doc.querySelector('[data-fence=locked]').click(); await settle();
@@ -227,15 +287,15 @@ async function runTests() {
     const sent = messages().slice(before);
     assert(sent.length === 4, 'Expected four setFence messages, got ' + sent.length);
     assert(sent.every(m => m.contentId === 'fence-a' && m.containerId === 'container-documents' && !('id' in m)), 'Message missing explicit content/container pair');
-    assert(sent[0].prop === 'locked' && sent[0].value === true, 'Lock toggle not posted');
-    assert(sent[1].prop === 'iconSize' && sent[1].value === 96, 'Icon size not posted as a number');
-    assert(sent[2].prop === 'tint' && sent[2].value === 'E74856', 'Tint not posted');
-    assert(sent[3].prop === 'title' && sent[3].value === 'Renamed', 'Title not trimmed');
+    assert(sent[0].change.property === 'locked' && sent[0].change.value === true, 'Lock toggle not posted');
+    assert(sent[1].change.property === 'iconSize' && sent[1].change.value === 96, 'Icon size not posted as a number');
+    assert(sent[2].change.property === 'tint' && JSON.stringify(sent[2].change.value) === '[231,72,86]', 'Tint not typed');
+    assert(sent[3].change.property === 'title' && sent[3].change.value === 'Renamed', 'Title not trimmed');
     assert(doc.getElementById('fenceSel').value === 'fence-a', 'Selection lost on refresh');
     assert(doc.querySelector('[data-fence=locked]').classList.contains('on') && doc.querySelector('[data-fence=tint]').value === 'E74856', 'Refreshed state not reflected');
     assert(!doc.querySelector('[data-fence=titleColor] [value=tint]').disabled, 'Follow-tint stays disabled after choosing a tint');
     change(doc, 'fenceTint', ''); await settle();
-    assert(messages().at(-1).value === null, 'Clearing the tint did not post null');
+    assert(messages().at(-1).change.value === null, 'Clearing the tint did not post null');
   });
   await test('showFence opens the fence page with that fence selected', async () => {
     doc.querySelector('[data-page=general]').click();
@@ -262,9 +322,9 @@ async function runTests() {
     const win = frame.contentWindow;
     const row = current().fences.find(f => f.id === 'fence-a');
     const before = row.locked;
-    win.chrome.webview.postMessage({
-      type: 'setFence', contentId: row.contentId, containerId: 'retired-container',
-      prop: 'locked', value: !before,
+    win.testClient.submit({
+      kind: 'setContainer', contentId: row.contentId, containerId: 'retired-container',
+      change: { property: 'locked', value: !before },
     });
     await settle();
     assert(row.locked === before && errorShown(doc), 'Stale pair changed the current container');
@@ -371,12 +431,66 @@ async function runTests() {
     assert(doc.activeElement.getAttribute('aria-checked') === 'false', 'Space did not toggle');
     assert(doc.getElementById('nrTarget').value === 'fence-b', 'Reorder reset draft target');
   });
+  await test('Create an AND rule with an origin condition and edit it without changing its identity', async () => {
+    doc = await reset(); rulesPage(doc);
+    change(doc, 'nrName', 'Public PNG');
+    change(doc, 'nrTarget', 'fence-b');
+    change(doc, 'nrKind', 'ext'); change(doc, 'nrValue', 'png');
+    doc.getElementById('nrCondition').click();
+    change(doc, 'nrKind', 'origin'); change(doc, 'nrOrigin', 'publicDesktop');
+    assert(doc.getElementById('nrOriginWrap').style.display !== 'none', 'Origin choice hidden');
+    doc.getElementById('nrCondition').click();
+    await add(doc);
+    const created = current().rules.list.at(-1), id = created.id;
+    assert(created.allOf.length === 2 && created.allOf[1].value === 'publicDesktop', 'AND conditions missing');
+    doc.querySelector('[data-row-id="' + id + '"] [data-act=edit]').click();
+    assert(doc.getElementById('nrConditions').children.length === 2, 'Editor lost existing conditions');
+    change(doc, 'nrName', 'Public PNG edited');
+    await add(doc);
+    const edited = current().rules.list.find(r => r.id === id);
+    assert(edited.name === 'Public PNG edited' && edited.allOf.length === 2, 'Edit replaced identity or lost conditions');
+    assert(frame.contentWindow.testMessages.at(-1).command.change.kind === 'edit', 'Edit sent a full RuleSet');
+  });
+  await test('An externally changed workspace revision rejects a rule draft until explicit retry', async () => {
+    doc = await reset(); rulesPage(doc);
+    const rule = current().rules.list[0], original = rule.name;
+    doc.querySelector('[data-row-id="' + rule.id + '"] [data-act=edit]').click();
+    change(doc, 'nrName', 'Conflict draft');
+    current().settings.autostart = !current().settings.autostart;
+    frame.contentWindow.testRefresh(); await settle();
+    await add(doc);
+    assert(current().rules.list[0].name === original, 'Stale draft overwrote authoritative rule');
+    assert(!doc.getElementById('draftPanel').hidden && doc.getElementById('nrName').value === 'Conflict draft', 'Conflicting draft was discarded');
+    doc.getElementById('draftRetry').click(); await settle();
+    assert(current().rules.list[0].name === 'Conflict draft', 'Explicit retry did not apply the draft');
+    assert(doc.getElementById('nrName').value === '', 'Accepted retry did not clear its editor');
+  });
+  await test('Cancelling a multi-condition editor does not send any operation', async () => {
+    doc = await reset(); rulesPage(doc);
+    const before = frame.contentWindow.testMessages.length;
+    doc.querySelector('#ruleList [data-act=edit]').click();
+    const count = doc.getElementById('nrConditions').children.length;
+    doc.getElementById('nrConditions').querySelector('button').click();
+    assert(doc.getElementById('nrConditions').children.length === count - 1, 'Condition removal failed');
+    doc.getElementById('nrCancel').click();
+    assert(frame.contentWindow.testMessages.length === before, 'Cancel sent a change');
+    assert(doc.getElementById('nrName').value === '' && doc.getElementById('nrConditions').children.length === 0, 'Cancel retained the editor');
+  });
+  await test('A rejected draft is never shown as saved; discarding it restores the last primary status', async () => {
+    doc = await reset();
+    frame.contentWindow.testClient.submit({ kind: 'setContainer', contentId: 'fence-a',
+      containerId: 'retired-container', change: { property: 'locked', value: true } });
+    await settle();
+    assert(doc.getElementById('saveState').textContent === '工作区未保存。', 'Unaccepted draft was shown as saved');
+    doc.getElementById('draftDiscard').click();
+    assert(doc.getElementById('saveState').textContent === '所有更改已保存。', 'Discard did not restore the primary receipt');
+  });
   await test('Quick-add templates post addTemplate once and render the new rule', async () => {
     doc = await reset();
     rulesPage(doc);
     const before = ruleCount(doc);
     doc.querySelector('#templates [data-template=cleanup]').click(); await settle();
-    const sent = frame.contentWindow.testMessages.filter(m => m.name === 'addTemplate');
+    const sent = frame.contentWindow.testMessages.filter(m => m.command?.action?.action === 'addTemplate').map(m => m.command.action);
     assert(sent.length === 1 && sent[0].template === 'cleanup', 'addTemplate not posted');
     assert(ruleCount(doc) === before + 1, 'Template rule not rendered');
     const conds = doc.querySelector('#ruleList [data-row-id] .conds').textContent;
@@ -565,13 +679,13 @@ async function runTests() {
   });
   await test('A same-display swap is rejected and distinct selections survive refresh', async () => {
     change(doc, 'swapB', 'one');
-    const messages = () => frame.contentWindow.testMessages.filter(m => m.name === 'swapMonitors');
+    const messages = () => frame.contentWindow.testMessages.filter(m => m.command?.action?.action === 'swapMonitors').map(m => m.command.action);
     doc.getElementById('swapDo').click(); await settle();
     assert(messages().length === 0 && errorShown(doc), 'Same-display swap was submitted');
     change(doc, 'swapA', 'two'); change(doc, 'swapB', 'one');
     frame.contentWindow.testRefresh();
     doc.getElementById('swapDo').click(); await settle();
-    assert(messages().length === 1 && messages()[0].a === 'two' && messages()[0].b === 'one', 'Display selections reset or swapped incorrectly');
+    assert(messages().length === 1 && messages()[0].first === 'two' && messages()[0].second === 'one', 'Display selections reset or swapped incorrectly');
   });
 
   await test('Desktop icons can be restored, hidden again, and restored repeatedly', async () => {
@@ -640,6 +754,11 @@ const server = http.createServer(async (request, response) => {
     if (url.pathname === '/i18n.js') {
       response.setHeader('Content-Type', 'text/javascript; charset=utf-8');
       response.end(await readFile(new URL('../ui/i18n.js', import.meta.url), 'utf8'));
+      return;
+    }
+    if (url.pathname === '/settings-client.js') {
+      response.setHeader('Content-Type', 'text/javascript; charset=utf-8');
+      response.end(await readFile(new URL('../ui/settings-client.js', import.meta.url), 'utf8'));
       return;
     }
     if (url.pathname === '/settings' || url.pathname === '/preview') {

@@ -167,6 +167,8 @@ pub struct App {
     /// Finished shell file operations from the worker threads (see `fileops.rs`).
     fileops_done: fileops::FileOpResults,
     settings: Option<SettingsHost>,
+    settings_session: pecofence_core::settings_protocol::SettingsSession,
+    settings_view_sequence: Cell<u64>,
     /// Fence to select on the settings page once it reports `ready` (opened via 栅栏选项…).
     settings_focus_fence: Option<ContentId>,
     web_env: Option<WebEnvironment>,
@@ -719,6 +721,8 @@ impl App {
             fs_pending,
             fileops_done: Arc::new(Mutex::new(Vec::new())),
             settings: None,
+            settings_session: Default::default(),
+            settings_view_sequence: Cell::new(0),
             settings_focus_fence: None,
             web_env: None,
             settings_class,

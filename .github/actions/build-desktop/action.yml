@@ -40,6 +40,9 @@ runs:
       with:
         python-version: '3.x'
         check-latest: true
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '24'
     - name: Cache public crate downloads
       uses: actions/cache@v4
       with:
