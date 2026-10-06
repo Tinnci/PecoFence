@@ -125,8 +125,10 @@ https://github.com/user-attachments/assets/6320cf28-a791-4720-9659-b4575df021a0
 <summary><strong>從原始碼建置</strong></summary>
 
 安裝 Rust stable、Visual Studio Build Tools 的 C++ 工作負載與 Windows SDK。
-本版本目前還需要經身分驗證的 Git 存取權限，以取得私有儲存庫 `Tinnci/spm`；
-僅能存取公開的 PecoFence 儲存庫不足以完成建置。具備上述條件後執行：
+公開建置只使用本儲存庫與公開 registry，包含本機 `crates/spm-contracts`（0.1.0），
+不需要私有 token 或 SPM checkout。選用的 `Tinnci/spm` 後端維持私有，
+只有即時 SPM 資料需要它；編譯或使用一般桌面圍欄不需要，也不隨 PecoFence 散布。
+詳見 [SPM 邊界](../SPM_BOUNDARY.md)。執行：
 
 ```powershell
 cargo build --locked --release

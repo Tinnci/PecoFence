@@ -48,7 +48,16 @@ esac
 echo "repo     : $(pwd)"
 echo "commit   : $(git rev-parse HEAD)"
 echo "branch   : $(git rev-parse --abbrev-ref HEAD)"
-echo "spm rev  : $(grep -A2 'name = \"spm-contracts\"' Cargo.lock | grep rev | head -1)"
+python3 - <<'PY'
+import pathlib
+import sys
+if sys.version_info < (3, 11):
+    raise SystemExit("Python >=3.11 is required to read public contract provenance")
+import tomllib
+path = pathlib.Path("crates/spm-contracts/Cargo.toml")
+data = tomllib.loads(path.read_text())
+print(f"contracts: {data['package']['version']} (public workspace: {path.parent})")
+PY
 echo "triple   : $TRIPLE  profile: $PROFILE"
 echo "packages : ${PACKAGES[*]}"
 echo "linker   : lld-link"

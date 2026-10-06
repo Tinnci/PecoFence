@@ -9,6 +9,12 @@
 - Python >=3.11 for catalog checks/source packaging.
 - Node.js >=22 (CI uses 24), PowerShell 7 and Chrome or Edge for complete Settings verification.
 
+Public builds use only this repository and public registries. The local
+`crates/spm-contracts` crate is version 0.1.0; no SPM checkout or private token
+is required. Ordinary desktop fences work without the optional private backend;
+live SPM data needs an authorized backend installation, not distributed here.
+See [SPM_BOUNDARY.md](SPM_BOUNDARY.md) for the contract and verification boundary.
+
 Python is not pinned to a minor version. The validation, site-build and
 source-packaging scripts use the standard library, including `tomllib` (available
 since 3.11), and support newer Python releases. CI uses the latest stable Python 3.
@@ -78,9 +84,13 @@ both workflows, prints per-command timings and compiles release binaries only
 once. See [RELEASING.md](RELEASING.md#ci-and-deployment-flow) for authentication,
 cache boundaries and deployment triggers.
 
-`-SourceOnly` runs public checks without private contracts. CI runs that phase
-before authentication, then `-SkipSourceChecks` for the native phase; the default
-local command runs both. Packaging/immutable installation and build receipts are
+`-SourceOnly` runs source checks without native compilation. CI runs that phase,
+then `-SkipSourceChecks` for the native phase; neither phase reads private SPM
+source or authenticates to it. The default local command runs both.
+Required source and headless/synthetic protocol tests cannot silently skip
+failures behind feature gates. Live private-daemon integration is a separate
+authorized private workflow; public test success does not prove it was run.
+Packaging/immutable installation and build receipts are
 described in [PACKAGING.md](PACKAGING.md). Native UI replacement remains a proposed
 direction in [ADR-007](decisions/ADR-007-native-settings.md), not an implemented host.
 
@@ -111,6 +121,7 @@ It keeps its generated configuration and report under `.cache/`.
 | `crates/render` | Direct2D/Composition drawing, motion and glass |
 | `crates/app` | Native windows, input, application state and Settings IPC |
 | `crates/watchdog` | Restores desktop icons after an abnormal app exit |
+| `crates/spm-contracts` | Public shared SPM wire contracts (0.1.0), not the private daemon |
 | `ui` | Offline settings HTML and localization helper embedded into the executable |
 | `locales` | Shared native and settings messages |
 | `site` | Static product website, built by `scripts/build-site.py` (see [WEBSITE.md](WEBSITE.md)) |

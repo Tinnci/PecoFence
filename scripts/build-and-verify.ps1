@@ -29,6 +29,8 @@ function Invoke-CheckedCommand([string]$Name, [string]$Program, [string[]]$Argum
 # Cheap source checks fail before the expensive native compilation.
 if ($SourceOnly -and $SkipSourceChecks) { throw "SourceOnly cannot skip its own checks." }
 if (-not $SkipSourceChecks) {
+  Invoke-CheckedCommand "Public dependency policy tests" $Python @("scripts/test-public-dependencies.py")
+  Invoke-CheckedCommand "Public dependency boundary" $Python @("scripts/check-public-dependencies.py")
   Invoke-CheckedCommand "Action policy tests" $Python @("scripts/test-actions-policy.py")
   Invoke-CheckedCommand "Action pin policy" $Python @("scripts/check-actions.py")
   Invoke-CheckedCommand "Format" "cargo" @("fmt", "--all", "--check")
@@ -42,6 +44,7 @@ if (-not $SkipSourceChecks) {
 }
 if ($SourceOnly) { return }
 
+Invoke-CheckedCommand "Resolved public dependency graph" $Python @("scripts/check-public-dependencies.py", "--resolved")
 Invoke-CheckedCommand "Clippy" "cargo" @(
   "clippy", "--locked", "--workspace", "--all-targets", "--target-dir", $TargetDir,
   "--", "-D", "warnings"

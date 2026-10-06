@@ -25,5 +25,5 @@ updates:
         update-types: [minor, patch]
     commit-message:
       prefix: "chore(ci)"
-  # Cargo's private pinned SPM contract needs paired updates and separate bot access.
-  # Do not enable an unauthenticated Cargo updater or auto-merge major action updates.
+  # The SPM contract is a local public workspace crate, not a private Git dependency.
+  # Cargo/Windows binding upgrades remain deliberate paired changes; no auto-merge.

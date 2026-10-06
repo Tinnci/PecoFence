@@ -5,6 +5,7 @@
 - [Architecture decisions](decisions/)
 - [Upgrading to PecoFence](UPGRADING.md)
 - [Development and verification](DEVELOPMENT.md)
+- [Public contracts and private SPM backend boundary](SPM_BOUNDARY.md)
 - [Languages and translation contributions](LOCALIZATION.md)
 - [Preparing and publishing a release](RELEASING.md)
 - [Independent edition: identities and publishing setup](INDEPENDENCE.md)

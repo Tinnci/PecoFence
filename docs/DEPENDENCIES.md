@@ -22,10 +22,9 @@ action's own `runs.using`.
   YAML validator or a recursive supply-chain audit.
 - The winget wrapper still invokes mutable/downloaded upstream tools. It remains
   disabled by default; see [INDEPENDENCE.md](INDEPENDENCE.md).
-- Cargo automation is deliberately not enabled yet: `Tinnci/spm` is private and
-  revision-pinned for paired contract changes, and Windows Composition is vendored.
-  Review Rust/Windows toolchain and binding changes together rather than pretending
-  an unauthenticated updater covers these dependencies.
+- Cargo automation is deliberately not enabled yet. `spm-contracts` 0.1.0 is a
+  public workspace crate, not a private Git dependency; Windows Composition is
+  vendored. Review contracts, Rust/Windows toolchain and binding changes together.
 
 ## Required repository configuration
 
@@ -33,19 +32,15 @@ Adding the file to the default branch enables version-update scheduling, subject
 to repository/organization Dependabot policies. This change does not alter those
 remote settings or supply a credential.
 
-For native builds of Dependabot PRs, add a **Dependabot secret** named
-`PRIVATE_REPO_TOKEN` under Settings → Secrets and variables → Dependabot. An Actions
-secret with the same name is not automatically available to Dependabot-triggered
-PR workflows. Use narrowly scoped read-only access to `Tinnci/spm`; do not paste
-the token into source, logs or documentation.
+Public CI, releases and Dependabot PR builds use this repository plus public
+registries. They do not read `Tinnci/spm` and need no `PRIVATE_REPO_TOKEN`,
+private checkout or Dependabot private-repository secret. The private backend
+remains separate; see [SPM_BOUNDARY.md](SPM_BOUNDARY.md).
 
-Main/tag jobs use the Actions secret. `github.token` cannot read the separate
-private repository and is no longer an ineffective fallback. Public source checks
-run before private authentication; missing access still fails the required native
-build instead of silently marking an untested package green.
-
-Do not use `pull_request_target` or workflow privilege escalation to bypass these
-restrictions. Ordinary fork PRs require a separate contracts-distribution decision.
+Do not use privileged `pull_request_target`, workflow privilege escalation or a
+private-source cache. Required source checks and headless/synthetic protocol
+tests must fail on errors, not silently skip behind feature gates. A green public
+build is not evidence of live private-daemon integration.
 
 ## Verification
 

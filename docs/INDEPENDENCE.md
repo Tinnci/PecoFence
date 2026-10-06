@@ -25,7 +25,7 @@ release; disabled deployment defaults are not evidence about external accounts.
 | Microsoft Store/MSIX | Publishing identity fields are `null`; no CI Store upload | Obtain your own Partner Center identity; fill required fields or pass a separate JSON with `-Identity`; build/upload locally. See [STORE.md](STORE.md). |
 | winget | No independently confirmed package identity; automation updates existing packages only | Establish an accepted first version in `winget-pkgs`, confirm `WINGET_PACKAGE_IDENTIFIER`, supply secret `WINGET_TOKEN`, review transitive tooling, then enable `ENABLE_WINGET_PUBLISH=true`. |
 | Code signing | Production signing decision outstanding | Choose certificate ownership, key storage and signing procedure. MSIX test certificates are local-only. |
-| Private dependency | `Tinnci/spm` is our dependency; Cargo pins its contracts revision | Give authorized contributors authenticated access, or decide how to distribute the contracts for public reproducible builds. Never place credentials in files. |
+| SPM boundary | Public `crates/spm-contracts` 0.1.0; optional `Tinnci/spm` backend remains private | Public builds need no private access. Coordinate immutable shared-contract updates and authorized private integration separately; see [SPM_BOUNDARY.md](SPM_BOUNDARY.md). |
 | Runtime/product identity | Product and binaries remain PecoFence | Decide whether to retain the name; require a naming, data migration and coexistence plan before changing identifiers. |
 | Media | Existing screenshots and demonstrations remain | Replace with this edition's own demos when ready; retain licensing and attribution for any retained material. |
 
@@ -74,8 +74,11 @@ Use isolated portable test instances as described in [DEVELOPMENT.md](DEVELOPMEN
 - Which website host and public HTTPS URL should this edition use?
 - Should it publish to the Store, winget, both, or neither?
 - What is the production code-signing policy?
-- How will public contributors obtain the pinned private `spm` contracts:
-  authenticated access or an explicitly licensed distribution strategy?
+
+The contracts-distribution decision is resolved: public PecoFence builds from
+this repository and public registries, with no private token or SPM checkout.
+The private backend is not distributed with the application. This does not
+change backend visibility, customer data/configuration or attribution obligations.
 
 Keep secrets in approved credential stores or repository Actions secrets, never
 in checked-in configuration. Enable publishing only after the relevant identity,

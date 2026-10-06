@@ -136,8 +136,11 @@ a uma interação melhor na área de trabalho.
 <summary><strong>Compilar a partir do código-fonte</strong></summary>
 
 Instale o Rust stable e o Visual Studio Build Tools com a carga de trabalho C++ e o Windows SDK.
-Esta edição também exige atualmente acesso Git autenticado ao repositório privado
-`Tinnci/spm`; o acesso apenas ao repositório público do PecoFence não é suficiente.
+As compilações públicas usam apenas este repositório e registros públicos, incluindo
+`crates/spm-contracts` (0.1.0); não exigem token privado nem checkout do SPM.
+O backend opcional `Tinnci/spm` permanece privado e só é necessário para dados SPM
+ao vivo, não para compilar ou usar os grupos normais da área de trabalho.
+Ele não é distribuído com o PecoFence. Veja o [limite SPM](../SPM_BOUNDARY.md).
 
 ```powershell
 cargo build --locked --release
