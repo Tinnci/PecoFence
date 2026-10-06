@@ -10,6 +10,7 @@ use crate::fence_window::{
 };
 use crate::icons::{IconCache, IconVariant, WM_APP_ICON_READY};
 use crate::peek::PeekOverlay;
+use crate::persistence::{Closing, SaveCoordinator, Writer};
 use crate::settings_host::{SettingsHost, WebEnvironment};
 use crate::shadow::{ShadowStyle, ShadowWindow};
 use crate::state::AppState;
@@ -54,6 +55,7 @@ mod menus;
 mod motion;
 pub(crate) mod panel_manager;
 mod peek;
+mod persistence;
 mod portals;
 mod settings;
 mod sync;
@@ -97,6 +99,8 @@ const TIMER_WALLPAPER_POLL: usize = 50;
 const TIMER_DESKTOP_ID: usize = 51;
 /// Poll owned portal completions only while a read is outstanding.
 const TIMER_PORTALS: usize = 52;
+/// Poll only while a document write or normal closing is in progress.
+const TIMER_PERSISTENCE: usize = 53;
 const SPI_SETDESKWALLPAPER: usize = 0x0014;
 const SPI_SETWORKAREA: usize = 0x002F;
 const TRAY_ID: u32 = 1;
@@ -142,6 +146,9 @@ pub struct Args {
 
 pub struct App {
     state: AppState,
+    writer: Writer,
+    persistence: SaveCoordinator,
+    save_notice: Option<(pecofence_core::settings_protocol::DocumentStamp, String)>,
     portal_reader: pecofence_platform::portal_reader::PortalReader,
     ctx: Rc<FenceContext>,
     fences: HashMap<ContainerId, FenceWindow>,
@@ -378,12 +385,19 @@ impl App {
                                         app.pump_portal_reads();
                                     }
                                 }
+                                TIMER_PERSISTENCE => {
+                                    if let Ok(mut guard) = cell.try_borrow_mut()
+                                        && let Some(app) = guard.as_mut()
+                                    {
+                                        app.pump_persistence();
+                                    }
+                                }
                                 TIMER_SAVE => {
                                     if let Ok(mut guard) = cell.try_borrow_mut()
                                         && let Some(app) = guard.as_mut()
                                     {
                                         window::kill_timer(hwnd, TIMER_SAVE);
-                                        app.state.save_if_dirty();
+                                        app.request_save();
                                     } else {
                                         // Busy (modal loop): retry shortly instead of dropping.
                                         window::set_timer(hwnd, TIMER_SAVE, 500);
@@ -551,12 +565,17 @@ impl App {
                             if let Ok(mut guard) = cell.try_borrow_mut()
                                 && let Some(app) = guard.as_mut()
                             {
-                                app.state.save_if_dirty();
+                                // OS termination is best effort: enqueue, never block Windows on I/O.
+                                app.request_save();
                                 if let Some(a) = app.anchor.borrow_mut().as_mut() {
                                     a.restore_desktop_icons();
                                 }
                             }
                             Some(1)
+                        }
+                        msg::WM_ENDSESSION if wparam != 0 => {
+                            window::post_quit(0);
+                            Some(0)
                         }
                         msg::WM_DESTROY => Some(0),
                         _ => None,
@@ -704,9 +723,19 @@ impl App {
 
         let settings_class = SettingsHost::register_class()?;
         let peek_class = PeekOverlay::register_class()?;
+        let writer = Writer::new(
+            state
+                .config_path()
+                .parent()
+                .unwrap_or_else(|| Path::new("."))
+                .to_path_buf(),
+        );
 
         let mut app = App {
             state,
+            writer,
+            persistence: Default::default(),
+            save_notice: None,
             portal_reader: Default::default(),
             ctx,
             fences: HashMap::new(),
@@ -870,7 +899,7 @@ impl App {
                 tracing::warn!(%error, "autostart reconciliation failed");
             }
         }
-        app.state.save_if_dirty();
+        app.request_save();
         window::set_coalescable_timer(app.control.hwnd(), TIMER_HOUSEKEEPING, 60_000, 5_000);
         window::set_coalescable_timer(app.control.hwnd(), TIMER_WALLPAPER_POLL, 5_000, 500);
         window::set_coalescable_timer(app.control.hwnd(), TIMER_DESKTOP_ID, 100, 25);
@@ -898,18 +927,18 @@ impl App {
     }
 
     fn schedule_save(&self) {
-        if self.state.save_allowed {
+        if self.mutations_allowed() {
             window::set_timer(self.control.hwnd(), TIMER_SAVE, 800);
         }
     }
 
     fn housekeeping(&mut self) {
-        if !self.state.save_allowed {
+        if !self.mutations_allowed() {
             return;
         }
         self.check_cut_clipboard();
-        if self.state.is_dirty() {
-            self.state.save_if_dirty();
+        if self.state.is_dirty() && self.state.persistence_issue.is_none() {
+            self.request_save();
         }
         // While the special desktop items are shown, re-read them once a minute as well: a
         // change in Windows' own "Desktop icon settings" leaves no folder event behind, and the
@@ -1011,13 +1040,13 @@ impl App {
     }
 
     fn handle(&mut self, cmd: Command) {
-        if !self.state.save_allowed
+        if !self.mutations_allowed()
             && !matches!(
                 &cmd,
                 Command::OpenSettings
-                    | Command::SettingsMessage(_)
+                    | Command::SettingsMessage { .. }
+                    | Command::SettingsClosed { .. }
                     | Command::Quit
-                    | Command::WindowGone(_)
                     | Command::FadeOutDone(_)
                     | Command::RedrawAll
             )
@@ -1336,22 +1365,34 @@ impl App {
                 }
             }
             Command::Quit => {
-                self.state.save_if_dirty();
-                if let Some(a) = self.anchor.borrow_mut().as_mut() {
-                    a.restore_desktop_icons();
+                if self.persistence.closing() == Closing::Open {
+                    window::kill_timer(self.control.hwnd(), TIMER_SAVE);
+                    self.persistence.begin_close();
+                    self.push_settings_state();
+                    self.pump_persistence();
+                } else {
+                    self.cancel_document_close();
                 }
-                window::post_quit(0);
             }
-            Command::WindowGone(hwnd) => {
-                if self.settings.as_ref().is_some_and(|h| h.hwnd() == hwnd) {
+            Command::SettingsClosed { source } => {
+                if self.settings.as_ref().is_some_and(|h| h.source() == source) {
                     self.settings = None;
+                    self.settings_session.close();
                 }
             }
             Command::FadeOutDone(hwnd) => {
                 // Dropping the window destroys it (RevokeDragDrop + DestroyWindow).
                 self.dying.retain(|w| w.hwnd() != hwnd);
             }
-            Command::SettingsMessage(json) => self.on_settings_message(&json),
+            Command::SettingsMessage { source, json } => {
+                if self
+                    .settings
+                    .as_ref()
+                    .is_some_and(|host| host.source() == source)
+                {
+                    self.on_settings_message(&json);
+                }
+            }
         }
     }
 
@@ -1361,7 +1402,14 @@ impl App {
         self.state.portals.close();
         window::kill_timer(self.control.hwnd(), TIMER_PORTALS);
         self.end_peek_now();
-        self.state.save_if_dirty();
+        // Normal Quit drained through its primary receipt. Forced OS termination cannot promise it.
+        if self.writer_busy_or_dirty() && self.persistence.closing() != Closing::Discarded {
+            tracing::warn!(
+                "shutdown with unresolved document persistence; forced termination is best effort"
+            );
+        }
+        self.writer.close();
+        window::kill_timer(self.control.hwnd(), TIMER_PERSISTENCE);
         self.fences.clear();
         self.dying.clear();
         self.panel_manager.borrow_mut().shutdown();

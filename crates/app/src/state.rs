@@ -38,7 +38,7 @@ pub struct AppState {
     pub load_issue: Option<String>,
     pub save_allowed: bool,
     pub persistence_issue: Option<String>,
-    pending_explicit_replacement: bool,
+    pending_explicit_replacement: Option<DocumentStamp>,
 }
 
 /// Summary of a desktop sync pass.
@@ -141,7 +141,7 @@ impl AppState {
             load_issue,
             save_allowed,
             persistence_issue: None,
-            pending_explicit_replacement: false,
+            pending_explicit_replacement: None,
         };
         state.rebuild_catalog();
         if state.save_allowed || !state.config.layouts.is_empty() {
@@ -186,15 +186,16 @@ impl AppState {
         self.config = config;
         self.document.replace();
         self.save_allowed = true;
-        self.pending_explicit_replacement = true;
         self.load_issue = None;
         self.recovered_from = None;
+        self.persistence_issue = None;
         self.rebuild_catalog();
         self.layout = 0;
         self.ensure_layout();
         self.first_run = false;
         self.reset_portal_runtime();
         self.mark_dirty();
+        self.pending_explicit_replacement = Some(self.document_stamp());
         Ok(())
     }
 
@@ -270,13 +271,13 @@ impl AppState {
     fn apply_snapshot_layouts(&mut self, layouts: Vec<pecofence_core::Layout>) {
         self.config.layouts = layouts;
         self.save_allowed = true;
-        self.pending_explicit_replacement = true;
         self.load_issue = None;
         self.recovered_from = None;
         self.layout = 0;
         self.ensure_layout();
         self.reset_portal_runtime();
         self.mark_dirty();
+        self.pending_explicit_replacement = Some(self.document_stamp());
     }
 
     pub fn delete_snapshot(&mut self, id: uuid::Uuid) -> bool {
@@ -655,33 +656,69 @@ impl AppState {
         self.document.dirty()
     }
 
-    pub fn save_if_dirty(&mut self) -> bool {
+    pub fn prepare_save(&self) -> Option<crate::persistence::SavePlan> {
         if !self.is_dirty() || !self.save_allowed {
-            return false;
+            return None;
         }
-        let saved = self.document_stamp();
-        let result = if self.pending_explicit_replacement {
-            self.store.replace(&self.config)
-        } else {
-            self.store.save(&self.config)
-        };
-        match result {
+        Some(crate::persistence::SavePlan {
+            stamp: self.document_stamp(),
+            replace: self.pending_explicit_replacement.is_some(),
+            config: self.config.clone(),
+        })
+    }
+
+    /// Only the application's coordinator may deliver a verified terminal receipt.
+    /// An old activation still has an accounted write, but cannot acknowledge this document.
+    pub fn apply_save_result(&mut self, result: crate::persistence::WriteResult) -> Option<bool> {
+        if result.ticket.stamp.workspace != self.document_stamp().workspace
+            || result.ticket.stamp.revision > self.document_stamp().revision
+        {
+            return None;
+        }
+        match result.outcome {
             Ok(receipt) => {
-                self.document.commit(saved);
-                self.pending_explicit_replacement = false;
+                self.document.commit(result.ticket.stamp);
+                if result.ticket.replace
+                    && self.pending_explicit_replacement.is_some_and(|barrier| {
+                        barrier.workspace == result.ticket.stamp.workspace
+                            && barrier.revision <= result.ticket.stamp.revision
+                    })
+                {
+                    self.pending_explicit_replacement = None;
+                }
                 self.persistence_issue = match receipt.backup {
                     pecofence_core::BackupStatus::Degraded(reason) => Some(reason),
                     _ => None,
                 };
-                tracing::debug!(path = %self.store.primary_path().display(), "config saved");
-                true
+                tracing::debug!(revision = result.ticket.stamp.revision, "config committed");
+                Some(true)
             }
-            Err(e) => {
-                self.persistence_issue = Some(e.to_string());
-                tracing::error!(error = %e, "config save failed");
-                false
+            Err(error) => {
+                self.persistence_issue = Some(error.clone());
+                tracing::error!(%error, "config commit failed");
+                Some(false)
             }
         }
+    }
+
+    #[cfg(test)]
+    fn save_if_dirty(&mut self) -> bool {
+        let Some(plan) = self.prepare_save() else {
+            return false;
+        };
+        let outcome = if plan.replace {
+            self.store.replace(&plan.config)
+        } else {
+            self.store.save(&plan.config)
+        };
+        self.apply_save_result(crate::persistence::WriteResult {
+            ticket: crate::persistence::Ticket {
+                id: 0,
+                stamp: plan.stamp,
+                replace: plan.replace,
+            },
+            outcome: outcome.map_err(|error| error.to_string()),
+        }) == Some(true)
     }
 
     // ---- desktop items ---------------------------------------------------------------------
@@ -1968,10 +2005,128 @@ mod tests {
             load_issue: None,
             save_allowed: true,
             persistence_issue: None,
-            pending_explicit_replacement: false,
+            pending_explicit_replacement: None,
         };
         state.ensure_layout();
         state
+    }
+
+    #[test]
+    fn asynchronous_receipt_covers_only_its_snapshot_and_replacement_barrier() {
+        use crate::persistence::{Ticket, WriteResult};
+        let mut state = test_state();
+        state.pending_explicit_replacement = Some(state.document_stamp());
+        let plan = state.prepare_save().unwrap();
+        let saved_language = plan.config.settings.language;
+        state.config.settings.language = pecofence_core::i18n::Language::English;
+        state.mark_dirty();
+        assert_eq!(plan.config.settings.language, saved_language);
+        assert_eq!(
+            state.apply_save_result(WriteResult {
+                ticket: Ticket {
+                    id: 1,
+                    stamp: plan.stamp,
+                    replace: plan.replace
+                },
+                outcome: Ok(pecofence_core::SaveReceipt {
+                    backup: pecofence_core::BackupStatus::AlreadyExists
+                }),
+            }),
+            Some(true)
+        );
+        assert_eq!(state.committed_revision(), Some(plan.stamp.revision));
+        assert!(state.is_dirty());
+        assert!(!state.prepare_save().unwrap().replace);
+    }
+
+    #[test]
+    fn old_activation_success_or_failure_cannot_acknowledge_or_poison_a_replacement() {
+        use crate::persistence::{Ticket, WriteResult};
+        let mut state = test_state();
+        let previous = state.prepare_save().unwrap().stamp;
+        state.persistence_issue = Some("previous workspace failure".into());
+        state.replace_config(Config::default()).unwrap();
+        assert!(state.persistence_issue.is_none());
+        for outcome in [
+            Err("old failure".into()),
+            Ok(pecofence_core::SaveReceipt {
+                backup: pecofence_core::BackupStatus::AlreadyExists,
+            }),
+        ] {
+            assert_eq!(
+                state.apply_save_result(WriteResult {
+                    ticket: Ticket {
+                        id: 1,
+                        stamp: previous,
+                        replace: true
+                    },
+                    outcome,
+                }),
+                None
+            );
+            assert!(state.persistence_issue.is_none());
+            assert!(state.committed_revision().is_none());
+            assert!(state.prepare_save().unwrap().replace);
+        }
+    }
+
+    #[test]
+    fn newer_same_activation_replacement_survives_an_older_replace_receipt() {
+        use crate::persistence::{Ticket, WriteResult};
+        let mut state = test_state();
+        state.pending_explicit_replacement = Some(state.document_stamp());
+        let older = state.prepare_save().unwrap();
+        state.apply_snapshot_layouts(state.config.layouts.clone());
+        assert_eq!(state.document_stamp().workspace, older.stamp.workspace);
+        assert_eq!(
+            state.apply_save_result(WriteResult {
+                ticket: Ticket {
+                    id: 1,
+                    stamp: older.stamp,
+                    replace: true
+                },
+                outcome: Ok(pecofence_core::SaveReceipt {
+                    backup: pecofence_core::BackupStatus::AlreadyExists
+                }),
+            }),
+            Some(true)
+        );
+        assert!(state.prepare_save().unwrap().replace);
+        assert!(state.is_dirty());
+    }
+
+    #[test]
+    fn failed_primary_retains_dirty_and_explicit_replacement_until_a_real_receipt() {
+        use crate::persistence::{Ticket, WriteResult};
+        let mut state = test_state();
+        state.replace_config(Config::default()).unwrap();
+        let stamp = state.prepare_save().unwrap().stamp;
+        let ticket = Ticket {
+            id: 1,
+            stamp,
+            replace: true,
+        };
+        assert_eq!(
+            state.apply_save_result(WriteResult {
+                ticket,
+                outcome: Err("disk full".into())
+            }),
+            Some(false)
+        );
+        assert!(state.is_dirty());
+        assert!(state.prepare_save().unwrap().replace);
+        assert_eq!(
+            state.apply_save_result(WriteResult {
+                ticket,
+                outcome: Ok(pecofence_core::SaveReceipt {
+                    backup: pecofence_core::BackupStatus::Degraded("backup offline".into())
+                }),
+            }),
+            Some(true)
+        );
+        assert!(!state.is_dirty());
+        assert_eq!(state.committed_revision(), Some(stamp.revision));
+        assert_eq!(state.persistence_issue.as_deref(), Some("backup offline"));
     }
 
     fn add_item(state: &mut AppState, fence: FenceId, name: &str) -> ItemId {

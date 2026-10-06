@@ -12,6 +12,7 @@ const port = Number(process.env.PECOFENCE_UI_TEST_PORT || 43190);
 const fixture = {
   type: 'state',
   saveAllowed: true, writable: true, loadIssue: null, saveHealth: null, recoveredFrom: null,
+  saving: false, closing: false, documentDirty: false,
   locale: 'zh-CN', translations: {},
   settings: {
     language: 'zh-CN',
@@ -63,7 +64,9 @@ function bridge() {
   window.testMessages = [];
   let receive, page, client;
   let stamp = { workspace: crypto.randomUUID(), revision: 0 }, viewSequence = 0, next = 1, committed = 0;
-  let last = JSON.stringify(state);
+  const documentValue = () => JSON.stringify({ settings: state.settings, rules: state.rules,
+    fences: state.fences, snapshots: state.snapshots });
+  let last = documentValue();
   const receipts = new Map();
   const settingPaths = {
     language: 'language', theme: 'theme', themeStyle: 'themeStyle', iconSize: 'iconSize',
@@ -79,17 +82,28 @@ function bridge() {
   window.testSummary = itemCount => receive({ data: { type: 'workspaceSummary', page, workspace: stamp.workspace, fenceCount: state.fences.length, itemCount } });
   window.testRefresh = () => {
     if (!client) return;
-    const current = JSON.stringify(state);
+    const current = documentValue();
     if (current !== last) { stamp.revision++; last = current; }
+    state.documentDirty = committed == null || committed < stamp.revision;
     receive({ data: { type: 'snapshot', protocol: 1, page, client, stamp: structuredClone(stamp), sequence: ++viewSequence, view: structuredClone(state) } });
     persist();
   };
   window.testShowFence = id => receive({ data: { type: 'showFence', id } });
   window.testState = state;
+  window.testCompleteSave = issue => {
+    if (!issue) committed = stamp.revision;
+    state.saveHealth = issue || null; state.saving = false;
+    window.testRefresh();
+  };
   const apply = command => {
     const replacement = command.kind === 'action'
       && ['newWorkspace', 'acceptRecovery'].includes(command.action.action) && command.action.confirmed === true;
-    if (!state.saveAllowed && !replacement) return 'readOnly';
+    const cancelClose = command.kind === 'action' && command.action.action === 'cancelClose';
+    if (!state.saveAllowed && !replacement && !cancelClose) return 'readOnly';
+    if (cancelClose) {
+      state.closing = false; state.saveAllowed = state.writable = true;
+    }
+    if (command.kind === 'action' && command.action.action === 'retrySave') state.saving = true;
     if (replacement) {
       state.saveAllowed = state.writable = true;
       state.loadIssue = state.recoveredFrom = state.saveHealth = null;
@@ -171,14 +185,20 @@ function bridge() {
           : message.sequence !== next ? 'sequence' : message.base.workspace !== stamp.workspace ? 'workspace'
           : message.base.revision !== stamp.revision ? 'conflict' : null;
         if (!rejected) rejected = apply(message.command);
-        const current = JSON.stringify(state);
+        const current = documentValue();
         if (current !== last) { stamp.revision++; last = current; }
         const receipt = { type: 'receipt', client: message.client, sequence: message.sequence,
           base: message.base, current: structuredClone(stamp), rejected, cancelled: false };
         if (message.sequence === next) { next++; receipts.set(message.sequence, receipt); }
         const saved = structuredClone(stamp);
         setTimeout(() => { receive({ data: receipt }); window.testRefresh(); }, 0);
-        setTimeout(() => { if (saved.workspace === stamp.workspace) { committed = Math.max(committed || 0, saved.revision); persist(); } }, 20);
+        setTimeout(() => {
+          if (!window.testHoldPersistence && saved.workspace === stamp.workspace) {
+            committed = Math.max(committed || 0, saved.revision);
+            state.saveHealth = null; state.saving = false;
+            window.testRefresh();
+          }
+        }, 20);
       },
     },
   };
@@ -484,6 +504,33 @@ async function runTests() {
     assert(doc.getElementById('saveState').textContent === '工作区未保存。', 'Unaccepted draft was shown as saved');
     doc.getElementById('draftDiscard').click();
     assert(doc.getElementById('saveState').textContent === '所有更改已保存。', 'Discard did not restore the primary receipt');
+  });
+  await test('Saving has a real pending state and a failed primary can be retried explicitly', async () => {
+    doc = await reset();
+    const win = frame.contentWindow;
+    win.testHoldPersistence = true;
+    current().settings.autostart = !current().settings.autostart;
+    current().saveHealth = 'disk full'; win.testRefresh(); await settle();
+    assert(!doc.getElementById('retrySave').hidden, 'Dirty failed save has no retry');
+    doc.getElementById('retrySave').click(); await settle();
+    assert(current().saving && doc.getElementById('saveState').textContent === '正在保存…', 'Request was confused with a completed write');
+    assert(doc.getElementById('retrySave').disabled, 'Retry can start another write while one is pending');
+    win.testCompleteSave(); await settle();
+    assert(doc.getElementById('saveState').textContent === '所有更改已保存。', 'Primary receipt did not confirm saving');
+    assert(doc.getElementById('retrySave').hidden, 'Committed primary is still marked dirty');
+  });
+  await test('Closing rejects editing but can be cancelled without cancelling the write', async () => {
+    doc = await reset();
+    const win = frame.contentWindow;
+    win.testHoldPersistence = true;
+    current().closing = true; current().saving = true;
+    current().saveAllowed = current().writable = false;
+    win.testRefresh(); await settle();
+    assert(!doc.getElementById('closingPanel').hidden, 'Closing state is invisible');
+    assert(doc.querySelector('[data-bind="autostart"]').disabled, 'Closing still accepts edits');
+    doc.getElementById('cancelClose').click(); await settle();
+    assert(!current().closing && current().saving, 'Cancelling closing incorrectly cancelled the write');
+    assert(!doc.querySelector('[data-bind="autostart"]').disabled, 'Cancellation did not reopen editing');
   });
   await test('Quick-add templates post addTemplate once and render the new rule', async () => {
     doc = await reset();

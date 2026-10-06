@@ -458,5 +458,10 @@
   "系统项目": "Éléments système",
   "编辑规则": "Modifier la règle",
   "保存规则": "Enregistrer la règle",
-  "重试未提交的修改": "Renvoyer les modifications non envoyées"
+  "重试未提交的修改": "Renvoyer les modifications non envoyées",
+  "重试保存": "Réessayer l’enregistrement",
+  "取消退出": "Annuler la fermeture",
+  "正在保存…": "Enregistrement…",
+  "正在等待保存完成，暂不接受修改。": "En attente de la fin de l’enregistrement. Les modifications sont temporairement désactivées.",
+  "保存失败。取消：返回工作区；重试：再次保存；继续：放弃未保存的修改并退出。": "Échec de l’enregistrement. Annuler : revenir à l’espace de travail. Réessayer : enregistrer à nouveau. Continuer : abandonner les modifications non enregistrées et quitter."
 }
