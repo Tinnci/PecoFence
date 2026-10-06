@@ -47,8 +47,9 @@ After configuring your own identity:
 ./scripts/make-msix.ps1 -Python .venv-msix/Scripts/python.exe -TestSign
 ```
 
-The first command builds and packs unsigned; `-SkipBuild` reuses
-`target/package/release`; `-TestSign` additionally creates a self-signed copy.
+The first command builds and packs unsigned; `-SkipBuild` requires the verified
+build receipt in `target/package/release`; `-TestSign` additionally creates a
+self-signed copy. ZIP/MSIX payloads share the implementation in [PACKAGING.md](PACKAGING.md).
 To use a separate identity JSON, add `-Identity "path/to/your-identity.json"`
 to any command. With an existing Python/Pillow installation, omit `-Python`.
 
@@ -56,7 +57,8 @@ to any command. With an existing Python/Pillow installation, omit `-Python`.
 `packaging/msix/AppxManifest.xml` supplies the manifest template: x64, Windows 11
 minimum (`10.0.22000.0`), `runFullTrust` and a `windows.startupTask`.
 The package version is `<Cargo.toml version>.0`; the Store requires the fourth
-component to be zero. Portable and MSIX packages include `LICENSE`, `NOTICE` and
+component to be zero. Stable version components must fit 0–65535. Portable and
+MSIX packages include the license (`LICENSE` / `LICENSE.txt`), `NOTICE` and
 third-party notices; verify these remain in the staged payload.
 
 ## Local install test
@@ -73,8 +75,9 @@ Add-AppxPackage "dist/pecofence-<version>-x64-testsigned.msix"
 Replace `<version>` with the built version. Trusting the certificate changes the
 machine's certificate store; remove that trust when testing is finished.
 The self-signed certificate is **local-test-only**, not a production code-signing
-identity. Never upload the test-signed copy to the Store or publish the generated
-PFX/private key. The default test password is not protection for distribution.
+identity. Never upload the test-signed copy to the Store. Signing now uses a
+temporary non-exportable key in CurrentUser/My and removes it in `finally`;
+only the public `.cer` is exported, never a private PFX/default password.
 
 Packaged startup uses the manifest startup task rather than the normal HKCU Run
 entry; the in-app toggle opens Windows Startup settings. Windows virtualizes the

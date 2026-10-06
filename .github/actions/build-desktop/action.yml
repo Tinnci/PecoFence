@@ -5,15 +5,38 @@ inputs:
   private-dependency-token:
     description: Token with read access to the private Tinnci/spm dependency
     required: true
+  require-clean-source:
+    description: Reject locally modified source in release packages
+    default: 'false'
 
 runs:
   using: composite
   steps:
+    - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
+      with:
+        components: rustfmt, clippy
+    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      with:
+        python-version: '3.x'
+        check-latest: true
+    - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      with:
+        node-version: '24'
+        package-manager-cache: false
+    - name: Validate sources without private credentials
+      shell: pwsh
+      run: |
+        python scripts/check-actions.py --online
+        if ($LASTEXITCODE -ne 0) { throw "Direct action runtime verification failed." }
+        ./scripts/build-and-verify.ps1 -SourceOnly
     - name: Authenticate private Cargo dependencies
       shell: pwsh
       env:
         SPM_READ_TOKEN: ${{ inputs.private-dependency-token }}
       run: |
+        if ([string]::IsNullOrWhiteSpace($env:SPM_READ_TOKEN)) {
+          throw "Configure PRIVATE_REPO_TOKEN with read-only access to Tinnci/spm. For Dependabot PRs, also add it under Dependabot secrets. Never use pull_request_target to expose credentials to untrusted code."
+        }
         # Cargo fetches in CARGO_HOME, not the checkout. Inherited Git config
         # reaches both locations without persisting the token in a config file.
         $config = @{
@@ -33,18 +56,8 @@ runs:
         if ($LASTEXITCODE -ne 0) {
           throw "PRIVATE_REPO_TOKEN needs read access to Tinnci/spm; this repository's GITHUB_TOKEN cannot read that private dependency."
         }
-    - uses: dtolnay/rust-toolchain@stable
-      with:
-        components: rustfmt, clippy
-    - uses: actions/setup-python@v5
-      with:
-        python-version: '3.x'
-        check-latest: true
-    - uses: actions/setup-node@v4
-      with:
-        node-version: '24'
     - name: Cache public crate downloads
-      uses: actions/cache@v4
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         # PecoFence is public but spm is private. Never cache CARGO_HOME/git
         # or target artifacts: base-branch caches are accessible to fork PRs.
@@ -56,4 +69,5 @@ runs:
       shell: pwsh
       env:
         SPM_READ_TOKEN: ${{ inputs.private-dependency-token }}
-      run: ./scripts/build-and-verify.ps1 -TargetDir target
+        REQUIRE_CLEAN_SOURCE: ${{ inputs.require-clean-source }}
+      run: ./scripts/build-and-verify.ps1 -TargetDir target -SkipSourceChecks -RequireCleanSource:($env:REQUIRE_CLEAN_SOURCE -eq 'true')

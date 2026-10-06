@@ -3,7 +3,10 @@
 [CmdletBinding()]
 param(
   [string]$TargetDir = "target",
-  [string]$Python = "python"
+  [string]$Python = "python",
+  [switch]$SourceOnly,
+  [switch]$SkipSourceChecks,
+  [switch]$RequireCleanSource
 )
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
@@ -24,13 +27,20 @@ function Invoke-CheckedCommand([string]$Name, [string]$Program, [string[]]$Argum
 }
 
 # Cheap source checks fail before the expensive native compilation.
-Invoke-CheckedCommand "Format" "cargo" @("fmt", "--all", "--check")
-Invoke-CheckedCommand "Translations" $Python @("scripts/check-locales.py")
-Invoke-CheckedCommand "README translations" $Python @("scripts/check-readme-translations.py")
-Invoke-CheckedCommand "Settings client protocol" "node" @("--test", "scripts/test-settings-client.cjs")
-Invoke-CheckedCommand "Settings browser UI" "pwsh" @("-NoProfile", "-File", "scripts/test-settings-browser.ps1")
-Invoke-CheckedCommand "Website publication tests" $Python @("scripts/test-build-site.py")
-Invoke-CheckedCommand "Website" $Python @("scripts/build-site.py", "--strict", "--out", ".cache/site-check")
+if ($SourceOnly -and $SkipSourceChecks) { throw "SourceOnly cannot skip its own checks." }
+if (-not $SkipSourceChecks) {
+  Invoke-CheckedCommand "Action policy tests" $Python @("scripts/test-actions-policy.py")
+  Invoke-CheckedCommand "Action pin policy" $Python @("scripts/check-actions.py")
+  Invoke-CheckedCommand "Format" "cargo" @("fmt", "--all", "--check")
+  Invoke-CheckedCommand "Translations" $Python @("scripts/check-locales.py")
+  Invoke-CheckedCommand "README translations" $Python @("scripts/check-readme-translations.py")
+  Invoke-CheckedCommand "Settings client protocol" "node" @("--test", "scripts/test-settings-client.cjs")
+  Invoke-CheckedCommand "Settings browser UI" "pwsh" @("-NoProfile", "-File", "scripts/test-settings-browser.ps1")
+  Invoke-CheckedCommand "Website publication tests" $Python @("scripts/test-build-site.py")
+  Invoke-CheckedCommand "Website" $Python @("scripts/build-site.py", "--strict", "--out", ".cache/site-check")
+  Invoke-CheckedCommand "Desktop packaging tests" $Python @("scripts/test-package-desktop.py")
+}
+if ($SourceOnly) { return }
 
 Invoke-CheckedCommand "Clippy" "cargo" @(
   "clippy", "--locked", "--workspace", "--all-targets", "--target-dir", $TargetDir,
@@ -59,10 +69,8 @@ Invoke-CheckedCommand "Workspace fixture validator tests" "cargo" @(
 )
 
 # One release compilation; packaging must consume these exact binaries.
-Invoke-CheckedCommand "Release build" "cargo" @(
-  "build", "--locked", "--release", "-p", "pecofence", "-p", "pecofence-watchdog",
-  "--target-dir", $TargetDir
-)
+Write-Host "`n[Release build] Compile once with verified source/output receipt"
+& (Join-Path $PSScriptRoot "build-desktop.ps1") -TargetDir $TargetDir -Python $Python
 # Existing 4.5 MiB budget includes the SPM host integration. Keep the same gate
 # for pull requests and releases; do not trade diagnostics for a smaller number.
 $binary = Join-Path $TargetDir "release/pecofence.exe"
@@ -71,4 +79,4 @@ Write-Host "`n[Size gate] pecofence.exe = $size bytes (limit: 4718592)"
 if ($size -gt 4718592) { throw "pecofence.exe exceeds the 4.5 MiB size budget" }
 
 Write-Host "`n[Package] Reusing the verified release binaries"
-& (Join-Path $PSScriptRoot "make-portable.ps1") -SkipBuild -TargetDir $TargetDir -Python $Python
+& (Join-Path $PSScriptRoot "make-portable.ps1") -SkipBuild -TargetDir $TargetDir -Python $Python -RequireCleanSource:$RequireCleanSource

@@ -7,8 +7,9 @@ matching `v<version>` tag executes the release job against that tag's own source
 Both use [.github/actions/build-desktop/action.yml](../.github/actions/build-desktop/action.yml)
 and [scripts/build-and-verify.ps1](../scripts/build-and-verify.ps1):
 
-1. Authenticate the private `Tinnci/spm` Git dependency.
-2. Install Rust stable with rustfmt/Clippy and the latest stable Python 3.
+1. Install Rust stable with rustfmt/Clippy, latest stable Python 3 and Node 24.
+2. Run public source/Actions policy, browser, website and packaging tests before
+   authenticating the private `Tinnci/spm` Git dependency.
 3. Restore **public registry archives only**, never private Git checkouts or
    compiled intermediates. Crate downloads are reusable across CI/releases and
    Rust upgrades; native dependency compilation happens on each runner.
@@ -16,7 +17,8 @@ and [scripts/build-and-verify.ps1](../scripts/build-and-verify.ps1):
    local website preview before native compilation. Run Clippy,
    regenerate/compare bindings, compile and run workspace tests with the
    WebView2 loader staged beside their executables.
-5. Compile `pecofence` and `pecofence-watchdog` once in release mode, enforce the
+5. Compile `pecofence` and `pecofence-watchdog` once with `build-desktop.ps1`, record
+   source/toolchain/binary fingerprints, enforce the
    existing 4.5 MiB application budget, then package those exact binaries with
    `make-portable.ps1 -SkipBuild`. All Cargo dependency resolution uses `--locked`.
 
@@ -27,6 +29,11 @@ CI runs; release jobs are not cancelled this way. Both jobs have a 45-minute lim
 The tag workflow checks that the tag matches `Cargo.toml`, runs the same gates,
 then creates a **draft** GitHub Release. Publishing that draft is a separate
 manual step. It does not imply Store, winget or website publication.
+
+Tag packaging requires clean source and selects exactly the current version's
+ZIP/checksum, not a wildcard collection of possibly stale versions.
+See [PACKAGING.md](PACKAGING.md) for receipt validation, deterministic ZIPs,
+per-user installation and shared MSIX payloads.
 
 Website deployment is independent of native builds:
 
@@ -56,6 +63,11 @@ Fork pull requests do not receive this secret, so they cannot complete the
 private-dependent native build. Do not switch to `pull_request_target` to run
 untrusted fork code with the secret. Public contribution builds require a
 separate decision about publishing or safely distributing the contracts crate.
+
+Dependabot PRs need a **Dependabot secret** with the same `PRIVATE_REPO_TOKEN`
+name; the Actions secret alone is insufficient. Major upgrades remain allowed
+but require review, not auto-merge. Configuration covers both workflows and the
+local composite action. See [DEPENDENCIES.md](DEPENDENCIES.md).
 
 Other credentials are independent: `GH_TOKEN`/`contents: write` creates the
 draft release; `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` deploy the site;

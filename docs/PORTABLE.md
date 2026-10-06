@@ -33,3 +33,7 @@ icons** from the tray menu or Settings → About.
 
 The ZIP is an unsigned portable build. It does not contain your configuration.
 Languages work offline; the glass background uses static desktop wallpaper.
+
+New packages include `package.json` with build provenance, payload hashes and
+runtime requirements. Keep the full verified payload together. SHA-256 checks
+integrity, not publisher identity; use downloads from a trusted source.

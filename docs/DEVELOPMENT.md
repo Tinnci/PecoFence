@@ -78,6 +78,12 @@ both workflows, prints per-command timings and compiles release binaries only
 once. See [RELEASING.md](RELEASING.md#ci-and-deployment-flow) for authentication,
 cache boundaries and deployment triggers.
 
+`-SourceOnly` runs public checks without private contracts. CI runs that phase
+before authentication, then `-SkipSourceChecks` for the native phase; the default
+local command runs both. Packaging/immutable installation and build receipts are
+described in [PACKAGING.md](PACKAGING.md). Native UI replacement remains a proposed
+direction in [ADR-007](decisions/ADR-007-native-settings.md), not an implemented host.
+
 The browser command launches headless Chrome/Edge against the production Settings
 page with a local mock bridge; it does not start PecoFence or change desktop settings.
 Use `-Browser <path>` if needed. It covers rule editing/AND conditions, conflicts,

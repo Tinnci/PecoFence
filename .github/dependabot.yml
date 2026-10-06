@@ -1,0 +1,29 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      workflow-actions:
+        patterns: ["*"]
+        update-types: [minor, patch]
+    commit-message:
+      prefix: "chore(ci)"
+  # Root workflow scanning does not reliably recurse into local composite actions.
+  - package-ecosystem: github-actions
+    directory: /.github/actions/build-desktop
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      desktop-actions:
+        patterns: ["*"]
+        update-types: [minor, patch]
+    commit-message:
+      prefix: "chore(ci)"
+  # Cargo's private pinned SPM contract needs paired updates and separate bot access.
+  # Do not enable an unauthenticated Cargo updater or auto-merge major action updates.
