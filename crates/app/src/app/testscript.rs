@@ -151,8 +151,13 @@ impl App {
                     }
                 }
                 ["message", ..] => {
-                    if let Some(json) = line.strip_prefix("message ") {
-                        self.queue.push(Command::SettingsMessage(json.to_string()));
+                    if let Some(json) = line.strip_prefix("message ")
+                        && let Some(host) = &self.settings
+                    {
+                        self.queue.push(Command::SettingsMessage {
+                            source: host.source(),
+                            json: json.to_string(),
+                        });
                     }
                 }
                 ["set-content", content, property, ..] => {

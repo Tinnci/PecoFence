@@ -10,6 +10,7 @@ mod fence_window;
 mod icons;
 mod layout;
 mod peek;
+mod persistence;
 mod portal_runtime;
 mod rename;
 mod settings_host;

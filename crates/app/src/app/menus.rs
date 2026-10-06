@@ -139,11 +139,18 @@ impl App {
             .separator()
             .item(
                 CMD_EXIT,
-                pecofence_core::i18n::text("退出 PecoFence"),
+                if self.persistence.closing() == Closing::Open {
+                    pecofence_core::i18n::text("退出 PecoFence")
+                } else {
+                    pecofence_core::i18n::text("取消退出")
+                },
                 false,
                 false,
             );
         let cmd = menu.show(self.control.hwnd(), x, y);
+        if self.persistence.closing() != Closing::Open && !matches!(cmd, CMD_SETTINGS | CMD_EXIT) {
+            return;
+        }
         match cmd {
             CMD_TOGGLE_FENCES => self.toggle_all_fences(),
             CMD_PEEK => self.queue.push(Command::TogglePeek),

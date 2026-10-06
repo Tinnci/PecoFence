@@ -232,8 +232,6 @@ pub enum Command {
     OpenOptionsForFence(ContentId),
     RedrawAll,
     Quit,
-    /// A window was destroyed (unregister).
-    WindowGone(HWND),
     /// A retired fence window (deleted / merged) finished fading out: destroy it now.
     FadeOutDone(HWND),
     /// The user clicked a fence: bring it above the other fences.
@@ -243,8 +241,14 @@ pub enum Command {
         fence: ContentId,
         sort: pecofence_core::SortMode,
     },
-    /// JSON message from the settings page.
-    SettingsMessage(String),
+    /// Message from one native Settings activation, not an HWND that can be reused.
+    SettingsMessage {
+        source: uuid::Uuid,
+        json: String,
+    },
+    SettingsClosed {
+        source: uuid::Uuid,
+    },
 }
 
 #[derive(Clone)]

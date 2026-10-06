@@ -70,6 +70,7 @@ struct HostState {
 
 pub struct SettingsHost {
     window: Window,
+    source: uuid::Uuid,
     state: Rc<RefCell<HostState>>,
     /// DWM Mica is active behind a transparent page.
     mica: bool,
@@ -92,6 +93,7 @@ impl SettingsHost {
         liquid_glass: bool,
         queue: CommandQueue,
     ) -> Result<Self> {
+        let source = uuid::Uuid::new_v4();
         let state = Rc::new(RefCell::new(HostState {
             controller: None,
             webview: None,
@@ -106,7 +108,7 @@ impl SettingsHost {
             let state = state.clone();
             let queue = queue.clone();
             Box::new(
-                move |hwnd: HWND, message: u32, _wparam: usize, lparam: isize| -> Option<isize> {
+                move |_hwnd: HWND, message: u32, _wparam: usize, lparam: isize| -> Option<isize> {
                     match message {
                         msg::WM_SIZE => {
                             let w = msg::lo_i16(lparam);
@@ -144,7 +146,7 @@ impl SettingsHost {
                             if let Some(c) = s.controller.take() {
                                 let _ = c.close();
                             }
-                            queue.push(Command::WindowGone(hwnd));
+                            queue.push(Command::SettingsClosed { source });
                             Some(0)
                         }
                         _ => None,
@@ -201,7 +203,10 @@ impl SettingsHost {
         {
             let queue = queue.clone();
             registrations.push(webview.on_web_message_received(move |args| {
-                queue.push(Command::SettingsMessage(args.web_message_as_json()));
+                queue.push(Command::SettingsMessage {
+                    source,
+                    json: args.web_message_as_json(),
+                });
             })?);
         }
         // Tell the page whether it sits on Mica before it renders (opaque fallback class).
@@ -246,6 +251,7 @@ impl SettingsHost {
         }
         Ok(Self {
             window,
+            source,
             state,
             mica,
             icons: Vec::new(),
@@ -255,6 +261,10 @@ impl SettingsHost {
 
     pub fn hwnd(&self) -> HWND {
         self.window.hwnd()
+    }
+
+    pub fn source(&self) -> uuid::Uuid {
+        self.source
     }
 
     pub fn update_language(&self) {

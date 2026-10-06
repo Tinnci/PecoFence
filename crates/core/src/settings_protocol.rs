@@ -305,6 +305,8 @@ pub enum Action {
     RestoreBackup { path: PathBuf, confirmed: bool },
     RepairIcons,
     HideDesktopIcons,
+    RetrySave,
+    CancelClose,
 }
 
 impl Action {
@@ -313,6 +315,7 @@ impl Action {
             self,
             Self::OpenConfigFolder
                 | Self::ExportConfig
+                | Self::CancelClose
                 | Self::NewWorkspace { .. }
                 | Self::AcceptRecovery { .. }
                 | Self::ImportConfig { .. }
@@ -479,6 +482,9 @@ impl SettingsSession {
     pub fn client(&self) -> Option<Uuid> {
         self.client
     }
+    pub fn close(&mut self) {
+        *self = Self::default();
+    }
     pub fn page(&self) -> Option<Uuid> {
         self.page
     }
@@ -602,6 +608,23 @@ mod tests {
         ));
     }
 
+    #[test]
+    fn closing_a_page_revokes_queued_requests_and_cannot_revive_its_client() {
+        let mut session = SettingsSession::default();
+        let page = Uuid::new_v4();
+        let client = session.open(page);
+        let stamp = DocumentClock::new(true).stamp();
+        let request = request(client, 1, stamp);
+        session.close();
+        assert!(session.page().is_none());
+        assert!(matches!(
+            session.admit(&request, stamp, true),
+            Admission::Reject(Rejection::Client)
+        ));
+        assert_ne!(session.open(page), client);
+        assert!(Action::CancelClose.permitted_read_only());
+        assert!(!Action::RetrySave.permitted_read_only());
+    }
     #[test]
     fn accepted_and_rejected_requests_are_replayed_without_execution() {
         let mut session = SettingsSession::default();

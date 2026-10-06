@@ -34,7 +34,7 @@
     --preview-panel: #f5ffffa8; --preview-border: #ffffffa8;
   }
   * { box-sizing: border-box; }
-  #recoveryPanel[hidden], #recoveryAccept[hidden] { display: none; }
+  #recoveryPanel[hidden], #recoveryAccept[hidden], #retrySave[hidden], #closingPanel[hidden] { display: none; }
   html, body { margin: 0; height: 100%; color: var(--text); background: transparent;
     font: 14px/1.5 "Segoe UI Variable Text", "Segoe UI", "Yu Gothic UI", "Microsoft YaHei UI", "Malgun Gothic", sans-serif; user-select: none; }
   html.no-mica body { background: var(--sheet); }
@@ -290,7 +290,12 @@
         <button id="recoveryImport">导入 PecoFence 配置</button>
         <button id="recoveryAccept">接受恢复的工作区</button>
         <button id="recoveryNew">新建工作区</button>
+        <button id="retrySave" hidden>重试保存</button>
       </div>
+    </div>
+    <div id="closingPanel" class="card" hidden role="status">
+      <span>正在等待保存完成，暂不接受修改。</span>
+      <button id="cancelClose">取消退出</button>
     </div>
     <p id="saveState" class="s" role="status"></p>
     <div id="draftPanel" class="card" hidden>
@@ -500,7 +505,7 @@
     const current = message?.stamp.workspace === client.stamp?.workspace
       && message?.stamp.revision === client.stamp?.revision;
     const pending = client.inFlight || client.queue.length || client.failed.length || client.accepted.length;
-    document.getElementById('saveState').textContent = message?.issue
+    document.getElementById('saveState').textContent = (state?.saving ? t("正在保存…") : message?.issue)
       || (current && !pending && message.committedRevision != null && message.committedRevision >= message.stamp.revision
         ? t("所有更改已保存。") : t("工作区未保存。"));
   }
@@ -967,6 +972,8 @@
   document.getElementById('recoveryImport').onclick = document.getElementById('cfgImport').onclick;
   document.getElementById('recoveryAccept').onclick = () => { if (confirmReplacement()) action({ action: 'acceptRecovery', confirmed: true }); };
   document.getElementById('recoveryNew').onclick = () => { if (confirmReplacement()) action({ action: 'newWorkspace', confirmed: true }); };
+  document.getElementById('retrySave').onclick = () => action({ action: 'retrySave' });
+  document.getElementById('cancelClose').onclick = () => action({ action: 'cancelClose' });
   document.getElementById('swapDo').onclick = () => { const first = document.getElementById('swapA').value, second = document.getElementById('swapB').value; if (first && second && first !== second) action({ action: 'swapMonitors', first, second }); else toast(t("请选择两个不同的显示器"), true); };
   function renderLayout() {
     const sl = document.getElementById('snapList');
@@ -1056,6 +1063,9 @@
       document.getElementById('recoveryPanel').hidden = !m.loadIssue && !m.saveHealth;
       document.getElementById('recoveryIssue').textContent = [m.loadIssue, m.saveHealth].filter(Boolean).join('\n');
       document.getElementById('recoveryAccept').hidden = !m.recoveredFrom;
+      document.getElementById('retrySave').hidden = !m.documentDirty || !m.saveHealth;
+      document.getElementById('retrySave').disabled = !!m.saving || !m.saveAllowed || !client.healthy;
+      document.getElementById('closingPanel').hidden = !m.closing;
       ruleForm.querySelectorAll('input, select, button').forEach(el => {
         el.disabled = !m.saveAllowed || !client.healthy || !!ruleSubmission;
       });

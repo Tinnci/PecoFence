@@ -4,6 +4,10 @@ use super::*;
 
 impl App {
     pub(super) fn on_fs_changed(&mut self) {
+        if self.persistence.closing() != Closing::Open {
+            // Keep observations queued if the user cancels closing.
+            return;
+        }
         if !self.state.save_allowed {
             if let Ok(mut pending) = self.fs_pending.lock() {
                 pending.clear();

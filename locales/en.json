@@ -458,5 +458,10 @@
   "系统项目": "System items",
   "编辑规则": "Edit rule",
   "保存规则": "Save rule",
-  "重试未提交的修改": "Retry unsubmitted changes"
+  "重试未提交的修改": "Retry unsubmitted changes",
+  "重试保存": "Retry saving",
+  "取消退出": "Cancel exit",
+  "正在保存…": "Saving…",
+  "正在等待保存完成，暂不接受修改。": "Waiting for saving to finish. Changes are temporarily disabled.",
+  "保存失败。取消：返回工作区；重试：再次保存；继续：放弃未保存的修改并退出。": "Saving failed. Cancel: return to the workspace; Try Again: save again; Continue: discard unsaved changes and exit."
 }

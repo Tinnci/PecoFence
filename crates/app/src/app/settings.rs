@@ -203,8 +203,11 @@ impl App {
             "translations": localization["translations"],
             "settings": self.state.config.settings,
             "loadIssue": self.state.load_issue,
-            "saveAllowed": self.state.save_allowed,
-            "writable": self.state.save_allowed,
+            "saveAllowed": self.mutations_allowed(),
+            "writable": self.mutations_allowed(),
+            "saving": self.persistence.busy(),
+            "closing": self.persistence.closing() != Closing::Open,
+            "documentDirty": self.state.is_dirty(),
             "saveHealth": self.state.persistence_issue,
             "recoveredFrom": self.state.recovered_from,
             "desktopIconsHidden": pecofence_platform::shell_icons::desktop_icons_hidden(),
@@ -293,15 +296,11 @@ impl App {
 
     /// A queued write is not a saved workspace. Report the actual primary commit.
     fn settings_commit(&mut self, success: &str) {
-        if self.state.save_if_dirty() {
+        if !self.state.is_dirty() && self.state.committed_revision().is_some() {
             self.settings_toast(success);
-            if let Some(issue) = &self.state.persistence_issue {
-                self.settings_error(issue);
-            }
-        } else if let Some(issue) = &self.state.persistence_issue {
-            self.settings_error(issue);
         } else {
-            self.settings_error(pecofence_core::i18n::text("工作区未保存。"));
+            self.save_notice = Some((self.state.document_stamp(), success.to_string()));
+            self.request_save();
         }
         self.push_settings_state();
     }
@@ -351,7 +350,7 @@ impl App {
                 let result = match self.settings_session.admit(
                     &request,
                     self.state.document_stamp(),
-                    self.state.save_allowed,
+                    self.mutations_allowed(),
                 ) {
                     Admission::Replay(receipt) => {
                         self.post_settings_message(ServerMessage::Receipt(receipt));
@@ -383,6 +382,16 @@ impl App {
         &mut self,
         command: SettingsCommand,
     ) -> Result<bool, Rejection> {
+        if self.persistence.closing() != Closing::Open
+            && !matches!(
+                &command,
+                SettingsCommand::Action {
+                    action: Action::CancelClose
+                }
+            )
+        {
+            return Err(Rejection::ReadOnly);
+        }
         if !self.state.save_allowed && !command.permitted_read_only() {
             return Err(Rejection::ReadOnly);
         }
@@ -427,6 +436,18 @@ impl App {
             SettingsCommand::Action { action } => {
                 action.validate().map_err(Rejection::Invalid)?;
                 match action {
+                    Action::RetrySave => self.request_save(),
+                    Action::CancelClose => {
+                        if !matches!(
+                            self.persistence.closing(),
+                            Closing::Waiting | Closing::Failed
+                        ) {
+                            return Err(Rejection::Invalid(
+                                "application is not waiting to close".into(),
+                            ));
+                        }
+                        self.cancel_document_close();
+                    }
                     Action::ApplyRules => {
                         let entries = shell::enumerate_desktop();
                         let moved = self.state.apply_rules_all(&entries);

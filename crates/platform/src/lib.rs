@@ -26,6 +26,7 @@ pub mod com;
 pub mod crashlog;
 pub mod d2d;
 pub mod desktop;
+pub mod dialogs;
 pub mod dispatcher;
 pub mod dragdrop;
 pub mod dwm;
