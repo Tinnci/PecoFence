@@ -1,6 +1,15 @@
 # 开发环境与工作流（SPM / PecoFence）
 
-> 本文档是新会话/新代理上手的唯一环境事实来源。任何环境变更后请更新此文件。
+> 本文记录开发实验室的环境，路径和历史实测结果不是公开构建的前提。
+> 公开构建与验证以 [DEVELOPMENT.md](DEVELOPMENT.md) 和
+> [SPM_BOUNDARY.md](SPM_BOUNDARY.md) 为准；环境变更后请更新此文件。
+
+公开 PecoFence 仅依赖本仓库和公开 registry；本地 `crates/spm-contracts`
+版本为 0.1.0，从原固定 revision
+`e0dd3e058d40ef1c4623c12dba2f0715d2011a1b` 提取。
+不需要私有 token 或 SPM checkout。`Tinnci/spm` 后端保持私有，仅实时 SPM
+数据需要；普通围栏的编译和运行不依赖它，也不随 PecoFence 分发。
+下述双仓实验室仅用于获授权的私有集成，不能当作公开 CI 已运行的证据。
 
 ## 仓库位置（重要）
 
@@ -44,7 +53,9 @@ Windows 进程写入的文档类文件（.json/.md/.js/.sh 等），git blob 干
 - git：便携版 MinGit `C:\Users\Administrator\Tools\MinGit\cmd\git.exe`
   （已加入用户 PATH；注册表持久化，新终端生效）
 - 全局代理：`http.proxy = http://127.0.0.1:7890`（mihomo）。直连 443 间歇失败时先查代理
-- spm-contracts 依赖固定在 git rev（见根 Cargo.toml）；契约变更后手动 bump rev
+- PecoFence 使用本地公开 `spm-contracts`；私有后端应消费同一公开契约的精确
+  Git commit/版本，不保留可独立修改的重复实现。配对更新流程见
+  [SPM_BOUNDARY.md](SPM_BOUNDARY.md)，迁移/发布/实机验证状态须单独确认。
 
 开发/测试构建默认关闭 debug symbols 和 incremental compilation，减少仓内
 `target/` 占用；release 保留 line-table 崩溃诊断符号。临时开启调试信息、清理
@@ -58,7 +69,7 @@ uv 更新到 0.12.23；现有 VS 2022 C++ Build Tools 与 Windows SDK 10.0.26100
 已通过 Windows workspace 编译。
 
 Windows CI 与 tag release 共用 `.github/actions/build-desktop/action.yml` 和
-`scripts/build-and-verify.ps1`，私有依赖认证不落盘 token。公开仓库的 CI 缓存
+`scripts/build-and-verify.ps1`，不读取私有 SPM，不需要私有认证。公开仓库的 CI 缓存
 仅包含公开 registry 下载包，不缓存私有 Git checkout 或编译中间产物；
 CI 便携包 artifact 保留 7 天。完整触发/部署边界见
 [RELEASING.md](RELEASING.md#ci-and-deployment-flow)。
@@ -103,9 +114,10 @@ PecoFence-lab\
 
 1. `#[tokio::test]` 默认单线程运行时：测试里用 `std::thread::sleep` 会饿死
    同运行时的 spawned 任务（v2_loopback 曾因此失败）。用 `tokio::time::sleep().await`。
-2. PecoFence CI 认证私有依赖：必须 unset actions/checkout 持久化的
-   `http.https://github.com/.extraheader`（GITHUB_TOKEN 无权读 Tinnci/spm），
-   再用 PRIVATE_REPO_TOKEN 凭据助手。
+2. 公开 CI/Dependabot 不需要 PRIVATE_REPO_TOKEN，也不得使用特权
+   pull_request_target 或私有源码缓存。源码检查及 headless/合成协议测试必须
+   执行且失败即失败；feature gate 不得静默跳过。私有 daemon 实机集成必须
+   在独立、获授权的私有流程中验证并记录，不能以公开测试代替。
 3. Windows runner 的 run: 默认 shell 是 PowerShell：`$VAR` 不是环境变量，
    要用 `$env:VAR`。
 4. `wsl bash -lc '...'` 从 PowerShell 调用时命令串会先过 zsh 且引号不保真：

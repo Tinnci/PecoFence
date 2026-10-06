@@ -1,0 +1,39 @@
+{
+  "project_id": "fictional-project",
+  "delivery_scope_id": "fictional-scope",
+  "baseline_id": null,
+  "policy_revision": 1,
+  "daemon_session": "11111111-1111-4111-8111-111111111111",
+  "revision": 1,
+  "computed_at": "2000-01-01T00:00:00Z",
+  "project_timezone": "Etc/UTC",
+  "freshness_ttl_secs": 300,
+  "sources": [],
+  "overall_gate": {
+    "state": "unsatisfied",
+    "unsatisfied_count": 1,
+    "unknown_count": 0,
+    "applicable_count": 1
+  },
+  "gates": [{
+    "gate_id": "fictional-gate",
+    "label": "Fictional example gate",
+    "state": "unsatisfied",
+    "applicability": "applicable",
+    "n": 4,
+    "v": 2,
+    "threshold": {"p": 3, "q": 4},
+    "required": 3,
+    "gap": 1,
+    "deadline": null,
+    "reason_codes": [],
+    "evidence_refs": []
+  }],
+  "next_milestone": null,
+  "work_summary": {"total": 0, "severe_open": 0, "pending_verification": 0},
+  "preview_items": [],
+  "customer_obligations": {"total": 0, "accepted": 0, "pending": 0},
+  "verification": {"total": 0, "passed": 0, "failed": 0, "unknown": 0},
+  "merge": {"total": 0, "merged": 0, "open": 0, "unknown": 0},
+  "trend": {"basis": "live_scope", "points": [], "has_plan_line": false}
+}

@@ -136,8 +136,11 @@ PecoFence est sous licence Apache 2.0 et les contributions sont bienvenues, d’
 <summary><strong>Compiler depuis les sources</strong></summary>
 
 Installez Rust stable ainsi que Visual Studio Build Tools avec la charge de travail C++ et le SDK Windows.
-Cette édition nécessite aussi actuellement un accès Git authentifié au dépôt privé
-`Tinnci/spm` ; l’accès au seul dépôt public PecoFence ne suffit pas.
+Les compilations publiques utilisent uniquement ce dépôt et les registres publics,
+dont `crates/spm-contracts` (0.1.0) ; aucun jeton privé ni copie de SPM n’est requis.
+Le backend facultatif `Tinnci/spm` reste privé et n’est nécessaire que pour les
+données SPM en direct, pas pour compiler ou utiliser les groupes de Bureau ordinaires.
+Il n’est pas distribué avec PecoFence. Voir la [frontière SPM](../SPM_BOUNDARY.md).
 
 ```powershell
 cargo build --locked --release

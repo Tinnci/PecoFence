@@ -1,0 +1,14 @@
+spm-contracts 0.1.0
+
+Protocol implementation derived from Tinnci/spm:
+https://github.com/Tinnci/spm
+Revision: e0dd3e058d40ef1c4623c12dba2f0715d2011a1b
+Upstream declared authors: SPM Engineering
+Upstream declared license: Apache-2.0
+
+The runtime-independent src/*.rs implementation is unchanged.
+Cargo.toml was modified to use explicit package metadata and public dependencies.
+Only generic protocol tests and fixtures are retained; additional fictional
+protocol cases are documented in docs/SPM_CONTRACT_PROVENANCE.md in PecoFence.
+No copyright ownership claim is added by this notice.
+The Apache License, Version 2.0 is included in LICENSE in this package.

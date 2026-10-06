@@ -130,8 +130,11 @@ to a better desktop interaction.
 <summary><strong>Build from source</strong></summary>
 
 Install Rust stable and Visual Studio Build Tools with the C++ workload and Windows SDK.
-This edition also currently requires authenticated Git access to the private
-`Tinnci/spm` repository; access to the public PecoFence repository alone is not sufficient.
+Public builds use only this repository and public registries, including the local
+`crates/spm-contracts` crate (0.1.0); no private token or SPM checkout is needed.
+The optional `Tinnci/spm` backend remains private and is needed only for live SPM
+data, not for compiling or using ordinary desktop fences. It is not distributed
+with PecoFence. See the [SPM boundary](docs/SPM_BOUNDARY.md).
 
 ```powershell
 cargo build --locked --release

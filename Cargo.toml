@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
     "crates/core",
+    "crates/spm-contracts",
     "crates/plugin-api",
     "crates/plugin-kernel",
     "crates/plugin-spm",
@@ -19,9 +20,9 @@ rust-version = "1.95"
 license = "Apache-2.0"
 
 [workspace.dependencies]
-# Pinned to spm @ e0dd3e058d40ef1c4623c12dba2f0715d2011a1b; bump rev explicitly
-# with provider-side coordination and paired verification (docs/ARCHITECTURE.md).
-spm-contracts = { version = "=0.1.0", git = "https://github.com/Tinnci/spm", rev = "e0dd3e058d40ef1c4623c12dba2f0715d2011a1b" }
+# The public wire contract lives here; private SPM consumes an immutable revision
+# of this repository. Neither desktop builds nor protocol tests need backend access.
+spm-contracts = { version = "=0.1.0", path = "crates/spm-contracts" }
 windows-core = "0.100"
 windows-numerics = "0.100"
 windows-window = "0.100"

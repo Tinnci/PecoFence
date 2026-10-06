@@ -1,0 +1,1 @@
+{"daemon_session":null,"kind":"request","payload":{"method":"hello","params":{"client_build":"pecofence-test","features":["multiplexing","pagination"],"protocol_major":2,"protocol_minor":0}},"protocol_major":2,"protocol_minor":0,"request_id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","revision":null,"subscription_id":null}

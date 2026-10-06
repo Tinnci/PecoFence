@@ -8,8 +8,9 @@ Both use [.github/actions/build-desktop/action.yml](../.github/actions/build-des
 and [scripts/build-and-verify.ps1](../scripts/build-and-verify.ps1):
 
 1. Install Rust stable with rustfmt/Clippy, latest stable Python 3 and Node 24.
-2. Run public source/Actions policy, browser, website and packaging tests before
-   authenticating the private `Tinnci/spm` Git dependency.
+2. Run public source/Actions policy, browser, website and packaging tests.
+   Dependency resolution uses this repository plus public registries; there is
+   no private SPM authentication or checkout.
 3. Restore **public registry archives only**, never private Git checkouts or
    compiled intermediates. Crate downloads are reusable across CI/releases and
    Rust upgrades; native dependency compilation happens on each runner.
@@ -53,19 +54,18 @@ Website deployment is independent of native builds:
 
 ### Credentials and boundaries
 
-`PRIVATE_REPO_TOKEN` must have read access to `Tinnci/spm` in **both CI and
-release jobs**. The current repository's `GITHUB_TOKEN` cannot read another
-private repository. The shared action passes the token only through step
-environment variables; Git configuration contains a variable reference, not
-the credential. Checkout uses `persist-credentials: false`.
+Public CI, tag builds, fork PRs and Dependabot PRs require no private token or SPM
+checkout. Actions no longer reads private SPM source. Do not introduce privileged
+`pull_request_target` or a private-source cache. Checkout uses
+`persist-credentials: false`; caches contain public registry archives only.
 
-Fork pull requests do not receive this secret, so they cannot complete the
-private-dependent native build. Do not switch to `pull_request_target` to run
-untrusted fork code with the secret. Public contribution builds require a
-separate decision about publishing or safely distributing the contracts crate.
+The local public `crates/spm-contracts` crate (0.1.0) is not a daemon distribution.
+Source checks and headless/synthetic protocol tests remain required; feature gates
+must not silently skip failures. Live private-daemon integration belongs to a
+separate authorized private workflow and must not be claimed from public CI
+results. See [SPM_BOUNDARY.md](SPM_BOUNDARY.md).
 
-Dependabot PRs need a **Dependabot secret** with the same `PRIVATE_REPO_TOKEN`
-name; the Actions secret alone is insufficient. Major upgrades remain allowed
+Dependabot needs no `PRIVATE_REPO_TOKEN` secret. Major upgrades remain allowed
 but require review, not auto-merge. Configuration covers both workflows and the
 local composite action. See [DEPENDENCIES.md](DEPENDENCIES.md).
 
@@ -92,7 +92,7 @@ python scripts/package-source.py
 ```
 
 The shared script does not install tools or configure credentials on the local
-machine. Use your existing Git credential helper for the private dependency.
+machine. Public builds do not require private Git credentials.
 If the system Python is too old, pass a compatible interpreter path as `-Python`;
 for example `-Python (uv python find 3.15)`. This selects a local interpreter,
 not a repository version pin. Use `-TargetDir target/package` to isolate builds

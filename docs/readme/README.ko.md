@@ -130,8 +130,11 @@ PecoFence는 Apache 2.0 라이선스로 공개되어 있습니다. 더 정확한
 <summary><strong>소스에서 빌드하기</strong></summary>
 
 Rust stable과 C++ 워크로드 및 Windows SDK가 포함된 Visual Studio Build Tools를 설치합니다.
-이 버전은 현재 비공개 `Tinnci/spm` 저장소에 대한 인증된 Git 접근 권한도 필요합니다.
-공개 PecoFence 저장소에 대한 접근 권한만으로는 빌드할 수 없습니다.
+공개 빌드는 이 저장소와 공개 레지스트리만 사용하며 `crates/spm-contracts` (0.1.0)를
+포함합니다. 비공개 토큰이나 SPM 체크아웃은 필요하지 않습니다. 선택적 `Tinnci/spm`
+백엔드는 비공개로 유지되며 실시간 SPM 데이터에만 필요합니다. 일반 바탕 화면 그룹의
+컴파일이나 사용에는 필요하지 않고 PecoFence에 포함되어 배포되지 않습니다.
+[SPM 경계](../SPM_BOUNDARY.md)를 참고하세요.
 
 ```powershell
 cargo build --locked --release

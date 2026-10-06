@@ -1,10 +1,7 @@
 name: Build desktop package
-description: Apply the same authenticated, locked build and packaging gates in CI and releases
+description: Apply the same credential-free, locked build and packaging gates in CI and releases
 
 inputs:
-  private-dependency-token:
-    description: Token with read access to the private Tinnci/spm dependency
-    required: true
   require-clean-source:
     description: Reject locally modified source in release packages
     default: 'false'
@@ -29,45 +26,36 @@ runs:
         python scripts/check-actions.py --online
         if ($LASTEXITCODE -ne 0) { throw "Direct action runtime verification failed." }
         ./scripts/build-and-verify.ps1 -SourceOnly
-    - name: Authenticate private Cargo dependencies
+    - name: Use a fresh public Cargo home
       shell: pwsh
-      env:
-        SPM_READ_TOKEN: ${{ inputs.private-dependency-token }}
       run: |
-        if ([string]::IsNullOrWhiteSpace($env:SPM_READ_TOKEN)) {
-          throw "Configure PRIVATE_REPO_TOKEN with read-only access to Tinnci/spm. For Dependabot PRs, also add it under Dependabot secrets. Never use pull_request_target to expose credentials to untrusted code."
-        }
-        # Cargo fetches in CARGO_HOME, not the checkout. Inherited Git config
-        # reaches both locations without persisting the token in a config file.
-        $config = @{
-          GIT_CONFIG_COUNT = "2"
-          GIT_CONFIG_KEY_0 = "credential.https://github.com.helper"
-          GIT_CONFIG_VALUE_0 = ""
-          GIT_CONFIG_KEY_1 = "credential.https://github.com.helper"
-          GIT_CONFIG_VALUE_1 = '!f() { printf "%s\n" "username=x-access-token" "password=$SPM_READ_TOKEN"; }; f'
-          GIT_TERMINAL_PROMPT = "0"
-          GCM_INTERACTIVE = "never"
-        }
-        foreach ($entry in $config.GetEnumerator()) {
-          [Environment]::SetEnvironmentVariable($entry.Key, $entry.Value)
-          Add-Content -Path $env:GITHUB_ENV -Value "$($entry.Key)=$($entry.Value)" -Encoding utf8
-        }
-        git ls-remote --exit-code https://github.com/Tinnci/spm HEAD
-        if ($LASTEXITCODE -ne 0) {
-          throw "PRIVATE_REPO_TOKEN needs read access to Tinnci/spm; this repository's GITHUB_TOKEN cannot read that private dependency."
-        }
+        $cargoHome = Join-Path $env:RUNNER_TEMP ("pecofence-public-cargo-" + [guid]::NewGuid().ToString("N"))
+        New-Item -ItemType Directory -Path $cargoHome | Out-Null
+        Add-Content -Path $env:GITHUB_ENV -Value "CARGO_HOME=$cargoHome" -Encoding utf8
     - name: Cache public crate downloads
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
-        # PecoFence is public but spm is private. Never cache CARGO_HOME/git
-        # or target artifacts: base-branch caches are accessible to fork PRs.
-        path: ~/.cargo/registry/cache
+        # Only public registry archives. Do not reintroduce private sources or
+        # compiled backend artifacts into caches accessible to fork PRs.
+        path: ${{ env.CARGO_HOME }}/registry/cache
         key: ${{ runner.os }}-public-cargo-registry-v1-${{ hashFiles('Cargo.lock') }}
         restore-keys: |
           ${{ runner.os }}-public-cargo-registry-v1-
+    - name: Fetch locked public dependencies without Git credentials
+      shell: pwsh
+      run: |
+        $env:GIT_TERMINAL_PROMPT = "0"
+        $env:GCM_INTERACTIVE = "never"
+        $env:GIT_CONFIG_COUNT = "1"
+        $env:GIT_CONFIG_KEY_0 = "credential.helper"
+        $env:GIT_CONFIG_VALUE_0 = "!f() { exit 0; }; f"
+        $env:GIT_CONFIG_NOSYSTEM = "1"
+        $env:GIT_CONFIG_GLOBAL = Join-Path $env:CARGO_HOME "empty-git-config"
+        New-Item -ItemType File -Path $env:GIT_CONFIG_GLOBAL | Out-Null
+        cargo fetch --locked
+        if ($LASTEXITCODE -ne 0) { throw "Public dependency fetch failed." }
     - name: Verify, compile and package
       shell: pwsh
       env:
-        SPM_READ_TOKEN: ${{ inputs.private-dependency-token }}
         REQUIRE_CLEAN_SOURCE: ${{ inputs.require-clean-source }}
       run: ./scripts/build-and-verify.ps1 -TargetDir target -SkipSourceChecks -RequireCleanSource:($env:REQUIRE_CLEAN_SOURCE -eq 'true')
