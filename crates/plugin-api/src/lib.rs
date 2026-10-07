@@ -306,7 +306,11 @@ pub trait DesktopService {
 
 pub trait IpcService {
     fn subscribe(&self, scope: &ScopeHandle, query: Query) -> Result<Token>;
+    /// Submit one local call. The host adapter owns wire/session correlation.
+    /// Completion settles this call, not necessarily the remote business work.
     fn send(&self, scope: &ScopeHandle, payload: Arc<[u8]>) -> Result<Token>;
+    /// Close a subscription or revoke local operation delivery. This does not
+    /// promise cancellation/rollback of an already dispatched remote effect.
     fn cancel(&self, token: Token) -> Result<()>;
 }
 

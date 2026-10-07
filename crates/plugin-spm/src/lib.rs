@@ -7,12 +7,11 @@ use pecofence_plugin_api::*;
 use serde::{Deserialize, Serialize};
 use spm_contracts::{
     Body, BuildBriefingRequest, DaemonSessionId, DeliveryScopeId, DetailLevel, Envelope, Event,
-    GateStatus, IdempotencyKey, PROTOCOL_MAJOR, PROTOCOL_MINOR, ProjectId, ProjectQuery,
-    ProjectSnapshot, RefreshRequest, Request, RequestId, ResolveNavigationRequest, Revision,
-    ViewKind,
+    GateStatus, IdempotencyKey, ProjectId, ProjectQuery, ProjectSnapshot, RefreshRequest, Request,
+    ResolveNavigationRequest, Response, Revision, RpcMethod, ViewKind,
 };
-use std::rc::Rc;
 use std::sync::Arc;
+use std::{collections::HashMap, rc::Rc};
 
 pub const PROVIDER_ID: &str = "pecofence.spm";
 const ACTION_REFRESH: u64 = 1;
@@ -96,11 +95,11 @@ impl SnapshotCursor {
     }
 }
 
-pub fn encode_request(envelope: &Envelope) -> Result<Arc<[u8]>> {
-    envelope
-        .validate(spm_contracts::Direction::ClientToServer)
+pub fn encode_request(request: &Request) -> Result<Arc<[u8]>> {
+    request
+        .validate()
         .map_err(|error| Error::Invalid(error.to_string()))?;
-    serde_json::to_vec(envelope)
+    serde_json::to_vec(request)
         .map(Arc::from)
         .map_err(|error| Error::Invalid(error.to_string()))
 }
@@ -896,6 +895,8 @@ impl PanelProvider for SpmPlugin {
             layout_revision: 0,
             frame_revision: 0,
             selected_item: None,
+            pending_actions: HashMap::new(),
+            action_status: None,
             tokens,
             stopped: false,
         }))
@@ -914,6 +915,8 @@ pub struct SpmPanel {
     layout_revision: u64,
     frame_revision: u64,
     selected_item: Option<usize>,
+    pending_actions: HashMap<Token, (RpcMethod, Option<Revision>)>,
+    action_status: Option<String>,
     tokens: PanelTokens,
     stopped: bool,
 }
@@ -932,6 +935,20 @@ impl PanelInstance for SpmPanel {
             return Err(Error::Closed);
         }
         match event {
+            PanelEvent::Completion { operation, result } => {
+                let Some((method, revision)) = self.pending_actions.remove(&operation) else {
+                    return Ok(PanelUpdate::default());
+                };
+                let outcome = result.and_then(|bytes| self.finish_action(method, revision, &bytes));
+                self.action_status = Some(match outcome {
+                    Ok(message) => message,
+                    Err(error) => format!("Action failed: {error}"),
+                });
+                Ok(PanelUpdate {
+                    commands: vec![HostCommand::Invalidate],
+                    relayout: false,
+                })
+            }
             PanelEvent::Snapshot {
                 subscription,
                 bytes,
@@ -965,14 +982,11 @@ impl PanelInstance for SpmPanel {
             }
             PanelEvent::Invoke { action, .. } => {
                 if action == ACTION_REFRESH {
-                    let payload = self.action_request(Request::Refresh(RefreshRequest {
+                    self.queue_action(Request::Refresh(RefreshRequest {
                         project_id: self.config.project_id.clone(),
                         delivery_scope_id: self.config.delivery_scope_id.clone(),
                         idempotency_key: IdempotencyKey::new(),
                     }))?;
-                    self.ctx
-                        .ipc
-                        .with(|ipc| ipc.send(&self.ctx.scope, payload))?;
                 } else if action == ACTION_EXPAND {
                     return Ok(PanelUpdate {
                         commands: vec![HostCommand::RequestMode(Presentation::Workspace)],
@@ -999,17 +1013,13 @@ impl PanelInstance for SpmPanel {
                     });
                 } else if action == ACTION_COPY_BRIEFING {
                     if let Some(snapshot) = &self.snapshot {
-                        let payload =
-                            self.action_request(Request::BuildBriefing(BuildBriefingRequest {
-                                project_id: snapshot.project_id.clone(),
-                                delivery_scope_id: snapshot.delivery_scope_id.clone(),
-                                revision: snapshot.revision,
-                                locale: "zh-CN".into(),
-                                timezone: snapshot.project_timezone.clone(),
-                            }))?;
-                        self.ctx
-                            .ipc
-                            .with(|ipc| ipc.send(&self.ctx.scope, payload))?;
+                        self.queue_action(Request::BuildBriefing(BuildBriefingRequest {
+                            project_id: snapshot.project_id.clone(),
+                            delivery_scope_id: snapshot.delivery_scope_id.clone(),
+                            revision: snapshot.revision,
+                            locale: "zh-CN".into(),
+                            timezone: snapshot.project_timezone.clone(),
+                        }))?;
                     }
                 } else if let Some(index) = action
                     .checked_sub(ACTION_OPEN_BASE)
@@ -1021,15 +1031,10 @@ impl PanelInstance for SpmPanel {
                         .and_then(|item| item.source_refs.first())
                 {
                     if let Some(snapshot) = &self.snapshot {
-                        let payload = self.action_request(Request::ResolveNavigation(
-                            ResolveNavigationRequest {
-                                source: target.clone(),
-                                revision: snapshot.revision,
-                            },
-                        ))?;
-                        self.ctx
-                            .ipc
-                            .with(|ipc| ipc.send(&self.ctx.scope, payload))?;
+                        self.queue_action(Request::ResolveNavigation(ResolveNavigationRequest {
+                            source: target.clone(),
+                            revision: snapshot.revision,
+                        }))?;
                     }
                 }
                 Ok(PanelUpdate {
@@ -1046,7 +1051,7 @@ impl PanelInstance for SpmPanel {
         let mount_key = self.mount.ok_or(Error::Closed)?;
         self.frame_revision = self.frame_revision.checked_add(1).ok_or(Error::Exhausted)?;
         let visible = input.exposure != Exposure::Hidden && input.active;
-        let view = if visible {
+        let mut view = if visible {
             build_presentation_view_with_selection(
                 self.snapshot.as_ref(),
                 input.presentation,
@@ -1057,6 +1062,22 @@ impl PanelInstance for SpmPanel {
         } else {
             PanelView::default()
         };
+        if visible && let Some(status) = &self.action_status {
+            view.nodes.push(ViewNode {
+                id: u64::MAX - 1,
+                role: "status",
+                text: status.clone(),
+                action: None,
+                rect: RectDip {
+                    x: input.viewport.x + 12.0,
+                    y: (input.viewport.y + input.viewport.h - 24.0).max(input.viewport.y),
+                    w: (input.viewport.w - 24.0).max(0.0),
+                    h: 22.0,
+                },
+                fill: Some(self.tokens.panel),
+                foreground: self.tokens.secondary,
+            });
+        }
         let candidate = layout_snapshot(&view, self.layout_revision);
         // Text, colors, freshness, and semantic labels may change without invalidating a
         // gesture. Only geometry/action mapping advances the layout revision.
@@ -1088,25 +1109,72 @@ impl PanelInstance for SpmPanel {
 
     fn begin_stop(&mut self, _reason: StopReason) {
         self.stopped = true;
+        for (operation, _) in self.pending_actions.drain() {
+            let _ = self.ctx.ipc.with(|ipc| ipc.cancel(operation));
+        }
         let _ = self.ctx.ipc.with(|ipc| ipc.cancel(self.subscription));
     }
 }
 
 impl SpmPanel {
-    fn action_request(&self, request: Request) -> Result<Arc<[u8]>> {
-        let daemon_session = self
-            .snapshot_cursor
-            .accepted_session()
-            .ok_or(Error::Revoked)?;
-        encode_request(&Envelope {
-            protocol_major: PROTOCOL_MAJOR,
-            protocol_minor: PROTOCOL_MINOR,
-            daemon_session: Some(daemon_session),
-            request_id: Some(RequestId::new()),
-            subscription_id: None,
-            revision: None,
-            body: Body::Request(request),
-        })
+    fn queue_action(&mut self, request: Request) -> Result<()> {
+        let method = request.method();
+        if self
+            .pending_actions
+            .values()
+            .any(|(pending, _)| *pending == method)
+        {
+            self.action_status = Some("Action already pending".into());
+            return Ok(());
+        }
+        let revision = match &request {
+            Request::BuildBriefing(request) => Some(request.revision),
+            Request::ResolveNavigation(request) => Some(request.revision),
+            _ => None,
+        };
+        let payload = encode_request(&request)?;
+        match self.ctx.ipc.with(|ipc| ipc.send(&self.ctx.scope, payload)) {
+            Ok(operation) => {
+                self.pending_actions.insert(operation, (method, revision));
+                self.action_status = Some("Request pending".into());
+            }
+            Err(error) => self.action_status = Some(format!("Action failed: {error}")),
+        }
+        Ok(())
+    }
+
+    fn finish_action(
+        &self,
+        method: RpcMethod,
+        revision: Option<Revision>,
+        bytes: &[u8],
+    ) -> Result<String> {
+        let envelope = decode_event(bytes)?;
+        match (method, envelope.body) {
+            (RpcMethod::BuildBriefing, Body::Response(Response::BuildBriefing(response)))
+                if revision == Some(response.revision) =>
+            {
+                self.ctx
+                    .clipboard
+                    .as_ref()
+                    .ok_or_else(|| Error::Backend("clipboard unavailable".into()))?
+                    .with(|clipboard| clipboard.write_text(&self.ctx.scope, response.text))?;
+                Ok("Briefing copied".into())
+            }
+            (RpcMethod::Refresh, Body::Response(Response::Refresh(response))) => Ok(match response
+                .disposition
+            {
+                spm_contracts::RefreshDisposition::Accepted => "Refresh accepted; awaiting data",
+                spm_contracts::RefreshDisposition::Coalesced => "Refresh coalesced; awaiting data",
+            }
+            .into()),
+            (RpcMethod::ResolveNavigation, Body::Response(Response::ResolveNavigation(_))) => Err(
+                Error::Backend("navigation origin not configured; no link opened".into()),
+            ),
+            _ => Err(Error::Invalid(
+                "unexpected action response or revision".into(),
+            )),
+        }
     }
 }
 
@@ -1114,6 +1182,285 @@ impl SpmPanel {
 mod tests {
     use super::*;
     use spm_contracts::*;
+    use std::cell::{Cell, RefCell};
+
+    #[derive(Default)]
+    struct Calls {
+        requests: RefCell<Vec<Request>>,
+        copied: RefCell<Vec<String>>,
+        cancelled: RefCell<Vec<Token>>,
+        opened: Cell<u64>,
+    }
+    struct Mock(Rc<Calls>);
+    impl ScopeLease for Mock {
+        fn id(&self) -> ScopeId {
+            ScopeId(1)
+        }
+        fn generation(&self) -> u64 {
+            1
+        }
+        fn is_open(&self) -> bool {
+            true
+        }
+    }
+    impl IpcService for Mock {
+        fn subscribe(&self, _: &ScopeHandle, _: Query) -> Result<Token> {
+            Ok(Token(1))
+        }
+        fn send(&self, scope: &ScopeHandle, bytes: Arc<[u8]>) -> Result<Token> {
+            scope.check()?;
+            let request =
+                serde_json::from_slice(&bytes).map_err(|e| Error::Invalid(e.to_string()))?;
+            let mut requests = self.0.requests.borrow_mut();
+            requests.push(request);
+            Ok(Token(requests.len() as u64 + 1))
+        }
+        fn cancel(&self, token: Token) -> Result<()> {
+            self.0.cancelled.borrow_mut().push(token);
+            Ok(())
+        }
+    }
+    impl ClipboardService for Mock {
+        fn write_text(&self, scope: &ScopeHandle, text: String) -> Result<Token> {
+            scope.check()?;
+            self.0.copied.borrow_mut().push(text);
+            Ok(Token(99))
+        }
+    }
+    impl NavigationService for Mock {
+        fn open(&self, _: &ScopeHandle, _: ExternalTarget) -> Result<Token> {
+            self.0.opened.set(self.0.opened.get() + 1);
+            Ok(Token(99))
+        }
+    }
+    impl RenderService for Mock {
+        fn measure(&self, _: &TextSpec, _: f32) -> Result<TextMetrics> {
+            Err(Error::Revoked)
+        }
+        fn invalidate(&self, _: MountKey, _: Option<RectDip>) -> Result<()> {
+            Err(Error::Revoked)
+        }
+    }
+    impl ThemeService for Mock {
+        fn snapshot(&self) -> Result<Arc<ThemeSnapshot>> {
+            Err(Error::Revoked)
+        }
+    }
+    impl DesktopService for Mock {
+        fn request_mode(&self, _: InstanceKey, _: Presentation) -> Result<()> {
+            Err(Error::Revoked)
+        }
+    }
+    impl StorageService for Mock {
+        fn read(&self, _: &ScopeHandle, _: &str) -> Result<Token> {
+            Err(Error::Revoked)
+        }
+        fn compare_and_set(
+            &self,
+            _: &ScopeHandle,
+            _: &str,
+            _: Option<u64>,
+            _: Arc<[u8]>,
+        ) -> Result<Token> {
+            Err(Error::Revoked)
+        }
+    }
+    fn capability<S: ?Sized + 'static>(
+        service: Box<S>,
+        scope: &ScopeHandle,
+        keep: &mut Vec<Rc<dyn std::any::Any>>,
+    ) -> Capability<S> {
+        let cell = Rc::new(ServiceCell::new(1, service));
+        let capability = Capability::new(&cell, scope.clone());
+        keep.push(cell);
+        capability
+    }
+    fn panel() -> (SpmPanel, Rc<Calls>, Vec<Rc<dyn std::any::Any>>) {
+        let calls = Rc::new(Calls::default());
+        let lease: Rc<dyn ScopeLease> = Rc::new(Mock(calls.clone()));
+        let scope = ScopeHandle::from_lease(&lease);
+        let mut keep: Vec<Rc<dyn std::any::Any>> = vec![Rc::new(lease)];
+        let ctx = PluginContext {
+            scope: scope.clone(),
+            render: capability::<dyn RenderService>(
+                Box::new(Mock(calls.clone())),
+                &scope,
+                &mut keep,
+            ),
+            theme: capability::<dyn ThemeService>(Box::new(Mock(calls.clone())), &scope, &mut keep),
+            desktop: capability::<dyn DesktopService>(
+                Box::new(Mock(calls.clone())),
+                &scope,
+                &mut keep,
+            ),
+            ipc: capability::<dyn IpcService>(Box::new(Mock(calls.clone())), &scope, &mut keep),
+            storage: capability::<dyn StorageService>(
+                Box::new(Mock(calls.clone())),
+                &scope,
+                &mut keep,
+            ),
+            clipboard: Some(capability::<dyn ClipboardService>(
+                Box::new(Mock(calls.clone())),
+                &scope,
+                &mut keep,
+            )),
+            navigation: Some(capability::<dyn NavigationService>(
+                Box::new(Mock(calls.clone())),
+                &scope,
+                &mut keep,
+            )),
+        };
+        let config = SpmConfig {
+            project_id: ProjectId::new("fictional-project").unwrap(),
+            delivery_scope_id: DeliveryScopeId::new("fictional-scope").unwrap(),
+        };
+        (
+            SpmPanel {
+                ctx,
+                key: InstanceKey {
+                    id: 1,
+                    activation: 1,
+                },
+                config,
+                subscription: Token(1),
+                mount: None,
+                snapshot: None,
+                snapshot_cursor: SnapshotCursor::default(),
+                layout: LayoutSnapshot::default(),
+                layout_revision: 0,
+                frame_revision: 0,
+                selected_item: None,
+                pending_actions: HashMap::new(),
+                action_status: None,
+                tokens: PanelTokens::dark(),
+                stopped: false,
+            },
+            calls,
+            keep,
+        )
+    }
+
+    fn completion(operation: Token, response: Response) -> PanelEvent {
+        PanelEvent::Completion {
+            operation,
+            result: Ok(serde_json::to_vec(&Envelope {
+                protocol_major: PROTOCOL_MAJOR,
+                protocol_minor: PROTOCOL_MINOR,
+                daemon_session: Some(DaemonSessionId::new()),
+                request_id: Some(RequestId::new()),
+                subscription_id: None,
+                revision: None,
+                body: Body::Response(response),
+            })
+            .unwrap()
+            .into()),
+        }
+    }
+    fn briefing(revision: u64) -> Response {
+        Response::BuildBriefing(BuildBriefingResponse {
+            briefing_id: BriefingId::new(),
+            revision: Revision(revision),
+            text: "Fictional briefing".into(),
+            html: None,
+            evidence_markers: vec![],
+        })
+    }
+    fn request_briefing(panel: &mut SpmPanel) {
+        panel
+            .queue_action(Request::BuildBriefing(BuildBriefingRequest {
+                project_id: panel.config.project_id.clone(),
+                delivery_scope_id: panel.config.delivery_scope_id.clone(),
+                revision: Revision(4),
+                locale: "en".into(),
+                timezone: "Etc/UTC".into(),
+            }))
+            .unwrap();
+    }
+
+    #[test]
+    fn briefing_is_copied_only_after_its_matching_result_and_never_twice() {
+        let (mut panel, calls, _keep) = panel();
+        request_briefing(&mut panel);
+        request_briefing(&mut panel);
+        assert_eq!(calls.requests.borrow().len(), 1);
+        assert!(calls.copied.borrow().is_empty());
+        panel.event(completion(Token(99), briefing(4))).unwrap();
+        assert!(calls.copied.borrow().is_empty());
+        panel.event(completion(Token(2), briefing(4))).unwrap();
+        panel.event(completion(Token(2), briefing(4))).unwrap();
+        assert_eq!(&*calls.copied.borrow(), &["Fictional briefing"]);
+        assert_eq!(panel.action_status.as_deref(), Some("Briefing copied"));
+    }
+
+    #[test]
+    fn wrong_briefing_revision_never_writes_the_clipboard() {
+        let (mut panel, calls, _keep) = panel();
+        request_briefing(&mut panel);
+        panel.event(completion(Token(2), briefing(3))).unwrap();
+        assert!(calls.copied.borrow().is_empty());
+        assert!(
+            panel
+                .action_status
+                .unwrap()
+                .contains("unexpected action response or revision")
+        );
+    }
+
+    #[test]
+    fn refresh_acceptance_is_not_reported_as_completed_data_and_stop_revokes_work() {
+        let (mut panel, calls, _keep) = panel();
+        panel
+            .event(PanelEvent::Invoke {
+                action: ACTION_REFRESH,
+                layout_revision: 0,
+            })
+            .unwrap();
+        panel
+            .event(completion(
+                Token(2),
+                Response::Refresh(RefreshResponse {
+                    operation_id: OperationId::new(),
+                    disposition: RefreshDisposition::Accepted,
+                }),
+            ))
+            .unwrap();
+        assert_eq!(
+            panel.action_status.as_deref(),
+            Some("Refresh accepted; awaiting data")
+        );
+        assert!(panel.snapshot.is_none());
+        request_briefing(&mut panel);
+        panel.begin_stop(StopReason::Shutdown);
+        assert!(calls.cancelled.borrow().contains(&Token(3)));
+        assert!(calls.cancelled.borrow().contains(&Token(1)));
+        assert_eq!(
+            panel.event(completion(Token(3), briefing(4))).unwrap_err(),
+            Error::Closed
+        );
+        assert!(calls.copied.borrow().is_empty());
+    }
+
+    #[test]
+    fn navigation_resolution_never_opens_an_unconfigured_origin() {
+        let (mut panel, calls, _keep) = panel();
+        panel
+            .pending_actions
+            .insert(Token(2), (RpcMethod::ResolveNavigation, Some(Revision(4))));
+        panel
+            .event(completion(
+                Token(2),
+                Response::ResolveNavigation(ResolveNavigationResponse {
+                    targets: vec![NavigationTarget {
+                        system: SourceSystem::Jira,
+                        configured_origin_id: "fictional-origin".into(),
+                        relative_record_path: "//unapproved.example/record".into(),
+                    }],
+                }),
+            ))
+            .unwrap();
+        assert_eq!(calls.opened.get(), 0);
+        assert!(panel.action_status.unwrap().contains("no link opened"));
+    }
 
     fn snapshot(session: DaemonSessionId, revision: u64) -> ProjectSnapshot {
         ProjectSnapshot {

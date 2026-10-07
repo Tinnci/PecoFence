@@ -74,6 +74,7 @@ pub(crate) struct PanelManager {
     _runtime: Arc<tokio::runtime::Runtime>,
     supervisor: Rc<RefCell<TaskSupervisor>>,
     ipc_state: Arc<PipeState>,
+    ipc_transport: crate::spm_transport::TransportHandle,
 }
 
 impl PanelManager {
@@ -135,7 +136,7 @@ impl PanelManager {
                 service_scope,
                 Box::new(PipeIpc {
                     state: ipc_state.clone(),
-                    transport,
+                    transport: transport.clone(),
                 }),
             )
             .expect("unique service");
@@ -158,6 +159,7 @@ impl PanelManager {
             _runtime: runtime,
             supervisor,
             ipc_state,
+            ipc_transport: transport,
         }
     }
 
@@ -348,6 +350,13 @@ impl PanelManager {
             self.supervisor.borrow().cancel_scope(scope);
         }
         record.handle.stop(reason);
+        for (token, subscription) in self.ipc_state.remove_scope(record.scope) {
+            if subscription {
+                let _ = self.ipc_transport.unsubscribe(token);
+            } else {
+                let _ = self.ipc_transport.cancel_operation(token);
+            }
+        }
         self.scopes.begin_stop(record.scope)?;
         self.supervisor.borrow().cancel_scope(record.scope);
         record.drain_started = Some(Instant::now());
@@ -476,6 +485,9 @@ impl PanelManager {
             .unwrap_or_default();
         let mut delivered = 0;
         for event in events {
+            if !self.ipc_state.claim(&event) {
+                continue;
+            }
             let Some(record) = self
                 .instances
                 .values()
@@ -490,10 +502,7 @@ impl PanelManager {
             if current_generation != Ok(event.generation) {
                 continue;
             }
-            match record.handle.event(PanelEvent::Snapshot {
-                subscription: event.subscription,
-                bytes: event.bytes,
-            }) {
+            match record.handle.event(event.event) {
                 Ok(_) => delivered += 1,
                 Err(error) => tracing::warn!(%error, "plugin IPC event rejected"),
             }
@@ -638,13 +647,15 @@ impl DesktopService for HostDesktop {
 struct PipeEvent {
     scope: ScopeId,
     generation: u64,
-    subscription: Token,
-    bytes: Arc<[u8]>,
+    token: Token,
+    event: PanelEvent,
 }
 
 struct PipeCommand {
     owner: ScopeId,
     generation: u64,
+    subscription: bool,
+    settled: bool,
 }
 
 pub(crate) struct PipeState {
@@ -681,23 +692,147 @@ impl PipeState {
         subscription: Token,
         bytes: Arc<[u8]>,
     ) {
-        if let Ok(mut events) = self.events.lock() {
-            if events.len() == 128 {
-                events.pop_front();
-            }
-            events.push_back(PipeEvent {
-                scope,
-                generation,
+        let live = self.commands.lock().is_ok_and(|commands| {
+            commands.get(&subscription).is_some_and(|command| {
+                command.subscription && command.owner == scope && command.generation == generation
+            })
+        });
+        if !live {
+            return;
+        }
+        self.enqueue(PipeEvent {
+            scope,
+            generation,
+            token: subscription,
+            event: PanelEvent::Snapshot {
                 subscription,
                 bytes,
-            });
+            },
+        });
+    }
+
+    pub(crate) fn complete(
+        &self,
+        scope: ScopeId,
+        generation: u64,
+        operation: Token,
+        result: Result<Arc<[u8]>>,
+    ) {
+        let Ok(mut commands) = self.commands.lock() else {
+            return;
+        };
+        let Some(command) = commands.get_mut(&operation) else {
+            return;
+        };
+        if command.subscription
+            || command.settled
+            || command.owner != scope
+            || command.generation != generation
+        {
+            return;
         }
-        pecofence_platform::window::post_message(
-            pecofence_platform::HWND(self.notify_hwnd as *mut core::ffi::c_void),
-            crate::commands::WM_APP_PLUGIN_EVENT,
-            0,
-            0,
+        command.settled = true;
+        drop(commands);
+        self.enqueue(PipeEvent {
+            scope,
+            generation,
+            token: operation,
+            event: PanelEvent::Completion { operation, result },
+        });
+    }
+
+    fn enqueue(&self, event: PipeEvent) {
+        if let Ok(mut events) = self.events.lock() {
+            if matches!(&event.event, PanelEvent::Snapshot { .. })
+                && let Some(index) = events.iter().position(|queued| {
+                    queued.token == event.token
+                        && matches!(&queued.event, PanelEvent::Snapshot { .. })
+                })
+            {
+                events.remove(index);
+            }
+            if events.len() >= 128 + crate::spm_transport::MAX_OPERATIONS
+                && let Some(index) = events
+                    .iter()
+                    .position(|queued| matches!(&queued.event, PanelEvent::Snapshot { .. }))
+            {
+                events.remove(index);
+            }
+            // Completed operations retain their bounded slot until claimed or cancelled.
+            events.push_back(event);
+        }
+        if self.notify_hwnd != 0 {
+            pecofence_platform::window::post_message(
+                pecofence_platform::HWND(self.notify_hwnd as *mut core::ffi::c_void),
+                crate::commands::WM_APP_PLUGIN_EVENT,
+                0,
+                0,
+            );
+        }
+    }
+
+    fn claim(&self, event: &PipeEvent) -> bool {
+        let Ok(mut commands) = self.commands.lock() else {
+            return false;
+        };
+        let Some(command) = commands.get(&event.token) else {
+            return false;
+        };
+        if command.owner != event.scope || command.generation != event.generation {
+            return false;
+        }
+        if matches!(&event.event, PanelEvent::Completion { .. }) {
+            if command.subscription || !command.settled {
+                return false;
+            }
+            commands.remove(&event.token);
+        } else if !command.subscription {
+            return false;
+        }
+        true
+    }
+
+    fn remove_scope(&self, scope: ScopeId) -> Vec<(Token, bool)> {
+        let Ok(mut commands) = self.commands.lock() else {
+            return vec![];
+        };
+        let tokens: Vec<_> = commands
+            .iter()
+            .filter(|(_, command)| command.owner == scope)
+            .map(|(token, command)| (*token, command.subscription))
+            .collect();
+        for (token, _) in &tokens {
+            commands.remove(token);
+        }
+        drop(commands);
+        if let Ok(mut events) = self.events.lock() {
+            events.retain(|event| event.scope != scope);
+        }
+        tokens
+    }
+}
+
+#[cfg(test)]
+impl PipeState {
+    pub(crate) fn test_operation(&self, token: Token, owner: ScopeId, generation: u64) {
+        self.commands.lock().unwrap().insert(
+            token,
+            PipeCommand {
+                owner,
+                generation,
+                subscription: false,
+                settled: false,
+            },
         );
+    }
+
+    pub(crate) fn test_events(&self) -> Vec<PanelEvent> {
+        self.events
+            .lock()
+            .unwrap()
+            .drain(..)
+            .map(|event| event.event)
+            .collect()
     }
 }
 
@@ -716,51 +851,101 @@ impl IpcService for PipeIpc {
         let subscription = self.state.token()?;
         let project_query: spm_contracts::ProjectQuery = serde_json::from_slice(&query.payload)
             .map_err(|error| Error::Invalid(error.to_string()))?;
-        self.transport
-            .subscribe(subscription, owner, generation, project_query)
-            .map_err(|_| Error::Backend("SPM transport stopped".into()))?;
         self.state
             .commands
             .lock()
             .map_err(|_| Error::Backend("IPC command mutex poisoned".into()))?
-            .insert(subscription, PipeCommand { owner, generation });
+            .insert(
+                subscription,
+                PipeCommand {
+                    owner,
+                    generation,
+                    subscription: true,
+                    settled: false,
+                },
+            );
+        if self
+            .transport
+            .subscribe(subscription, owner, generation, project_query)
+            .is_err()
+        {
+            self.state
+                .commands
+                .lock()
+                .map_err(|_| Error::Closed)?
+                .remove(&subscription);
+            return Err(Error::Backend("SPM transport stopped".into()));
+        }
         Ok(subscription)
     }
     fn send(&self, scope: &ScopeHandle, payload: Arc<[u8]>) -> Result<Token> {
         let owner = scope.check()?;
         let generation = scope.generation()?;
-        let commands = self
+        let request: spm_contracts::Request =
+            serde_json::from_slice(&payload).map_err(|error| Error::Invalid(error.to_string()))?;
+        request
+            .validate()
+            .map_err(|error| Error::Invalid(error.to_string()))?;
+        if !matches!(
+            &request,
+            spm_contracts::Request::Refresh(_)
+                | spm_contracts::Request::BuildBriefing(_)
+                | spm_contracts::Request::ResolveNavigation(_)
+        ) {
+            return Err(Error::Invalid("unsupported panel operation".into()));
+        }
+        let operation = self.state.token()?;
+        let mut commands = self
             .state
             .commands
             .lock()
             .map_err(|_| Error::Backend("IPC command mutex poisoned".into()))?;
-        let mut accepted = false;
-        for (subscription, _command) in commands
-            .iter()
-            .filter(|(_, command)| command.owner == owner && command.generation == generation)
+        if commands
+            .values()
+            .filter(|command| !command.subscription)
+            .count()
+            >= crate::spm_transport::MAX_OPERATIONS
         {
-            let envelope: spm_contracts::Envelope = serde_json::from_slice(&payload)
-                .map_err(|error| Error::Invalid(error.to_string()))?;
-            self.transport
-                .request(*subscription, envelope)
-                .map_err(|_| Error::Backend("SPM transport stopped".into()))?;
-            accepted = true;
+            return Err(Error::Exhausted);
         }
-        if !accepted {
-            return Err(Error::Revoked);
+        commands.insert(
+            operation,
+            PipeCommand {
+                owner,
+                generation,
+                subscription: false,
+                settled: false,
+            },
+        );
+        drop(commands);
+        if self
+            .transport
+            .request(operation, owner, generation, request)
+            .is_err()
+        {
+            self.state
+                .commands
+                .lock()
+                .map_err(|_| Error::Closed)?
+                .remove(&operation);
+            return Err(Error::Backend("SPM transport stopped".into()));
         }
-        self.state.token()
+        Ok(operation)
     }
     fn cancel(&self, token: Token) -> Result<()> {
-        self.state
+        let command = self
+            .state
             .commands
             .lock()
             .map_err(|_| Error::Backend("IPC command mutex poisoned".into()))?
             .remove(&token)
             .ok_or(Error::Revoked)?;
-        self.transport
-            .unsubscribe(token)
-            .map_err(|_| Error::Backend("SPM transport stopped".into()))?;
+        if command.subscription {
+            self.transport.unsubscribe(token)
+        } else {
+            self.transport.cancel_operation(token)
+        }
+        .map_err(|_| Error::Backend("SPM transport stopped".into()))?;
         Ok(())
     }
 }
@@ -828,6 +1013,156 @@ impl ClipboardService for HostClipboard {
         pecofence_platform::clipboard::set_text(&text)
             .map_err(|error| Error::Backend(error.to_string()))?;
         Ok(Token(1))
+    }
+}
+
+#[cfg(test)]
+mod pipe_tests {
+    use super::*;
+    use spm_contracts::{
+        DeliveryScopeId, DetailLevel, IdempotencyKey, ProjectId, ProjectQuery, RefreshRequest,
+        Request, ViewKind,
+    };
+
+    struct Lease;
+    impl ScopeLease for Lease {
+        fn id(&self) -> ScopeId {
+            ScopeId(7)
+        }
+        fn generation(&self) -> u64 {
+            3
+        }
+        fn is_open(&self) -> bool {
+            true
+        }
+    }
+
+    fn setup() -> (
+        PipeIpc,
+        Rc<dyn ScopeLease>,
+        ScopeHandle,
+        crate::spm_transport::Receivers,
+    ) {
+        let (transport, receivers) = crate::spm_transport::channel();
+        let lease: Rc<dyn ScopeLease> = Rc::new(Lease);
+        let scope = ScopeHandle::from_lease(&lease);
+        (
+            PipeIpc {
+                state: Arc::new(PipeState::new(pecofence_platform::HWND(
+                    std::ptr::null_mut(),
+                ))),
+                transport,
+            },
+            lease,
+            scope,
+            receivers,
+        )
+    }
+
+    fn query() -> Query {
+        Query {
+            endpoint: "spm.v2/read-model".into(),
+            payload: serde_json::to_vec(&ProjectQuery {
+                project_id: ProjectId::new("fictional-project").unwrap(),
+                delivery_scope_id: DeliveryScopeId::new("fictional-scope").unwrap(),
+                view: ViewKind::Summary,
+                filter: None,
+                detail_level: DetailLevel::Standard,
+                sort: vec![],
+            })
+            .unwrap()
+            .into(),
+        }
+    }
+
+    fn request() -> Arc<[u8]> {
+        serde_json::to_vec(&Request::Refresh(RefreshRequest {
+            project_id: ProjectId::new("fictional-project").unwrap(),
+            delivery_scope_id: DeliveryScopeId::new("fictional-scope").unwrap(),
+            idempotency_key: IdempotencyKey::new(),
+        }))
+        .unwrap()
+        .into()
+    }
+
+    #[test]
+    fn one_call_with_two_subscriptions_is_sent_once_and_cancelled_as_an_operation() {
+        let (ipc, _lease, scope, mut receivers) = setup();
+        let a = ipc.subscribe(&scope, query()).unwrap();
+        let b = ipc.subscribe(&scope, query()).unwrap();
+        let operation = ipc.send(&scope, request()).unwrap();
+        assert_ne!(operation, a);
+        assert_ne!(operation, b);
+        assert!(
+            matches!(receivers.data.try_recv().unwrap(), crate::spm_transport::Command::Subscribe { local, .. } if local == a)
+        );
+        assert!(
+            matches!(receivers.data.try_recv().unwrap(), crate::spm_transport::Command::Subscribe { local, .. } if local == b)
+        );
+        assert!(
+            matches!(receivers.data.try_recv().unwrap(), crate::spm_transport::Command::Request { local, .. } if local == operation)
+        );
+        assert!(receivers.data.try_recv().is_err());
+        ipc.cancel(operation).unwrap();
+        assert!(
+            matches!(receivers.control.try_recv().unwrap(), crate::spm_transport::Command::CancelOperation { local } if local == operation)
+        );
+        assert!(ipc.state.commands.lock().unwrap().contains_key(&a));
+        ipc.cancel(a).unwrap();
+        assert!(
+            matches!(receivers.control.try_recv().unwrap(), crate::spm_transport::Command::Unsubscribe { local } if local == a)
+        );
+    }
+
+    #[test]
+    fn completions_are_generation_bound_claimed_once_and_do_not_need_a_subscription() {
+        let (ipc, _lease, scope, _receivers) = setup();
+        let operation = ipc.send(&scope, request()).unwrap();
+        ipc.state
+            .complete(ScopeId(7), 2, operation, Ok(Arc::from(&b"wrong"[..])));
+        assert!(ipc.state.events.lock().unwrap().is_empty());
+        ipc.state
+            .complete(ScopeId(7), 3, operation, Ok(Arc::from(&b"correct"[..])));
+        ipc.state
+            .complete(ScopeId(7), 3, operation, Err(Error::Closed));
+        let event = ipc.state.events.lock().unwrap().pop_front().unwrap();
+        assert!(
+            matches!(&event.event, PanelEvent::Completion { operation: id, result: Ok(bytes) } if *id == operation && bytes.as_ref() == b"correct")
+        );
+        assert!(ipc.state.claim(&event));
+        assert!(!ipc.state.claim(&event));
+        assert!(ipc.state.events.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn settled_calls_keep_their_budget_until_claimed_and_scope_close_discards_delivery() {
+        let (ipc, _lease, scope, mut receivers) = setup();
+        for _ in 0..crate::spm_transport::MAX_OPERATIONS {
+            let operation = ipc.send(&scope, request()).unwrap();
+            receivers.data.try_recv().unwrap();
+            ipc.state
+                .complete(ScopeId(7), 3, operation, Err(Error::Closed));
+        }
+        assert_eq!(ipc.send(&scope, request()).unwrap_err(), Error::Exhausted);
+        assert_eq!(
+            ipc.state.events.lock().unwrap().len(),
+            crate::spm_transport::MAX_OPERATIONS
+        );
+        assert_eq!(
+            ipc.state.remove_scope(ScopeId(7)).len(),
+            crate::spm_transport::MAX_OPERATIONS
+        );
+        assert!(ipc.state.events.lock().unwrap().is_empty());
+        assert!(ipc.send(&scope, request()).is_ok());
+    }
+
+    #[test]
+    fn rejected_queue_submission_leaves_no_operation_or_subscription_record() {
+        let (ipc, _lease, scope, receivers) = setup();
+        drop(receivers);
+        assert!(ipc.send(&scope, request()).is_err());
+        assert!(ipc.subscribe(&scope, query()).is_err());
+        assert!(ipc.state.commands.lock().unwrap().is_empty());
     }
 }
 
