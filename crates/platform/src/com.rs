@@ -5,8 +5,8 @@ use windows_core::Result;
 
 /// Keeps OLE initialized (single-threaded apartment) on the current thread.
 ///
-/// Must be created on the UI thread **before** the composition dispatcher queue and
-/// before any WebView2 environment, so that `RegisterDragDrop` works.
+/// Must be created on the UI thread before native composition and drag/drop
+/// registration. An existing WinUI STA is compatible (`S_FALSE` is success).
 pub struct OleGuard(());
 
 impl OleGuard {

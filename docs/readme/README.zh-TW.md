@@ -66,7 +66,7 @@ https://github.com/user-attachments/assets/6320cf28-a791-4720-9659-b4575df021a0
 | **熟悉的檔案操作** | 檔案總管右鍵選單、拖放、複製貼上、多選、縮圖，以及圖示／清單／詳細資料三種檢視。 |
 | **要用時展開，不用時收合** | 把圍欄收合成一條標題列，游標停留就展開；也可以鎖定已經擺好的位置與大小。 |
 | **喜歡的配置留得住** | 儲存配置快照、每日自動備份、匯入匯出設定、交換兩個顯示器上的圍欄。 |
-| **輕巧地待在桌面上** | 以 Rust 撰寫的原生應用程式，WebView2 設定面板需要時才載入。 |
+| **原生設定介面** | 設定現由 Reactor 承載的原生 WinUI 3 控制項提供，包含五個任務頁和十三種規則條件表單。headless 測試與包含關閉/重開的合成 WinUI 測試已通過；這不代表功能對等或產品驗收完成。選定發行方案自包含 Windows App SDK Runtime 2.5.1，使用者不必另外安裝，並排除 WebView2（最終套件待核驗）；執行階段會增加部署和資源成本，不宣稱大小或啟動時間有所改善。 |
 
 自動整理只改變檔案所屬的圍欄，檔案原本的位置不會變動。
 你自己發起的移動、重新命名和刪除，則和檔案總管一樣直接作用在真實檔案上。
@@ -78,8 +78,7 @@ https://github.com/user-attachments/assets/6320cf28-a791-4720-9659-b4575df021a0
 **繁體中文 · 简体中文 · English · 日本語 · 한국어**  
 **Deutsch · Français · Español · Português (Brasil) · Русский**
 
-在 **設定 → 一般 → 顯示語言** 即時切換，也可以跟隨 Windows。
-翻譯已經內建，離線也能用；檔案名稱和你自己取的名稱都保持不變。
+介面支援的十種語言均已內建，離線可用；檔案名稱與自訂名稱保持不變。原生 Settings 的語言選擇與本地化表單已實作；視覺、無障礙以及完整語言/DPI 驗收仍待完成。
 
 ## 開始使用
 
@@ -102,8 +101,12 @@ https://github.com/user-attachments/assets/6320cf28-a791-4720-9659-b4575df021a0
 
 - 以 Windows 11 22H2 以上版本為對象，目前主要在 25H2 上完成原生驗證；
   舊版 Windows 與多顯示器硬體組合的完整回歸測試仍在進行中。
-- 設定面板需要 Microsoft Edge WebView2 Runtime。
-  請將壓縮檔內的 `WebView2Loader.dll`、`pecofence-watchdog.exe` 與主程式放在同一個資料夾。
+- 設定現包含五個 Reactor/WinUI 3 原生任務頁。headless 測試與包含關閉/重開的合成 WinUI 測試已通過；
+  這不等於功能對等或發行驗收。鍵盤、UI Automation/Narrator、高對比、文字縮放、全部十種語言在
+  100%/150%/200% DPI 以及乾淨系統檢查仍是必要的發行驗收工作。發行套件、匯入和處理程序檢查還需確認
+  自包含 Windows App SDK Runtime 及 WebView2 元件缺失。Full Windows CI 的 EXE 上限為
+  6.5 MiB（6,815,744 位元組）；最終發行測量待補，不宣稱啟動或記憶體有所改善。
+- 為了復原桌面圖示，請將 `pecofence-watchdog.exe` 與主程式放在同一個資料夾。
 - 設定儲存在 `%APPDATA%\PecoFence\workspace.v2.json`。
   以 `--portable` 啟動，可改為儲存在程式旁的 `config` 資料夾。
 - 新格式不讀取或自動遷移舊設定。原檔案保留；請明確新增工作區或匯入支援的文件。詳見[升級說明](../UPGRADING.md)。
@@ -125,6 +128,7 @@ https://github.com/user-attachments/assets/6320cf28-a791-4720-9659-b4575df021a0
 <summary><strong>從原始碼建置</strong></summary>
 
 安裝 Rust stable、Visual Studio Build Tools 的 C++ 工作負載與 Windows SDK。
+Windows SDK 是開發工具，與發行套件自包含的 Windows App SDK Runtime 不同。
 公開建置只使用本儲存庫與公開 registry，包含本機 `crates/spm-contracts`（0.1.0），
 不需要私有 token 或 SPM checkout。選用的 `Tinnci/spm` 後端維持私有，
 只有即時 SPM 資料需要它；編譯或使用一般桌面圍欄不需要，也不隨 PecoFence 散布。
@@ -132,7 +136,6 @@ https://github.com/user-attachments/assets/6320cf28-a791-4720-9659-b4575df021a0
 
 ```powershell
 cargo build --locked --release
-Copy-Item third_party/webview2/WebView2Loader.x64.dll target/release/WebView2Loader.dll
 ```
 
 產生免安裝版發行套件：
@@ -141,10 +144,10 @@ Copy-Item third_party/webview2/WebView2Loader.x64.dll target/release/WebView2Loa
 ./scripts/make-portable.ps1
 ```
 
-原生應用程式位於 `crates/`，設定面板在 `ui/`，翻譯在 `locales/`，
-驗證與打包指令碼在 `scripts/`。`extras/` 下的宣傳影片專案不參與應用程式的建置。
+Rust 應用程式位於 `crates/`，翻譯在 `locales/`，驗證與打包指令碼在 `scripts/`。設定採用
+Reactor 承載的原生 WinUI 3，而非瀏覽器介面。`extras/` 下的宣傳影片專案不參與應用程式的建置。
 
-[發行指南](../RELEASING.md) · [原始碼結構](../DEVELOPMENT.md#architecture)
+[發行指南](../RELEASING.md) · [原始碼結構](../DEVELOPMENT.md#architecture) · [驗證門檻](../VERIFICATION_GATES.md)
 
 </details>
 

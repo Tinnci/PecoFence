@@ -1,39 +1,15 @@
-//! Per-fence options shared by the fence context menu and the settings page's 「栅栏」 tab:
-//! one setter per property (state + window + anchor + save) and the page protocol
-//! (read-only `fences[]` projection, typed content/container edits, `showFence` navigation).
+//! Options shared by the fence context menu and native Settings:
+//! one setter per property (state + window + anchor + save), an owned read-only
+//! projection, and typed content/container edits with identity checks.
 //!
 //! Window-level properties (appearance, lock, quick-hide exclusion, auto height, dock) act on
 //! the fence's host window when the fence is a tab; content properties (icon size, spacing,
 //! portal flags) act on the fence itself, exactly like the menu did.
 
 use super::*;
+use crate::settings_ui::ContentOptions;
 use pecofence_core::{ContainerId, ContentId, FenceSnapshot};
 use std::result::Result;
-
-/// Fences-style colour choices for the per-fence tint (name, rgb); the settings page builds
-/// its 色调 options from this list (`tintPalette` in the state JSON).
-const TINT_PALETTE: &[(&str, [u8; 3])] = &[
-    ("红", [0xE7, 0x48, 0x56]),
-    ("橙", [0xF7, 0x63, 0x0C]),
-    ("黄", [0xFF, 0xB9, 0x00]),
-    ("绿", [0x10, 0x89, 0x3E]),
-    ("青", [0x00, 0xB7, 0xC3]),
-    ("蓝", [0x00, 0x78, 0xD4]),
-    ("紫", [0x87, 0x64, 0xB8]),
-    ("粉", [0xE3, 0x00, 0x8C]),
-    ("灰", [0x7A, 0x75, 0x74]),
-];
-
-pub(super) fn tint_palette_json() -> serde_json::Value {
-    TINT_PALETTE
-        .iter()
-        .map(|(name, rgb)| serde_json::json!({ "name": pecofence_core::i18n::text(name), "hex": hex(*rgb) }))
-        .collect()
-}
-
-fn hex(rgb: [u8; 3]) -> String {
-    format!("{:02X}{:02X}{:02X}", rgb[0], rgb[1], rgb[2])
-}
 
 impl App {
     pub(super) fn set_fence_auto_height(&mut self, fence: FenceId, on: bool) {
@@ -171,84 +147,32 @@ impl App {
 
     /// Opens the settings window on the 「栅栏」 page with `fence` selected.
     pub(super) fn open_fence_options(&mut self, fence: FenceId) {
-        let already_open = self.settings.is_some();
         self.open_settings();
-        if self.settings.is_none() {
-            return;
-        }
-        if already_open {
-            self.post_show_fence(fence);
-        } else {
-            // The page is still loading; `ready` delivers the state and then this.
-            self.settings_focus_fence = Some(fence);
-        }
+        self.post_show_fence(fence);
     }
 
     pub(super) fn post_show_fence(&self, fence: FenceId) {
         if let Some(h) = &self.settings {
-            h.post_json(&serde_json::json!({ "type": "showFence", "id": fence }).to_string());
+            h.show_content(fence);
         }
     }
 
-    /// The per-fence block of the state JSON. Window-level values come from the host so a
-    /// tab shows (and edits) what its window actually uses.
-    pub(super) fn fence_options_json(&self, f: &FenceSnapshot) -> serde_json::Value {
+    /// Window-level values come from the container, even when editing an inactive tab.
+    pub(super) fn content_options(&self, f: &FenceSnapshot) -> ContentOptions {
         let host_id = f.container_id;
-        let h = f;
-        let (tint, _, _) = self.style_of(host_id);
-        let (_, title_rgb, title_size) = self.style_of(host_id);
-        let opacity = h.appearance.as_ref().and_then(|a| a.opacity);
-        let opacity = match opacity {
-            None => "default",
-            Some(o) if o < 1.0 => "clear",
-            Some(_) => "solid",
-        };
-        let title_color = match title_rgb {
-            None => "theme".to_string(),
-            Some(rgb) if tint == Some(rgb) => "tint".to_string(),
-            Some([0xFF, 0xFF, 0xFF]) => "white".to_string(),
-            Some([0x00, 0x00, 0x00]) => "black".to_string(),
-            Some(rgb) => hex(rgb),
-        };
-        let title_size = match title_size.unwrap_or_default() {
-            TitleSize::Small => "small",
-            TitleSize::Normal => "normal",
-            TitleSize::Large => "large",
-        };
-        let spacing = match f.view.spacing {
-            Spacing::Compact => "compact",
-            Spacing::Normal => "normal",
-            Spacing::Loose => "loose",
-        };
-        let portal = (f.kind == FenceKind::FolderPortal).then(|| {
-            serde_json::json!({
-                "navigate": f.portal_navigate,
-                "titleIcon": !f.hide_title_icon,
-            })
-        });
-        serde_json::json!({
-            "id": f.id,
-            "contentId": f.id,
-            "containerId": f.container_id,
-            "isCollection": matches!(&f.content, pecofence_core::FenceContentSpec::Files { source: pecofence_core::ItemSourceSpec::Desktop }),
-            "title": f.title,
-            "kind": match f.kind {
-                FenceKind::Inbox => "inbox",
-                FenceKind::Virtual => "virtual",
-                FenceKind::FolderPortal => "portal",
-            },
-            "host": self.state.window_content(host_id).filter(|active| active.id != f.id).map(|active| active.title),
-            "iconSize": f.view.icon_size,
-            "spacing": spacing,
-            "autoHeight": h.auto_height,
-            "locked": h.locked,
-            "excludeFromQuickHide": h.exclude_from_quick_hide,
-            "opacity": opacity,
-            "tint": tint.map(hex),
-            "titleColor": title_color,
-            "titleSize": title_size,
-            "portal": portal,
-        })
+        ContentOptions::from_snapshot(
+            f,
+            self.state
+                .window_content(host_id)
+                .map(|active| active.title)
+                .unwrap_or_else(|| f.title.clone()),
+            self.state
+                .fences()
+                .iter()
+                .filter(|content| content.container_id == host_id)
+                .map(|content| content.title.clone())
+                .collect(),
+        )
     }
 
     /// Reject edits captured before the content moved to another container.

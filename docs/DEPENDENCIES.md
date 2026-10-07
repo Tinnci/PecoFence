@@ -3,8 +3,9 @@
 Dependabot can open upgrade PRs when an action publishes a newer version with a
 supported runtime. It cannot change the runtime of old upstream code, repair
 breaking action inputs, configure credentials, or guarantee an upgrade passes CI.
-Setting `node-version: 24` installs Node for our scripts; it does **not** change an
-action's own `runs.using`.
+The desktop workflow does not install a project Node.js runtime. Its scripts use
+Rust and Python; GitHub Actions that declare a Node runtime still execute under
+their own declared `runs.using` version.
 
 ## Current policy
 
@@ -25,6 +26,10 @@ action's own `runs.using`.
 - Cargo automation is deliberately not enabled yet. `spm-contracts` 0.1.0 is a
   public workspace crate, not a private Git dependency; Windows Composition is
   vendored. Review contracts, Rust/Windows toolchain and binding changes together.
+- The Windows App SDK runtime comes from the public NuGet flat-container endpoint
+  at one exact version and SHA-256/SHA-512. CI caches only that pinned source
+  archive under a hash-specific key; staging verifies the archive before extraction,
+  and runtime files are regenerated and independently checked on each runner.
 
 ## Required repository configuration
 

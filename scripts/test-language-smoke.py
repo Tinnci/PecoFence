@@ -1,10 +1,11 @@
-"""Exercise real Settings IPC in an isolated portable instance on Windows."""
+"""Exercise native Settings interactions in an isolated portable instance on Windows."""
 import argparse
 import json
 import os
 import re
 import shutil
 import subprocess
+import sys
 import uuid
 from pathlib import Path
 
@@ -45,7 +46,13 @@ def main():
     stage.mkdir(parents=True)
     shutil.copy2(binary, stage / "pecofence.exe")
     shutil.copy2(binary.parent / "pecofence-watchdog.exe", stage / "pecofence-watchdog.exe")
-    shutil.copy2(ROOT / "third_party/webview2/WebView2Loader.x64.dll", stage / "WebView2Loader.dll")
+    subprocess.run(
+        [
+            sys.executable, str(ROOT / "scripts/stage-winappsdk-runtime.py"), "copy",
+            "--source", str(binary.parent), "--destination", str(stage),
+        ],
+        cwd=ROOT, check=True,
+    )
     environment = dict(
         os.environ, PECOFENCE_INSTANCE=instance, RUST_LOG="info",
         LOCALAPPDATA=str(stage / "local-appdata"), APPDATA=str(stage / "roaming-appdata"),
@@ -88,14 +95,15 @@ def main():
     saved = json.loads(config_path.read_text(encoding="utf-8"))
     log_path = Path(environment["LOCALAPPDATA"]) / "PecoFence" / f"pecofence.{instance}.log"
     log = log_path.read_text(encoding="utf-8")
-    assert "settings: page ready" in log, "Embedded Settings document did not initialize"
+    assert "settings: native controls ready" in log, "Native Settings controls did not initialize"
     for language in LANGUAGES:
         assert re.search(r'interface language changed.*language="?'+re.escape(language)+r'(?:"|\s|$)', log), language
     assert saved["settings"]["language"] == "zh-CN", "Language preference was not saved"
     assert saved["layouts"][0]["contents"][0]["title"] == custom_title, "Custom content name changed"
     assert autostart_value() == before, "Portable test changed the installed autostart entry"
     report = {"passed": True, "languages": LANGUAGES, "settings_ready": True,
-              "preference_saved": True, "custom_name_preserved": True, "autostart_preserved": True}
+              "preference_saved": True, "custom_name_preserved": True, "autostart_preserved": True,
+              "windows_app_sdk_runtime": "2.5.1"}
     (stage / "report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(f"PASS: native Settings initialized; {len(LANGUAGES)} live switches; configuration, names and autostart verified")
     print(f"Report: {stage / 'report.json'}")

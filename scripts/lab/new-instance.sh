@@ -56,13 +56,13 @@ SPM_BIN="$SPM_REPO/target/$TRIPLE/$SPM_PROFILE"
 required=(
   "$PF_BIN/pecofence.exe"
   "$PF_BIN/pecofence-watchdog.exe"
-  "third_party/webview2/WebView2Loader.x64.dll"
   "$SPM_BIN/spmd.exe"
   "$SPM_BIN/spm.exe"
 )
 for f in "${required[@]}"; do
   [ -f "$f" ] || { echo "missing build artifact: $f (run scripts/build-windows.sh first)" >&2; exit 1; }
 done
+python3 scripts/stage-winappsdk-runtime.py verify --directory "$PF_BIN"
 
 mkdir -p "$INST"/{config,data,logs,appdata/Roaming,appdata/Local} "$LAB/fixtures"
 
@@ -81,7 +81,7 @@ if [ -n "$FIXTURE" ]; then
 fi
 
 cp "$PF_BIN/pecofence.exe" "$PF_BIN/pecofence-watchdog.exe" "$INST/"
-cp third_party/webview2/WebView2Loader.x64.dll "$INST/WebView2Loader.dll"
+python3 scripts/stage-winappsdk-runtime.py copy --source "$PF_BIN" --destination "$INST"
 cp "$SPM_BIN/spmd.exe" "$SPM_BIN/spm.exe" "$INST/"
 
 SEED_NOTE="first-run defaults"
@@ -105,11 +105,16 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import sys
+sys.path.insert(0, str(Path.cwd() / 'scripts'))
+import winappsdk_runtime as runtime
 env = os.environ
 inst = Path(env['INST'])
 contracts = json.loads(env['CONTRACTS'])
+runtime_manifest = runtime.load_runtime_manifest()
+runtime_files, _ = runtime.validate_runtime_directory(inst, runtime_manifest)
 manifest = {
-    'schema_version': 2, 'instance': env['NAME'],
+    'schema_version': 4, 'instance': env['NAME'],
     'created_at': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
     'source': 'local', 'spm_commit': env['SPM_SHA'], 'pecofence_commit': env['PF_SHA'],
     'contracts': contracts, 'cargo_lock_sha256': env['CARGO_LOCK_SHA'],
@@ -117,7 +122,15 @@ manifest = {
     'wire_protocol': contracts['wire_protocol'], 'db_format': 'v2',
     'binaries_sha256': {
         name: hashlib.sha256((inst / name).read_bytes()).hexdigest()
-        for name in ('pecofence.exe', 'pecofence-watchdog.exe', 'spmd.exe', 'spm.exe', 'WebView2Loader.dll')
+        for name in ('pecofence.exe', 'pecofence-watchdog.exe', 'spmd.exe', 'spm.exe')
+    },
+    'windows_app_sdk': {
+        'version': runtime.PACKAGE_VERSION,
+        'manifest_sha256': runtime.manifest_digest(runtime_manifest),
+        'files_sha256': {
+            name: hashlib.sha256(data).hexdigest()
+            for name, data in sorted(runtime_files.items())
+        },
     },
     'fixture': {'path': env['FIXTURE_REL'], 'sha256': env['FIXTURE_SHA']},
     'config': env['SEED_NOTE'],

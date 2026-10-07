@@ -11,7 +11,7 @@ use crate::fence_window::{
 use crate::icons::{IconCache, IconVariant, WM_APP_ICON_READY};
 use crate::peek::PeekOverlay;
 use crate::persistence::{Closing, SaveCoordinator, Writer};
-use crate::settings_host::{SettingsHost, WebEnvironment};
+use crate::settings_host::SettingsHost;
 use crate::shadow::{ShadowStyle, ShadowWindow};
 use crate::state::AppState;
 use pecofence_core::geometry::WorkArea;
@@ -101,6 +101,10 @@ const TIMER_DESKTOP_ID: usize = 51;
 const TIMER_PORTALS: usize = 52;
 /// Poll only while a document write or normal closing is in progress.
 const TIMER_PERSISTENCE: usize = 53;
+/// Opt-in timed exit enters the same save/close gate as the tray's Quit action.
+const TIMER_EXIT: usize = 54;
+/// A modal/native handler still owns AppCell; defer WinUI exit until it unwinds.
+const TIMER_REACTOR_EXIT: usize = 55;
 const SPI_SETDESKWALLPAPER: usize = 0x0014;
 const SPI_SETWORKAREA: usize = 0x002F;
 const TRAY_ID: u32 = 1;
@@ -175,11 +179,11 @@ pub struct App {
     fileops_done: fileops::FileOpResults,
     settings: Option<SettingsHost>,
     settings_session: pecofence_core::settings_protocol::SettingsSession,
-    settings_view_sequence: Cell<u64>,
-    /// Fence to select on the settings page once it reports `ready` (opened via 栅栏选项…).
-    settings_focus_fence: Option<ContentId>,
-    web_env: Option<WebEnvironment>,
-    settings_class: WindowClass,
+    /// Coalesce projections until a typed command's decision has been delivered.
+    settings_dispatching: Rc<Cell<bool>>,
+    reactor_context: windows_reactor::AppContext,
+    /// Queued invocation checks AppCell again, including inside nested modal pumps.
+    exit_ui: windows_reactor::AppCallback,
     theme_mode: ThemeMode,
     /// The user's accent palette at the last visual refresh (None = built-in default look).
     accent: Option<systheme::AccentPalette>,
@@ -227,8 +231,33 @@ fn command_name(cmd: &Command) -> String {
 
 impl App {
     /// Creates everything and returns the shared cell the control window drives.
-    pub fn create(args: Args) -> Result<AppCell> {
+    pub fn create(args: Args, reactor_context: windows_reactor::AppContext) -> Result<AppCell> {
         let cell: AppCell = Rc::new(RefCell::new(None));
+        let exit_target = Rc::new(Cell::new(None));
+        let exit_ui = reactor_context.callback({
+            let context = reactor_context.clone();
+            let cell = Rc::downgrade(&cell);
+            let exit_target = exit_target.clone();
+            move || {
+                let Some(cell) = cell.upgrade() else {
+                    return Ok(());
+                };
+                let Ok(guard) = cell.try_borrow_mut() else {
+                    // Dispatcher callbacks can run in a nested file-dialog pump.
+                    // Do not exit synchronously under an outer native App borrow.
+                    if let Some(hwnd) = exit_target.get() {
+                        window::set_timer(hwnd, TIMER_REACTOR_EXIT, 16);
+                    }
+                    return Ok(());
+                };
+                let running = guard.is_some();
+                drop(guard);
+                if running {
+                    context.exit()?;
+                }
+                Ok(())
+            }
+        });
 
         let stack = Rc::new(RenderStack::new()?);
         tracing::info!(
@@ -269,6 +298,8 @@ impl App {
         let control_class = WindowClass::register("PecoFence.Control", ClassOptions::default())?;
         let control_handler: MessageHandler = {
             let cell = cell.clone();
+            let timed_commands = queue.clone();
+            let exit_ui = exit_ui.clone();
             // Folder-watcher debounce state (see WM_APP_FS_CHANGED / TIMER_FS).
             let fs_armed = Cell::new(false);
             let fs_flushed: Cell<Option<Instant>> = Cell::new(None);
@@ -378,6 +409,17 @@ impl App {
                         }
                         msg::WM_TIMER => {
                             match wparam {
+                                TIMER_EXIT => {
+                                    window::kill_timer(hwnd, TIMER_EXIT);
+                                    timed_commands.push(Command::Quit);
+                                }
+                                TIMER_REACTOR_EXIT => {
+                                    window::kill_timer(hwnd, TIMER_REACTOR_EXIT);
+                                    if let Err(error) = exit_ui.invoke() {
+                                        tracing::error!(%error, "deferred dispatcher exit failed");
+                                        window::post_quit(0);
+                                    }
+                                }
                                 TIMER_PORTALS => {
                                     if let Ok(mut guard) = cell.try_borrow_mut()
                                         && let Some(app) = guard.as_mut()
@@ -430,7 +472,7 @@ impl App {
                                         window::kill_timer(hwnd, TIMER_ICONS);
                                         app.on_icons_ready();
                                     } else {
-                                        // WebView2 creation and native menus pump messages while
+                                        // Native modal dialogs and menus pump messages while
                                         // the App is borrowed. Keep the completed icon batch
                                         // pending; workers may have sent their final notification.
                                         window::set_timer(hwnd, TIMER_ICONS, 100);
@@ -574,7 +616,13 @@ impl App {
                             Some(1)
                         }
                         msg::WM_ENDSESSION if wparam != 0 => {
-                            window::post_quit(0);
+                            // Windows session termination cannot wait for I/O.
+                            // Still retire the single WinUI lifetime, not a nested
+                            // or unrelated Win32 message loop.
+                            if let Err(error) = exit_ui.invoke() {
+                                tracing::error!(%error, "session-end dispatcher exit failed");
+                                window::post_quit(0);
+                            }
                             Some(0)
                         }
                         msg::WM_DESTROY => Some(0),
@@ -589,6 +637,7 @@ impl App {
             .ex_style(style::EX_TOOLWINDOW | style::EX_NOACTIVATE)
             .bounds(0, 0, 0, 0)
             .create(control_handler)?;
+        exit_target.set(Some(control.hwnd()));
         queue.attach(&control);
         std::mem::forget(control_class); // class lives for the process
 
@@ -721,7 +770,6 @@ impl App {
             .map_err(|e| tracing::warn!(error = %e, "shell change notifications unavailable"))
             .ok();
 
-        let settings_class = SettingsHost::register_class()?;
         let peek_class = PeekOverlay::register_class()?;
         let writer = Writer::new(
             state
@@ -751,10 +799,9 @@ impl App {
             fileops_done: Arc::new(Mutex::new(Vec::new())),
             settings: None,
             settings_session: Default::default(),
-            settings_view_sequence: Cell::new(0),
-            settings_focus_fence: None,
-            web_env: None,
-            settings_class,
+            settings_dispatching: Rc::new(Cell::new(false)),
+            reactor_context,
+            exit_ui,
             theme_mode,
             accent,
             wallpaper_override: args.wallpaper_override.clone(),
@@ -922,8 +969,20 @@ impl App {
                 Err(e) => tracing::warn!(error = %e, "memstats failed"),
             }
         }
+        if let Some(ms) = args.exit_after_ms {
+            window::set_timer(app.control.hwnd(), TIMER_EXIT, ms.max(1));
+        }
         *cell.borrow_mut() = Some(app);
         Ok(cell)
+    }
+
+    fn exit_reactor(&self) {
+        if let Err(error) = self.exit_ui.invoke() {
+            tracing::error!(%error, "WinUI dispatcher exit could not be queued");
+            // Fault fallback only. Normal exit runs through the queued WinUI
+            // callback after this AppCell borrow is released.
+            window::post_quit(0);
+        }
     }
 
     fn schedule_save(&self) {
@@ -1044,7 +1103,7 @@ impl App {
             && !matches!(
                 &cmd,
                 Command::OpenSettings
-                    | Command::SettingsMessage { .. }
+                    | Command::SettingsRequest { .. }
                     | Command::SettingsClosed { .. }
                     | Command::Quit
                     | Command::FadeOutDone(_)
@@ -1384,13 +1443,13 @@ impl App {
                 // Dropping the window destroys it (RevokeDragDrop + DestroyWindow).
                 self.dying.retain(|w| w.hwnd() != hwnd);
             }
-            Command::SettingsMessage { source, json } => {
+            Command::SettingsRequest { source, request } => {
                 if self
                     .settings
                     .as_ref()
-                    .is_some_and(|host| host.source() == source)
+                    .is_some_and(|host| host.source() == source && host.is_alive())
                 {
-                    self.on_settings_message(&json);
+                    self.on_settings_request(*request);
                 }
             }
         }
@@ -1410,6 +1469,8 @@ impl App {
         }
         self.writer.close();
         window::kill_timer(self.control.hwnd(), TIMER_PERSISTENCE);
+        window::kill_timer(self.control.hwnd(), TIMER_EXIT);
+        window::kill_timer(self.control.hwnd(), TIMER_REACTOR_EXIT);
         self.fences.clear();
         self.dying.clear();
         self.panel_manager.borrow_mut().shutdown();

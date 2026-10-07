@@ -17,7 +17,7 @@
 | `App` 处理窗口、规则、文件任务、设置和保存 | 原生命令泵事实上也是业务应用层 | `App` 只组合与分发；用例负责政策 |
 | `IpcService` 的订阅和操作共用 `Token`、字节和 `cancel` | 返回值不能证明请求归属；一次操作按订阅广播 | 订阅和操作使用不同句柄、不同完成契约 |
 | `PluginContext` 固定装入通用服务 | 有无效实现和伪完成 token；依赖图没有降低使用成本 | 静态注册，显式注入有真实实现的领域端口 |
-| WebView 替换整个 Settings/Rules 对象 | 客户端旧副本可能覆盖其他修改；接受和落盘混淆 | 带请求 ID、修订号的细粒度命令与确认 |
+| 旧 WebView Settings 客户端替换整个 Settings/Rules 对象 | 旧客户端副本可能覆盖其他修改；接受和落盘混淆 | 当前原生界面通过带请求 ID、文档 stamp 的细粒度命令与回执接入应用会话 |
 | 保存、Shell 操作使用 bool/字符串或忽略结果 | 部分成功、取消、失败和未知不能可靠表达 | 每个实际副作用有类型化终态 |
 
 源码入口：[应用组合根](../crates/app/src/app/mod.rs)、[状态](../crates/app/src/state.rs)、[现有插件 API](../crates/plugin-api/src/lib.rs)、[设置处理](../crates/app/src/app/settings.rs)、[SPM 管道适配器](../crates/app/src/spm_transport.rs)。这些链接用于追踪替换，不表示它们已经符合目标接口。
@@ -48,7 +48,7 @@ flowchart TB
 | 层 | 拥有什么 | 不允许做什么 |
 | --- | --- | --- |
 | Domain | 文档不变量、规则求值、成员关系、布局/标签操作 | 读目录、拿 HWND、发管道、显示 toast、决定重试时机 |
-| Application | 用例、操作/来源代际、提交顺序、取消与错误政策 | 绘制、调用 WebView/Explorer 对象、解析 SPM wire |
+| Application | 用例、操作/来源代际、提交顺序、取消与错误政策 | 绘制、操作 HWND/Explorer 对象、解析 SPM wire |
 | Presentation | 文件列表、设置、面板的只读投影；本地编辑草稿 | 将显示状态直接写回完整文档；把断连当作业务失败 |
 | Adapters | 真实 I/O、序列化、Shell/COM、协议、设备实现 | 把不完整结果伪装成空/成功；自行修改领域状态 |
 | Native host | UI 线程、窗口/消息泵、组件挂载、渲染提交、OS 生命周期 | 在 WndProc 中做目录遍历、同步等待 worker 或业务事务 |
@@ -183,14 +183,14 @@ Shell 对重名文件可能重命名、跳过或取消。返回每项真实目�
 
 ### 4.3 Windows 线程与停止
 
-UI 线程拥有 HWND、DComp/D2D 提交、WebView controller、OLE drop target、组件和 `Rc` 帧。worker 仅接收 owned、`Send` 请求并返回 owned 结果，创建并销毁自己的 COM apartment；COM 接口、绘制 session 和可变应用状态不跨线程。
+主 STA 上的 `Reactor::run_with` 拥有现有原生 `App`、桌面与托盘的应用生命周期；打开或关闭 Settings 组件窗口不应终止整个应用或托盘。UI 线程拥有 HWND、Reactor/WinUI 3 Settings 控件、DComp/D2D 提交、OLE drop target、组件和 `Rc` 帧。worker 仅接收 owned、`Send` 请求并返回 owned 结果，创建并销毁自己的 COM apartment；COM 接口、绘制 session 和可变应用状态不跨线程。
 
 不同适配器有不同 executor 契约：
 
 - 纯 `std::fs` 读取/CPU 壁纸处理不需要 COM，可运行于普通有界 worker。
 - Shell metadata/name 查询由专用 STA reader 执行；`CoInitializeEx` 失败产生真实错误结果。消息循环在任务间泵送，并支持 COM 调用所需的 apartment 消息处理；不能只在任意线程初始化 COM 就声称所有 Shell extension 都可安全使用。
 - 交互式 Shell 文件任务使用有消息泵的独立 STA executor。任务只有仍有效的宿主 dialog-owner lease；原生 HWND 的有效性由 UI 注册/撤销，不能将一个复制的地址当作所有权。owner 消失则取消或按明确的无 owner 政策继续，不转投新 HWND。
-- OLE drag/drop、WebView controller 与 D2D/DComp 留在既有 UI apartment。worker 不同步调用 UI/等待 UI 回调，避免 UI 等 worker、worker 等 UI 的死锁；STA 可能重入的回调不得持有业务可变借用或用例锁。
+- OLE drag/drop、原生 Settings 控件与 D2D/DComp 留在既有 UI apartment。worker 不同步调用 UI/等待 UI 回调，避免 UI 等 worker、worker 等 UI 的死锁；STA 可能重入的回调不得持有业务可变借用或用例锁。
 
 有限消息泵不能保证一个阻塞文件系统或任意第三方 Shell extension 有界完成；此限制继续由下面的隔离政策处理，不在 SDK 声称通用 Shell 执行保证。
 
@@ -253,14 +253,14 @@ struct CommitReceipt {
 
 强制 OS 结束或进程崩溃没有保存保证。允许期限内尽力完成已开始的提交，不以 Accepted 宣称可恢复；原子替换保留最近明确 committed 的文档，未决文件任务按 journal 核对。无法写入任何存储时也不能承诺未提交修改幸存。测试在 Accepted 后立即关闭、提交中关闭、CommitFailed 后关闭与强制结束。
 
-## 6. Settings 协议：客户端发操作，不发权威对象
+## 6. Settings 应用边界：原生界面发操作，不发权威对象
 
-采用精确版本、serde-tagged 消息和受验证 DTO。第一版使用文档级 optimistic revision；**不**立即加入每字段向量时钟或自动冲突合并。
+应用边界采用受验证的类型化 Rust 请求与只读视图，不使用序列化 UI 消息。第一版使用文档级 optimistic revision；**不**立即加入每字段向量时钟或自动冲突合并。
 
 ```rust
 struct SettingsRequest {
     protocol: u16,
-    client: Uuid, // page handshake identity
+    session: Uuid, // native Settings session identity
     sequence: u64,
     base: DocumentStamp, // activation UUID + expected revision
     command: SettingsCommand,
@@ -275,7 +275,7 @@ enum SettingsCommand {
 }
 
 struct Receipt {
-    client: Uuid,
+    session: Uuid,
     sequence: u64,
     base: DocumentStamp,
     current: DocumentStamp,
@@ -284,23 +284,22 @@ struct Receipt {
 }
 
 struct PersistenceNotice {
-    page: Uuid,
-    client: Uuid,
+    session: Uuid,
     stamp: DocumentStamp,
     committed_revision: Option<u64>,
     issue: Option<String>,
 }
 ```
 
-以上为已实现 C1 的契约形状，精确 wire、去重容量和测试见 [SETTINGS_PROTOCOL.md](SETTINGS_PROTOCOL.md)。原生接线使用这些枚举；ViewSnapshot 的 JSON 是只读投影，不是权威可写对象。后文 OS 操作健康和异步存储为后续目标，不应理解为当前全部完成。
+以上是类型化应用边界的契约形状，已实现的协议、精确类型、去重容量和测试见 [SETTINGS_PROTOCOL.md](SETTINGS_PROTOCOL.md)。Settings 界面现为 Reactor 承载的原生 WinUI 3，五个任务页和十三种规则条件表单已实现；headless 与合成 tour 报告通过，不表示全功能对等或真实 Windows 验收。`SettingsView` 是只读投影，`Request`/`Receipt` 与 `DocumentStamp` 仍是应用所有的命令边界，不把权威可写对象交给窗口。后文 OS 操作健康和异步存储为后续目标，不应理解为当前全部完成。
 
-细粒度操作防止无关字段被覆盖；文档修订冲突则明确拒绝，返回新 snapshot 供客户端重试。`Accepted` 只表示内存中的文档已更新，`Committed` 表示该修订及之前的修改已落盘。每个请求只作一次接纳决定，持久化通知不是第二个命令回复。
+细粒度操作防止无关字段被覆盖；文档修订冲突则明确拒绝，返回新 snapshot 供原生界面重试。`Accepted` 只表示内存中的文档已更新，`Committed` 表示该修订及之前的修改已落盘。每个请求只作一次接纳决定，持久化通知不是第二个命令回复。
 
 当前 `DocumentStamp.workspace` 是本次激活 UUID，导入/恢复接受/新建/重新载入都会改变它；它不是持久文档 ID。revision 只在该 activation 内比较，不假设跨文档全局唯一。所有 snapshot、回复、提交确认和 PersistenceNotice 绑定 activation；旧 activation 消息即使 revision 相同也拒绝，旧提交不能确认新文档已保存。若 B2 引入持久文档 ID，必须与激活身份分别建模。
 
-`ready` 带 page UUID，为新 WebView 会话分配 client UUID，返回协议版本、激活、完整 ViewSnapshot、文档修订和保存健康；同 page 的重试保持 client。客户端 request sequence 单调递增；宿主有界保存最近 32 个请求与接纳决定。相同序号/相同内容重试返回原决定，内容不同拒绝；已淘汰的旧序号拒绝，绝不重新执行。乱序/跳号拒绝并要求重新打开页面；更换 client 后不能重发旧未决修改当作新请求。此去重只覆盖活动会话，不声称跨重启操作恰好一次。
+WebView 的 `ready` 页面握手、JSON 前端桥和浏览器客户端脚本不是所选 Settings 方向的一部分。Reactor/WinUI 3 原生界面已有五个任务页和十三种规则条件表单；报告的 headless 测试和包含关闭/重开的合成 WinUI 测试通过，但不代表完整功能对等或真实桌面验收。窗口生命周期内的 Settings session identity 向应用 session 发送带单调 request sequence、`DocumentStamp` 和 `SettingsCommand` 的类型化请求，应用返回相应 `Receipt`。宿主有界保存最近 32 个请求与接纳决定。相同序号/相同内容重试返回原决定，内容不同拒绝；已淘汰的旧序号拒绝，绝不重新执行。乱序/跳号拒绝并要求建立新的 Settings session；更换 session 后不能重发旧未决修改当作新请求。此去重只覆盖活动会话，不声称跨重启操作恰好一次。分层 CI 与 release acceptance 的证据边界见[验证门槛](VERIFICATION_GATES.md)。
 
-推送视图有独立序号；前端丢弃旧 activation/旧推送。前端草稿与服务器投影分开：新状态只更新未编辑字段，脏草稿显示冲突；不能收到 state 后整页覆盖用户输入。
+应用向原生 Settings session 提供只读视图更新；旧 activation/旧修订的更新不得确认当前工作区。编辑草稿与应用投影分开：新状态只更新未编辑字段，脏草稿显示冲突；状态刷新不能整页覆盖用户输入。
 
 未知协议/字段/操作、无效数值、找不到的目标、只读会话、过期修订、过大 payload 均有明确拒绝。OS autostart、文件选择、导入、备份恢复有自己的操作结果；内存设置已接受不代表注册表/文件 I/O 已成功。OS 集成的期望值、实际状态与最近失败分开投影；失败不伪造实际状态，用户可重试或用新命令撤回期望值，不在后台偷偷回滚可能已被后续命令改变的设置。
 
@@ -458,7 +457,7 @@ action 含义、命中几何、语义结构/标签任一改变都推进 interact
 - **生命周期**：突发刷新、关闭/重建、同 ID 不同 activation、晚到结果、饱和队列、停止后无回调。
 - **协议**：错版本、错 workspace/request/session、重复/迟到完成、去重缓存淘汰、已连接但不回应、订阅共享/退订竞态、断连后不自动重放命令。
 - **视图**：stale 数据有标识；旧路径条目不可操作；草稿不被推送抹掉；帧/命中/语义一致。
-- **Windows 工作流**：真实目录/watcher/F5，Shell 部分成功，多 DPI，Explorer 重启，Win+D，Peek，设备恢复和 WebView。未执行的项明确标记，不以 headless 测试代替。
+- **Windows 工作流**：真实目录/watcher/F5，Shell 部分成功，多 DPI，Explorer 重启，Win+D，Peek、设备恢复，以及原生 Settings 的屏幕阅读器、高对比度和无 WebView Runtime 干净环境检查。未执行的项明确标记，不以 headless 测试代替。
 
 交付是“请求到真实结果的链路可证明”，不是“新增了若干 trait / 拆了若干文件”。目录布局、抽象数量和日志行数都不是架构完成指标。
 
@@ -487,7 +486,7 @@ Config / schema 2
 | `ConfigStore` | 精确 schema、字节预算、主文件替换、原件 archive、备份状态 | 创建默认工作区、把读错误当 first run |
 | `AppState` | 应用政策、规范化图与观测之间的投影、可写/恢复状态 | 把呈现快照作为可变持久副本 |
 | 原生宿主 | 容器 HWND、放置、输入捕获、真实窗口挂载和呈现 | 将窗口 ID 当作内容或文件归属 ID |
-| Settings 入口 | 显示健康、提交配对目标、确认恢复/替换 | 自行决定归属或绕过校验覆盖图 |
+| Reactor/WinUI 3 Settings 界面（已实现；验收未完成） | 五个任务页需求、显示健康、提交配对目标、确认恢复/替换 | 自行决定归属或绕过校验覆盖图 |
 
 Root 仍名为 `Config`，且还保存部分桌面观测字段；不是已经完成第 3 节完整 `WorkspaceDocument/ObservationStore` 分离。`FenceId` 在过渡中的原生命名仅指 `ContentId`；`FenceSnapshot` 和 `FenceContentSpec` 是不序列化的只读投影，不读取旧配置。
 
@@ -503,7 +502,7 @@ Root 仍名为 `Config`，且还保存部分桌面观测字段；不是已经完
 
 ### 验证与剩余范围
 
-纯组件测试覆盖图与身份、结构取消、来源 remount、迟到/重复读取、错误载入、原件保留和备份退化。Settings 的浏览器 mock 回归覆盖独立内容/共享容器属性、错误配对、只读恢复、集合目标与多语言布局；它不证明真实 WebView2/Explorer/Run-key/热键效果。
+纯组件测试覆盖图与身份、结构取消、来源 remount、迟到/重复读取、错误载入、原件保留和备份退化。Settings 已实现为 Reactor 承载的 WinUI 3；报告的 headless 测试和合成关闭/重开 tour 通过。Full Windows CI 与真实 Windows 验收仍需按 [USER_REQUIREMENTS.md](USER_REQUIREMENTS.md) 的待验收表记录，不以旧浏览器 mock 或纯组件测试代替。
 
 实验夹具使用 `core` 的 `validate_workspace` 示例程序生成和校验精确格式，不维护第二套 Python schema，也不自动迁移旧 seeds。真实桌面交互脚本的容器在 tear-off 中可能更换，属性命令在执行时从稳定内容 ID 解析当前配对。
 

@@ -7,7 +7,7 @@
 //! ```text
 //! sleep <ms>                 wait
 //! dump <tag>                 log one `pecofence::test` line per fence window (+ dying ones)
-//! message <json>             send the same JSON command as the settings WebView
+//! settings                   open the native Settings window
 //! quick-hide | quick-show    the desktop double-click toggle
 //! peek | end-peek            Peek overlay
 //! pin-test-windows           keep debug audit windows above other apps without an overlay
@@ -150,16 +150,7 @@ impl App {
                         });
                     }
                 }
-                ["message", ..] => {
-                    if let Some(json) = line.strip_prefix("message ")
-                        && let Some(host) = &self.settings
-                    {
-                        self.queue.push(Command::SettingsMessage {
-                            source: host.source(),
-                            json: json.to_string(),
-                        });
-                    }
-                }
+                ["settings"] => self.queue.push(Command::OpenSettings),
                 ["set-content", content, property, ..] => {
                     let value = line.splitn(4, ' ').nth(3);
                     match (

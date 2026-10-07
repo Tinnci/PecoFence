@@ -9,23 +9,19 @@ inputs:
 runs:
   using: composite
   steps:
-    - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
-      with:
-        components: rustfmt, clippy
     - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
       with:
         python-version: '3.x'
         check-latest: true
-    - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-      with:
-        node-version: '24'
-        package-manager-cache: false
     - name: Validate sources without private credentials
       shell: pwsh
       run: |
         python scripts/check-actions.py --online
         if ($LASTEXITCODE -ne 0) { throw "Direct action runtime verification failed." }
         ./scripts/build-and-verify.ps1 -SourceOnly
+    - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
+      with:
+        components: rustfmt, clippy
     - name: Use a fresh public Cargo home
       shell: pwsh
       run: |
@@ -54,6 +50,13 @@ runs:
         New-Item -ItemType File -Path $env:GIT_CONFIG_GLOBAL | Out-Null
         cargo fetch --locked
         if ($LASTEXITCODE -ne 0) { throw "Public dependency fetch failed." }
+    - name: Cache pinned public Windows App SDK package
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        # This is one public NuGet archive, independently hash-verified before
+        # extraction. Never cache expanded runtime files or compiled outputs.
+        path: target/.cache/windows-app-sdk/Microsoft.WindowsAppSDK.Runtime.2.5.1.nupkg
+        key: ${{ runner.os }}-windows-app-sdk-runtime-2.5.1-2fbd27012291be50cafed6942306964281d37167af6a6af3887e1163ec5cf063
     - name: Verify, compile and package
       shell: pwsh
       env:

@@ -242,9 +242,9 @@ pub enum Command {
         sort: pecofence_core::SortMode,
     },
     /// Message from one native Settings activation, not an HWND that can be reused.
-    SettingsMessage {
+    SettingsRequest {
         source: uuid::Uuid,
-        json: String,
+        request: Box<pecofence_core::settings_protocol::Request>,
     },
     SettingsClosed {
         source: uuid::Uuid,

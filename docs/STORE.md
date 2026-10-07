@@ -58,9 +58,13 @@ does not depend on product website assets.
 `packaging/msix/AppxManifest.xml` supplies the manifest template: x64, Windows 11
 minimum (`10.0.22000.0`), `runFullTrust` and a `windows.startupTask`.
 The package version is `<Cargo.toml version>.0`; the Store requires the fourth
-component to be zero. Stable version components must fit 0–65535. Portable and
-MSIX packages include the license (`LICENSE` / `LICENSE.txt`), `NOTICE` and
-third-party notices; verify these remain in the staged payload.
+component to be zero. Stable version components must fit 0–65535. The MSIX
+includes the same pinned, 206-file Windows App SDK Runtime 2.5.1 inventory as the
+portable package, plus its redistribution license/provenance and third-party
+notices. Settings use native Win32 controls; no WebView2 loader or Edge WebView2
+Runtime is required.
+Portable and MSIX packages include the license (`LICENSE` / `LICENSE.txt`),
+`NOTICE` and third-party notices; verify these remain in the staged payload.
 
 ## Local install test
 

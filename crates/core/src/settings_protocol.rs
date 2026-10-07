@@ -1,5 +1,7 @@
-//! Settings is an application client, not a serialized-config writer.
-//! Wire version, page identity, workspace lifetime and document revision are independent.
+//! Typed Settings use cases and admission decisions.
+//! Activation identity, workspace lifetime and document revision are independent.
+//! Native controls call these types directly; serialization is only for config
+//! values and explicit test inputs, never a browser transport.
 
 use crate::i18n::Language;
 use crate::rules::{Class, Cond, Rule, Target, Template};
@@ -13,7 +15,6 @@ use std::path::PathBuf;
 use uuid::Uuid;
 
 pub const VERSION: u16 = 1;
-pub const MAX_REQUEST_BYTES: usize = 64 * 1024;
 const REPLAY_WINDOW: usize = 32;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -390,13 +391,6 @@ pub struct Request {
     pub command: SettingsCommand,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "camelCase", deny_unknown_fields)]
-pub enum ClientMessage {
-    Ready { protocol: u16, page: Uuid },
-    Request(Box<Request>),
-}
-
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Rejection {
@@ -421,34 +415,6 @@ pub struct Receipt {
     pub current: DocumentStamp,
     pub rejected: Option<Rejection>,
     pub cancelled: bool,
-}
-
-#[derive(Serialize)]
-#[serde(
-    tag = "type",
-    rename_all = "camelCase",
-    rename_all_fields = "camelCase"
-)]
-pub enum ServerMessage {
-    Snapshot {
-        protocol: u16,
-        page: Uuid,
-        client: Uuid,
-        stamp: DocumentStamp,
-        sequence: u64,
-        view: serde_json::Value,
-    },
-    Receipt(Receipt),
-    Persistence {
-        page: Uuid,
-        client: Uuid,
-        stamp: DocumentStamp,
-        committed_revision: Option<u64>,
-        issue: Option<String>,
-    },
-    ProtocolError {
-        detail: String,
-    },
 }
 
 pub enum Admission {
@@ -609,7 +575,7 @@ mod tests {
     }
 
     #[test]
-    fn closing_a_page_revokes_queued_requests_and_cannot_revive_its_client() {
+    fn closing_an_activation_revokes_queued_requests_and_cannot_revive_its_client() {
         let mut session = SettingsSession::default();
         let page = Uuid::new_v4();
         let client = session.open(page);
@@ -696,11 +662,7 @@ mod tests {
     }
 
     #[test]
-    fn invalid_wire_values_unknown_fields_and_legacy_commands_are_rejected() {
-        assert!(
-            serde_json::from_str::<ClientMessage>(r#"{"type":"patchSettings","settings":{}}"#)
-                .is_err()
-        );
+    fn invalid_test_values_and_unknown_request_fields_are_rejected() {
         assert!(
             serde_json::from_str::<ContainerChange>(r#"{"property":"locked","value":"true"}"#)
                 .is_err()
@@ -714,14 +676,11 @@ mod tests {
         let mut session = SettingsSession::default();
         let client = session.open(Uuid::new_v4());
         let r = request(client, 1, DocumentClock::new(true).stamp());
-        let value = serde_json::to_value(ClientMessage::Request(Box::new(r.clone()))).unwrap();
-        assert_eq!(
-            serde_json::from_value::<ClientMessage>(value.clone()).unwrap(),
-            ClientMessage::Request(Box::new(r))
-        );
+        let value = serde_json::to_value(&r).unwrap();
+        assert_eq!(serde_json::from_value::<Request>(value.clone()).unwrap(), r);
         let mut unknown = value;
         unknown["legacy"] = true.into();
-        assert!(serde_json::from_value::<ClientMessage>(unknown).is_err());
+        assert!(serde_json::from_value::<Request>(unknown).is_err());
     }
 
     #[test]
@@ -785,7 +744,7 @@ mod tests {
     }
 
     #[test]
-    fn browser_condition_shapes_roundtrip_and_unknown_nested_fields_fail() {
+    fn persisted_condition_shapes_roundtrip_and_unknown_nested_fields_fail() {
         for json in [
             r#"{"cond":"createdTime","value":{"fromMin":1080,"toMin":360}}"#,
             r#"{"cond":"sizeMb","value":{"min":0,"max":12.5}}"#,
@@ -825,34 +784,24 @@ mod tests {
     }
 
     #[test]
-    fn server_wire_names_distinguish_decision_from_primary_commit() {
-        let stamp = DocumentClock::new(true).stamp();
+    fn admitted_decision_does_not_commit_the_document() {
+        let mut clock = DocumentClock::new(true);
         let client = Uuid::new_v4();
-        let receipt = ServerMessage::Receipt(Receipt {
+        let base = clock.stamp();
+        clock.change();
+        let receipt = Receipt {
             client,
             sequence: 1,
-            base: stamp,
-            current: stamp,
+            base,
+            current: clock.stamp(),
             rejected: None,
             cancelled: false,
-        });
-        let value = serde_json::to_value(receipt).unwrap();
-        assert_eq!(value["type"], "receipt");
-        assert_eq!(value["sequence"], 1);
-        assert!(value["rejected"].is_null());
-        assert!(value.get("committedRevision").is_none());
-        let value = serde_json::to_value(ServerMessage::Persistence {
-            page: Uuid::new_v4(),
-            client,
-            stamp,
-            committed_revision: Some(0),
-            issue: Some("backup unavailable".into()),
-        })
-        .unwrap();
-        assert_eq!(value["type"], "persistence");
-        assert_eq!(value["committedRevision"], 0);
-        assert_eq!(value["issue"], "backup unavailable");
-        assert!(value.get("committed_revision").is_none());
+        };
+        assert!(receipt.rejected.is_none());
+        assert_eq!(clock.committed(), Some(0));
+        assert!(clock.dirty());
+        assert!(clock.commit(receipt.current));
+        assert!(!clock.dirty());
     }
 
     #[test]

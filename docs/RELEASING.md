@@ -7,20 +7,23 @@ matching `v<version>` tag executes the release job against that tag's own source
 Both use [.github/actions/build-desktop/action.yml](../.github/actions/build-desktop/action.yml)
 and [scripts/build-and-verify.ps1](../scripts/build-and-verify.ps1):
 
-1. Install Rust stable with rustfmt/Clippy, latest stable Python 3 and Node 24.
-2. Run public source/Actions policy, Settings browser and desktop packaging tests.
+1. Set up latest stable Python 3 and run Python-only public source/Actions policy,
+   locale and offline packaging/runtime tests.
    Dependency resolution uses this repository plus public registries; there is
    no private SPM authentication or checkout.
-3. Restore **public registry archives only**, never private Git checkouts or
-   compiled intermediates. Crate downloads are reusable across CI/releases and
-   Rust upgrades; native dependency compilation happens on each runner.
-4. Run formatting, translation and Settings client checks before native compilation. Run Clippy,
-   regenerate/compare bindings, compile and run workspace tests with the
-   WebView2 loader staged beside their executables.
-5. Compile `pecofence` and `pecofence-watchdog` once with `build-desktop.ps1`, record
-   source/toolchain/binary fingerprints, enforce the
-   existing 4.5 MiB application budget, then package those exact binaries with
-   `make-portable.ps1 -SkipBuild`. All Cargo dependency resolution uses `--locked`.
+2. Install Rust stable with rustfmt/Clippy only after the source-only phase.
+3. Restore **public registry archives and the hash-pinned public Windows App SDK
+   NuGet archive only**, never private Git checkouts or compiled intermediates.
+   Crate downloads are reusable across CI/releases and Rust upgrades; native
+   dependency compilation and runtime extraction happen on each runner.
+4. Run format checks, Clippy, regenerate/compare bindings, stage the verified
+   runtime beside debug outputs, and compile/run the locked workspace tests.
+5. Compile `pecofence` and `pecofence-watchdog` once with `build-desktop.ps1`,
+   stage the same audited runtime beside release outputs, and record source,
+   toolchain, executable and runtime fingerprints. The 6.5 MiB
+   (`6,815,744` byte) gate applies only to `pecofence.exe`; runtime/package costs
+   are bounded and reported separately. Then package those exact binaries/runtime
+   with `make-portable.ps1 -SkipBuild`. All Cargo dependency resolution uses `--locked`.
 
 CI uploads the ZIP/checksum as `pecofence-portable`, retained for seven days. It
 does **not** publish a release or deploy the app. New commits cancel superseded
@@ -33,7 +36,7 @@ manual step. It does not imply Store or winget publication.
 Tag packaging requires clean source and selects exactly the current version's
 ZIP/checksum, not a wildcard collection of possibly stale versions.
 See [PACKAGING.md](PACKAGING.md) for receipt validation, deterministic ZIPs,
-per-user installation and shared MSIX payloads.
+per-user installation, nested runtime extraction and shared MSIX payloads.
 
 The product website, its builder and its hosting workflows have been removed.
 Desktop CI and tag releases do not build or deploy a website. Other distribution steps remain separate:
@@ -48,7 +51,9 @@ Desktop CI and tag releases do not build or deploy a website. Other distribution
 Public CI, tag builds, fork PRs and Dependabot PRs require no private token or SPM
 checkout. Actions no longer reads private SPM source. Do not introduce privileged
 `pull_request_target` or a private-source cache. Checkout uses
-`persist-credentials: false`; caches contain public registry archives only.
+`persist-credentials: false`; caches contain public registry archives and the one
+hash-pinned Windows App SDK source NuGet only. Runtime extraction is regenerated
+and hash-verified on each build.
 
 The local public `crates/spm-contracts` crate (0.1.0) is not a daemon distribution.
 Source checks and headless/synthetic protocol tests remain required; feature gates

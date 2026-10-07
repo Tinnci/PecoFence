@@ -83,7 +83,8 @@ impl App {
             let owner = self
                 .settings
                 .as_ref()
-                .map_or(self.control.hwnd(), |view| view.hwnd());
+                .and_then(|view| view.hwnd())
+                .unwrap_or(self.control.hwnd());
             let detail = self
                 .state
                 .persistence_issue
@@ -128,6 +129,6 @@ impl App {
         if let Some(anchor) = self.anchor.borrow_mut().as_mut() {
             anchor.restore_desktop_icons();
         }
-        window::post_quit(0);
+        self.exit_reactor();
     }
 }

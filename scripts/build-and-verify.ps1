@@ -33,15 +33,16 @@ if (-not $SkipSourceChecks) {
   Invoke-CheckedCommand "Public dependency boundary" $Python @("scripts/check-public-dependencies.py")
   Invoke-CheckedCommand "Action policy tests" $Python @("scripts/test-actions-policy.py")
   Invoke-CheckedCommand "Action pin policy" $Python @("scripts/check-actions.py")
-  Invoke-CheckedCommand "Format" "cargo" @("fmt", "--all", "--check")
+  Invoke-CheckedCommand "Native locale scanner tests" $Python @("scripts/test-locales.py")
   Invoke-CheckedCommand "Translations" $Python @("scripts/check-locales.py")
+  Invoke-CheckedCommand "README translation tests" $Python @("scripts/test-readme-translations.py")
   Invoke-CheckedCommand "README translations" $Python @("scripts/check-readme-translations.py")
-  Invoke-CheckedCommand "Settings client protocol" "node" @("--test", "scripts/test-settings-client.cjs")
-  Invoke-CheckedCommand "Settings browser UI" "pwsh" @("-NoProfile", "-File", "scripts/test-settings-browser.ps1")
   Invoke-CheckedCommand "Desktop packaging tests" $Python @("scripts/test-package-desktop.py")
+  Invoke-CheckedCommand "Windows App SDK runtime tests" $Python @("scripts/test-winappsdk-runtime.py")
 }
 if ($SourceOnly) { return }
 
+Invoke-CheckedCommand "Format" "cargo" @("fmt", "--all", "--check")
 Invoke-CheckedCommand "Resolved public dependency graph" $Python @("scripts/check-public-dependencies.py", "--resolved")
 Invoke-CheckedCommand "Clippy" "cargo" @(
   "clippy", "--locked", "--workspace", "--all-targets", "--target-dir", $TargetDir,
@@ -55,14 +56,17 @@ Invoke-CheckedCommand "Bindings match source" "git" @(
   "crates/render/src/comp.rs", "crates/render/src/gpu_bindings.rs"
 )
 
-# Make runtime dependencies explicit rather than depending on the runner's DLL search path.
-Invoke-CheckedCommand "Compile tests" "cargo" @(
-  "test", "--locked", "--workspace", "--no-run", "--target-dir", $TargetDir
+# Test executables carry the embedded WinUI activation manifest. Stage the
+# self-contained runtime beside debug outputs before Cargo compiles and runs them.
+Invoke-CheckedCommand "Stage debug Windows App SDK runtime" $Python @(
+  "scripts/stage-winappsdk-runtime.py", "stage", "--target-dir", $TargetDir, "--profile", "debug"
 )
-Copy-Item -LiteralPath "third_party/webview2/WebView2Loader.x64.dll" `
-  -Destination (Join-Path $TargetDir "debug/deps/WebView2Loader.dll") -Force
 Invoke-CheckedCommand "Workspace tests" "cargo" @(
   "test", "--locked", "--workspace", "--target-dir", $TargetDir
+)
+Invoke-CheckedCommand "Reactor dialog teardown regression tests" "cargo" @(
+  "test", "--locked", "-p", "windows-reactor", "--lib", "content_dialog_reset_tests",
+  "--target-dir", $TargetDir
 )
 Invoke-CheckedCommand "Workspace fixture validator tests" "cargo" @(
   "test", "--locked", "-p", "pecofence-core", "--example", "validate_workspace",
@@ -72,12 +76,11 @@ Invoke-CheckedCommand "Workspace fixture validator tests" "cargo" @(
 # One release compilation; packaging must consume these exact binaries.
 Write-Host "`n[Release build] Compile once with verified source/output receipt"
 & (Join-Path $PSScriptRoot "build-desktop.ps1") -TargetDir $TargetDir -Python $Python
-# Existing 4.5 MiB budget includes the SPM host integration. Keep the same gate
-# for pull requests and releases; do not trade diagnostics for a smaller number.
+# The executable budget is separate from the self-contained runtime payload.
 $binary = Join-Path $TargetDir "release/pecofence.exe"
 $size = (Get-Item -LiteralPath $binary).Length
-Write-Host "`n[Size gate] pecofence.exe = $size bytes (limit: 4718592)"
-if ($size -gt 4718592) { throw "pecofence.exe exceeds the 4.5 MiB size budget" }
+Write-Host "`n[Size gate] pecofence.exe = $size bytes (limit: 6815744)"
+if ($size -gt 6815744) { throw "pecofence.exe exceeds the 6.5 MiB executable budget" }
 
 Write-Host "`n[Package] Reusing the verified release binaries"
 & (Join-Path $PSScriptRoot "make-portable.ps1") -SkipBuild -TargetDir $TargetDir -Python $Python -RequireCleanSource:$RequireCleanSource
