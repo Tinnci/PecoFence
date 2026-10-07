@@ -1,10 +1,10 @@
 use crate::app::panel_manager::PipeState;
-use pecofence_plugin_api::{ScopeId, Token};
+use pecofence_plugin_api::{Error, ScopeId, Token};
 use pecofence_plugin_kernel::CancellationToken;
 use spm_contracts::{
     Body, DaemonSessionId, Direction, Envelope, Event, Feature, HelloRequest, PROTOCOL_MAJOR,
-    PROTOCOL_MINOR, ProjectQuery, Request, RequestId, Response, SubscribeRequest, SubscriptionId,
-    UnsubscribeRequest,
+    PROTOCOL_MINOR, ProjectQuery, Request, RequestId, Response, RpcMethod, SubscribeRequest,
+    SubscriptionId, UnsubscribeRequest,
 };
 use std::{
     collections::{BTreeSet, HashMap, HashSet},
@@ -12,11 +12,14 @@ use std::{
         Arc,
         atomic::{AtomicU8, Ordering},
     },
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
+
+pub(crate) const MAX_OPERATIONS: usize = 64;
+const OPERATION_TIMEOUT: Duration = Duration::from_secs(15);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
@@ -57,10 +60,26 @@ impl TransportHandle {
             .map_err(|_| ())
     }
 
-    pub fn request(&self, local: Token, envelope: Envelope) -> Result<(), ()> {
+    pub fn request(
+        &self,
+        local: Token,
+        owner: ScopeId,
+        generation: u64,
+        request: Request,
+    ) -> Result<(), ()> {
         self.data_sender
-            .try_send(Command::Request { local, envelope })
+            .try_send(Command::Request {
+                local,
+                route: Route { owner, generation },
+                request,
+            })
             .map_err(send_error)
+    }
+
+    pub fn cancel_operation(&self, local: Token) -> Result<(), ()> {
+        self.control_sender
+            .send(Command::CancelOperation { local })
+            .map_err(|_| ())
     }
 
     #[allow(dead_code)]
@@ -81,8 +100,8 @@ fn send_error(error: mpsc::error::TrySendError<Command>) {
 }
 
 pub struct Receivers {
-    data: mpsc::Receiver<Command>,
-    control: mpsc::UnboundedReceiver<Command>,
+    pub(crate) data: mpsc::Receiver<Command>,
+    pub(crate) control: mpsc::UnboundedReceiver<Command>,
 }
 
 // PipeState::token uses a checked, increasing u64 counter; tokens never repeat.
@@ -122,8 +141,19 @@ pub enum Command {
     },
     Request {
         local: Token,
-        envelope: Envelope,
+        route: Route,
+        request: Request,
     },
+    CancelOperation {
+        local: Token,
+    },
+}
+
+struct PendingOperation {
+    local: Token,
+    route: Route,
+    method: RpcMethod,
+    deadline: Instant,
 }
 
 struct ActiveQuery {
@@ -142,6 +172,7 @@ struct Actor {
     cancelled_tokens: HashSet<Token>,
     remote_queries: HashMap<SubscriptionId, ProjectQuery>,
     pending_subscribes: HashMap<RequestId, ProjectQuery>,
+    pending_operations: HashMap<RequestId, PendingOperation>,
     daemon_session: Option<DaemonSessionId>,
 }
 
@@ -163,6 +194,7 @@ pub async fn run(
         cancelled_tokens: HashSet::new(),
         remote_queries: HashMap::new(),
         pending_subscribes: HashMap::new(),
+        pending_operations: HashMap::new(),
         daemon_session: None,
     };
     tracing::info!(endpoint = %endpoint_for_log, "transport.run");
@@ -205,6 +237,10 @@ pub async fn run(
         }
         delay = (delay * 2).min(Duration::from_secs(15));
     }
+    actor.fail_operations("transport stopped; remote outcome unknown");
+    while let Ok(command) = actor.receivers.data.try_recv() {
+        actor.apply_offline(command);
+    }
     actor.set_state(ConnectionState::Disconnected);
 }
 
@@ -236,6 +272,7 @@ impl Actor {
     }
 
     fn reset_remote(&mut self) {
+        self.fail_operations("connection lost; remote outcome unknown");
         self.remote_queries.clear();
         self.pending_subscribes.clear();
         for active in self.active.values_mut() {
@@ -268,7 +305,19 @@ impl Actor {
             Command::Unsubscribe { local } => {
                 self.unsubscribe_local(local);
             }
-            Command::Request { .. } => {}
+            Command::Request { local, route, .. } => {
+                if !self.discard_cancelled(local) {
+                    self.sink.complete(
+                        route.owner,
+                        route.generation,
+                        local,
+                        Err(Error::Backend(
+                            "SPM unavailable; request was not dispatched".into(),
+                        )),
+                    );
+                }
+            }
+            Command::CancelOperation { local } => self.cancel_operation(local),
         }
     }
 
@@ -337,6 +386,10 @@ impl Actor {
             if hello.request_id != Some(hello_id) {
                 return Err(());
             }
+            if response.protocol_major != PROTOCOL_MAJOR || response.protocol_minor > PROTOCOL_MINOR
+            {
+                return Err(());
+            }
             let session_changed = self.daemon_session != Some(response.daemon_session);
             self.daemon_session = Some(response.daemon_session);
             self.reset_remote();
@@ -350,8 +403,11 @@ impl Actor {
             for query in queries {
                 self.send_subscribe(&mut writer, query).await?;
             }
+            let mut deadlines = tokio::time::interval(Duration::from_secs(1));
+            deadlines.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
             loop {
                 tokio::select! {
+                    _ = deadlines.tick() => self.expire_operations(Instant::now()),
                     _ = cancel.cancelled() => return Ok(()),
                     command = self.receivers.control.recv() => {
                         let Some(command) = command else { return Ok(()) };
@@ -442,17 +498,42 @@ impl Actor {
             }
             Command::Request {
                 local,
-                mut envelope,
+                route,
+                request,
             } => {
-                if self.local_queries.contains_key(&local) {
-                    envelope.daemon_session = self.daemon_session;
-                    envelope.request_id = Some(RequestId::new());
-                    envelope
-                        .validate(Direction::ClientToServer)
-                        .map_err(|_| ())?;
-                    write_envelope(writer, &envelope).await.map_err(|_| ())?;
+                if self.discard_cancelled(local) {
+                    return Ok(());
                 }
+                if self.pending_operations.len() >= MAX_OPERATIONS {
+                    self.sink
+                        .complete(route.owner, route.generation, local, Err(Error::Exhausted));
+                    return Ok(());
+                }
+                let request_id = RequestId::new();
+                let method = request.method();
+                let envelope = self.request_envelope(request_id, request)?;
+                if let Err(error) = envelope.validate(Direction::ClientToServer) {
+                    self.sink.complete(
+                        route.owner,
+                        route.generation,
+                        local,
+                        Err(Error::Invalid(error.to_string())),
+                    );
+                    return Ok(());
+                }
+                // Register before writing: partial writes have an indeterminate outcome.
+                self.pending_operations.insert(
+                    request_id,
+                    PendingOperation {
+                        local,
+                        route,
+                        method,
+                        deadline: Instant::now() + OPERATION_TIMEOUT,
+                    },
+                );
+                write_envelope(writer, &envelope).await.map_err(|_| ())?;
             }
+            Command::CancelOperation { local } => self.cancel_operation(local),
         }
         Ok(())
     }
@@ -470,10 +551,41 @@ impl Actor {
     }
 
     fn route_incoming(&mut self, envelope: Envelope) {
+        if envelope.daemon_session != self.daemon_session
+            || envelope.protocol_minor > PROTOCOL_MINOR
+        {
+            return;
+        }
+        if let Some(request_id) = envelope.request_id
+            && let Some(operation) = self.pending_operations.remove(&request_id)
+        {
+            let result = match &envelope.body {
+                Body::Response(response) if response_method(response) == operation.method => {
+                    serde_json::to_vec(&envelope)
+                        .map(Arc::<[u8]>::from)
+                        .map_err(|error| Error::Invalid(error.to_string()))
+                }
+                Body::Error(error) => Err(Error::Backend(format!(
+                    "{:?}: {}",
+                    error.code, error.message
+                ))),
+                _ => Err(Error::Invalid("unexpected action response method".into())),
+            };
+            self.sink.complete(
+                operation.route.owner,
+                operation.route.generation,
+                operation.local,
+                result,
+            );
+            return;
+        }
         if let Body::Response(Response::Subscribe(response)) = &envelope.body {
             if let Some(request_id) = envelope.request_id {
                 tracing::info!(request_id = ?request_id, subscription_id = ?response.subscription_id, "subscribe.acknowledged");
                 if let Some(query) = self.pending_subscribes.remove(&request_id) {
+                    if response.accepted_query != query || !self.active.contains_key(&query) {
+                        return;
+                    }
                     self.remote_queries
                         .insert(response.subscription_id, query.clone());
                     if let Some(active) = self.active.get_mut(&query) {
@@ -484,14 +596,8 @@ impl Actor {
             return;
         }
         if matches!(&envelope.body, Body::Event(Event::OperationCompleted(_))) {
-            if let Ok(bytes) = serde_json::to_vec(&envelope).map(Arc::<[u8]>::from) {
-                for active in self.active.values() {
-                    for (local, route) in &active.routes {
-                        self.sink
-                            .publish(route.owner, route.generation, *local, bytes.clone());
-                    }
-                }
-            }
+            // RefreshEvents is not negotiated. An operation notification is not
+            // a subscription snapshot, nor an uncorrelated global completion.
             return;
         }
         let Body::Event(Event::Snapshot(_)) = &envelope.body else {
@@ -518,6 +624,68 @@ impl Actor {
                     .publish(route.owner, route.generation, *local, bytes.clone());
             }
         }
+    }
+
+    fn cancel_operation(&mut self, local: Token) {
+        let id = self
+            .pending_operations
+            .iter()
+            .find(|(_, operation)| operation.local == local)
+            .map(|(id, _)| *id);
+        if let Some(id) = id {
+            self.pending_operations.remove(&id);
+        } else {
+            self.cancelled_tokens.insert(local);
+            if self.cancelled_tokens.len() > 4096 {
+                self.cancelled_tokens.clear();
+            }
+        }
+    }
+
+    fn fail_operations(&mut self, message: &str) {
+        for (_, operation) in self.pending_operations.drain() {
+            self.sink.complete(
+                operation.route.owner,
+                operation.route.generation,
+                operation.local,
+                Err(Error::Backend(message.into())),
+            );
+        }
+    }
+
+    fn expire_operations(&mut self, now: Instant) {
+        let expired: Vec<_> = self
+            .pending_operations
+            .iter()
+            .filter(|(_, operation)| operation.deadline <= now)
+            .map(|(id, _)| *id)
+            .collect();
+        for id in expired {
+            if let Some(operation) = self.pending_operations.remove(&id) {
+                self.sink.complete(
+                    operation.route.owner,
+                    operation.route.generation,
+                    operation.local,
+                    Err(Error::Backend(
+                        "operation timed out; remote outcome unknown".into(),
+                    )),
+                );
+            }
+        }
+    }
+}
+
+fn response_method(response: &Response) -> RpcMethod {
+    match response {
+        Response::Hello(_) => RpcMethod::Hello,
+        Response::GetCapabilities(_) => RpcMethod::GetCapabilities,
+        Response::Subscribe(_) => RpcMethod::Subscribe,
+        Response::Unsubscribe(_) => RpcMethod::Unsubscribe,
+        Response::QueryPage(_) => RpcMethod::QueryPage,
+        Response::Refresh(_) => RpcMethod::Refresh,
+        Response::ResolveNavigation(_) => RpcMethod::ResolveNavigation,
+        Response::BuildBriefing(_) => RpcMethod::BuildBriefing,
+        Response::Ping(_) => RpcMethod::Ping,
     }
 }
 
@@ -573,8 +741,17 @@ async fn write_envelope(
 ) -> std::io::Result<()> {
     let frame = spm_contracts::encode_frame(envelope)
         .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?;
-    writer.write_all(&frame).await?;
-    writer.flush().await
+    tokio::time::timeout(Duration::from_secs(10), async {
+        writer.write_all(&frame).await?;
+        writer.flush().await
+    })
+    .await
+    .map_err(|_| {
+        std::io::Error::new(
+            std::io::ErrorKind::TimedOut,
+            "SPM write timed out; remote outcome unknown",
+        )
+    })?
 }
 
 #[cfg(test)]
@@ -622,8 +799,100 @@ mod tests {
             cancelled_tokens: HashSet::new(),
             remote_queries: HashMap::new(),
             pending_subscribes: HashMap::new(),
+            pending_operations: HashMap::new(),
             daemon_session: None,
         }
+    }
+
+    fn action(actor: &mut Actor, token: Token, method: RpcMethod) -> RequestId {
+        actor
+            .sink
+            .test_operation(token, route().owner, route().generation);
+        let id = RequestId::new();
+        actor.pending_operations.insert(
+            id,
+            PendingOperation {
+                local: token,
+                route: route(),
+                method,
+                deadline: Instant::now() + OPERATION_TIMEOUT,
+            },
+        );
+        id
+    }
+
+    fn action_reply(session: DaemonSessionId, id: RequestId) -> Envelope {
+        Envelope {
+            protocol_major: PROTOCOL_MAJOR,
+            protocol_minor: PROTOCOL_MINOR,
+            daemon_session: Some(session),
+            request_id: Some(id),
+            subscription_id: None,
+            revision: None,
+            body: Body::Response(Response::Refresh(spm_contracts::RefreshResponse {
+                operation_id: spm_contracts::OperationId::new(),
+                disposition: spm_contracts::RefreshDisposition::Accepted,
+            })),
+        }
+    }
+
+    #[test]
+    fn action_response_is_correlated_once_and_ignores_foreign_sessions() {
+        let mut actor = actor();
+        let session = DaemonSessionId::new();
+        actor.daemon_session = Some(session);
+        let id = action(&mut actor, Token(10), RpcMethod::Refresh);
+        let reply = action_reply(session, id);
+        actor.route_incoming(action_reply(DaemonSessionId::new(), id));
+        actor.route_incoming(action_reply(session, RequestId::new()));
+        assert_eq!(actor.pending_operations.len(), 1);
+        assert!(actor.sink.test_events().is_empty());
+        actor.route_incoming(reply.clone());
+        actor.route_incoming(reply);
+        let events = actor.sink.test_events();
+        assert_eq!(events.len(), 1);
+        assert!(matches!(
+            &events[0],
+            pecofence_plugin_api::PanelEvent::Completion {
+                operation: Token(10),
+                result: Ok(_)
+            }
+        ));
+        assert!(actor.pending_operations.is_empty());
+    }
+
+    #[test]
+    fn wrong_method_deadline_and_disconnect_terminalize_only_the_owned_call() {
+        let mut actor = actor();
+        let session = DaemonSessionId::new();
+        actor.daemon_session = Some(session);
+        let wrong = action(&mut actor, Token(10), RpcMethod::BuildBriefing);
+        actor.route_incoming(action_reply(session, wrong));
+        let expired = action(&mut actor, Token(11), RpcMethod::Refresh);
+        actor.pending_operations.get_mut(&expired).unwrap().deadline = Instant::now();
+        action(&mut actor, Token(12), RpcMethod::Refresh);
+        actor.expire_operations(Instant::now());
+        assert_eq!(actor.pending_operations.len(), 1);
+        actor.fail_operations("connection lost; remote outcome unknown");
+        let events = actor.sink.test_events();
+        assert_eq!(events.len(), 3);
+        for (event, expected) in events.iter().zip([Token(10), Token(11), Token(12)]) {
+            assert!(
+                matches!(event, pecofence_plugin_api::PanelEvent::Completion { operation, result: Err(_) } if *operation == expected)
+            );
+        }
+        assert!(actor.pending_operations.is_empty());
+    }
+
+    #[test]
+    fn cancelled_operations_do_not_receive_late_responses() {
+        let mut actor = actor();
+        let session = DaemonSessionId::new();
+        actor.daemon_session = Some(session);
+        let id = action(&mut actor, Token(10), RpcMethod::Refresh);
+        actor.cancel_operation(Token(10));
+        actor.route_incoming(action_reply(session, id));
+        assert!(actor.sink.test_events().is_empty());
     }
 
     fn test_envelope() -> Envelope {
@@ -742,7 +1011,10 @@ mod tests {
                 features: BTreeSet::new(),
             })),
         };
-        assert!(handle.request(Token(1), envelope).is_err());
+        let Body::Request(request) = envelope.body else {
+            unreachable!()
+        };
+        assert!(handle.request(Token(1), ScopeId(1), 1, request).is_err());
     }
 
     #[test]
