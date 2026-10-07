@@ -96,6 +96,10 @@ Actions 使用已核验的 Node 24/复合 action SHA，Dependabot 显式覆盖�
 首先替换 Settings WebView host；复用类型化用例/提交状态，原生键盘与可访问性验收通过后
 才删 web 依赖。当前未实现原生 Settings，也没有提前关闭 web 测试。
 
+用户任务、五页设置的功能对等清单、P0/P1/P2 优先级和完整移除条件见
+[USER_REQUIREMENTS.md](USER_REQUIREMENTS.md)。维护者已选择原生替换；
+这是待实施需求，不是已经完成的原生化。规则编辑、只读恢复、冲突草稿和退出保存必须保留。
+
 ## 每次交付需附
 
 具体替换链路与已删除入口；测试命令和实际结果；未验证的 Windows/daemon 行为；来源/配置文件处理政策；若涉及协议，则列双方 SHA 和支持的精确组合。提交/发布与架构验收是不同动作。

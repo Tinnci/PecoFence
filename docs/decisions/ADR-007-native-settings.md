@@ -1,20 +1,23 @@
 # ADR-007: Native Settings direction and packaging boundary
 
-Status: proposed direction; native Settings is **not implemented**.
+Status: accepted direction following the maintainer's decision to replace WebView
+UI. Native Settings is **not implemented** and WebView2 has **not been removed**.
+The functional scope and removal acceptance criteria are defined in
+[USER_REQUIREMENTS.md](../USER_REQUIREMENTS.md).
 
 ## Observed scope
 
 WebView2 hosts `ui/settings.html`. Desktop fences, menus and the SPM panel already
-use native Windows/Direct2D rendering; the static product website is not desktop
-runtime UI. Removing the browser therefore starts with the Settings host, not a
-rewrite of every panel or the website.
+use native Windows/Direct2D rendering. The product website has been removed
+separately. Removing the desktop browser therefore starts with the Settings host,
+not a rewrite of every panel.
 
 Current `windows-webview` linkage imports the loader at process startup. Deleting
 HTML or omitting the DLL would break startup, not produce a native build.
 
-## Recommendation
+## Chosen approach
 
-Prefer Win32 common controls for interactive settings forms/accessibility, with
+Use Win32 standard/common controls for interactive settings forms/accessibility, with
 the existing native rendering/material stack where needed. WinUI 3 is plausible
 for richer controls, but introduces Windows App SDK deployment/runtime decisions;
 it is not automatically the smaller/no-runtime option.

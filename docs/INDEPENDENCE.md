@@ -9,7 +9,8 @@ third-party credit, and it does not imply ownership of upstream publishing accou
 
 At the time of this setup, this repository has no published GitHub Releases;
 draft-release automation is configured. No independent Store listing, winget
-identity or public site is configured. This is a configuration snapshot, not a
+identity is configured. The product website is no longer part of the repository.
+This is a configuration snapshot, not a
 claim that no release has ever existed anywhere.
 Check current repository settings and published artifacts before announcing a
 release; disabled deployment defaults are not evidence about external accounts.
@@ -19,9 +20,7 @@ release; disabled deployment defaults are not evidence about external accounts.
 | Source repository | `Tinnci/PecoFence` | Check access, branch protections and repository settings separately. |
 | GitHub hosting relationship | Still a GitHub fork of `DayuanJiang/PecoFence`, as checked during this setup | Treat repository metadata separately from publishing identities; preserve commit history and credit. |
 | GitHub Releases | Tag workflow builds draft releases; no releases published at setup time | Review artifacts, release notes and signing policy before publishing a draft. |
-| Website | `baseUrl=null`, `customDomain=null`; local default `http://localhost:8000`; no analytics beacon or Store/winget buttons | Choose your own HTTPS URL and host; configure `site/site.json`; validate with `--strict --deploy`. See [WEBSITE.md](WEBSITE.md). |
-| Cloudflare Pages | Opt-in; no assumed project, domain or account | Supply `CLOUDFLARE_PAGES_PROJECT`, secrets `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID`, then `ENABLE_WEBSITE_DEPLOY=true`; deployment is `main` only. |
-| GitHub Pages | Manual, opt-in alternative, not a live fallback | Configure your own URL, select GitHub Actions in Pages settings, enable `ENABLE_GITHUB_PAGES=true`, and run on `main` using OIDC. |
+| Product website | Website source, assets, builder/tests, hosting workflows and tracked deployment caches removed | No website build or deployment is part of this edition. Review any previously configured remote hosting separately; removing source does not delete remote resources or revoke credentials. |
 | Microsoft Store/MSIX | Publishing identity fields are `null`; no CI Store upload | Obtain your own Partner Center identity; fill required fields or pass a separate JSON with `-Identity`; build/upload locally. See [STORE.md](STORE.md). |
 | winget | No independently confirmed package identity; automation updates existing packages only | Establish an accepted first version in `winget-pkgs`, confirm `WINGET_PACKAGE_IDENTIFIER`, supply secret `WINGET_TOKEN`, review transitive tooling, then enable `ENABLE_WINGET_PUBLISH=true`. |
 | Code signing | Production signing decision outstanding | Choose certificate ownership, key storage and signing procedure. MSIX test certificates are local-only. |
@@ -42,7 +41,7 @@ transitive supply chain before enabling publication.
 - Keep the inherited `CHANGELOG.md` as historical context. Past upstream changes
   or certifications are not evidence of this edition's releases or approval.
 - A GitHub fork relationship is repository metadata, distinct from source content,
-  commit history and Store/winget/site publishing identities. Check GitHub repository
+  commit history and Store/winget publishing identities. Check GitHub repository
   settings separately; do not rewrite history to erase credit.
 - Replacing screenshots or marketing media does not erase licensing obligations
   for source, dependencies or retained assets.
@@ -71,9 +70,14 @@ Use isolated portable test instances as described in [DEVELOPMENT.md](DEVELOPMEN
 ## Decisions still required
 
 - Keep PecoFence as the product name or perform a planned rename?
-- Which website host and public HTTPS URL should this edition use?
 - Should it publish to the Store, winget, both, or neither?
 - What is the production code-signing policy?
+
+The website decision is resolved: no product website is maintained here. If
+website-specific Actions variables/secrets, Pages settings, custom domains or
+Cloudflare hosting were configured elsewhere, the maintainer should review their
+retirement separately. This source change does not alter those remote settings,
+delete hosted deployments or revoke credentials.
 
 The contracts-distribution decision is resolved: public PecoFence builds from
 this repository and public registries, with no private token or SPM checkout.

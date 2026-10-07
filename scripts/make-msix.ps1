@@ -67,7 +67,7 @@ try {
 & $Python scripts/package_desktop.py stage-msix --release (Join-Path $TargetDir "release") --version $Version --out $stage
 if ($LASTEXITCODE -ne 0) { throw "Verified MSIX payload generation failed" }
 
-# Tile and Store logos rendered from site/assets/mark.svg.
+# Tile and Store logos drawn directly by the standalone asset generator.
 & $Python scripts/make-msix-assets.py (Join-Path $stage "Assets")
 if ($LASTEXITCODE -ne 0) { throw "Asset generation failed" }
 

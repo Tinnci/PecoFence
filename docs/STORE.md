@@ -53,7 +53,8 @@ self-signed copy. ZIP/MSIX payloads share the implementation in [PACKAGING.md](P
 To use a separate identity JSON, add `-Identity "path/to/your-identity.json"`
 to any command. With an existing Python/Pillow installation, omit `-Python`.
 
-`scripts/make-msix-assets.py` renders logos from `site/assets/mark.svg`.
+`scripts/make-msix-assets.py` draws the package mark directly with Pillow; it
+does not depend on product website assets.
 `packaging/msix/AppxManifest.xml` supplies the manifest template: x64, Windows 11
 minimum (`10.0.22000.0`), `runFullTrust` and a `windows.startupTask`.
 The package version is `<Cargo.toml version>.0`; the Store requires the fourth

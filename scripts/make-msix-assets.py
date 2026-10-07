@@ -1,7 +1,7 @@
-"""Render the Store/tile PNGs for the MSIX package from site/assets/mark.svg.
+"""Render the Store/tile PNGs for the MSIX package using the mark defined below.
 
 The mark is four rounded corner brackets plus a 2x2 grid of rounded squares; it is
-redrawn here with Pillow (no SVG renderer needed) at every scale the Store expects.
+drawn with Pillow (no website assets or SVG renderer needed) at every scale the Store expects.
 
     python scripts/make-msix-assets.py <output directory>
 """

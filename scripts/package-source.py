@@ -36,11 +36,9 @@ def main():
         if not source.is_file() or source.is_symlink():
             continue
         parts = Path(name).parts
-        if any(part in (".git", ".cache", "target", "dist", "node_modules", "__pycache__", ".capture", "out") for part in parts):
+        if any(part in (".git", ".cache", ".wrangler", "target", "dist", "node_modules", "__pycache__", ".capture", "out") for part in parts):
             continue
-        if source.suffix.lower() in (".log", ".dmp", ".pdb", ".nupkg", ".wav", ".m4a", ".mkv", ".pyc"):
-            continue
-        if source.suffix.lower() == ".mp4" and not name.startswith("site/assets/"):
+        if source.suffix.lower() in (".log", ".dmp", ".pdb", ".nupkg", ".wav", ".m4a", ".mkv", ".mp4", ".pyc"):
             continue
         if source.name.startswith(".env") and source.name != ".env.example":
             continue

@@ -91,7 +91,7 @@ Required source and headless/synthetic protocol tests cannot silently skip
 failures behind feature gates. Live private-daemon integration is a separate
 authorized private workflow; public test success does not prove it was run.
 Packaging/immutable installation and build receipts are
-described in [PACKAGING.md](PACKAGING.md). Native UI replacement remains a proposed
+described in [PACKAGING.md](PACKAGING.md). Native UI replacement is the chosen
 direction in [ADR-007](decisions/ADR-007-native-settings.md), not an implemented host.
 
 The browser command launches headless Chrome/Edge against the production Settings
@@ -124,7 +124,6 @@ It keeps its generated configuration and report under `.cache/`.
 | `crates/spm-contracts` | Public shared SPM wire contracts (0.1.0), not the private daemon |
 | `ui` | Offline settings HTML and localization helper embedded into the executable |
 | `locales` | Shared native and settings messages |
-| `site` | Static product website, built by `scripts/build-site.py` (see [WEBSITE.md](WEBSITE.md)) |
 
 Regenerate Win32 bindings with `cargo run -p tool_bindgen`. The definitions in
 `tools/bindgen` generate platform, Composition and GPU-glass bindings.
