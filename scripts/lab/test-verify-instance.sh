@@ -25,6 +25,14 @@ pf, backend, lab = root / 'public', root / 'backend', root / 'lab'
 script = pf / 'scripts/lab/verify-instance.sh'
 script.parent.mkdir(parents=True)
 shutil.copyfile(source_script, script)
+(pf / 'scripts/winappsdk_runtime.py').write_text(
+    "from pathlib import Path\n"
+    "PACKAGE_VERSION = '2.5.1'\n"
+    "def load_runtime_manifest(): return {'synthetic': True}\n"
+    "def manifest_digest(_manifest): return '" + "c" * 64 + "'\n"
+    "def validate_runtime_directory(root, _manifest):\n"
+    "    return {'SyntheticSDK.dll': (Path(root) / 'SyntheticSDK.dll').read_bytes()}, {}\n",
+    encoding='utf-8')
 contracts = pf / 'crates/spm-contracts'
 (contracts / 'src').mkdir(parents=True)
 (contracts / 'Cargo.toml').write_text('[package]\nname="spm-contracts"\nversion="0.1.0"\n')
@@ -56,16 +64,21 @@ fixture.write_text('{"synthetic": true}\n')
 def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 binaries = {}
-for name in ('pecofence.exe', 'pecofence-watchdog.exe', 'spmd.exe', 'spm.exe', 'WebView2Loader.dll'):
+for name in ('pecofence.exe', 'pecofence-watchdog.exe', 'spmd.exe', 'spm.exe'):
     (inst / name).write_text('not executable: synthetic verifier data\n')
     binaries[name] = digest(inst / name)
+(inst / 'SyntheticSDK.dll').write_bytes(b'synthetic runtime')
 original = {
-    'schema_version': 2, 'instance': 'test', 'created_at': 'synthetic',
+    'schema_version': 4, 'instance': 'test', 'created_at': 'synthetic',
     'source': 'local', 'spm_commit': revision, 'pecofence_commit': revision,
     'contracts': provenance, 'cargo_lock_sha256': digest(pf / 'Cargo.lock'),
     'toolchain': {'rustc': 'synthetic', 'windows_sdk': 'synthetic', 'msvc': 'synthetic'},
     'wire_protocol': provenance['wire_protocol'], 'db_format': 'v2',
     'binaries_sha256': binaries,
+    'windows_app_sdk': {
+        'version': '2.5.1', 'manifest_sha256': 'c' * 64,
+        'files_sha256': {'SyntheticSDK.dll': digest(inst / 'SyntheticSDK.dll')},
+    },
     'fixture': {'path': 'fixtures/synthetic/catalog.json', 'sha256': digest(fixture)},
     'config': 'synthetic', 'profiles': {'spm': 'release', 'pecofence': 'release'},
     'start_args': {'spmd': ['synthetic'], 'pecofence': ['synthetic']},
@@ -93,7 +106,7 @@ check('explicit backend required', 'authorized backend integration requires expl
 for key, value, reason in (
     ('spm_commit', '0' * 40, 'commit does not exist: spm_commit'),
     ('pecofence_commit', '0' * 40, 'commit does not exist: pecofence_commit'),
-    ('schema_version', 1, 'unsupported manifest schema'),
+    ('schema_version', 2, 'unsupported manifest schema'),
     ('cargo_lock_sha256', '0' * 64, 'public Cargo.lock sha256 mismatch'),
     ('wire_protocol', {'major': 9, 'minor': 0}, 'public wire protocol mismatch'),
     ('spm_rev_pinned_in_pecofence', '0' * 40, 'obsolete private backend pin assertion'),
@@ -107,7 +120,18 @@ check('contract provenance mismatch', 'public contract provenance mismatch', dat
 data = copy.deepcopy(original)
 del data['binaries_sha256']['spmd.exe']
 check('incomplete binary hashes', 'incomplete deployed binary hash inventory', data)
+data = copy.deepcopy(original)
+data['windows_app_sdk']['files_sha256']['SyntheticSDK.dll'] = '0' * 64
+check('runtime hash mismatch', 'Windows App SDK runtime provenance/hash mismatch', data)
+data = copy.deepcopy(original)
+data['binaries_sha256']['WebView2Loader.dll'] = '0' * 64
+check('obsolete WebView inventory rejected', 'incomplete deployed binary hash inventory', data)
+webview_payload = inst / 'WebView2Loader.dll'
+webview_payload.write_text('obsolete synthetic WebView payload\n')
+check('unmanifested WebView payload rejected', 'WebView payload is not supported in lab instances')
+webview_payload.unlink()
 for path, reason in ((inst / 'pecofence.exe', 'binary sha256 mismatch: pecofence.exe'),
+                     (inst / 'SyntheticSDK.dll', 'Windows App SDK runtime provenance/hash mismatch'),
                      (fixture, 'fixture sha256 mismatch:')):
     saved = path.read_bytes()
     path.write_bytes(saved + b'x')

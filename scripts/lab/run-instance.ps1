@@ -1,5 +1,5 @@
 # Start a PecoFence lab instance: spmd (fixture mode) + pecofence (portable),
-# each with per-instance isolation for logs, appdata and the WebView2 profile.
+# each with per-instance isolation for logs and appdata.
 # Usage: powershell -File scripts/lab/run-instance.ps1 -Name normal-local-001
 param(
   [Parameter(Mandatory = $true)][string]$Name,
@@ -31,7 +31,7 @@ Set-Content -Path (Join-Path $Inst "logs\spmd.pid") -Value $spmd.Id
 Start-Sleep -Milliseconds 800
 
 # 2. pecofence: portable config lives next to the exe; isolate APPDATA /
-#    LOCALAPPDATA (logs, crash dumps, WebView2 profile) and the single-instance
+#    LOCALAPPDATA (logs and crash dumps) and the single-instance
 #    mutex name so several lab instances can coexist.
 $oldAppData = $env:APPDATA
 $oldLocalAppData = $env:LOCALAPPDATA

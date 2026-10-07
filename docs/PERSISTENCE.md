@@ -21,7 +21,7 @@ ticket 有独立单调 ID、工作区激活、修订和写入模式。迟到/重
 
 主文件失败保留 dirty 与替换屏障。失败不会自发形成重试循环；新的保存意图、后续修改或用户明确重试才可重新提交。备份退化可以确认主文件修订，但保留警告。Settings 保存成功 toast 也等待真实结果，页面关闭不取消写入或丢弃其结果。
 
-Settings 原生事件附带独立 source UUID，不用可复用 HWND 识别 owner；关闭页面撤销 session。旧窗口排队的 ready/request/close 不能影响新窗口。
+Settings 组件事件附带独立 source UUID，不用可复用 HWND 识别 owner；关闭窗口撤销 session。选定的 Reactor 接线将由主 STA `Reactor::run_with` 继续拥有 `App`、桌面和托盘生命周期：关闭 Settings 组件窗口只撤销该窗口的 client，不退出整个应用，也不取消应用拥有的保存。旧窗口排队的 request/close 不能影响新窗口。不存在浏览器 ready 消息。
 
 ## 正常退出
 
@@ -41,9 +41,9 @@ OS 的 QUERYENDSESSION 只尽力派发保存，不阻塞结束会话；ENDSESSIO
 ```powershell
 cargo test --locked -p pecofence persistence
 cargo test --locked -p pecofence state::tests
-pwsh -NoProfile -File scripts/test-settings-browser.ps1
+cargo test --locked -p pecofence settings_host
 ```
 
-覆盖单飞/合并、重复与旧 ticket、阻塞写入不阻塞调用方、失败/重试/退出选择、真实临时目录写入与 archive 原始字节、跨激活及同激活替换屏障、备份退化、页面撤销和浏览器保存/取消退出状态。
+覆盖单飞/合并、重复与旧 ticket、阻塞写入不阻塞调用方、失败/重试/退出选择、真实临时目录写入与 archive 原始字节、跨激活及同激活替换屏障、备份退化和会话撤销。原生 Settings 的 headless 测试和包含关闭/重开的合成 WinUI tour 报告通过；这类保存/协议和合成窗口证据不等于 N01–N08 功能对等，也不证明键盘/读屏、DPI、高对比度或真实 Windows 退出行为通过。分层验收见[验证门槛](VERIFICATION_GATES.md)。
 
 仍需：真实 Windows 模态对话框/退出/OS 结束验收；合作写入者锁与外部变更检测；完整持久/观测分离；文件传输的逐项结果与 journal；未知磁盘结果的独立核对流程。当前退出保证只针对文档保存，不能据此声称所有已派发 Shell 文件任务都被 drain/journal。

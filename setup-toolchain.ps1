@@ -8,7 +8,6 @@
     2. Rustup & Rust stable (x86_64-pc-windows-msvc)
     3. Toolchain components (rustfmt, clippy)
     4. Python >=3.11 via uv (used by project validation and packaging scripts)
-    5. Verifies existing Node.js and WebView2 runtime installations
 #>
 
 [CmdletBinding()]
@@ -29,7 +28,7 @@ if (-not $isAdmin) {
 }
 
 # 2. Check for Visual Studio C++ Build Tools (MSVC & Windows SDK)
-Write-Host "`n[1/5] Checking Visual Studio C++ Build Tools..." -ForegroundColor Yellow
+Write-Host "`n[1/4] Checking Visual Studio C++ Build Tools..." -ForegroundColor Yellow
 $vsWhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
 $hasVCTools = $false
 
@@ -57,7 +56,7 @@ if (-not $hasVCTools -and -not $SkipBuildTools) {
 }
 
 # 3. Check and Configure Rust (MSVC Toolchain)
-Write-Host "`n[2/5] Checking Rust Toolchain (rustup, rustc, cargo)..." -ForegroundColor Yellow
+Write-Host "`n[2/4] Checking Rust Toolchain (rustup, rustc, cargo)..." -ForegroundColor Yellow
 
 # Ensure .cargo\bin is in PATH for the current session
 $cargoBin = Join-Path $env:USERPROFILE ".cargo\bin"
@@ -114,7 +113,7 @@ if (Get-Command rustup -ErrorAction SilentlyContinue) {
 
 # 4. Resolve a supported Python without replacing the system interpreter.
 # Source packaging uses tomllib (added in Python 3.11); newer versions are welcome.
-Write-Host "`n[3/5] Checking Python >=3.11 via uv..." -ForegroundColor Yellow
+Write-Host "`n[3/4] Checking Python >=3.11 via uv..." -ForegroundColor Yellow
 $uvCommand = Get-Command uv -ErrorAction SilentlyContinue
 $uvPrefix = @()
 if (-not $uvCommand) {
@@ -136,26 +135,13 @@ if (-not $uvCommand) {
 if ($LASTEXITCODE -ne 0) { throw "Python >=3.11 setup failed." }
 Write-Host "  [OK] Use uv run --no-project --python '>=3.11' python scripts/<script>.py" -ForegroundColor Green
 
-# 5. Node is not needed for cargo alone, but is required by the complete verification script.
-Write-Host "`n[4/5] Checking Node.js..." -ForegroundColor Yellow
-if (Get-Command node -ErrorAction SilentlyContinue) {
-    $nodeVer = & node --version
-    if ([int]($nodeVer.TrimStart("v").Split(".")[0]) -lt 22) {
-        Write-Warning "Node.js >=22 is required for Settings protocol tests; install a supported release before full verification."
-    } else {
-        Write-Host "  [OK] Node.js $nodeVer" -ForegroundColor Green
-    }
-} else {
-    Write-Warning "Node.js >=22 is required by scripts/build-and-verify.ps1. Cargo alone builds without Node."
-}
-
-# 6. Summary and Build Instructions
-Write-Host "`n[5/5] Toolchain Configuration Complete!" -ForegroundColor Green
+# 5. Summary and Build Instructions
+Write-Host "`n[4/4] Toolchain Configuration Complete!" -ForegroundColor Green
 Write-Host "====================================================" -ForegroundColor Cyan
 Write-Host "To build and run PecoFence in PowerShell:" -ForegroundColor White
 Write-Host "  cd C:\Users\Administrator\PecoFence" -ForegroundColor Yellow
 Write-Host "  cargo build --locked" -ForegroundColor Yellow
-Write-Host "  Copy-Item third_party\webview2\WebView2Loader.x64.dll target\debug\WebView2Loader.dll" -ForegroundColor Yellow
+Write-Host "  uv run --no-project --python '>=3.11' python scripts\stage-winappsdk-runtime.py stage --target-dir target --profile debug" -ForegroundColor Yellow
 Write-Host "  .\target\debug\pecofence.exe" -ForegroundColor Yellow
 Write-Host "`nTo create a portable release package:" -ForegroundColor White
 Write-Host "  powershell -ExecutionPolicy Bypass -File scripts\make-portable.ps1" -ForegroundColor Yellow

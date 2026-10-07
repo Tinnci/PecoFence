@@ -1,83 +1,89 @@
-# Settings 协议 v1：当前实现
+# Settings 类型化应用边界
 
-设置页面是应用客户端，不是持久文档的所有者。页面的完整 `view` 只是只读投影；修改只能通过闭合的类型化命令进入用例。
+Settings 窗口是应用客户端，不是持久文档的所有者。Reactor 承载的原生
+WinUI 3 窗口已有五个任务页和十三种规则条件表单。UI 通过 owned `SettingsView` 只读投影和
+类型化 `Request`/`Receipt`、`DocumentStamp` 边界调用用例，不使用 HTML、
+JavaScript、浏览器进程或 JSON 页面消息桥。
 
 实现入口：
 
-- [Rust 契约、修订时钟与会话去重](../crates/core/src/settings_protocol.rs)
-- [应用接纳与用例](../crates/app/src/app/settings.rs)
+- [命令、修订时钟与会话接纳](../crates/core/src/settings_protocol.rs)
+- [只读投影类型](../crates/app/src/settings_ui.rs)
+- [应用接纳、恢复与设置用例](../crates/app/src/app/settings.rs)
 - [内容/容器配对校验](../crates/app/src/app/fence_options.rs)
-- [无 DOM 的客户端与草稿队列](../ui/settings-client.js)
-- [生产页面与规则编辑器](../ui/settings.html)
+
+文件名 `settings_protocol.rs` 保留，但 Request/Receipt 是进程内 Rust 类型；
+序列化实现只用于配置值及明确的测试输入，不用于生产 UI 传输。
 
 ## 身份与接纳
 
-`ready` 带精确 `protocol: 1` 和每次页面创建生成的 UUID `page`。宿主分配 `client` UUID；同一 page 重发 ready 不重置序号。新 page 撤销旧 client 的提交资格。
+每次窗口创建产生独立 source UUID，应用为这一激活打开 `SettingsSession`
+并分配 client UUID。关闭窗口撤销 client。排队事件带 source，而不是可复用 HWND；
+旧窗口事件不能修改另一次激活。
 
-`DocumentStamp { workspace, revision }` 中 workspace 是本次工作区激活的 UUID，不是文件路径，也不是持久化的文档 ID。载入、新建、导入和恢复接受产生新身份；revision 只在这一身份内比较。页面刷新改变 client，但不改变当前 workspace。
+`DocumentStamp { workspace, revision }` 中 workspace 是本次工作区激活的 UUID，
+不是文件路径。新建、导入和接受恢复产生新身份；revision 只在这一身份内比较。
+重新打开设置窗口更换 client，不更换 workspace。
 
-```json
-{
-  "type": "request",
-  "protocol": 1,
-  "client": "e4d64f64-379e-4536-a598-d58a0df563c6",
-  "sequence": 1,
-  "base": {
-    "workspace": "80c6d765-4032-4ebf-a46a-aafcd214ccac",
-    "revision": 8
-  },
-  "command": {
-    "kind": "setSetting",
-    "change": { "property": "peekEnabled", "value": false }
-  }
-}
-```
+请求必须满足当前 client、workspace、精确 base revision 和下一个 sequence。
+另一工作区恰好相同的 revision 不能绕过校验。每次文档变更推进修订；
+来源健康和门户条目观测不推进修订。内容和窗口属性编辑同时验证
+`content_id + container_id` 当前归属，不能把迁移前的编辑应用到新窗口。
 
-请求必须满足当前 client、workspace、精确 base revision 和下一个 sequence；不能用另一工作区恰好相同的 revision 绕过校验。每次内存文档变更推进修订，来源健康和门户条目观测不推进修订。无效目标/值在用例边界拒绝；内容编辑和窗口属性编辑都验证 `contentId + containerId` 当前归属配对。
+接纳决定消耗序号，包括冲突、只读、校验失败和用户取消。错误 client、版本、
+跳号或过期请求不推进水位。应用保留最近 32 个请求及决定；同序号同内容返回原
+receipt，同序号不同内容拒绝。淘汰的序号不能重新执行。没有跨重启恰好一次保证。
 
-序号从 1 开始，最大为 JavaScript 安全整数。接纳决定消耗序号，包括冲突、只读、校验失败和用户取消；错误 client、错版本、跳号或已过期请求不推进接纳水位。宿主保留最近 32 个请求及决定，相同请求重发返回原 receipt；同序号不同内容拒绝。淘汰的序号拒绝，绝不重新执行。重启/新页面之后没有跨会话恰好一次保证。
+## 命令与风险
 
-输入最多 64 KiB，未知字段、旧 `patchSettings`/`setRules`/`setFence` 协议不接受。没有自动兼容适配器。
+| 命令 | 所有者与行为 |
+| --- | --- |
+| `SetSetting` | 单个全局设置；控件不能替换整个 Settings |
+| `SetContent` | 标题、文件视图、门户选项；验证内容/容器配对 |
+| `SetContainer` | 外观、锁定、自动高度、Quick Hide、停靠；影响同一窗口的标签 |
+| `Rule` | 创建、编辑、启停、重排、删除、自动归类、默认目标 |
+| `Action` | 快照、模板、原生文件选择、备份恢复、图标操作和明确工作区替换 |
 
-## 命令
+规则支持 1–32 个 AND 条件，覆盖所有持久模型条件。目标只能是文件集合；
+门户和业务 panel 不能成为虚拟归类目标。命令与导入使用同一规则验证。
+用户通过原生表单操作，不必编写 JSON。
 
-| kind | 所有者与行为 |
-|---|---|
-| `setSetting` | 单个设置属性；没有整个 Settings 替换 |
-| `setContent` | 标题、文件视图、门户选项；验证当前内容/容器配对 |
-| `setContainer` | 外观、锁定、自动高度、Quick Hide、停靠；共享给同一容器的标签 |
-| `rule` | 创建、编辑、启停、重排、删除、自动归类开关、默认目标；没有整个 RuleSet 替换 |
-| `action` | 快照、模板、文件选择、备份恢复、图标操作和明确工作区替换 |
+只读恢复保留查看、导出、打开配置目录及明确确认的导入、新建、接受恢复和备份
+恢复入口。替换前保留原文件。取消文件选择返回 cancelled，不是保存成功。
+恢复/删除等风险操作有原生确认。
 
-`retrySave` 明确重新派发失败的文档提交；`cancelClose` 只取消退出等待，不取消 writer 的在途副作用。view 的 saving/closing/documentDirty 是运行状态，不推进文档修订。新原生 Settings 窗口还有独立 source UUID，排队事件不能借用复用的 HWND 进入另一页面；关闭页面撤销 client，但不撤销应用拥有的保存。
+`RetrySave` 明确重新派发失败的提交。`CancelClose` 只取消退出等待，不取消
+writer 已经执行的副作用。关闭设置窗口也不取消应用拥有的保存。
 
-规则创建/编辑提供 1–32 个 AND 条件。页面支持添加/移除条件和编辑已有规则，含用户桌面、公共桌面、系统 namespace 来源；已有条件和规则身份不会因编辑丢失。集合目标不能是门户或 panel。命令与文件导入使用同一规则验证；时间字段精确使用 `fromMin`/`toMin`。通配符匹配使用有界动态规划，不再递归展开星号分支。
+## 决定、保存与草稿
 
-只读恢复状态只开放查看、导出、打开配置目录及明确确认的导入/新建/接受恢复/备份恢复。文件选择取消返回 cancelled 决定，而非保存成功。
+`Receipt { client, sequence, base, current, rejected, cancelled }` 表示命令决定。
+无拒绝、未取消只说明应用已接纳，不说明已经落盘。`SettingsView` 独立提供
+`committed_revision`、dirty、saving、closing 和保存问题。
 
-## 回复与保存
+旧修订提交不能清掉较新修改，旧工作区提交不能确认新工作区。主文件成功后才
+推进 committed revision；备份失败可同时报告主文件已提交与退化警告。
+保存与退出策略见 [PERSISTENCE.md](PERSISTENCE.md)。
 
-- `snapshot`：protocol/page/client/stamp/独立视图 sequence/view；推送序号防止旧投影覆盖新投影。
-- `receipt`：client/sequence/base/current/rejected/cancelled；`rejected: null` 且未取消只表示内存接纳成功。
-- `persistence`：page/client/stamp/committedRevision/issue；只有主文件提交成功才推进 committedRevision。可选备份失败可以同时报告已提交的主文件修订和退化原因。
-- `protocolError`：不可解码或不支持的协议；客户端停止继续提交，需重新打开页面。
+原生适配器保留草稿，与最新投影分离。后台更新不能重写正在编辑的字段、
+改变所选目标或转移焦点。冲突和校验失败保留草稿；重试采用最新修订必须由
+用户明确决定。工作区替换不能自动把旧草稿应用到新工作区。
 
-接纳与保存是不同证据。旧修订的提交不能清掉新修订，旧工作区的提交不能确认新工作区。正常计时器和退出已使用专用串行 writer；失败提供明确重试/取消退出/放弃选择，见 [PERSISTENCE.md](PERSISTENCE.md)。合作写入锁、外部编辑检测和未知磁盘结果核对仍未实现。
-
-## 草稿
-
-客户端最多保留 64 个排队/进行中/失败/待投影确认的修改，按顺序只发送一个未决请求。仅在自己的修改获得接纳时推进后续排队修改的 base，绝不因外部 snapshot 自动重放冲突修改。
-
-规则表单在开始编辑时捕获 base，宿主推送不覆盖未提交字段。冲突保留草稿，用户明确选择“重试未提交的修改”才使用最新修订提交新请求；“放弃”只丢客户端草稿。页面/工作区替换不把旧草稿套到新工作区。晚到保存通知不能把新修改显示为已保存。
-
-## 证据与边界
+## 验证与边界
 
 ```powershell
 cargo test --locked -p pecofence-core settings_protocol
-node --test scripts/test-settings-client.cjs
-pwsh -NoProfile -File scripts/test-settings-browser.ps1
+cargo test --locked -p pecofence settings_host
+cargo test --locked -p pecofence persistence
 ```
 
-浏览器测试使用生产 HTML/client 与本地 mock；Rust 测试单独验证真实编解码、接纳水位/重放、修订提交和规则校验。完整构建入口也执行两组 JavaScript 测试。
-
-这些不证明真实 WebView2、Run-key、热键和 Explorer 图标的 OS 效果。当前 OS 错误仍通过已有集成路径反馈，独立期望/实际/最近失败状态与异步操作终态属于 C2，见 [ROADMAP](ROADMAP.md)。
+报告的 headless 原生 Settings 测试和包含关闭/重开的合成 WinUI tour 已通过；
+一次本机探测在抽样 tour 中加载 18 个 app-local Windows App SDK DLL，未观察到浏览器模块或子进程。
+这些结果不证明全部 N01–N08 工作流已通过，也不证明未受测路径不存在浏览器加载。
+完整工作流还需 Windows 实机键盘、UI Automation/Narrator、多 DPI、高对比、文字缩放和
+干净环境验收；还需核验 self-contained Windows App SDK Runtime 2.5.1 的确切清单，
+且 WebView2 runtime、loader、helper 及 UI 资源不在 imports、动态加载路径、进程树或最终发行包中。
+最终构建与 package 测量待补。详细分层见[验证门槛](VERIFICATION_GATES.md)。
+自动化不能证明 Run-key、热键或 Explorer 图标副作用全部成功。OS 集成的独立
+期望/实际/最近失败状态、跨进程锁和外部编辑检测仍属于后续工作，
+不能因 UI 原生化宣称它们已完成。

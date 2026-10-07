@@ -67,7 +67,7 @@ Toma lo que necesites y pulsa **Esc** para volver.
 | **Archivos como siempre** | Menús contextuales del Explorador, arrastrar y soltar, copiar y pegar, selección múltiple, miniaturas y vistas de iconos, lista y detalles. |
 | **Espacio cuando lo necesitas** | Contrae un grupo hasta su título. Pasa el cursor para expandirlo. Bloquea la distribución que te gusta. |
 | **Un camino de vuelta** | Instantáneas de distribución, copias de seguridad diarias, importación y exportación de la configuración e intercambio entre pantallas. |
-| **Huella mínima** | Una aplicación nativa escrita en Rust; el panel de Configuración en WebView2 se carga solo cuando hace falta. |
+| **Configuración nativa** | Configuración ya usa controles WinUI 3 nativos alojados por Reactor, con cinco páginas de tareas y trece formularios de condiciones de reglas. Las pruebas headless y un recorrido WinUI sintético, incluido cerrar y volver a abrir, han pasado; esto no demuestra paridad funcional ni aceptación de la versión. La distribución elegida incluye Windows App SDK Runtime 2.5.1 autocontenido, sin instalación aparte, y excluye WebView2 (la comprobación del paquete final está pendiente). El Runtime aumenta el tamaño del paquete y el uso de recursos. No se afirma una mejora de tamaño ni de inicio. |
 
 Las reglas de organización automática dejan los archivos en su ubicación original. Los movimientos
 que inicias tú funcionan igual que en el Explorador.
@@ -79,9 +79,8 @@ que inicias tú funcionan igual que en el Explorador.
 **Español · English · 简体中文 · 繁體中文 · 日本語**  
 **한국어 · Deutsch · Français · Português (Brasil) · Русский**
 
-Cámbialo al instante en **Configuración → General → Idioma de la interfaz** o deja que siga a Windows.
-Todas las traducciones vienen incluidas y funcionan sin conexión. Tus nombres de archivo y los
-nombres que pongas tú se conservan.
+Los diez idiomas de la interfaz vienen incluidos y funcionan sin conexión. Tus nombres de archivo y
+los nombres que pongas tú se conservan. El selector de idioma y los formularios localizados de la Configuración nativa ya están implementados; aún falta la aceptación visual, de accesibilidad y de todas las combinaciones de idioma/DPI.
 
 ## Descarga PecoFence
 
@@ -106,8 +105,15 @@ en el idioma que elijas. Los iconos del escritorio de Windows se restauran al sa
 
 - Diseñado para Windows 11 22H2 y posteriores. La mayor parte de las pruebas nativas se ha hecho
   en 25H2; la matriz completa de versiones anteriores y hardware multipantalla sigue en curso.
-- La Configuración necesita Microsoft Edge WebView2 Runtime. Mantén `WebView2Loader.dll` y
-  `pecofence-watchdog.exe`, incluidos en el ZIP, junto a la aplicación.
+- Configuración ya tiene cinco páginas de tareas nativas con Reactor/WinUI 3. Las pruebas headless y
+  un recorrido WinUI sintético, incluido cerrar y volver a abrir, han pasado; esto no demuestra paridad
+  funcional ni aceptación de la versión. Teclado, UI Automation/Narrador, alto contraste, escalado de
+  texto, los diez idiomas a DPI de 100%/150%/200% y un equipo limpio siguen siendo pruebas obligatorias
+  de aceptación. Aún hay que inspeccionar el paquete, imports y procesos para confirmar el Runtime
+  autocontenido de Windows App SDK y la ausencia de WebView2. Full Windows CI aplica un límite de EXE
+  de 6,5 MiB (6.815.744 bytes); la medición final de la versión está pendiente. No se afirma una mejora
+  de inicio ni de memoria.
+- Mantén `pecofence-watchdog.exe` junto a la aplicación para recuperar los iconos del escritorio.
 - La configuración se guarda en `%APPDATA%\PecoFence\workspace.v2.json`. Inicia con `--portable`
   para guardarla en una carpeta `config` junto al ejecutable.
 - El nuevo formato no importa ni migra configuraciones antiguas.
@@ -135,6 +141,7 @@ precisa hasta una interacción de escritorio mejor resuelta.
 <summary><strong>Compilar desde el código fuente</strong></summary>
 
 Instala Rust stable y Visual Studio Build Tools con la carga de trabajo de C++ y el Windows SDK.
+El Windows SDK es una herramienta de desarrollo, distinta del runtime de Windows App SDK incluido.
 Las compilaciones públicas usan solo este repositorio y registros públicos,
 incluido `crates/spm-contracts` (0.1.0); no necesitan un token privado ni una copia
 de SPM. El backend opcional `Tinnci/spm` sigue siendo privado y solo se necesita
@@ -143,7 +150,6 @@ No se distribuye con PecoFence. Consulta el [límite SPM](../SPM_BOUNDARY.md).
 
 ```powershell
 cargo build --locked --release
-Copy-Item third_party/webview2/WebView2Loader.x64.dll target/release/WebView2Loader.dll
 ```
 
 Crea un ZIP portátil listo para distribuir:
@@ -152,11 +158,12 @@ Crea un ZIP portátil listo para distribuir:
 ./scripts/make-portable.ps1
 ```
 
-El espacio de trabajo se organiza en `crates/` para la aplicación nativa, `ui/` para la
-Configuración, `locales/` para las traducciones y `scripts/` para verificación y empaquetado.
+El espacio de trabajo se organiza en `crates/` para la aplicación Rust, `locales/` para las
+traducciones y `scripts/` para verificación y empaquetado. La dirección elegida para Configuración
+es WinUI 3 nativo alojado por Reactor, no una interfaz web.
 El proyecto de vídeo opcional en `extras/` es independiente de la compilación de la aplicación.
 
-[Instrucciones de publicación](../RELEASING.md) · [Estructura del código](../DEVELOPMENT.md#architecture)
+[Instrucciones de publicación](../RELEASING.md) · [Estructura del código](../DEVELOPMENT.md#architecture) · [Puertas de verificación](../VERIFICATION_GATES.md)
 
 </details>
 

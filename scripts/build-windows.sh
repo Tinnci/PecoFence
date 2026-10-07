@@ -73,13 +73,22 @@ if [ "$PROFILE" = test ]; then
   else
     exit 1
   fi
+  python3 scripts/stage-winappsdk-runtime.py stage --target-dir target --profile debug --target-triple "$TRIPLE"
   exit 0
 fi
+case "$PROFILE_DIR" in
+  debug|release) ;;
+  *)
+    echo "cannot stage the pinned Windows App SDK runtime for custom profile: $PROFILE_DIR" >&2
+    exit 1
+    ;;
+esac
 cargo build --locked --target "$TRIPLE" --profile "$PROFILE" "${pkg_flags[@]}"
+
+python3 scripts/stage-winappsdk-runtime.py stage --target-dir target --profile "$PROFILE_DIR" --target-triple "$TRIPLE"
 
 echo
 echo "artifacts under target/$TRIPLE/$PROFILE_DIR:"
 for p in "${PACKAGES[@]}"; do
   ls -la "target/$TRIPLE/$PROFILE_DIR/$p.exe" 2>/dev/null || true
 done
-echo "runtime dll for deployment: third_party/webview2/WebView2Loader.x64.dll"

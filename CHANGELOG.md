@@ -8,8 +8,20 @@
 - Remove inherited website analytics and include `NOTICE` in binary packages.
 - Remove the product website, website-only assets, builder/tests, hosting workflows
   and tracked deployment caches; retain desktop verification and packaging.
-- Define user requirements and the native Settings replacement acceptance criteria;
-  the current WebView2 Settings host has not yet been replaced.
+- Replace the Settings web UI with Reactor-hosted native WinUI 3 controls. The
+  five task pages and thirteen rule-condition forms are implemented; reported
+  headless tests and a synthetic WinUI tour including close/reopen pass. This is
+  not full feature-parity or release acceptance. Typed `SettingsView`,
+  `Request`/`Receipt` and `DocumentStamp` remain the application boundary; no
+  generic service framework or second mutable model is added.
+- Select a self-contained Windows App SDK Runtime 2.5.1 distribution with no
+  WebView2 payload. Users should not need to install the Windows App SDK Runtime
+  separately for a correctly packaged build. Payload/import/process checks,
+  keyboard/UIA/screen-reader, high-contrast, all-ten-locale, DPI and clean-machine
+  acceptance remain pending. The runtime adds deployment/resource cost; no size
+  or startup improvement is claimed. Full Windows CI uses the agreed 6.5 MiB
+  (6,815,744-byte) EXE cap. Final release measurements and acceptance evidence
+  remain pending. See [verification gates](docs/VERIFICATION_GATES.md).
 
 The versioned entries below are retained from the upstream baseline. References
 to Store submissions or a published website describe that history, not an active

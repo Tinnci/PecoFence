@@ -45,7 +45,9 @@ Windows 进程写入的文档类文件（.json/.md/.js/.sh 等），git blob 干
   - 工具链：clang-cl-19（C 依赖）+ lld-link（链接），SDK/MSVC 库经 `/mnt/c`
     只读使用；linker 通过 `CARGO_TARGET_*_LINKER` 环境变量选择，不进仓内
     `.cargo/config.toml`（Windows CI 继续用 link.exe）
-  - 产物：仓内 `target/x86_64-pc-windows-msvc/<profile>/`（ext4，明文）
+  - 产物：仓内 `target/x86_64-pc-windows-msvc/<profile>/`（ext4，明文）；
+    PecoFence 构建后自动校验并 stage 固定的 Windows App SDK Runtime 2.5.1
+    （206 个文件 / 59,158,503 bytes），spm 不 stage 此运行时
   - 脚本防御性 `unset CARGO_TARGET_DIR`：任何全局变量都不得改写仓内 target
 - **已退役**：`C:\Users\Administrator\cargo-target`（双仓共用 NTFS target，
   6.1G）已删除；Windows 用户环境变量 `CARGO_TARGET_DIR` 已移除；
@@ -70,7 +72,8 @@ uv 更新到 0.12.23；现有 VS 2022 C++ Build Tools 与 Windows SDK 10.0.26100
 
 Windows CI 与 tag release 共用 `.github/actions/build-desktop/action.yml` 和
 `scripts/build-and-verify.ps1`，不读取私有 SPM，不需要私有认证。公开仓库的 CI 缓存
-仅包含公开 registry 下载包，不缓存私有 Git checkout 或编译中间产物；
+包含公开 registry 下载包及一个 SHA256/SHA512 固定的公开 Windows App SDK NuGet 源包；
+每次运行仍会校验归档并重新生成 runtime 文件，不缓存编译中间产物或私有 Git checkout；
 CI 便携包 artifact 保留 7 天。完整触发/部署边界见
 [RELEASING.md](RELEASING.md#ci-and-deployment-flow)。
 产品网站、网站构建脚本和托管部署工作流已从源码移除；桌面 CI 不再构建或部署网站。
@@ -82,12 +85,12 @@ PecoFence-lab\
   fixtures\      # 只读、带 SHA 的场景输入（由 WSL 拷入，必须保持明文）
   instances\     # 每场景一个实例目录（构建快照）
     normal-local-001\
-      *.exe + WebView2Loader.dll     # 从仓内 target 拷贝（快照，非链接）
+      *.exe / *.dll / 语言目录       # 从仓内 target 拷贝（快照，非链接）
       config\workspace.v2.json       # schema 2 播种或首跑生成；应用写入归 Windows 侧
       data\                          # DB 模式预留
       logs\                          # spmd/pecofence 的 stdout/stderr + pid
-      appdata\{Roaming,Local}\       # 实例专属 APPDATA/LOCALAPPDATA（WebView2 profile、崩溃日志）
-      run-manifest.json              # 溯源：两仓 SHA、配对 rev、每个文件 SHA256
+      appdata\{Roaming,Local}\       # 实例专属 APPDATA/LOCALAPPDATA（日志、崩溃转储）
+      run-manifest.json              # schema 4：两仓 SHA、四个 exe 与完整 SDK runtime SHA256
   downloads\     # CI artifact 原包
   archive\       # 退役数据归档
 ```

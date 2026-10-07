@@ -4,6 +4,6 @@ Validation:
 
 - [ ] Format, Clippy and workspace tests
 - [ ] Translation coverage check
-- [ ] Settings browser tests, if the UI changed
+- [ ] Native Settings verification, if the UI changed
 
 For native UI changes, include Windows build, display scaling and the behavior tested.

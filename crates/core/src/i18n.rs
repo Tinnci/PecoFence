@@ -177,16 +177,6 @@ pub fn text(source: &'static str) -> &'static str {
     text_in(language(), source)
 }
 
-pub fn ui_payload() -> serde_json::Value {
-    let active = language();
-    let translations = if active == Language::SimplifiedChinese {
-        serde_json::json!({})
-    } else {
-        serde_json::to_value(catalog(active)).expect("serializable translation catalog")
-    };
-    serde_json::json!({ "locale": active.tag(), "translations": translations })
-}
-
 /// Substitute numbered placeholders once. Arguments are never parsed as templates,
 /// so braces in filenames and user titles remain literal.
 pub fn interpolate(template: &str, arguments: &[String]) -> String {

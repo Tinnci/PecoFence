@@ -33,6 +33,8 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+sys.path.insert(0, str(Path(os.environ['PF_REPO']).resolve() / 'scripts'))
+import winappsdk_runtime as runtime
 if sys.version_info < (3, 11):
     raise SystemExit('VERIFY-FAILED: Python >=3.11 is required')
 import tomllib
@@ -128,10 +130,10 @@ except (OSError, UnicodeError, json.JSONDecodeError) as exc:
 
 for key in ('instance', 'created_at', 'source', 'spm_commit', 'pecofence_commit',
             'contracts', 'cargo_lock_sha256', 'db_format',
-            'config', 'profiles', 'start_args'):
+            'config', 'profiles', 'start_args', 'windows_app_sdk'):
     required(manifest, key, '')
-if manifest.get('schema_version') != 2:
-    fail('unsupported manifest schema (recreate instance with schema_version 2)')
+if manifest.get('schema_version') != 4:
+    fail('unsupported manifest schema (recreate instance with schema_version 4)')
 if 'spm_rev_pinned_in_pecofence' in manifest:
     fail('obsolete private backend pin assertion')
 if manifest['instance'] != sys.argv[2]:
@@ -156,8 +158,10 @@ for key in ('spmd', 'pecofence'):
 binaries = required(manifest, 'binaries_sha256', '')
 if not isinstance(binaries, dict) or not binaries:
     fail('invalid binaries_sha256')
-if set(binaries) != {'pecofence.exe', 'pecofence-watchdog.exe', 'spmd.exe', 'spm.exe', 'WebView2Loader.dll'}:
+if set(binaries) != {'pecofence.exe', 'pecofence-watchdog.exe', 'spmd.exe', 'spm.exe'}:
     fail('incomplete deployed binary hash inventory')
+if any('webview' in path.name.casefold() for path in inst.iterdir()):
+    fail('WebView payload is not supported in lab instances')
 for filename, expected in binaries.items():
     if not isinstance(filename, str) or Path(filename).name != filename or filename in ('.', '..'):
         fail(f'invalid binary path: {filename}')
@@ -168,6 +172,22 @@ for filename, expected in binaries.items():
         fail(f'missing binary: {filename}')
     if sha256(path) != expected.lower():
         fail(f'binary sha256 mismatch: {filename}')
+
+sdk = manifest['windows_app_sdk']
+if not isinstance(sdk, dict) or set(sdk) != {'version', 'manifest_sha256', 'files_sha256'}:
+    fail('invalid Windows App SDK runtime provenance')
+try:
+    sdk_manifest = runtime.load_runtime_manifest()
+    runtime_files, _ = runtime.validate_runtime_directory(inst, sdk_manifest)
+except (OSError, ValueError, KeyError) as exc:
+    fail(f'invalid staged Windows App SDK runtime: {exc}')
+expected_sdk_hashes = {
+    name: hashlib.sha256(data).hexdigest() for name, data in runtime_files.items()
+}
+if sdk.get('version') != runtime.PACKAGE_VERSION \
+        or sdk.get('manifest_sha256') != runtime.manifest_digest(sdk_manifest) \
+        or sdk.get('files_sha256') != expected_sdk_hashes:
+    fail('Windows App SDK runtime provenance/hash mismatch')
 
 fixture = required(manifest, 'fixture', '')
 if not isinstance(fixture, dict) or 'path' not in fixture or 'sha256' not in fixture:

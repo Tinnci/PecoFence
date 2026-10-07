@@ -66,7 +66,7 @@ https://github.com/user-attachments/assets/6320cf28-a791-4720-9659-b4575df021a0
 | **慣れた操作のまま** | エクスプローラーの右クリックメニュー、ドラッグ＆ドロップ、コピー／貼り付け、複数選択、サムネイル、アイコン／一覧／詳細の表示切替。 |
 | **必要なときだけ広げる** | フェンスをタイトルだけに折りたたみ、ホバーで展開。気に入った配置は位置とサイズを固定できます。 |
 | **いつでも元に戻せる** | レイアウトのスナップショット、毎日の自動バックアップ、設定のエクスポート・インポート、ディスプレイ間のフェンス交換。 |
-| **軽く、小さく** | Rust で書かれたネイティブアプリ。WebView2 の設定パネルは必要なときだけ読み込まれます。 |
+| **ネイティブな設定画面** | 設定画面は Reactor がホストするネイティブ WinUI 3 で、5 つのタスクページと 13 種類のルール条件フォームを実装済みです。終了/再起動を含む headless テストと合成 WinUI ツアーは合格しましたが、機能同等性やリリース受け入れの完了を意味しません。選択した配布方式は自己完結型 Windows App SDK Runtime 2.5.1 を同梱して別途インストールを不要にし、WebView2 を除外します（最終パッケージ検証は未完了）。ランタイムは配布とリソースのコストを増やします。サイズや起動時間の改善は主張しません。 |
 
 自動整理のルールは、ファイルを元の場所から動かしません。
 自分で行った移動などの操作は、エクスプローラーと同じように実際のファイルに反映されます。
@@ -78,8 +78,8 @@ https://github.com/user-attachments/assets/6320cf28-a791-4720-9659-b4575df021a0
 **日本語 · English · 简体中文 · 繁體中文 · 한국어**  
 **Deutsch · Français · Español · Português (Brasil) · Русский**
 
-**設定 → 全般 → 表示言語** からすぐに切り替えられ、Windows の言語に合わせることもできます。
-翻訳はすべて内蔵されていてオフラインでも動作します。ファイル名や自分で付けた名前はそのまま保持されます。
+インターフェイスの 10 言語はすべて内蔵され、オフラインでも動作します。ファイル名や自分で付けた名前はそのまま保持されます。
+ネイティブ Settings の言語選択と各言語のフォームは実装済みです。視覚、アクセシビリティ、言語/DPI 全組み合わせの受け入れ確認は引き続き必要です。
 
 ## はじめる
 
@@ -102,8 +102,13 @@ https://github.com/user-attachments/assets/6320cf28-a791-4720-9659-b4575df021a0
 
 - Windows 11 22H2 以降を対象としています。ネイティブ環境でのテストは主に 25H2 で行っており、
   旧バージョンやマルチディスプレイ構成の網羅的な検証は進行中です。
-- 設定画面には Microsoft Edge WebView2 Runtime が必要です。同梱の `WebView2Loader.dll` と
-  `pecofence-watchdog.exe` は、アプリと同じフォルダーに置いたままにしてください。
+- 設定画面には Reactor/WinUI 3 のネイティブな 5 つのタスクページがあります。終了/再起動を含む
+  headless テストと合成 WinUI ツアーは合格しましたが、機能同等性やリリース受け入れではありません。
+  キーボード、UI Automation/Narrator、高コントラスト、テキスト拡大、全 10 言語の 100%/150%/200% DPI、
+  クリーン環境の確認はリリース受け入れに必須です。最終パッケージ、import、プロセスを調べ、
+  自己完結型 Windows App SDK Runtime と WebView2 コンポーネントの有無を確認する必要があります。
+  Full Windows CI の EXE 上限は 6.5 MiB（6,815,744 バイト）です。最終測定は未記録で、起動やメモリの改善は主張しません。
+- デスクトップアイコンの復元に使う `pecofence-watchdog.exe` はアプリと同じフォルダーに置いてください。
 - 設定は `%APPDATA%\PecoFence\workspace.v2.json` に保存されます。`--portable` を付けて起動すると、
   実行ファイルの隣にある `config` フォルダーに保存されます。
 - 新しい形式は古い設定の読み込みや移行に対応しません。
@@ -129,6 +134,7 @@ PecoFence は Apache 2.0 ライセンスで公開されています。訳文の�
 <summary><strong>ソースからビルドする</strong></summary>
 
 Rust stable と、C++ ワークロードおよび Windows SDK を含む Visual Studio Build Tools をインストールします。
+Windows SDK は開発用ツールで、同梱する Windows App SDK Runtime とは別のものです。
 公開ビルドは、このリポジトリと公開レジストリのみを使用します。
 `crates/spm-contracts`（0.1.0）を含み、非公開トークンや SPM のチェックアウトは不要です。
 オプションの `Tinnci/spm` バックエンドは非公開のままで、ライブ SPM データにのみ必要です。
@@ -137,7 +143,6 @@ Rust stable と、C++ ワークロードおよび Windows SDK を含む Visual S
 
 ```powershell
 cargo build --locked --release
-Copy-Item third_party/webview2/WebView2Loader.x64.dll target/release/WebView2Loader.dll
 ```
 
 配布用のポータブル ZIP を作成するには：
@@ -146,10 +151,12 @@ Copy-Item third_party/webview2/WebView2Loader.x64.dll target/release/WebView2Loa
 ./scripts/make-portable.ps1
 ```
 
-ワークスペースの構成は、ネイティブアプリが `crates/`、設定画面が `ui/`、翻訳が `locales/`、
-検証とパッケージ用スクリプトが `scripts/` です。`extras/` にあるオプションの動画プロジェクトは、アプリのビルドとは独立しています。
+ワークスペースは、Rust アプリの `crates/`、翻訳の `locales/`、検証とパッケージ用スクリプトの
+`scripts/` で構成されます。設定画面は Reactor がホストするネイティブ WinUI 3 を選択しており、
+ブラウザー UI ではありません。
+`extras/` にあるオプションの動画プロジェクトは、アプリのビルドとは独立しています。
 
-[リリース手順](../RELEASING.md) · [ソース構成](../DEVELOPMENT.md#architecture)
+[リリース手順](../RELEASING.md) · [ソース構成](../DEVELOPMENT.md#architecture) · [検証ゲート](../VERIFICATION_GATES.md)
 
 </details>
 

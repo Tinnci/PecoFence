@@ -175,11 +175,14 @@ impl DesktopAnchor {
         );
 
         let handler: MessageHandler = {
-            let cell = cell.clone();
+            // The anchor owns its window and hook. Callbacks must not keep the
+            // owner alive after startup fails or the application retires.
+            let cell = Rc::downgrade(&cell);
             Box::new(move |_hwnd, message, wparam, _lparam| match message {
                 msg::WM_MOUSEACTIVATE => Some(msg::MA_NOACTIVATE),
                 msg::WM_TIMER => {
-                    if let Ok(mut guard) = cell.try_borrow_mut()
+                    if let Some(cell) = cell.upgrade()
+                        && let Ok(mut guard) = cell.try_borrow_mut()
                         && let Some(anchor) = guard.as_mut()
                     {
                         anchor.on_timer(wparam);
@@ -187,7 +190,8 @@ impl DesktopAnchor {
                     Some(0)
                 }
                 msg::WM_INPUT => {
-                    if let Ok(mut guard) = cell.try_borrow_mut()
+                    if let Some(cell) = cell.upgrade()
+                        && let Ok(mut guard) = cell.try_borrow_mut()
                         && let Some(anchor) = guard.as_mut()
                     {
                         anchor.on_raw_input(_lparam);
@@ -208,12 +212,13 @@ impl DesktopAnchor {
         sentinel.show_no_activate();
 
         let hook = {
-            let cell = cell.clone();
+            let cell = Rc::downgrade(&cell);
             WinEventHook::install(
                 winevent::SYSTEM_FOREGROUND,
                 winevent::SYSTEM_FOREGROUND,
                 Box::new(move |_event, hwnd| {
-                    if let Ok(mut guard) = cell.try_borrow_mut()
+                    if let Some(cell) = cell.upgrade()
+                        && let Ok(mut guard) = cell.try_borrow_mut()
                         && let Some(anchor) = guard.as_mut()
                     {
                         anchor.on_foreground(hwnd);

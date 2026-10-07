@@ -156,9 +156,11 @@ impl App {
             CMD_PEEK => self.queue.push(Command::TogglePeek),
             CMD_NEW_FENCE => self.queue.push(Command::NewFence { x, y: y - 300 }),
             CMD_APPLY_RULES => self.queue.push(Command::ApplyRulesNow),
-            CMD_REPAIR_ICONS => self.set_desktop_icons_hidden(false),
+            CMD_REPAIR_ICONS => {
+                let _ = self.set_desktop_icons_hidden(false);
+            }
             CMD_HIDE_ICONS_AGAIN => {
-                self.set_desktop_icons_hidden(
+                let _ = self.set_desktop_icons_hidden(
                     !pecofence_platform::shell_icons::desktop_icons_hidden(),
                 );
             }

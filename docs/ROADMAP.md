@@ -48,15 +48,15 @@
 
 ## C：类型化 Settings 用例
 
-状态：C1 类型化协议、修订/会话接纳、真实保存通知和规则编辑已实现并通过自动化；C2 OS 集成期望/实际/失败投影与 Windows 人工验收未完成。精确当前协议见 [SETTINGS_PROTOCOL.md](SETTINGS_PROTOCOL.md)。
+状态：C1 类型化协议、修订/会话接纳、真实保存通知和规则编辑已实现。Reactor/WinUI 3 Settings 已实现五个任务页和十三种规则条件表单；报告的 headless 测试及包含关闭/重开的合成 WinUI 测试通过，但不代表完整功能对等或 release acceptance。`SettingsView`、类型化 `Request`/`Receipt` 与 `DocumentStamp` 继续作为应用 session 边界。C2 OS 集成期望/实际/失败投影及真实 Windows 验收未完成。精确当前协议见 [SETTINGS_PROTOCOL.md](SETTINGS_PROTOCOL.md)；验证分层见[验证门槛](VERIFICATION_GATES.md)。
 
-- 已实现精确版本、page/client/workspace 身份、request sequence、expected document revision；最近 32 个决定可重放，已淘汰请求不重新执行。
+- 已实现精确版本、Settings session/workspace 身份、request sequence、expected document revision；最近 32 个决定可重放，已淘汰请求不重新执行。
 - 已删除整 Settings/Rules 替换和 raw JSON Value 命令 switch；属性、目标、规则和操作使用闭合枚举。
 - 内存接纳 receipt 与 persistence 分开；客户端有界单飞队列保留冲突草稿，明确重试/放弃，不因推送自动覆盖。
 - 页面可编辑已有规则、添加/移除 AND 条件及来源条件；文件导入/规则编辑共享验证，通配符不再递归指数展开。
 - C2 仍需将 OS 设置的期望、实际、错误与重试建模为真实操作结果，不能把文档接纳当作注册/隐藏成功。
 
-自动化覆盖错版本/未知字段/无效数值、重复/跳号/过期请求、跨工作区修订、冲突草稿、晚到保存通知、规则编辑、只读恢复和多语言浏览器布局。B2-1 已接入异步保存/失败重试/取消退出状态；真实 WebView、OS 注册失败与 Windows 退出行为待验收。
+已有协议与用例测试覆盖错版本/未知字段/无效数值、重复/跳号/过期请求、跨工作区修订、冲突草稿、晚到保存通知、规则编辑和只读恢复。B2-1 已接入异步保存/失败重试/取消退出状态。报告的 headless 原生 Settings 测试和合成 WinUI 关闭/重开 tour 已通过；最终 Full Windows CI、实际 OS 注册失败和 Windows 退出行为仍须分别验证。
 
 ## D：静态 provider 与类型化 SPM 端口
 
@@ -86,19 +86,36 @@
 
 动态 ABI、插件市场、热卸载 DLL、沙箱、共享内存总线、事件溯源、通用微内核和盲目拆 crate。不重写 SPM 业务判断、不以本地一次终态承诺远端副作用恰好一次，不为体积牺牲诊断和正确性。
 
-## 构建维护与后续原生设置
+## 构建维护与原生设置当前状态
 
 Actions 使用已核验的 Node 24/复合 action SHA，Dependabot 显式覆盖工作流与本地 action；
 源码检查先于私有凭据。打包/安装使用共用 PE、构建 receipt、payload manifest 校验，
 不删除旧解压目录的用户配置。见 [DEPENDENCIES](DEPENDENCIES.md) 和 [PACKAGING](PACKAGING.md)。
 
-原生设置方向见 [ADR-007](decisions/ADR-007-native-settings.md)：SPM/栅栏本来就是原生，
-首先替换 Settings WebView host；复用类型化用例/提交状态，原生键盘与可访问性验收通过后
-才删 web 依赖。当前未实现原生 Settings，也没有提前关闭 web 测试。
+Settings 方向与部署边界见 [ADR-007](decisions/ADR-007-native-settings.md)。已实现五个 Reactor/WinUI 3 任务页和十三种规则条件表单；headless 测试及包含关闭/重开的合成 WinUI tour 报告通过。一次本机探测从暂存运行时加载 18 个 Windows App SDK DLL；抽样 tour 未观察到浏览器模块或子进程，此观察仅覆盖受测路径，不证明全路径缺失。生命周期设计为由
+Reactor 主 STA `Reactor::run_with` 拥有现有 `App`、桌面和托盘；打开或关闭 Settings
+组件窗口不得退出整个应用。已实现原生 WinUI 3 五任务页：常规与外观、窗口与内容、整理规则、
+布局与备份、关于与诊断，以及十三种规则条件表单。页面不能用占位内容代替各项用户需求。所有操作继续通过
+类型化应用 session 和持久化用例，不增加通用服务框架或第二份可变配置状态。
 
-用户任务、五页设置的功能对等清单、P0/P1/P2 优先级和完整移除条件见
-[USER_REQUIREMENTS.md](USER_REQUIREMENTS.md)。维护者已选择原生替换；
-这是待实施需求，不是已经完成的原生化。规则编辑、只读恢复、冲突草稿和退出保存必须保留。
+发行方向为自包含 Windows App SDK Runtime 2.5.1，不携带 WebView2 payload；正确自包含的
+发行包不要求普通用户另行安装 Windows App SDK Runtime。Windows SDK 是开发工具链，不是
+随包运行时。App SDK 会增加部署/资源成本，不声称启动、内存或整体体积优化。Full Windows CI
+执行 **6.5 MiB（6,815,744 bytes）EXE 上限**；最终发布测量待补。运行时精确清单、发行包、
+imports、进程树和干净 Windows 的最终验收仍待完成。分层门槛、旧门槛的调整和当前证据边界见
+[VERIFICATION_GATES.md](VERIFICATION_GATES.md)。
+
+用户任务、N01–N08 范围、P0/P1/P2 优先级和验收条件见
+[USER_REQUIREMENTS.md](USER_REQUIREMENTS.md)。原生设置有自动化实现证据，但 feature parity 与真实桌面验收仍未完成：
+
+| 验收项 | 状态 | 证据/下一步 |
+| --- | --- | --- |
+| 五个 WinUI 3 任务页与类型化应用命令/回执 | 五页/十三种规则条件已实现；headless 与合成 tour 报告通过；不等于功能对等或 release acceptance | 最终 Full Windows CI 和 N01–N08 逐项行为证据 |
+| 键盘、焦点顺序、UI Automation、Narrator | 待真实 Windows 验收；不阻塞每个 commit | Windows 版本、读屏软件、步骤与结果 |
+| 100%/150%/200% DPI、文字缩放、高对比度、长译文布局 | 待真实 Windows 验收；需求保留，不作为每个 commit 的手动 gate | 覆盖全部十种语言，记录裁切/可达性结果 |
+| 自包含 Windows App SDK 2.5.1 且无 WebView2 payload | 本机抽样 tour 加载 18 个 app-local SDK DLL，未观察到浏览器模块/子进程；不是完整清单或包验收 | 核验确切运行时清单、PE imports、动态加载、完整进程树、发行包，并在干净系统实际完成设置任务 |
+| EXE 大小/启动/资源测量 | Full Windows CI 的 EXE 上限为 6.5 MiB（6,815,744 bytes）；最终发布测量待补 | 记录可复现条件与实测；不声称启动、内存或整体性能改善 |
+| 桌面核心可靠性、OS 集成和授权企业/SPM 闭环 | 尚非完成状态 | 按各自需求与可授权实机环境单独验证；不得由 Settings 替换推断完成 |
 
 ## 每次交付需附
 

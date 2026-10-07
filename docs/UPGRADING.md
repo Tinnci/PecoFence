@@ -35,8 +35,11 @@ atomic protection against arbitrary external editors.
 
 ## Desktop integration
 
-The executable remains `pecofence.exe`, with `pecofence-watchdog.exe` and
-`WebView2Loader.dll` beside it. Exit older versions first: instance-lock and
+The executables are `pecofence.exe` and `pecofence-watchdog.exe`. Settings use
+native Win32 controls; current packages include the self-contained Windows App
+SDK Runtime 2.5.1 and do not need `WebView2Loader.dll` or the Microsoft Edge
+WebView2 Runtime. Older installations may still contain the loader, which older
+app versions used. Exit older versions first: instance-lock and
 desktop-icon recovery mechanisms still protect Explorer ownership independently
 of workspace format compatibility.
 

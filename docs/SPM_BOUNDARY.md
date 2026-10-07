@@ -2,25 +2,49 @@
 
 ## Chosen architecture
 
-PecoFence builds entirely from this repository and public registries. Its shared
-wire contracts live in the public workspace crate `crates/spm-contracts`, version
+PecoFence builds from this repository and public sources. The Rust dependency
+boundary is this checkout, crates.io, and exactly one immutable Microsoft Windows
+Rust SDK Git source: `https://github.com/microsoft/windows-rs` at revision
+`2672e615d9cc0771448a781f3b2fe34e7fd08c6a`. The only allowed package names
+from that source, all at version `0.100.0`, are `windows-collections`,
+`windows-core`, `windows-future`, `windows-implement`, `windows-interface`,
+`windows-link`, `windows-reference`, `windows-result`, `windows-strings`,
+`windows-threading` and `windows-time`. The lockfile must record the same
+commit for those 11 packages.
+
+`windows-reactor` remains crate version `0.100.0` and is the sole vendored SDK
+exception. `vendor/windows-reactor` is imported from the same immutable commit
+(crate tree `0f27b6f95eb2177098543dd9bad6b6e84d9ad997`) with one focused
+content-dialog shutdown fix. Its manifest keeps the exact crate identity and
+pins its direct SDK dependencies to the same Git revision. The upstream source,
+tests, public API snapshot, MIT and Apache licenses, and provenance are retained.
+The crate is excluded from workspace membership so dependency-license
+generation continues to include it.
+
+The shared wire contracts live in the public
+workspace crate `crates/spm-contracts`, version
 **0.1.0**, extracted from the exact previously pinned SPM revision
 `e0dd3e058d40ef1c4623c12dba2f0715d2011a1b`. This is a contracts extraction,
 not a publication or migration of the SPM backend.
 
 `Tinnci/spm` remains private. No private token or SPM checkout is required to
-compile PecoFence or use ordinary desktop fences. Live SPM data requires an
-authorized private backend installation; the daemon is not distributed here.
+compile PecoFence or use ordinary desktop fences. The public Windows build needs
+unauthenticated access to GitHub for that pinned SDK revision, crates.io, and the
+separately pinned public NuGet runtime artifact. It does not need private source
+credentials or a private backend. Live SPM data requires an authorized private
+backend installation; the daemon is not distributed here.
 Private data, credentials, configuration and operational artifacts stay private.
 Retain all applicable licenses, `NOTICE` and upstream/third-party attribution.
 
 The crate and [provenance review](SPM_CONTRACT_PROVENANCE.md) are included here.
 `scripts/check-public-dependencies.py` checks manifests, the lockfile, workflow
 credential references and, with `--resolved`, Cargo's actual dependency graph.
-Its approved source boundary is this checkout and crates.io. Source-only and
-full desktop verification both enforce it; CI fetches locked dependencies with
-a fresh Cargo home and no Git credential helper. Backend migration, public commit
-availability and live integration remain separate verification results.
+It rejects other Git sources, mutable refs, alternate URLs, package names or
+versions, same-version Git/registry Windows type duplicates, and Cargo source
+replacement configuration. Source-only and full desktop verification enforce
+this boundary; CI fetches locked dependencies with a fresh Cargo home and no Git
+credential helper. Backend migration, public commit availability and live
+integration remain separate verification results.
 
 ## One source of truth
 

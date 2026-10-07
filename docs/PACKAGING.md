@@ -4,7 +4,8 @@
 
 `scripts/build-desktop.ps1` captures source/version/lockfile/compiler inputs, runs
 the locked release build once, then verifies the inputs did not change and records
-the hashes of both x64 GUI executables in `release/build-receipt.json`.
+the hashes of both x64 GUI executables and the staged Windows App SDK runtime in
+`release/build-receipt.json`.
 
 Both ZIP and MSIX consume that receipt through
 [package_desktop.py](../scripts/package_desktop.py). `-SkipBuild` no longer means
@@ -22,28 +23,49 @@ Use an ignored target directory, normally `target` or `target/package`. Changing
 source after a build requires rerunning the build helper, even for documentation
 changes; this is intentionally conservative provenance, not a signature.
 
-The ZIP contains `package.json`: build inputs, per-file sizes/SHA-256, architecture,
-image imports and runtime requirements. Entries are sorted with fixed timestamps
-and permissions: identical payload bytes with the same compression toolchain
-produce the same ZIP. This does not
-claim reproducibility of Rust/Windows compiler output.
+The schema-2 ZIP contains `package.json`: build inputs, per-file sizes/SHA-256,
+executable/runtime PE imports, pinned runtime provenance and runtime requirements.
+Entries are sorted with fixed timestamps and permissions: identical payload bytes
+with the same compression toolchain produce the same ZIP. This does not claim
+reproducibility of Rust/Windows compiler output.
 
 Packing uses a fresh temporary directory and does not delete an older extracted
 version or its `config` directory. The result is verified before replacing the
 output archive. License and NOTICE files are retained.
 
-## Runtime requirements and native UI
+## Self-contained Windows App SDK runtime
 
-The builder reads static and delay PE imports. The current executable imports
-`WebView2Loader.dll`, so it packages the x64 loader/license and declares the
-**external WebView2 Evergreen Runtime** requirement. The DLL alone is not the browser
-runtime. The watchdog does not need WebView.
+The builder stages the public `Microsoft.WindowsAppSDK.Runtime` 2.5.1 NuGet
+package from its pinned URL only after verifying exact archive size, SHA-256 and
+SHA-512. The reviewed x64 selection contains **206 files / 59,158,503 bytes
+(200 PE images)**. It includes language resources and is checked against the
+activation-manifest provenance; it does not include WebView or VC runtime files.
+The archive, activation manifest, upstream runtime list and SDK license hashes
+are retained in `third_party/winappsdk/runtime-manifest.json`.
 
-A future binary without that import does not automatically carry the WebView
-payload. This is tested with synthetic native-only PE images, not a claim that
-native Settings already exists. Dynamic `LoadLibrary` dependencies and any newly
-introduced runtime must be declared/validated explicitly when implemented.
-See [ADR-007](decisions/ADR-007-native-settings.md).
+Build receipts bind the runtime inventory and each staged file. Portable ZIPs and
+MSIX staging contain the runtime files beside the executables, the pinned runtime
+inventory JSON, `WINDOWS-APP-SDK-LICENSE.txt` and third-party notices. Lab instances
+and the interactive language smoke copy and verify the same complete tree. The
+manifest declares `windowsAppSdkSelfContained: true` and
+`webview2Evergreen: false`; both static and delay imports are inspected, and
+WebView-named files/imports are rejected. Earlier builds used Microsoft's
+`Microsoft.Web.WebView2` loader; its history is in [third_party/README.md](../third_party/README.md).
+
+The 6.5 MiB (`6,815,744` byte) executable gate applies only to
+`pecofence.exe`; the runtime is measured and inventoried separately. ZIP safety
+bounds are 128 MiB compressed, 160 MiB uncompressed and 512 entries. These are
+defensive parser limits, not a promised download-size or runtime-size budget.
+
+For a local debug Cargo build, stage the runtime before launching the executable:
+
+```powershell
+uv run --no-project --python ">=3.11" python scripts/stage-winappsdk-runtime.py `
+  stage --target-dir target --profile debug
+```
+
+The integrated build-and-verify path performs this staging automatically. The
+downloaded NuGet archive and staged output remain in ignored `target/`.
 
 ## Install without touching another version
 
@@ -56,9 +78,10 @@ uv run --no-project --python ">=3.11" pwsh -NoProfile -File scripts/install-user
 # Remove -WhatIf to install; -CreateShortcut is optional.
 ```
 
-It validates the archive hash, flat allowlisted contents, payload hashes, PE
-architecture and runtime metadata **before writing**. Path traversal, alternate
-data streams, case-insensitive duplicate names, symlinks, extra binaries, private
+It validates the archive hash, strict nested-path allowlist, payload hashes,
+x64 executable imports and exact pinned runtime inventory **before writing**.
+Path traversal, alternate data streams, reserved Windows names, case aliases,
+file-as-directory collisions, symlinks/reparse points, extra binaries, private
 keys and embedded user config are rejected.
 
 Default destination: `%LOCALAPPDATA%\Tinnci\PecoFence\versions\<version>-<hash>`.
@@ -81,9 +104,9 @@ they can still be handled by their documented manual extraction workflow.
 ## MSIX and signing
 
 Own Partner Center identity is still mandatory and unset by default. MSIX uses
-the same verified executables/conditional runtime payload, then SDK-generated
-manifest/assets/resources. Stable three-part versions must fit MSIX's 16-bit
-components. See [STORE.md](STORE.md).
+the same verified executables and self-contained runtime payload, then
+SDK-generated manifest/assets/resources. Stable three-part versions must fit
+MSIX's 16-bit components. See [STORE.md](STORE.md).
 
 Test signing keeps a non-exportable key in the current-user certificate store,
 signs by thumbprint, exports only the public `.cer`, then removes the temporary key

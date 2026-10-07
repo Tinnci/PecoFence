@@ -67,7 +67,7 @@ Greifen Sie sich, was Sie brauchen, und kehren Sie mit **Esc** zurück.
 | **Vertraute Dateiverwaltung** | Explorer-Kontextmenüs, Drag & Drop, Kopieren/Einfügen, Mehrfachauswahl, Miniaturansichten sowie Symbol-, Listen- und Detailansicht. |
 | **Platz, wenn Sie ihn brauchen** | Klappen Sie einen Bereich bis auf den Titel ein. Zum Ausklappen einfach darüberfahren. Sperren Sie ein Layout, das Ihnen gefällt. |
 | **Ein Weg zurück** | Layout-Momentaufnahmen, tägliche Sicherungen, Import/Export der Konfiguration und Tausch zwischen Bildschirmen. |
-| **Ein kleiner Fußabdruck** | Eine native Rust-Anwendung; die WebView2-Einstellungen werden nur bei Bedarf geladen. |
+| **Native Einstellungen** | Die Settings-Oberfläche nutzt Reactor und native WinUI-3-Steuerelemente mit fünf Aufgabenseiten und dreizehn Regelbedingungsformularen. Headless-Tests und ein synthetischer WinUI-Rundgang einschließlich Schließen und erneutem Öffnen bestanden; das belegt weder Funktionsgleichheit noch Release-Abnahme. Die gewählte Verteilung bündelt die selbstenthaltende Windows App SDK Runtime 2.5.1 ohne separate Installation und schließt WebView2 aus (endgültige Paketprüfung ausstehend). Die Runtime erhöht Paket- und Ressourcenbedarf. Eine Verbesserung von Größe oder Startzeit wird nicht behauptet. |
 
 Automatische Sortierregeln lassen Dateien an ihrem ursprünglichen Speicherort. Verschiebungen,
 die Sie selbst anstoßen, funktionieren wie im Explorer.
@@ -79,9 +79,9 @@ die Sie selbst anstoßen, funktionieren wie im Explorer.
 **Deutsch · English · 简体中文 · 繁體中文 · 日本語**  
 **한국어 · Français · Español · Português (Brasil) · Русский**
 
-Wechseln Sie jederzeit unter **Einstellungen → Allgemein → Anzeigesprache** oder übernehmen Sie
-die Windows-Sprache. Alle Übersetzungen sind enthalten und funktionieren offline. Dateinamen
-und eigene Bezeichnungen bleiben unverändert.
+Alle zehn Oberflächensprachen sind enthalten und funktionieren offline. Dateinamen und eigene
+Bezeichnungen bleiben unverändert. Sprachauswahl und lokalisierte Formulare der nativen Settings sind
+implementiert; visuelle, barrierefreie und vollständige Sprach-/DPI-Abnahme stehen noch aus.
 
 ## PecoFence herunterladen
 
@@ -105,8 +105,14 @@ in der gewählten Sprache angelegt. Beim Beenden erscheinen die Windows-Desktops
 
 - Entwickelt für Windows 11 22H2 und neuer. Die meisten nativen Tests liefen auf 25H2;
   die vollständige Matrix aus älteren Versionen und Multi-Monitor-Hardware ist noch in Arbeit.
-- Für die Einstellungen wird die Microsoft Edge WebView2 Runtime benötigt. Lassen Sie die
-  mitgelieferten `WebView2Loader.dll` und `pecofence-watchdog.exe` neben der App liegen.
+- Die Settings haben fünf native Reactor/WinUI-3-Aufgabenseiten. Headless-Tests und ein synthetischer
+  WinUI-Rundgang einschließlich Schließen und erneutem Öffnen bestanden; das belegt weder Funktionsgleichheit
+  noch Release-Abnahme. Tastatur, UI Automation/Narrator, hoher Kontrast, Textskalierung, alle zehn Sprachen
+  bei 100%/150%/200% DPI und ein sauberes System sind weiterhin erforderliche Release-Prüfungen. Paket,
+  Imports und Prozesse müssen noch auf die selbstenthaltende Windows App SDK Runtime und das Fehlen von
+  WebView2-Komponenten geprüft werden. Full Windows CI setzt ein EXE-Limit von 6,5 MiB (6.815.744 Byte);
+  die abschließende Release-Messung steht aus. Verbesserungen bei Startzeit oder Speicher werden nicht behauptet.
+- Lassen Sie `pecofence-watchdog.exe` zur Wiederherstellung der Desktopsymbole neben der App liegen.
 - Die Konfiguration liegt in `%APPDATA%\PecoFence\workspace.v2.json`. Mit `--portable` gestartet,
   bleibt sie in einem Ordner `config` neben der ausführbaren Datei.
 - Das neue Format importiert oder migriert alte Konfigurationen nicht.
@@ -133,6 +139,7 @@ PecoFence steht unter der Apache-2.0-Lizenz, und Beiträge sind willkommen – v
 <summary><strong>Aus dem Quellcode bauen</strong></summary>
 
 Installieren Sie Rust stable sowie die Visual Studio Build Tools mit C++-Workload und Windows SDK.
+Das Windows SDK dient der Entwicklung; es ist nicht die mitgelieferte Windows App SDK Runtime.
 Öffentliche Builds verwenden nur dieses Repository und öffentliche Registries,
 einschließlich `crates/spm-contracts` (0.1.0); weder ein privater Token noch ein
 SPM-Checkout ist nötig. Das optionale Backend `Tinnci/spm` bleibt privat und wird
@@ -141,7 +148,6 @@ Desktop-Gruppen. Es wird nicht mitgeliefert. Siehe [SPM-Grenze](../SPM_BOUNDARY.
 
 ```powershell
 cargo build --locked --release
-Copy-Item third_party/webview2/WebView2Loader.x64.dll target/release/WebView2Loader.dll
 ```
 
 Ein portables ZIP zum Weitergeben erstellen:
@@ -150,11 +156,12 @@ Ein portables ZIP zum Weitergeben erstellen:
 ./scripts/make-portable.ps1
 ```
 
-Der Workspace gliedert sich in `crates/` für die native App, `ui/` für die Einstellungen,
-`locales/` für Übersetzungen und `scripts/` für Prüfung und Paketierung.
+Der Workspace gliedert sich in `crates/` für die Rust-App, `locales/` für Übersetzungen
+und `scripts/` für Prüfung und Paketierung. Die gewählte Richtung ist natives WinUI 3,
+gehostet von Reactor, kein Browser-Frontend.
 Das optionale Videoprojekt in `extras/` ist vom App-Build unabhängig.
 
-[Release-Anleitung](../RELEASING.md) · [Quellcode-Struktur](../DEVELOPMENT.md#architecture)
+[Release-Anleitung](../RELEASING.md) · [Quellcode-Struktur](../DEVELOPMENT.md#architecture) · [Prüfgates](../VERIFICATION_GATES.md)
 
 </details>
 

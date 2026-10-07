@@ -14,6 +14,7 @@ mod persistence;
 mod portal_runtime;
 mod rename;
 mod settings_host;
+mod settings_ui;
 mod shadow;
 mod spm_transport;
 mod state;
@@ -21,6 +22,22 @@ mod state;
 use pecofence_platform::com::OleGuard;
 use pecofence_platform::window;
 use windows_core::Result;
+
+/// WinUI owns the one STA pump, while this resource owns the existing native
+/// desktop application. Native COM/windows must retire before OLE is uninitialized.
+struct NativeLifetime {
+    cell: app::AppCell,
+    _ole: OleGuard,
+}
+
+impl Drop for NativeLifetime {
+    fn drop(&mut self) {
+        let application = self.cell.borrow_mut().take();
+        if let Some(mut application) = application {
+            application.shutdown();
+        }
+    }
+}
 
 fn parse_args() -> app::Args {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -108,10 +125,8 @@ fn main() -> Result<()> {
     }
 
     let args = parse_args();
-    let exit_after = args.exit_after_ms;
 
     window::set_process_dpi_awareness_v2();
-    let _ole = OleGuard::init()?;
 
     // `PECOFENCE_INSTANCE=<name>` runs a second, independent instance (developer testing with
     // `--portable`); the default name keeps one PecoFence per session.
@@ -127,15 +142,11 @@ fn main() -> Result<()> {
         return Ok(());
     };
 
-    let cell = app::App::create(args)?;
-    if let Some(ms) = exit_after {
-        window::quit_after(ms);
-    }
-
-    let code = window::run_message_loop();
-    if let Some(app) = cell.borrow_mut().as_mut() {
-        app.shutdown();
-    }
-    drop(cell);
-    std::process::exit(code);
+    // Unlike run_component, run_with retains this lifetime with zero Settings
+    // windows. WinUI pumps the native HWNDs, timers and posted command queue too.
+    windows_reactor::App::run_with(move |context| {
+        let ole = OleGuard::init()?;
+        let cell = app::App::create(args, context.clone())?;
+        Ok(NativeLifetime { cell, _ole: ole })
+    })
 }

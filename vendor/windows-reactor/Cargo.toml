@@ -1,0 +1,85 @@
+[package]
+name = "windows-reactor"
+version = "0.100.0"
+edition = "2024"
+rust-version = "1.95"
+license = "MIT OR Apache-2.0"
+description = "Declarative Windows UI library for Rust"
+repository = "https://github.com/microsoft/windows-rs"
+categories = ["os::windows-apis"]
+readme = "readme.md"
+
+# Keep standalone tooling inside this vendored crate, including nested Delta
+# checkouts, from discovering a different ancestor repository's workspace.
+[workspace]
+
+[features]
+test = []
+
+[dependencies.windows-collections]
+version = "=0.100.0"
+git = "https://github.com/microsoft/windows-rs"
+rev = "2672e615d9cc0771448a781f3b2fe34e7fd08c6a"
+default-features = false
+features = ["std"]
+
+[dependencies.windows-core]
+version = "=0.100.0"
+git = "https://github.com/microsoft/windows-rs"
+rev = "2672e615d9cc0771448a781f3b2fe34e7fd08c6a"
+default-features = false
+
+[dependencies.windows-future]
+version = "=0.100.0"
+git = "https://github.com/microsoft/windows-rs"
+rev = "2672e615d9cc0771448a781f3b2fe34e7fd08c6a"
+default-features = false
+
+[dependencies.windows-reference]
+version = "=0.100.0"
+git = "https://github.com/microsoft/windows-rs"
+rev = "2672e615d9cc0771448a781f3b2fe34e7fd08c6a"
+default-features = false
+features = ["std"]
+
+[dependencies.windows-threading]
+version = "=0.100.0"
+git = "https://github.com/microsoft/windows-rs"
+rev = "2672e615d9cc0771448a781f3b2fe34e7fd08c6a"
+default-features = false
+
+[dependencies.windows-time]
+version = "=0.100.0"
+git = "https://github.com/microsoft/windows-rs"
+rev = "2672e615d9cc0771448a781f3b2fe34e7fd08c6a"
+default-features = false
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(windows_slim_errors, windows_cast_diagnostics)'] }
+missing_unsafe_on_extern = "warn"
+unused_qualifications = "warn"
+
+[lints.cargo]
+unused_dependencies = "deny"
+
+[lints.clippy]
+type_complexity = "allow"
+manual_c_str_literals = "allow"
+try_from_instead_of_from_str = "allow"
+semicolon_if_nothing_returned = "warn"
+map_unwrap_or = "warn"
+manual_let_else = "warn"
+uninlined_format_args = "warn"
+redundant_clone = "warn"
+implicit_clone = "warn"
+single_match_else = "warn"
+cloned_instead_of_copied = "warn"
+manual_string_new = "warn"
+manual_assert = "warn"
+assigning_clones = "warn"
+explicit_iter_loop = "warn"
+use_self = "warn"
+
+[package.metadata.docs.rs]
+default-target = "x86_64-pc-windows-msvc"
+targets = []

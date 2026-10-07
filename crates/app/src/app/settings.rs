@@ -1,11 +1,29 @@
-//! Settings host window + page protocol: state JSON, toasts, message handling, config adoption,
-//! import / export / restore, settings diff application.
+//! Native Settings application boundary: owned projections, typed decisions,
+//! config adoption, import / export / restore and settings diff application.
 
 use super::*;
-use pecofence_core::settings_protocol::{
-    self as protocol, Action, Admission, ClientMessage, Rejection, ServerMessage, SettingsCommand,
-};
+use crate::settings_ui::{MonitorChoice, SettingsView, SnapshotChoice};
+use pecofence_core::settings_protocol::{Action, Admission, Rejection, Request, SettingsCommand};
 use std::result::Result;
+
+/// Keep the publication gate balanced even if a command unwinds.
+struct SettingsDispatchGuard {
+    flag: Rc<Cell<bool>>,
+    previous: bool,
+}
+
+impl SettingsDispatchGuard {
+    fn new(flag: Rc<Cell<bool>>) -> Self {
+        let previous = flag.replace(true);
+        Self { flag, previous }
+    }
+}
+
+impl Drop for SettingsDispatchGuard {
+    fn drop(&mut self) {
+        self.flag.set(self.previous);
+    }
+}
 
 impl App {
     /// Replaces the configuration wholesale (import / backup) and rebuilds everything.
@@ -54,7 +72,7 @@ impl App {
     }
 
     fn export_config(&mut self) -> Result<bool, String> {
-        let owner = self.settings.as_ref().map(|h| h.hwnd());
+        let owner = self.settings.as_ref().and_then(|h| h.hwnd());
         let name = format!(
             "pecofence-{}.json",
             pecofence_core::config_store::today_yyyy_mm_dd()
@@ -78,7 +96,7 @@ impl App {
     }
 
     fn import_config(&mut self) -> Result<bool, String> {
-        let owner = self.settings.as_ref().map(|h| h.hwnd());
+        let owner = self.settings.as_ref().and_then(|h| h.hwnd());
         let path = pecofence_platform::filedialog::open_json(
             owner,
             pecofence_core::i18n::text("导入 PecoFence 配置"),
@@ -97,37 +115,29 @@ impl App {
     }
 
     pub(super) fn open_settings(&mut self) {
-        if let Some(h) = &self.settings {
-            window::show_normal(h.hwnd());
-            window::bring_to_front(h.hwnd());
+        if let Some(h) = &self.settings
+            && h.is_alive()
+        {
+            h.activate();
             return;
         }
-        if self.web_env.is_none() {
-            match WebEnvironment::create() {
-                Ok(env) => self.web_env = Some(env),
-                Err(e) => {
-                    tracing::error!(error = %e, "WebView2 environment failed");
-                    if let Some(t) = &self.tray {
-                        t.show_info(
-                            "PecoFence",
-                            pecofence_core::i18n::text("无法创建 WebView2 环境，请确认已安装 Microsoft Edge WebView2 运行时。"),
-                            true,
-                        );
-                    }
-                    return;
-                }
-            }
-        }
+        // Component retirement may have run inside a modal message pump before the
+        // queued SettingsClosed command is drained. Retire that activation now;
+        // its late close/request events cannot affect the replacement.
+        self.settings = None;
+        self.settings_session.close();
         match SettingsHost::open(
-            &self.settings_class,
-            self.web_env.as_ref().unwrap(),
+            &self.reactor_context,
             self.theme_mode,
             self.ctx.theme.borrow().liquid_glass,
             self.queue.clone(),
         ) {
             Ok(mut host) => {
                 // Caption icon: the same drawn fence glyph as the tray, at 16/32 DIP.
-                let scale = monitors::dpi_for_window(host.hwnd()).max(96) as f32 / 96.0;
+                let scale = host
+                    .hwnd()
+                    .map(|hwnd| monitors::dpi_for_window(hwnd).max(96) as f32 / 96.0)
+                    .unwrap_or(1.0);
                 let accent = self.ctx.theme.borrow().accent_rgb8();
                 let dark = self.theme_mode == ThemeMode::Dark;
                 let small = (16.0 * scale).round() as i32;
@@ -136,14 +146,17 @@ impl App {
                     (small, tray_icon_image(small, accent, dark)),
                     (big, tray_icon_image(big, accent, dark)),
                 );
+                self.settings_session.open(host.source());
                 self.settings = Some(host);
+                self.push_settings_state();
+                tracing::info!("settings: native controls ready");
             }
             Err(e) => {
                 tracing::error!(error = %e, "settings window failed");
                 if let Some(t) = &self.tray {
                     t.show_info(
                         "PecoFence",
-                        pecofence_core::i18n::text("无法打开设置窗口（WebView2 初始化失败），请检查 Microsoft Edge WebView2 运行时。"),
+                        &pecofence_core::i18n::format("无法打开设置窗口：{0}", &[e.to_string()]),
                         true,
                     );
                 }
@@ -151,131 +164,72 @@ impl App {
         }
     }
 
-    fn settings_view(&self) -> serde_json::Value {
-        let localization = pecofence_core::i18n::ui_payload();
-        let fences: Vec<serde_json::Value> = self
-            .state
-            .fences()
-            .iter()
-            .map(|f| self.fence_options_json(f))
-            .collect();
+    fn settings_view(&self) -> SettingsView {
+        let fences = self.state.fences();
+        let contents = fences.iter().map(|f| self.content_options(f)).collect();
         let mem_mb = pecofence_platform::memstats::MemoryStats::current()
-            .map(|m| m.private_working_set as f64 / (1024.0 * 1024.0))
-            .unwrap_or(0.0);
-        let snapshots: Vec<serde_json::Value> = self
+            .ok()
+            .map(|m| m.private_working_set as f64 / (1024.0 * 1024.0));
+        let snapshots = self
             .state
             .config
             .snapshots
             .iter()
-            .map(|s| {
-                serde_json::json!({
-                    "id": s.id,
-                    "name": s.name,
-                    "ts": s.ts,
-                    "date": pecofence_platform::fileinfo::format_local_datetime(s.ts),
-                    "fenceCount": s.layouts.iter().map(|l| l.contents.len()).sum::<usize>(),
-                })
+            .map(|s| SnapshotChoice {
+                id: s.id,
+                name: s.name.clone(),
+                date: pecofence_platform::fileinfo::format_local_datetime(s.ts),
+                content_count: s.layouts.iter().map(|l| l.contents.len()).sum(),
             })
             .collect();
-        let backups: Vec<serde_json::Value> = self
-            .state
-            .backup_files()
-            .iter()
-            .map(|p| {
-                serde_json::json!({
-                    "path": p.to_string_lossy(),
-                    "name": p.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default(),
-                })
-            })
-            .collect();
-        let monitors: Vec<serde_json::Value> = self
+        let monitors = self
             .monitor_labels()
             .into_iter()
-            .map(|(id, label)| serde_json::json!({ "id": id, "label": label }))
+            .map(|(id, label)| MonitorChoice { id, label })
             .collect();
-        let accent = {
-            let [r, g, b] = self.ctx.theme.borrow().accent_rgb8();
-            format!("#{r:02X}{g:02X}{b:02X}")
-        };
-        serde_json::json!({
-            "type": "state",
-            "locale": localization["locale"],
-            "translations": localization["translations"],
-            "settings": self.state.config.settings,
-            "loadIssue": self.state.load_issue,
-            "saveAllowed": self.mutations_allowed(),
-            "writable": self.mutations_allowed(),
-            "saving": self.persistence.busy(),
-            "closing": self.persistence.closing() != Closing::Open,
-            "documentDirty": self.state.is_dirty(),
-            "saveHealth": self.state.persistence_issue,
-            "recoveredFrom": self.state.recovered_from,
-            "desktopIconsHidden": pecofence_platform::shell_icons::desktop_icons_hidden(),
-            "rules": self.state.config.rules,
-            "fences": fences,
-            "snapshots": snapshots,
-            "backups": backups,
-            "monitors": monitors,
-            "tintPalette": fence_options::tint_palette_json(),
-            "version": env!("CARGO_PKG_VERSION"),
-            "configPath": self.state.config_path().to_string_lossy(),
-            "memoryMb": mem_mb,
-            "itemCount": self.state.workspace_item_count(),
-            "themeMode": if self.theme_mode == ThemeMode::Dark { "dark" } else { "light" },
-            "accent": accent,
-        })
-    }
-
-    pub(super) fn push_settings_state(&self) {
-        if let (Some(page), Some(client)) =
-            (self.settings_session.page(), self.settings_session.client())
-        {
-            let sequence = self
-                .settings_view_sequence
-                .get()
-                .checked_add(1)
-                .expect("settings view sequence exhausted");
-            self.settings_view_sequence.set(sequence);
-            self.post_settings_message(ServerMessage::Snapshot {
-                protocol: protocol::VERSION,
-                page,
-                client,
-                stamp: self.state.document_stamp(),
-                sequence,
-                view: self.settings_view(),
-            });
-            self.post_settings_message(ServerMessage::Persistence {
-                page,
-                client,
-                stamp: self.state.document_stamp(),
-                committed_revision: self.state.committed_revision(),
-                issue: self.state.persistence_issue.clone(),
-            });
+        SettingsView {
+            stamp: self.state.document_stamp(),
+            settings: self.state.config.settings.clone(),
+            writable: self.mutations_allowed(),
+            saving: self.persistence.busy(),
+            closing: self.persistence.closing() != Closing::Open,
+            dirty: self.state.is_dirty(),
+            committed_revision: self.state.committed_revision(),
+            save_issue: self.state.persistence_issue.clone(),
+            load_issue: self.state.load_issue.clone(),
+            recovered_from: self.state.recovered_from.clone(),
+            desktop_icons_hidden: Some(pecofence_platform::shell_icons::desktop_icons_hidden()),
+            rules: self.state.config.rules.clone(),
+            contents,
+            snapshots,
+            backups: self.state.backup_files(),
+            monitors,
+            version: env!("CARGO_PKG_VERSION"),
+            config_path: self.state.config_path().to_path_buf(),
+            memory_mb: mem_mb,
+            item_count: self.state.workspace_item_count(),
         }
     }
 
-    fn post_settings_message(&self, message: ServerMessage) {
-        if let Some(host) = &self.settings {
-            match serde_json::to_string(&message) {
-                Ok(json) => host.post_json(&json),
-                Err(error) => tracing::error!(%error, "settings response serialization failed"),
-            }
+    pub(super) fn push_settings_state(&self) {
+        if self.settings_dispatching.get() {
+            return;
+        }
+        if let (Some(host), Some(client)) = (&self.settings, self.settings_session.client()) {
+            host.update(client, self.settings_view());
         }
     }
 
     /// File watcher/navigation updates must not rebuild controls while the user is
     /// editing a name or has a select popup open.
     pub(super) fn push_workspace_summary(&self) {
+        if self.settings_dispatching.get() {
+            return;
+        }
         if let Some(h) = &self.settings {
-            h.post_json(
-                &serde_json::json!({
-                    "type": "workspaceSummary",
-                    "page": self.settings_session.page(),
-                    "workspace": self.state.document_stamp().workspace,
-                    "fenceCount": self.state.fences().len(),
-                    "itemCount": self.state.workspace_item_count(),
-                })
-                .to_string(),
+            h.summary(
+                self.state.document_stamp(),
+                self.state.workspace_item_count(),
             );
         }
     }
@@ -290,7 +244,7 @@ impl App {
 
     pub(super) fn settings_toast(&self, text: &str) {
         if let Some(h) = &self.settings {
-            h.post_json(&serde_json::json!({ "type": "toast", "text": text }).to_string());
+            h.notify(text, false);
         }
     }
 
@@ -307,76 +261,49 @@ impl App {
 
     pub(super) fn settings_error(&self, text: &str) {
         if let Some(h) = &self.settings {
-            h.post_json(
-                &serde_json::json!({ "type": "toast", "text": text, "error": true }).to_string(),
-            );
+            h.notify(text, true);
         }
     }
 
-    pub(super) fn on_settings_message(&mut self, json: &str) {
-        let message = if json.len() > protocol::MAX_REQUEST_BYTES {
-            Err("settings request exceeds 64 KiB".to_string())
-        } else {
-            serde_json::from_str::<ClientMessage>(json).map_err(|error| error.to_string())
-        };
-        let message = match message {
-            Ok(message) => message,
-            Err(detail) => {
-                self.post_settings_message(ServerMessage::ProtocolError { detail });
+    pub(super) fn on_settings_request(&mut self, request: Request) {
+        let old_language = pecofence_core::i18n::language();
+        let result = match self.settings_session.admit(
+            &request,
+            self.state.document_stamp(),
+            self.mutations_allowed(),
+        ) {
+            Admission::Replay(receipt) => {
+                if let Some(host) = &self.settings {
+                    host.decision(receipt);
+                }
+                self.push_settings_state();
                 return;
             }
+            Admission::Reject(reason) => Err(reason),
+            Admission::Apply => {
+                let _dispatch = SettingsDispatchGuard::new(self.settings_dispatching.clone());
+                self.apply_settings_command(request.command.clone())
+            }
         };
-        match message {
-            ClientMessage::Ready {
-                protocol: version,
-                page,
-            } if version == protocol::VERSION => {
-                self.settings_session.open(page);
-                tracing::info!("settings: page ready");
-                self.push_settings_state();
-                if let Some(fence) = self.settings_focus_fence.take() {
-                    self.post_show_fence(fence);
-                }
-            }
-            ClientMessage::Ready { .. } => {
-                self.post_settings_message(ServerMessage::ProtocolError {
-                    detail: format!(
-                        "unsupported settings protocol; expected {}",
-                        protocol::VERSION
-                    ),
-                })
-            }
-            ClientMessage::Request(request) => {
-                let result = match self.settings_session.admit(
-                    &request,
-                    self.state.document_stamp(),
-                    self.mutations_allowed(),
-                ) {
-                    Admission::Replay(receipt) => {
-                        self.post_settings_message(ServerMessage::Receipt(receipt));
-                        self.push_settings_state();
-                        return;
-                    }
-                    Admission::Reject(reason) => Err(reason),
-                    Admission::Apply => self.apply_settings_command(request.command.clone()),
-                };
-                let (rejected, cancelled) = match result {
-                    Ok(cancelled) => (None, cancelled),
-                    Err(reason) => (Some(reason), false),
-                };
-                let receipt = self.settings_session.record(
-                    *request,
-                    self.state.document_stamp(),
-                    rejected,
-                    cancelled,
-                );
-                self.post_settings_message(ServerMessage::Receipt(receipt));
-                self.push_settings_state();
-            }
+        let (rejected, cancelled) = match result {
+            Ok(cancelled) => (None, cancelled),
+            Err(reason) => (Some(reason), false),
+        };
+        let receipt =
+            self.settings_session
+                .record(request, self.state.document_stamp(), rejected, cancelled);
+        if let Some(host) = &self.settings {
+            host.decision(receipt);
+        }
+        self.push_settings_state();
+        if old_language != pecofence_core::i18n::language()
+            && let Some(host) = &self.settings
+        {
+            host.update_language();
         }
     }
 
-    /// The same typed use cases serve the page and opt-in native test intents.
+    /// The same typed use cases serve native controls and opt-in test intents.
     /// Success means the command was applied, not that a deferred write already committed.
     pub(super) fn apply_settings_command(
         &mut self,
@@ -397,6 +324,26 @@ impl App {
         }
         match command {
             SettingsCommand::SetSetting { change } => {
+                if matches!(
+                    change,
+                    pecofence_core::settings_protocol::SettingChange::Autostart(_)
+                ) && pecofence_platform::process::is_packaged()
+                {
+                    // Windows owns the MSIX startup task. A handoff to Windows
+                    // Settings is not proof that the requested switch changed.
+                    shell::shell_execute(
+                        std::path::Path::new("ms-settings:startupapps"),
+                        None,
+                        None,
+                    )
+                    .map_err(|e| Rejection::Backend(e.to_string()))?;
+                    return Err(Rejection::Backend(
+                        pecofence_core::i18n::text(
+                            "MSIX 启动由 Windows 管理，请在“启动应用”中更改。",
+                        )
+                        .into(),
+                    ));
+                }
                 let mut candidate = self.state.config.clone();
                 change
                     .apply(&mut candidate.settings)
@@ -539,8 +486,12 @@ impl App {
                         self.restore_from_file(&path, pecofence_core::i18n::text("恢复备份"))
                             .map_err(Rejection::Backend)?;
                     }
-                    Action::RepairIcons => self.set_desktop_icons_hidden(false),
-                    Action::HideDesktopIcons => self.set_desktop_icons_hidden(true),
+                    Action::RepairIcons => self
+                        .set_desktop_icons_hidden(false)
+                        .map_err(Rejection::Backend)?,
+                    Action::HideDesktopIcons => self
+                        .set_desktop_icons_hidden(true)
+                        .map_err(Rejection::Backend)?,
                 }
             }
         }
@@ -549,7 +500,7 @@ impl App {
 
     /// Both rescue buttons and the tray use the same idempotent operation. A second
     /// request must still repair Explorer's state if it changed outside PecoFence.
-    pub(super) fn set_desktop_icons_hidden(&mut self, hidden: bool) {
+    pub(super) fn set_desktop_icons_hidden(&mut self, hidden: bool) -> Result<(), String> {
         if self.apply_desktop_icons_hidden(hidden) {
             self.state.config.settings.hide_real_icons = hidden;
             self.settings_mutated();
@@ -559,11 +510,13 @@ impl App {
             } else {
                 pecofence_core::i18n::text("桌面图标已显示，可点击“重新隐藏桌面图标”恢复隐藏。")
             });
+            Ok(())
         } else {
             self.push_settings_state();
-            self.settings_error(pecofence_core::i18n::text(
-                "桌面图标状态未能更改，请等待资源管理器恢复后重试。",
-            ));
+            let issue =
+                pecofence_core::i18n::text("桌面图标状态未能更改，请等待资源管理器恢复后重试。");
+            self.settings_error(issue);
+            Err(issue.into())
         }
     }
 
@@ -596,7 +549,7 @@ impl App {
         !pecofence_platform::shell_icons::desktop_icons_hidden()
     }
 
-    /// Applies a full settings object from the page, reacting to what changed.
+    /// Applies an application-owned settings candidate, reacting to what changed.
     pub(super) fn apply_settings(&mut self, new: pecofence_core::Settings) {
         let old = self.state.config.settings.clone();
         self.apply_settings_from(old, new, false);
@@ -613,6 +566,7 @@ impl App {
         }
         if force_integrations || new.autostart != old.autostart {
             if let Err(issue) = pecofence_platform::autostart::set_product_enabled(new.autostart) {
+                new.autostart = old.autostart;
                 self.settings_error(&issue.to_string());
             }
             if pecofence_platform::process::is_packaged() {
@@ -704,12 +658,47 @@ impl App {
         }
         pecofence_core::i18n::set_language(language);
         tracing::info!(language = language.tag(), "interface language changed");
-        if let Some(host) = &self.settings {
+        if !self.settings_dispatching.get()
+            && let Some(host) = &self.settings
+        {
             host.update_language();
         }
         for window in self.fences.values() {
             window.redraw();
         }
         self.push_settings_state();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SettingsDispatchGuard;
+    use std::cell::Cell;
+    use std::rc::Rc;
+
+    #[test]
+    fn dispatch_gate_restores_outer_scope() {
+        let flag = Rc::new(Cell::new(false));
+        {
+            let _outer = SettingsDispatchGuard::new(flag.clone());
+            assert!(flag.get());
+            {
+                let _inner = SettingsDispatchGuard::new(flag.clone());
+                assert!(flag.get());
+            }
+            assert!(flag.get());
+        }
+        assert!(!flag.get());
+    }
+
+    #[test]
+    fn dispatch_gate_resets_during_unwind() {
+        let flag = Rc::new(Cell::new(false));
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _dispatch = SettingsDispatchGuard::new(flag.clone());
+            panic!("synthetic command failure");
+        }));
+        assert!(result.is_err());
+        assert!(!flag.get());
     }
 }
