@@ -3,9 +3,13 @@
 ## Unreleased — Tinnci edition
 
 - Unify local, CI and tag-release verification; reduce development build disk usage.
-- Separate repository/download links from upstream publishing accounts. Store,
-  winget and website deployment require independently configured identities.
+- Separate repository/download links from upstream publishing accounts. Store
+  and winget publishing require independently configured identities.
 - Remove inherited website analytics and include `NOTICE` in binary packages.
+- Remove the product website, website-only assets, builder/tests, hosting workflows
+  and tracked deployment caches; retain desktop verification and packaging.
+- Define user requirements and the native Settings replacement acceptance criteria;
+  the current WebView2 Settings host has not yet been replaced.
 
 The versioned entries below are retained from the upstream baseline. References
 to Store submissions or a published website describe that history, not an active

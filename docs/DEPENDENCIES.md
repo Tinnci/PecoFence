@@ -14,7 +14,7 @@ action's own `runs.using`.
 - Minor/patch updates are grouped; major updates remain allowed as separate PRs.
   There is no automatic merge.
 - Direct remote actions use full commit SHA pins with version comments. Updated
-  official actions and Wrangler declare Node 24; Rust/Pages upload/winget wrappers
+  official actions declare Node 24; Rust/winget wrappers
   are composite actions.
 - `scripts/check-actions.py` checks direct pins, local-action coverage and rejects
   privileged `pull_request_target`. Its `--online` mode fetches pinned public

@@ -8,14 +8,13 @@ Both use [.github/actions/build-desktop/action.yml](../.github/actions/build-des
 and [scripts/build-and-verify.ps1](../scripts/build-and-verify.ps1):
 
 1. Install Rust stable with rustfmt/Clippy, latest stable Python 3 and Node 24.
-2. Run public source/Actions policy, browser, website and packaging tests.
+2. Run public source/Actions policy, Settings browser and desktop packaging tests.
    Dependency resolution uses this repository plus public registries; there is
    no private SPM authentication or checkout.
 3. Restore **public registry archives only**, never private Git checkouts or
    compiled intermediates. Crate downloads are reusable across CI/releases and
    Rust upgrades; native dependency compilation happens on each runner.
-4. Run formatting, translation checks, website publication tests and a strict
-   local website preview before native compilation. Run Clippy,
+4. Run formatting, translation and Settings client checks before native compilation. Run Clippy,
    regenerate/compare bindings, compile and run workspace tests with the
    WebView2 loader staged beside their executables.
 5. Compile `pecofence` and `pecofence-watchdog` once with `build-desktop.ps1`, record
@@ -29,24 +28,16 @@ CI runs; release jobs are not cancelled this way. Both jobs have a 45-minute lim
 
 The tag workflow checks that the tag matches `Cargo.toml`, runs the same gates,
 then creates a **draft** GitHub Release. Publishing that draft is a separate
-manual step. It does not imply Store, winget or website publication.
+manual step. It does not imply Store or winget publication.
 
 Tag packaging requires clean source and selects exactly the current version's
 ZIP/checksum, not a wildcard collection of possibly stale versions.
 See [PACKAGING.md](PACKAGING.md) for receipt validation, deterministic ZIPs,
 per-user installation and shared MSIX payloads.
 
-Website deployment is independent of native builds:
+The product website, its builder and its hosting workflows have been removed.
+Desktop CI and tag releases do not build or deploy a website. Other distribution steps remain separate:
 
-- `.github/workflows/website.yml` strictly builds the static site on relevant
-  `main` changes or manual dispatch **from `main` only**, then uploads it to
-  Cloudflare Pages. Set `ENABLE_WEBSITE_DEPLOY=true`, your own
-  `CLOUDFLARE_PAGES_PROJECT`, the public site URL and site credentials first.
-- `.github/workflows/pages.yml` is a manually triggered, opt-in alternative:
-  `ENABLE_GITHUB_PAGES=true`, a configured public URL and the `main` ref are
-  required. Neither hosting destination is configured by default.
-- Both publishing paths use `build-site.py --strict --deploy`, which rejects
-  an unset URL or localhost/HTTP preview URL. Native CI can still build previews.
 - Microsoft Store/MSIX packaging and Partner Center upload remain local/manual,
   disabled until an independently assigned product identity is supplied.
 - Source ZIP export remains a separate local step; GitHub tag archives are not
@@ -70,8 +61,8 @@ but require review, not auto-merge. Configuration covers both workflows and the
 local composite action. See [DEPENDENCIES.md](DEPENDENCIES.md).
 
 Other credentials are independent: `GH_TOKEN`/`contents: write` creates the
-draft release; `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` deploy the site;
-`WINGET_TOKEN` opens the winget PR. GitHub Pages uses `pages: write` and OIDC.
+draft release; `WINGET_TOKEN` opens the winget PR. No website hosting credentials
+are required by the remaining workflows.
 
 The independent edition leaves unknown publishing identities unset rather than
 reusing upstream ones. See [INDEPENDENCE.md](INDEPENDENCE.md) for the configuration
@@ -123,9 +114,8 @@ git push -u origin main
 ```
 
 Use your configured Git identity. Review the exported files before committing.
-The project does not assume or claim a particular GitHub organization. After the
-first push, set the repository URL in `site/site.json` and follow
-[WEBSITE.md](WEBSITE.md) to publish the product page.
+The project does not assume or claim a particular GitHub organization. Keep
+repository and download links in the README accurate for the actual destination.
 
 ## Versioned release
 

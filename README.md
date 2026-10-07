@@ -149,8 +149,7 @@ Create a distributable portable ZIP:
 
 The workspace is organized into `crates/` for the native app, `ui/` for Settings,
 `locales/` for translations and `scripts/` for verification and packaging.
-The product website lives in `site/`, and the optional video project in `extras/`
-is independent of the app build.
+The optional video project in `extras/` is independent of the app build.
 
 [Release instructions](docs/RELEASING.md) · [Source layout](docs/DEVELOPMENT.md#architecture)
 

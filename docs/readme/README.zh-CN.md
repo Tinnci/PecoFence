@@ -142,7 +142,7 @@ Copy-Item third_party/webview2/WebView2Loader.x64.dll target/release/WebView2Loa
 ```
 
 原生应用位于 `crates/`，设置面板在 `ui/`，翻译在 `locales/`，
-验证与打包脚本在 `scripts/`。产品网站在 `site/`，`extras/` 下的宣传视频工程不参与应用构建。
+验证与打包脚本在 `scripts/`。`extras/` 下的宣传视频工程不参与应用构建。
 
 [发布指南](../RELEASING.md) · [源码结构](../DEVELOPMENT.md#architecture)
 

@@ -26,6 +26,7 @@
 /extras/pecofence-promo/review/
 
 # Local editor and credential files
+/.wrangler/
 .env
 .env.*
 !.env.example

@@ -73,8 +73,7 @@ Windows CI 与 tag release 共用 `.github/actions/build-desktop/action.yml` 和
 仅包含公开 registry 下载包，不缓存私有 Git checkout 或编译中间产物；
 CI 便携包 artifact 保留 7 天。完整触发/部署边界见
 [RELEASING.md](RELEASING.md#ci-and-deployment-flow)。
-fork 的 Cloudflare 网站部署默认关闭；核对域名/项目身份并配置凭据后，
-才可通过仓库 variable `ENABLE_WEBSITE_DEPLOY=true` 显式开启。
+产品网站、网站构建脚本和托管部署工作流已从源码移除；桌面 CI 不再构建或部署网站。
 
 ## 验收实例实验室（`C:\Users\Administrator\PecoFence-lab\`）
 

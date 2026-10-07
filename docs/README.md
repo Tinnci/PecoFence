@@ -1,5 +1,6 @@
 # Documentation
 
+- [User requirements and native Settings replacement checklist, in Chinese](USER_REQUIREMENTS.md)
 - [Application architecture and typed interfaces, in Chinese](ARCHITECTURE.md)
 - [Architecture implementation roadmap, in Chinese](ROADMAP.md)
 - [Architecture decisions](decisions/)
@@ -10,7 +11,6 @@
 - [Preparing and publishing a release](RELEASING.md)
 - [Independent edition: identities and publishing setup](INDEPENDENCE.md)
 - [Portable edition instructions](PORTABLE.md)
-- [Product website: build and publishing](WEBSITE.md)
 - [Optional Microsoft Store packaging](STORE.md)
 - [Complete feature list, in Chinese](FEATURES.md)
 - [README in other languages](readme/) — the root README is English; translations live in `docs/readme/`
