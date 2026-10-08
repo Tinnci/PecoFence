@@ -5,20 +5,22 @@ inputs:
   require-clean-source:
     description: Reject locally modified source in release packages
     default: 'false'
+  verification-mode:
+    description: Verification mode passed to build-and-verify.ps1
+    default: Full
 
 runs:
   using: composite
   steps:
     - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
       with:
-        python-version: '3.x'
-        check-latest: true
+        python-version: '3.13'
     - name: Validate sources without private credentials
       shell: pwsh
       run: |
         python scripts/check-actions.py --online
         if ($LASTEXITCODE -ne 0) { throw "Direct action runtime verification failed." }
-        ./scripts/build-and-verify.ps1 -SourceOnly
+        ./scripts/build-and-verify.ps1 -SourceOnly -ReportPath target/source-verification.json
     - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
       with:
         components: rustfmt, clippy
@@ -37,6 +39,20 @@ runs:
         key: ${{ runner.os }}-public-cargo-registry-v1-${{ hashFiles('Cargo.lock') }}
         restore-keys: |
           ${{ runner.os }}-public-cargo-registry-v1-
+    - name: Restore pinned public windows-rs Git object database
+      id: windows-rs-git-db
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        # Fresh CARGO_HOME means git/db contains only the approved public
+        # windows-rs object database; never cache expanded checkouts.
+        path: ${{ env.CARGO_HOME }}/git/db
+        key: ${{ runner.os }}-public-windows-rs-git-db-v1-2672e615d9cc0771448a781f3b2fe34e7fd08c6a-${{ hashFiles('Cargo.lock') }}
+    - name: Validate restored public Git object database
+      shell: pwsh
+      run: |
+        $databaseRoot = Join-Path $env:CARGO_HOME "git/db"
+        python scripts/check-public-git-cache.py --database-root $databaseRoot --allow-empty
+        if ($LASTEXITCODE -ne 0) { throw "Restored public Cargo Git cache is invalid; refusing to use it." }
     - name: Fetch locked public dependencies without Git credentials
       shell: pwsh
       run: |
@@ -50,6 +66,15 @@ runs:
         New-Item -ItemType File -Path $env:GIT_CONFIG_GLOBAL | Out-Null
         cargo fetch --locked
         if ($LASTEXITCODE -ne 0) { throw "Public dependency fetch failed." }
+        $databaseRoot = Join-Path $env:CARGO_HOME "git/db"
+        python scripts/check-public-git-cache.py --database-root $databaseRoot
+        if ($LASTEXITCODE -ne 0) { throw "Fetched public Cargo Git object database failed validation." }
+    - name: Save validated public windows-rs Git object database
+      if: success() && steps.windows-rs-git-db.outputs.cache-hit != 'true'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ env.CARGO_HOME }}/git/db
+        key: ${{ runner.os }}-public-windows-rs-git-db-v1-2672e615d9cc0771448a781f3b2fe34e7fd08c6a-${{ hashFiles('Cargo.lock') }}
     - name: Cache pinned public Windows App SDK package
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
@@ -61,4 +86,9 @@ runs:
       shell: pwsh
       env:
         REQUIRE_CLEAN_SOURCE: ${{ inputs.require-clean-source }}
-      run: ./scripts/build-and-verify.ps1 -TargetDir target -SkipSourceChecks -RequireCleanSource:($env:REQUIRE_CLEAN_SOURCE -eq 'true')
+        VERIFICATION_MODE: ${{ inputs.verification-mode }}
+      run: |
+        if ($env:VERIFICATION_MODE -cnotin @('Quick', 'Full')) {
+          throw "verification-mode must be Quick or Full."
+        }
+        ./scripts/build-and-verify.ps1 -Mode $env:VERIFICATION_MODE -TargetDir target -SkipSourceChecks -ReportPath target/verification.json -RequireCleanSource:($env:REQUIRE_CLEAN_SOURCE -eq 'true')

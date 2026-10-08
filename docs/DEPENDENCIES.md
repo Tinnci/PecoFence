@@ -31,6 +31,40 @@ their own declared `runs.using` version.
   archive under a hash-specific key; staging verifies the archive before extraction,
   and runtime files are regenerated and independently checked on each runner.
 
+## Windows CI feedback and cache boundary
+
+Windows CI pins Python 3.13 for worker setup; local validation scripts continue
+to support Python 3.11 or newer. The Quick and Full verification jobs run
+independently. Quick is intended to return native feedback sooner; Full remains
+the build job and produces the portable artifacts with every existing release
+compile, size, binding-consistency and real-ZIP gate intact.
+
+Each run uses a fresh public `CARGO_HOME` and retains the existing public Cargo
+registry and NuGet caches. CI also has a narrowly validated Git object-database
+cache for the public `windows-rs` source at its single pinned URL and commit.
+It must not cache a Cargo checkout/worktree, compiled outputs, private SPM
+content, credentials or secret environment. Cache reuse does not replace or
+bypass source, import or artifact-hash validation; the pinned dependency and
+runtime checks still run on each job.
+
+Git cache validation checks history connectivity and recomputes the commit,
+tree and blob content hashes for the entire pinned source snapshot. It does
+not rehash every unused historical SDK blob on every restore: that exceeded
+120 seconds on the local object database, while snapshot hashing plus
+connectivity took 5.37 seconds. This is a local validation measurement, not a
+claim about end-to-end CI speed. Nested repositories, active Git hooks,
+unrelated root payloads and object substitutions are rejected.
+
+Quick may accept `-TestPackage` to narrow its ordinary workspace test packages.
+The aggregate report identifies that requested scope, and the Reactor shutdown
+and workspace-validator suites remain mandatory. A narrowed Quick run is not a
+Full run and cannot change Full or release acceptance.
+
+The earlier 11m6s CI duration is a historical measurement, not a baseline for
+the new jobs. Do not claim a time-to-feedback improvement until the updated
+tests and CI have rerun. Running Quick and Full on separate workers can increase
+total CI compute even if Quick completes earlier.
+
 ## Required repository configuration
 
 Adding the file to the default branch enables version-update scheduling, subject

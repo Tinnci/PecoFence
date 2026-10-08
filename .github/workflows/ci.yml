@@ -14,6 +14,26 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  quick:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/build-desktop
+        with:
+          verification-mode: Quick
+      - name: Publish quick verification reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: pecofence-verification-quick
+          if-no-files-found: warn
+          retention-days: 7
+          path: |
+            target/source-verification.json
+            target/verification.json
   build:
     runs-on: windows-latest
     timeout-minutes: 45
@@ -22,6 +42,8 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/build-desktop
+        with:
+          verification-mode: Full
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: pecofence-portable
@@ -31,3 +53,13 @@ jobs:
           path: |
             dist/pecofence-*-x64.zip
             dist/pecofence-*-x64.zip.sha256
+      - name: Publish full verification reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: pecofence-verification-full
+          if-no-files-found: warn
+          retention-days: 7
+          path: |
+            target/source-verification.json
+            target/verification.json
