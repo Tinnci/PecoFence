@@ -57,6 +57,27 @@ try {
   }
   $count++
 
+  $firstDirectory = Join-Path $temporary "first"
+  $secondDirectory = Join-Path $temporary "second"
+  [IO.Directory]::CreateDirectory($firstDirectory) | Out-Null
+  [IO.Directory]::CreateDirectory($secondDirectory) | Out-Null
+  $executableName = "verification-path-priority-$([guid]::NewGuid().ToString('N')).exe"
+  # Discovery requires executable names, not runnable binaries. These fixtures
+  # are never launched; all actual process regressions use the supplied Python.
+  [IO.File]::WriteAllText((Join-Path $firstDirectory $executableName), "fixture")
+  [IO.File]::WriteAllText((Join-Path $secondDirectory $executableName), "fixture")
+  $savedPath = $env:PATH
+  try {
+    $env:PATH = "$firstDirectory$([IO.Path]::PathSeparator)$secondDirectory$([IO.Path]::PathSeparator)$savedPath"
+    Assert-That (@(Get-Command $executableName -CommandType Application).Count -ge 2) "fixture must expose multiple PATH matches"
+    $application = @(Resolve-VerificationApplication $executableName)
+    Assert-That ($application.Count -eq 1) "resolve exactly one executable"
+    Assert-That ($application[0].Source -eq (Join-Path $firstDirectory $executableName)) "honor PATH priority"
+  } finally {
+    $env:PATH = $savedPath
+  }
+  $count++
+
   $narrow = @(Get-DesktopVerificationPlan "Quick" $Python $shell "target" $false @("pecofence", "pecofence-core"))
   $narrowCheck = $narrow | Where-Object Id -eq "selected-package-tests"
   $narrowArguments = $narrowCheck.Arguments

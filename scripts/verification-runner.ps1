@@ -67,6 +67,14 @@ function Add-VerificationError {
   })
 }
 
+function Resolve-VerificationApplication {
+  param([string]$Program)
+  # Get-Command -CommandType Application can return several PATH matches.
+  # Match ordinary shell resolution: launch only the highest-priority one.
+  $applications = @(Get-Command $Program -CommandType Application -ErrorAction Stop)
+  $applications[0]
+}
+
 function Invoke-VerificationPlan {
   param($Run, [object[]]$Plan, [string]$ReportPath = "")
   foreach ($check in $Plan) {
@@ -99,7 +107,7 @@ function Invoke-VerificationPlan {
         $entry.status = "timeout"
         $entry.reason = "The verification time budget was exhausted before this check."
       } else {
-        $application = Get-Command $check.Program -CommandType Application -ErrorAction Stop
+        $application = Resolve-VerificationApplication $check.Program
         $start = [Diagnostics.ProcessStartInfo]::new()
         $start.FileName = $application.Source
         $start.UseShellExecute = $false
