@@ -41,10 +41,16 @@ The crate and [provenance review](SPM_CONTRACT_PROVENANCE.md) are included here.
 credential references and, with `--resolved`, Cargo's actual dependency graph.
 It rejects other Git sources, mutable refs, alternate URLs, package names or
 versions, same-version Git/registry Windows type duplicates, and Cargo source
-replacement configuration. Source-only and full desktop verification enforce
-this boundary; CI fetches locked dependencies with a fresh Cargo home and no Git
-credential helper. Backend migration, public commit availability and live
-integration remain separate verification results.
+replacement configuration. SourceOnly checks source-level dependency policy
+without invoking Cargo. Quick also checks Cargo's resolved dependency graph
+against this policy; Full retains its existing source and dependency checks.
+CI uses a fresh public Cargo home and no Git credential helper. Existing public
+Cargo-registry and NuGet caches are retained, with only a narrowly validated
+Git object-database cache for the pinned public `windows-rs` source and commit.
+No checkout tree, compiled output, private SPM data or credentials are cached.
+Cache reuse does not bypass hash, import or source-policy checks. Backend
+migration, public commit availability and live integration remain separate
+verification results.
 
 ## One source of truth
 
@@ -93,10 +99,15 @@ remote edits, deletion or visibility changes are part of this migration.
 
 Public CI, releases and Dependabot build from public source without
 `PRIVATE_REPO_TOKEN` or a private source checkout/cache. Do not use privileged
-`pull_request_target` to bypass that boundary. Cache public registry archives
-only; deployment credentials are unrelated to contracts consumption.
+`pull_request_target` to bypass that boundary. Dependency caches are limited to
+public registry/NuGet archives and the validated object database for the one
+pinned public Windows SDK Git source; never cache checkout trees, compiled
+outputs, private SPM content or credentials. Deployment credentials are
+unrelated to contracts consumption.
 
-Source checks and headless/synthetic protocol tests remain required.
+Source checks and headless/synthetic protocol tests remain required. Quick runs
+the Reactor shutdown and workspace-validator suites even when `-TestPackage`
+narrows its other workspace tests; Full continues to run every existing gate.
 CI feature gates must not silently skip failures or turn missing verification
 into a green result. Record which tests ran; native Windows, browser, protocol
 and live integration results are distinct evidence.
