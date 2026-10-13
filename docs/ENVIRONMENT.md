@@ -1,6 +1,15 @@
 # 开发环境与工作流（SPM / PecoFence）
 
-> 本文档是新会话/新代理上手的唯一环境事实来源。任何环境变更后请更新此文件。
+> 本文记录开发实验室的环境，路径和历史实测结果不是公开构建的前提。
+> 公开构建与验证以 [DEVELOPMENT.md](DEVELOPMENT.md) 和
+> [SPM_BOUNDARY.md](SPM_BOUNDARY.md) 为准；环境变更后请更新此文件。
+
+公开 PecoFence 仅依赖本仓库和公开 registry；本地 `crates/spm-contracts`
+版本为 0.1.0，从原固定 revision
+`e0dd3e058d40ef1c4623c12dba2f0715d2011a1b` 提取。
+不需要私有 token 或 SPM checkout。`Tinnci/spm` 后端保持私有，仅实时 SPM
+数据需要；普通围栏的编译和运行不依赖它，也不随 PecoFence 分发。
+下述双仓实验室仅用于获授权的私有集成，不能当作公开 CI 已运行的证据。
 
 ## 仓库位置（重要）
 
@@ -31,14 +40,14 @@ Windows 进程写入的文档类文件（.json/.md/.js/.sh 等），git blob 干
 ## Windows 构建（WSL 交叉编译）
 
 - 一键脚本：`~/dev/<repo>/scripts/build-windows.sh [profile] [package ...]`
-  - 默认 release；spm 默认构建 `spmd spm-cli spm-widget`（产物 `spmd.exe`/`spm.exe`/`spm-widget.exe`），
+  - 默认 release；spm 默认构建 `spmd spm-cli`（产物 `spmd.exe`/`spm.exe`），
     PecoFence 默认构建 `pecofence pecofence-watchdog`
   - 工具链：clang-cl-19（C 依赖）+ lld-link（链接），SDK/MSVC 库经 `/mnt/c`
     只读使用；linker 通过 `CARGO_TARGET_*_LINKER` 环境变量选择，不进仓内
     `.cargo/config.toml`（Windows CI 继续用 link.exe）
-  - 产物：仓内 `target/x86_64-pc-windows-msvc/<profile>/`（ext4，明文）
-  - spm 发布 ZIP：构建后执行 `python3 scripts/package-windows.py --release-dir target/x86_64-pc-windows-msvc/release`，输出 `dist/spm-<version>-x64.zip` 和校验文件；CI 使用同一脚本。
-  - `scripts/build-windows.sh test spmd` 可在 WSL 编译 Windows 测试 EXE；需显式运行所需测试 EXE（脚本本身不执行）。
+  - 产物：仓内 `target/x86_64-pc-windows-msvc/<profile>/`（ext4，明文）；
+    PecoFence 构建后自动校验并 stage 固定的 Windows App SDK Runtime 2.5.1
+    （206 个文件 / 59,158,503 bytes），spm 不 stage 此运行时
   - 脚本防御性 `unset CARGO_TARGET_DIR`：任何全局变量都不得改写仓内 target
 - **已退役**：`C:\Users\Administrator\cargo-target`（双仓共用 NTFS target，
   6.1G）已删除；Windows 用户环境变量 `CARGO_TARGET_DIR` 已移除；
@@ -46,7 +55,28 @@ Windows 进程写入的文档类文件（.json/.md/.js/.sh 等），git blob 干
 - git：便携版 MinGit `C:\Users\Administrator\Tools\MinGit\cmd\git.exe`
   （已加入用户 PATH；注册表持久化，新终端生效）
 - 全局代理：`http.proxy = http://127.0.0.1:7890`（mihomo）。直连 443 间歇失败时先查代理
-- spm-contracts 依赖固定在 git rev（见根 Cargo.toml）；契约变更后手动 bump rev
+- PecoFence 使用本地公开 `spm-contracts`；私有后端应消费同一公开契约的精确
+  Git commit/版本，不保留可独立修改的重复实现。配对更新流程见
+  [SPM_BOUNDARY.md](SPM_BOUNDARY.md)，迁移/发布/实机验证状态须单独确认。
+
+开发/测试构建默认关闭 debug symbols 和 incremental compilation，减少仓内
+`target/` 占用；release 保留 line-table 崩溃诊断符号。临时开启调试信息、清理
+旧产物及 `RUST_LOG` 调整见 [DEVELOPMENT.md](DEVELOPMENT.md#build-disk-usage)。
+
+Python 脚本只要求 >=3.11（`tomllib`），不固定 minor 版本；CI 使用最新稳定
+Python 3。本机旧 Python 可保留，使用
+`uv run --no-project --python ">=3.11" python scripts/<script>.py` 选择兼容版本。
+Windows 会话（2026-10-05）已将 Rust stable/rustfmt/Clippy 更新到 1.99 系列、
+uv 更新到 0.12.23；现有 VS 2022 C++ Build Tools 与 Windows SDK 10.0.26100.0
+已通过 Windows workspace 编译。
+
+Windows CI 与 tag release 共用 `.github/actions/build-desktop/action.yml` 和
+`scripts/build-and-verify.ps1`，不读取私有 SPM，不需要私有认证。公开仓库的 CI 缓存
+包含公开 registry 下载包及一个 SHA256/SHA512 固定的公开 Windows App SDK NuGet 源包；
+每次运行仍会校验归档并重新生成 runtime 文件，不缓存编译中间产物或私有 Git checkout；
+CI 便携包 artifact 保留 7 天。完整触发/部署边界见
+[RELEASING.md](RELEASING.md#ci-and-deployment-flow)。
+产品网站、网站构建脚本和托管部署工作流已从源码移除；桌面 CI 不再构建或部署网站。
 
 ## 验收实例实验室（`C:\Users\Administrator\PecoFence-lab\`）
 
@@ -55,40 +85,26 @@ PecoFence-lab\
   fixtures\      # 只读、带 SHA 的场景输入（由 WSL 拷入，必须保持明文）
   instances\     # 每场景一个实例目录（构建快照）
     normal-local-001\
-      *.exe + WebView2Loader.dll     # 从仓内 target 拷贝（快照，非链接）
-      config\config.json             # 播种或首跑生成；应用会重写 → 归 Windows 侧
+      *.exe / *.dll / 语言目录       # 从仓内 target 拷贝（快照，非链接）
+      config\workspace.v2.json       # schema 2 播种或首跑生成；应用写入归 Windows 侧
       data\                          # DB 模式预留
       logs\                          # spmd/pecofence 的 stdout/stderr + pid
-      appdata\{Roaming,Local}\       # 实例专属 APPDATA/LOCALAPPDATA（WebView2 profile、崩溃日志）
-      run-manifest.json              # 溯源：两仓 SHA、配对 rev、每个文件 SHA256
+      appdata\{Roaming,Local}\       # 实例专属 APPDATA/LOCALAPPDATA（日志、崩溃转储）
+      run-manifest.json              # schema 4：两仓 SHA、四个 exe 与完整 SDK runtime SHA256
   downloads\     # CI artifact 原包
   archive\       # 退役数据归档
 ```
 
 - 创建：WSL 侧 `scripts/lab/new-instance.sh --name <n> --fixture <catalog.json>
-  [--seed-config <config.json>]`（fixture 拷贝整个父目录——catalog 引用
-  `snapshots/*.json` 相对路径）。创建时检查本地 `spm-contracts` 与
-  PecoFence 锁定提交一致；仅实验性配对可显式加 `--allow-contract-drift`。
+  [--seed-config <workspace.v2.json>]`（seed 先经实际 core 校验，不迁移旧格式；
+  fixture 拷贝整个父目录——catalog 引用
+  `snapshots/*.json` 相对路径）
 - 启停：Windows 侧 `scripts/lab/run-instance.ps1 -Name <n>` /
   `stop-instance.ps1 -Name <n>`（spmd 走 fixture 模式 + 实例内绝对路径日志；
   pecofence 走 `--portable --no-hide-icons` + `PECOFENCE_INSTANCE` +
   实例专属 APPDATA/LOCALAPPDATA）
 - 多后端实例通过 spmd 的 `--instance` 与 pecofence 的 `PECOFENCE_INSTANCE`
   使用同名实例标识实现管道级隔离，可并行运行不同 fixture 的场景。
-- 启动脚本会拒绝同一实例目录内仍在运行的进程，并在 spmd 或 PecoFence
-  启动后立即退出时报告错误；停止脚本只根据 PID 结束可执行文件仍位于该目录内的进程。
-- 默认 PecoFence 持有会话内新旧两个单实例互斥体；spmd v2 的首个命名管道实例
-  由进程在初始化数据库前占用。相同用户、会话、实例标识下的新旧 v2 版本不能同时
-  服务同一端点。命名实例在未传 `--db` 时使用独立的稳定哈希数据库文件名；显式
-  `--db` 仍由调用方保证隔离。此前使用旧默认 `spmd-v2.sqlite` 的命名持久实例，
-  升级时应显式传原数据库绝对路径；新默认文件名不会自动迁移旧数据。
-- 命名 PecoFence 实例的配置仍由启动目录（`--portable`）或 `APPDATA` 决定；
-  `PECOFENCE_INSTANCE` 本身只隔离互斥体、日志、WebView2 profile 和 SPM 管道。
-  Lab 为每个实例复制可执行文件并设置独立 APPDATA/LOCALAPPDATA，避免配置互相覆盖。
-- 便携版双程序更新使用 `scripts/update-portable-pair.ps1`，文档见
-  `docs/PORTABLE_UPDATE.md`。新版本使用安装根目录共享 `config/`，先切换并探测
-  spmd，再让 PecoFence 正常退出并重建窗口；失败会回滚 SQLite 文件和进程。
-  旧的 `replace-running-instance.ps1` 已退役，禁止按进程名全局终止实例。
 - **DLP 规则（实测）**：
   - WSL 写入（fixtures/manifest/二进制）→ 明文，必须保持
   - Windows 进程写文档类（实例 config 被应用重写）→ 可能加密；对应用透明，
@@ -100,9 +116,10 @@ PecoFence-lab\
 
 1. `#[tokio::test]` 默认单线程运行时：测试里用 `std::thread::sleep` 会饿死
    同运行时的 spawned 任务（v2_loopback 曾因此失败）。用 `tokio::time::sleep().await`。
-2. PecoFence CI 认证私有依赖：必须 unset actions/checkout 持久化的
-   `http.https://github.com/.extraheader`（GITHUB_TOKEN 无权读 Tinnci/spm），
-   再用 PRIVATE_REPO_TOKEN 凭据助手。
+2. 公开 CI/Dependabot 不需要 PRIVATE_REPO_TOKEN，也不得使用特权
+   pull_request_target 或私有源码缓存。源码检查及 headless/合成协议测试必须
+   执行且失败即失败；feature gate 不得静默跳过。私有 daemon 实机集成必须
+   在独立、获授权的私有流程中验证并记录，不能以公开测试代替。
 3. Windows runner 的 run: 默认 shell 是 PowerShell：`$VAR` 不是环境变量，
    要用 `$env:VAR`。
 4. `wsl bash -lc '...'` 从 PowerShell 调用时命令串会先过 zsh 且引号不保真：

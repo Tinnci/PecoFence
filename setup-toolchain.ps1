@@ -7,8 +7,7 @@
     1. Visual Studio 2022 C++ Build Tools (MSVC compiler, Windows 10/11 SDK)
     2. Rustup & Rust stable (x86_64-pc-windows-msvc)
     3. Toolchain components (rustfmt, clippy)
-    4. Python 3 (used by project validation and packaging scripts)
-    5. Verifies existing Node.js and WebView2 runtime installations
+    4. Python >=3.11 via uv (used by project validation and packaging scripts)
 #>
 
 [CmdletBinding()]
@@ -29,7 +28,7 @@ if (-not $isAdmin) {
 }
 
 # 2. Check for Visual Studio C++ Build Tools (MSVC & Windows SDK)
-Write-Host "`n[1/5] Checking Visual Studio C++ Build Tools..." -ForegroundColor Yellow
+Write-Host "`n[1/4] Checking Visual Studio C++ Build Tools..." -ForegroundColor Yellow
 $vsWhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
 $hasVCTools = $false
 
@@ -57,11 +56,11 @@ if (-not $hasVCTools -and -not $SkipBuildTools) {
 }
 
 # 3. Check and Configure Rust (MSVC Toolchain)
-Write-Host "`n[2/5] Checking Rust Toolchain (rustup, rustc, cargo)..." -ForegroundColor Yellow
+Write-Host "`n[2/4] Checking Rust Toolchain (rustup, rustc, cargo)..." -ForegroundColor Yellow
 
 # Ensure .cargo\bin is in PATH for the current session
 $cargoBin = Join-Path $env:USERPROFILE ".cargo\bin"
-if (Test-Path $cargoBin -and ($env:PATH -notlike "*$cargoBin*")) {
+if ((Test-Path $cargoBin) -and ($env:PATH -notlike "*$cargoBin*")) {
     $env:PATH = "$cargoBin;$env:PATH"
 }
 
@@ -88,14 +87,21 @@ if (-not (Get-Command rustup -ErrorAction SilentlyContinue)) {
 if (Get-Command rustup -ErrorAction SilentlyContinue) {
     Write-Host "  Configuring rustup for PecoFence..." -ForegroundColor Cyan
     
+    # Selecting an already-installed stable toolchain does not update it.
+    & rustup update stable-x86_64-pc-windows-msvc --no-self-update
+    if ($LASTEXITCODE -ne 0) { throw "Rust stable update failed." }
+
     # Set default host and toolchain to stable MSVC
     & rustup default stable-x86_64-pc-windows-msvc
+    if ($LASTEXITCODE -ne 0) { throw "Rust stable selection failed." }
     
     # Add required target
-    & rustup target add x86_64-pc-windows-msvc
+    & rustup target add x86_64-pc-windows-msvc --toolchain stable-x86_64-pc-windows-msvc
+    if ($LASTEXITCODE -ne 0) { throw "Rust MSVC target installation failed." }
     
     # Add required components (rustfmt, clippy) specified in rust-toolchain.toml
-    & rustup component add rustfmt clippy
+    & rustup component add rustfmt clippy --toolchain stable-x86_64-pc-windows-msvc
+    if ($LASTEXITCODE -ne 0) { throw "Rust component installation failed." }
     
     $rustcVer = & rustc --version
     $cargoVer = & cargo --version
@@ -105,40 +111,37 @@ if (Get-Command rustup -ErrorAction SilentlyContinue) {
     Write-Error "Rustup could not be located in PATH. Please restart PowerShell after installation."
 }
 
-# 4. Check Python 3 (Required for packaging and translation scripts)
-Write-Host "`n[3/5] Checking Python 3..." -ForegroundColor Yellow
-if (Get-Command python -ErrorAction SilentlyContinue) {
-    $pyVer = & python --version
-    Write-Host "  [OK] $pyVer" -ForegroundColor Green
-} elseif (Get-Command py -ErrorAction SilentlyContinue) {
-    $pyVer = & py --version
-    Write-Host "  [OK] $pyVer (via py launcher)" -ForegroundColor Green
-} else {
-    Write-Host "  Python 3 not found. Installing via winget..." -ForegroundColor Cyan
-    try {
-        winget install --id Python.Python.3.12 --exact --silent --accept-package-agreements --accept-source-agreements
-        Write-Host "  [OK] Python 3 installed. You may need to reload your environment variables." -ForegroundColor Green
-    } catch {
-        Write-Warning "  Could not install Python 3 automatically. Install from https://www.python.org/ if needed for scripts."
+# 4. Resolve a supported Python without replacing the system interpreter.
+# Source packaging uses tomllib (added in Python 3.11); newer versions are welcome.
+Write-Host "`n[3/4] Checking Python >=3.11 via uv..." -ForegroundColor Yellow
+$uvCommand = Get-Command uv -ErrorAction SilentlyContinue
+$uvPrefix = @()
+if (-not $uvCommand) {
+    $bootstrapPython = Get-Command python -ErrorAction SilentlyContinue
+    if (-not $bootstrapPython) {
+        $bootstrapPython = Get-Command py -ErrorAction SilentlyContinue
     }
+    if (-not $bootstrapPython) {
+        throw "Install uv first (https://docs.astral.sh/uv/getting-started/installation/), then rerun this script."
+    }
+    Write-Host "  Installing uv from PyPI..." -ForegroundColor Cyan
+    & $bootstrapPython.Source -m pip install --user --upgrade uv
+    if ($LASTEXITCODE -ne 0) { throw "uv installation from PyPI failed." }
+    # Module invocation works even when pip's Scripts directory is not on PATH.
+    $uvCommand = $bootstrapPython
+    $uvPrefix = @("-m", "uv")
 }
+& $uvCommand.Source @uvPrefix run --no-project --python ">=3.11" python --version
+if ($LASTEXITCODE -ne 0) { throw "Python >=3.11 setup failed." }
+Write-Host "  [OK] Use uv run --no-project --python '>=3.11' python scripts/<script>.py" -ForegroundColor Green
 
-# 5. Check Node.js (Optional, used for Settings browser UI tests)
-Write-Host "`n[4/5] Checking Node.js..." -ForegroundColor Yellow
-if (Get-Command node -ErrorAction SilentlyContinue) {
-    $nodeVer = & node --version
-    Write-Host "  [OK] Node.js $nodeVer" -ForegroundColor Green
-} else {
-    Write-Host "  Node.js not in PATH (desktop app builds without Node, but UI test scripts use it)." -ForegroundColor Gray
-}
-
-# 6. Summary and Build Instructions
-Write-Host "`n[5/5] Toolchain Configuration Complete!" -ForegroundColor Green
+# 5. Summary and Build Instructions
+Write-Host "`n[4/4] Toolchain Configuration Complete!" -ForegroundColor Green
 Write-Host "====================================================" -ForegroundColor Cyan
 Write-Host "To build and run PecoFence in PowerShell:" -ForegroundColor White
 Write-Host "  cd C:\Users\Administrator\PecoFence" -ForegroundColor Yellow
 Write-Host "  cargo build --locked" -ForegroundColor Yellow
-Write-Host "  Copy-Item third_party\webview2\WebView2Loader.x64.dll target\debug\WebView2Loader.dll" -ForegroundColor Yellow
+Write-Host "  uv run --no-project --python '>=3.11' python scripts\stage-winappsdk-runtime.py stage --target-dir target --profile debug" -ForegroundColor Yellow
 Write-Host "  .\target\debug\pecofence.exe" -ForegroundColor Yellow
 Write-Host "`nTo create a portable release package:" -ForegroundColor White
 Write-Host "  powershell -ExecutionPolicy Bypass -File scripts\make-portable.ps1" -ForegroundColor Yellow

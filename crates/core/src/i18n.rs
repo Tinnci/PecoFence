@@ -177,16 +177,6 @@ pub fn text(source: &'static str) -> &'static str {
     text_in(language(), source)
 }
 
-pub fn ui_payload() -> serde_json::Value {
-    let active = language();
-    let translations = if active == Language::SimplifiedChinese {
-        serde_json::json!({})
-    } else {
-        serde_json::to_value(catalog(active)).expect("serializable translation catalog")
-    };
-    serde_json::json!({ "locale": active.tag(), "translations": translations })
-}
-
 /// Substitute numbered placeholders once. Arguments are never parsed as templates,
 /// so braces in filenames and user titles remain literal.
 pub fn interpolate(template: &str, arguments: &[String]) -> String {
@@ -244,7 +234,7 @@ mod tests {
     }
 
     #[test]
-    fn saved_languages_round_trip_and_old_settings_stay_chinese() {
+    fn saved_languages_round_trip_and_missing_language_is_rejected() {
         let settings = crate::Settings::default();
         assert_eq!(settings.language, Language::System);
         for &language in SUPPORTED {
@@ -256,8 +246,7 @@ mod tests {
         }
         let mut old = serde_json::to_value(&settings).unwrap();
         old.as_object_mut().unwrap().remove("language");
-        let loaded: crate::Settings = serde_json::from_value(old).unwrap();
-        assert_eq!(loaded.language, Language::SimplifiedChinese);
+        assert!(serde_json::from_value::<crate::Settings>(old).is_err());
         assert_eq!(text_in(Language::English, "不存在的消息"), "不存在的消息");
     }
 

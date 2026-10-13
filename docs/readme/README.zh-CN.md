@@ -66,7 +66,7 @@ https://github.com/user-attachments/assets/6320cf28-a791-4720-9659-b4575df021a0
 | **熟悉的文件操作** | 资源管理器右键菜单、拖放、复制粘贴、多选、缩略图，以及图标／列表／详细信息视图。 |
 | **用时展开，闲时收好** | 把栅栏卷成标题条，鼠标悬停即可展开；也可以锁定已经摆好的位置。 |
 | **喜欢的布局，留得住** | 保存布局快照、每日自动备份、导入导出配置、交换两个显示器上的栅栏。 |
-| **轻巧地待在桌面上** | Rust 编写的原生应用，WebView2 设置面板按需加载。 |
+| **原生设置界面** | 设置现由 Reactor 承载的原生 WinUI 3 控件提供，包含五个任务页和十三种规则条件表单。headless 测试和包含关闭/重开的合成 WinUI 测试已通过；这不代表功能对等或产品验收完成。选定发行方案自包含 Windows App SDK Runtime 2.5.1，用户无需单独安装，并排除 WebView2（最终包待核验）；运行时会增加部署和资源成本，不声称体积或启动时间有所改善。 |
 
 自动整理只改变文件所属的栅栏，保留文件原来的位置。
 你主动发起的移动、重命名和删除，则像资源管理器一样操作真实文件。
@@ -78,20 +78,18 @@ https://github.com/user-attachments/assets/6320cf28-a791-4720-9659-b4575df021a0
 **简体中文 · 繁體中文 · English · 日本語 · 한국어**  
 **Deutsch · Français · Español · Português (Brasil) · Русский**
 
-在 **设置 → 常规 → 显示语言** 中即时切换，也可以跟随 Windows。
-翻译已经内置，离线可用；文件名和你自己起的名称保持不变。
+界面支持的十种语言均已内置，离线可用；文件名和自定义名称保持不变。原生 Settings 的语言选择和本地化表单已实现；视觉、无障碍以及完整语言/DPI 验收仍待完成。
 
 ## 开始使用
 
-<a href="https://apps.microsoft.com/detail/9MV6WG3XNWSX?mode=direct"><img src="https://get.microsoft.com/images/zh-cn%20dark.svg" alt="从 Microsoft Store 获取" width="200"></a>
+这是在 [Tinnci/PecoFence](https://github.com/Tinnci/PecoFence) 独立维护的版本。
+本版本尚未配置 Microsoft Store 和 winget 分发渠道，也尚未发布任何 Release。
+请在本仓库的 [Releases](https://github.com/Tinnci/PecoFence/releases) 或
+[CI 构建产物](https://github.com/Tinnci/PecoFence/actions)中查看是否有可用构建，或按下方说明从源码构建。
 
-Microsoft Store 版由微软签名，自动更新，不会出现 SmartScreen 提示。想要纯压缩包？下面的便携版是同一个程序。
-
-1. 在本仓库的 **Releases** 页面下载 `pecofence-<版本>-x64.zip`。
+1. 有可用的便携构建时，从本仓库的 Releases 或 CI 构建产物下载 `pecofence-<版本>-x64.zip`。
 2. **完整解压**到一个文件夹，运行 `pecofence.exe`。
 3. 开始整理。需要设置或退出时，右键系统托盘里的 PecoFence 图标。
-
-习惯用包管理器？`winget install DayuanJiang.PecoFence` 安装的是同一个便携版，并且不会触发 SmartScreen 提示。
 
 **Windows 11 x64 · 便携版 · 无需账号 · Apache 2.0 开源**
 
@@ -103,14 +101,18 @@ Microsoft Store 版由微软签名，自动更新，不会出现 SmartScreen 提
 
 - 面向 Windows 11 22H2 及以上版本，目前主要在 25H2 上完成原生验证；
   旧版本 Windows 和多显示器硬件组合的完整回归仍在进行。
-- 设置面板需要 Microsoft Edge WebView2 Runtime。
-  请将压缩包里的 `WebView2Loader.dll`、`pecofence-watchdog.exe` 与主程序放在一起。
-- 配置保存在 `%APPDATA%\PecoFence\config.json`。
+- 设置现包含五个 Reactor/WinUI 3 原生任务页。headless 测试和包含关闭/重开的合成 WinUI 测试已通过；
+  这不等于功能对等或发行验收。键盘、UI Automation/Narrator、高对比度、文字缩放、全部十种语言在
+  100%/150%/200% DPI 以及干净系统检查仍是必需的发行验收工作。发行包、导入和进程检查还需确认
+  自包含 Windows App SDK Runtime 及 WebView2 组件缺失。Full Windows CI 的 EXE 上限为
+  6.5 MiB（6,815,744 字节）；最终发行测量待补，不声称启动或内存有所改善。
+- 为便于恢复桌面图标，请将 `pecofence-watchdog.exe` 与主程序放在一起。
+- 配置保存在 `%APPDATA%\PecoFence\workspace.v2.json`。
   用 `--portable` 启动，可改为保存在程序旁的 `config` 文件夹。
-- 已有安装会继续使用旧配置目录，保留布局、规则和备份。详见[升级说明](../UPGRADING.md)。
+- 新格式不读取或自动迁移旧配置。原文件保留；请明确新建工作区或导入受支持文档。详见[升级说明](../UPGRADING.md)。
 - 玻璃效果采样静态桌面壁纸，不会折射其他应用窗口或视频壁纸。
 - Windows 自带对话框和第三方资源管理器菜单仍使用系统语言。
-- 便携版未做代码签名。首次运行若出现 Windows SmartScreen 提示，点击**更多信息 → 仍要运行**。通过 Microsoft Store 或 winget 安装不会出现该提示。
+- 便携版未做代码签名。首次运行若出现 Windows SmartScreen 提示，仅在信任构建来源时点击**更多信息 → 仍要运行**。
 
 [便携版说明](../PORTABLE.md) · [多语言说明](../LOCALIZATION.md)
 
@@ -125,11 +127,15 @@ Microsoft Store 版由微软签名，自动更新，不会出现 SmartScreen 提
 <details>
 <summary><strong>从源码构建</strong></summary>
 
-安装 Rust stable、Visual Studio Build Tools 的 C++ 工作负载和 Windows SDK，然后运行：
+安装 Rust stable、Visual Studio Build Tools 的 C++ 工作负载和 Windows SDK。
+Windows SDK 是开发工具，与发行包自包含的 Windows App SDK Runtime 不同。
+公开构建只使用本仓库和公开 registry，包含本地 `crates/spm-contracts`（0.1.0），
+不需要私有 token 或 SPM checkout。可选的 `Tinnci/spm` 后端保持私有，
+仅实时 SPM 数据需要它；编译或使用普通桌面围栏不需要，也不随 PecoFence 分发。
+详见 [SPM 边界](../SPM_BOUNDARY.md)。运行：
 
 ```powershell
 cargo build --locked --release
-Copy-Item third_party/webview2/WebView2Loader.x64.dll target/release/WebView2Loader.dll
 ```
 
 生成便携发布包：
@@ -138,10 +144,10 @@ Copy-Item third_party/webview2/WebView2Loader.x64.dll target/release/WebView2Loa
 ./scripts/make-portable.ps1
 ```
 
-原生应用位于 `crates/`，设置面板在 `ui/`，翻译在 `locales/`，
-验证与打包脚本在 `scripts/`。产品网站在 `site/`，`extras/` 下的宣传视频工程不参与应用构建。
+Rust 应用位于 `crates/`，翻译在 `locales/`，验证与打包脚本在 `scripts/`。设置采用
+Reactor 承载的原生 WinUI 3，而不是浏览器界面。`extras/` 下的宣传视频工程不参与应用构建。
 
-[发布指南](../RELEASING.md) · [源码结构](../DEVELOPMENT.md#architecture)
+[发布指南](../RELEASING.md) · [源码结构](../DEVELOPMENT.md#architecture) · [验证门槛](../VERIFICATION_GATES.md)
 
 </details>
 

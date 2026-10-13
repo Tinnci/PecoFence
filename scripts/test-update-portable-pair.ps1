@@ -3,7 +3,6 @@ param(
   [Parameter(Mandatory = $true)][string]$PecoFenceBinDir,
   [Parameter(Mandatory = $true)][string]$SpmBinDir,
   [Parameter(Mandatory = $true)][string]$FixtureDir,
-  [Parameter(Mandatory = $true)][string]$WebViewLoader,
   [switch]$FailNewFence,
   [switch]$Persistent,
   [string]$CandidatePecoFenceZip = "",
@@ -22,7 +21,12 @@ try {
   foreach ($file in @("pecofence.exe", "pecofence-watchdog.exe")) {
     Copy-Item (Join-Path $PecoFenceBinDir $file) (Join-Path $root $file)
   }
-  Copy-Item $WebViewLoader (Join-Path $root "WebView2Loader.dll")
+  $runtimeManifest = Get-Content -Raw -Encoding UTF8 (Join-Path $PSScriptRoot '..\third_party\winappsdk\runtime-manifest.json') | ConvertFrom-Json
+  foreach ($entry in $runtimeManifest.files) {
+    $destination = Join-Path $root $entry.path
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $destination) | Out-Null
+    Copy-Item -LiteralPath (Join-Path $PecoFenceBinDir $entry.path) -Destination $destination
+  }
   Copy-Item (Join-Path $SpmBinDir "spmd.exe") (Join-Path $root "spmd.exe")
   Copy-Item $FixtureDir (Join-Path $root "fixture") -Recurse
   $fixture = Join-Path $root "fixture\catalog.json"
@@ -30,12 +34,32 @@ try {
   $pfStage = Join-Path $root "pf-package"
   $spmStage = Join-Path $root "spm-package"
   New-Item -ItemType Directory -Path $pfStage, $spmStage | Out-Null
-  foreach ($file in @("pecofence.exe", "pecofence-watchdog.exe", "WebView2Loader.dll")) {
+  foreach ($file in @("pecofence.exe", "pecofence-watchdog.exe")) {
     Copy-Item (Join-Path $root $file) (Join-Path $pfStage $file)
   }
+  foreach ($entry in $runtimeManifest.files) {
+    $destination = Join-Path $pfStage $entry.path
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $destination) | Out-Null
+    Copy-Item -LiteralPath (Join-Path $root $entry.path) -Destination $destination
+  }
   if ($FailNewFence) {
-    # A valid PE that does not implement the PecoFence CLI simulates a failed candidate.
-    Copy-Item (Join-Path $SpmBinDir "spmd.exe") (Join-Path $pfStage "pecofence.exe") -Force
+    # Reach the rollback path after stopping the old daemon: workspace preflight
+    # and protocol preflights succeed, then the candidate fails to launch. This is a
+    # disposable test executable, never part of a product package.
+    $compiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
+    if (-not (Test-Path -LiteralPath $compiler)) { throw 'Rollback fixture requires the Windows .NET Framework C# compiler' }
+    $failureSource = Join-Path $root 'failed-candidate.cs'
+    @'
+internal static class FailedCandidate {
+    static int Main(string[] args) {
+        bool validate = args.Length == 2 && args[0] == "--validate-workspace";
+        bool probe = args.Length == 1 && args[0] == "--probe-spm";
+        return validate || probe ? 0 : 42;
+    }
+}
+'@ | Set-Content -LiteralPath $failureSource -Encoding UTF8
+    & $compiler /nologo /target:exe ("/out:" + (Join-Path $pfStage 'pecofence.exe')) $failureSource
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot compile failed-candidate fixture' }
   }
   Copy-Item (Join-Path $root "spmd.exe") (Join-Path $spmStage "spmd.exe")
   $pfZip = Join-Path $root "pf.zip"
@@ -80,6 +104,11 @@ try {
     }
     if ($Persistent -and -not (Test-Path $database -PathType Leaf)) {
       throw "database missing after rollback"
+    }
+    $oldDaemon.Refresh()
+    $oldFence.Refresh()
+    if (-not $oldDaemon.HasExited -or -not $oldFence.HasExited) {
+      throw 'Failure fixture did not reach both process replacements and rollback'
     }
     Start-Sleep -Seconds 1
     $restored = @(Get-Process spmd, pecofence -ErrorAction SilentlyContinue | Where-Object {

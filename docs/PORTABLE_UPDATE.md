@@ -7,7 +7,7 @@ installations or download releases. Obtain ZIPs from a trusted release source: a
 checksum stored beside a ZIP detects corruption but is not a publisher signature.
 
 For the initial flat layout, place `pecofence.exe`, `pecofence-watchdog.exe`,
-`WebView2Loader.dll`, `spmd.exe`, and portable `config/` under `InstallRoot`.
+`pecofence_shell_extension.dll`, the complete pinned Windows App SDK runtime, `spmd.exe`, and portable `config/` under `InstallRoot`.
 Subsequent updates use `active.json` to find the active version. Keep one paired
 instance per root. Named instances also need a distinct root and the same `-Instance`
 value on each update.
@@ -39,6 +39,11 @@ backup and restarts the old pair. It updates an existing default-instance Run
 entry only when it points at the previous PecoFence executable; unrelated startup
 entries are preserved.
 
+The native version uses `workspace.v2.json`. Before stopping either old process,
+the candidate validates the saved workspace. An incompatible workspace or a root
+containing only legacy `config.json` stops the update with the current installation
+still running. Decide how to migrate or recover that configuration explicitly.
+
 An older binary without `spmd --stop` or PecoFence's update-exit message cannot
 be shut down gracefully by this script. Exit that old pair manually, then run the
 updater once; later updates can use the managed handoff. The desktop windows are
@@ -54,6 +59,6 @@ exercise SQLite rollback:
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/test-update-portable-pair.ps1 `
   -PecoFenceBinDir <Windows build directory> -SpmBinDir <Windows build directory> `
-  -FixtureDir <spm-contracts fixtures directory> -WebViewLoader <WebView2Loader.x64.dll>
+  -FixtureDir <spm/crates/spmd/tests/fixtures directory>
 # Add -FailNewFence -Persistent to test a failed candidate with SQLite rollback.
 ```

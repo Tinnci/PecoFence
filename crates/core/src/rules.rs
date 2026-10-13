@@ -1,6 +1,6 @@
 //! Auto-sorting rule engine (plan §8). Pure functions over `ItemFacts`.
 
-use crate::model::{FenceId, Origin, RuleId};
+use crate::model::{ContentId, Origin, RuleId};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -8,11 +8,11 @@ use uuid::Uuid;
 #[serde(rename_all = "camelCase")]
 pub enum Target {
     Inbox,
-    Fence(FenceId),
+    Collection(ContentId),
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RuleSet {
     pub default_target: Target,
     pub keep_updated: bool,
@@ -42,7 +42,7 @@ pub enum Class {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Rule {
     pub id: RuleId,
     pub name: String,
@@ -58,6 +58,46 @@ pub struct Rule {
 }
 
 impl Rule {
+    pub(crate) fn validate_definition(name: &str, conditions: &[Cond]) -> Result<(), String> {
+        if name.trim().is_empty()
+            || name.len() > 1024
+            || conditions.is_empty()
+            || conditions.len() > 32
+        {
+            return Err("rule needs a name and 1–32 conditions".into());
+        }
+        for condition in conditions {
+            let valid = match condition {
+                Cond::Type(v) => !v.is_empty() && v.len() <= 64,
+                Cond::Ext(v) | Cond::ExactName(v) => {
+                    !v.is_empty()
+                        && v.len() <= 64
+                        && v.iter().all(|s| !s.trim().is_empty() && s.len() <= 1024)
+                }
+                Cond::Name { value, .. } | Cond::ShortcutTarget { value, .. } => {
+                    !value.trim().is_empty() && value.len() <= 1024
+                }
+                Cond::Glob(v) => !v.trim().is_empty() && v.len() <= 256,
+                Cond::CreatedTime { from_min, to_min } => *from_min < 1440 && *to_min < 1440,
+                Cond::CreatedWeekday(v) => {
+                    !v.is_empty() && v.len() <= 7 && v.iter().all(|d| *d < 7)
+                }
+                Cond::SizeMb { min, max } => {
+                    (min.is_some() || max.is_some())
+                        && min.is_none_or(|v| v.is_finite() && v >= 0.0)
+                        && max.is_none_or(|v| v.is_finite() && v >= 0.0)
+                        && min.zip(*max).is_none_or(|(a, b)| a <= b)
+                }
+                Cond::IdleDays { min } => *min > 0,
+                _ => true,
+            };
+            if !valid {
+                return Err("invalid rule condition".into());
+            }
+        }
+        Ok(())
+    }
+
     pub fn new(name: &str, target: Target, all_of: Vec<Cond>) -> Self {
         let priority_class = if all_of
             .iter()
@@ -124,7 +164,13 @@ pub enum StrOp {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", tag = "cond", content = "value")]
+#[serde(
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    tag = "cond",
+    content = "value",
+    deny_unknown_fields
+)]
 pub enum Cond {
     Type(Vec<TypeCategory>),
     Ext(Vec<String>),
@@ -315,24 +361,27 @@ fn str_op(op: StrOp, haystack: &str, needle: &str) -> bool {
     }
 }
 
-/// Minimal glob: `*` and `?`, case-insensitive.
+/// Minimal glob: `*` and `?`, case-insensitive, O(pattern × text) with no recursion.
 pub fn glob_match(pattern: &str, text: &str) -> bool {
-    fn rec(p: &[char], t: &[char]) -> bool {
-        match (p.first(), t.first()) {
-            (None, None) => true,
-            (Some('*'), _) => rec(&p[1..], t) || (!t.is_empty() && rec(p, &t[1..])),
-            (Some('?'), Some(_)) => rec(&p[1..], &t[1..]),
-            (Some(a), Some(b))
-                if a.eq_ignore_ascii_case(b) || a.to_lowercase().eq(b.to_lowercase()) =>
-            {
-                rec(&p[1..], &t[1..])
-            }
-            _ => false,
+    let text: Vec<char> = text.chars().collect();
+    let mut previous = vec![false; text.len() + 1];
+    let mut current = vec![false; text.len() + 1];
+    previous[0] = true;
+    for pattern_char in pattern.chars() {
+        current[0] = pattern_char == '*' && previous[0];
+        for (index, text_char) in text.iter().enumerate() {
+            current[index + 1] = if pattern_char == '*' {
+                previous[index + 1] || current[index]
+            } else {
+                previous[index]
+                    && (pattern_char == '?'
+                        || pattern_char.eq_ignore_ascii_case(text_char)
+                        || pattern_char.to_lowercase().eq(text_char.to_lowercase()))
+            };
         }
+        std::mem::swap(&mut previous, &mut current);
     }
-    let p: Vec<char> = pattern.chars().collect();
-    let t: Vec<char> = text.chars().collect();
-    rec(&p, &t)
+    previous[text.len()]
 }
 
 pub fn cond_matches(cond: &Cond, facts: &ItemFacts) -> bool {
@@ -433,14 +482,14 @@ impl RuleSet {
     }
 
     /// Stardock-style first-run presets: 程序 / 文件夹 / 文件与文档 (+ 下载 by name).
-    pub fn default_presets(programs: FenceId, folders: FenceId, documents: FenceId) -> Self {
+    pub fn default_presets(programs: ContentId, folders: ContentId, documents: ContentId) -> Self {
         Self {
             default_target: Target::Inbox,
             keep_updated: true,
             list: vec![
                 Rule::new(
                     crate::i18n::text("程序与快捷方式"),
-                    Target::Fence(programs),
+                    Target::Collection(programs),
                     vec![Cond::Type(vec![
                         TypeCategory::Programs,
                         TypeCategory::Shortcuts,
@@ -448,12 +497,12 @@ impl RuleSet {
                 ),
                 Rule::new(
                     crate::i18n::text("文件夹"),
-                    Target::Fence(folders),
+                    Target::Collection(folders),
                     vec![Cond::Type(vec![TypeCategory::Folders])],
                 ),
                 Rule::new(
                     crate::i18n::text("文件与文档"),
-                    Target::Fence(documents),
+                    Target::Collection(documents),
                     vec![Cond::Type(vec![
                         TypeCategory::Documents,
                         TypeCategory::Images,
@@ -524,7 +573,7 @@ impl Template {
     }
 
     /// The rule that fills `fence`, tagged with this template's key.
-    pub fn rule(self, fence: FenceId) -> Rule {
+    pub fn rule(self, collection: ContentId) -> Rule {
         let conds = match self {
             Template::Images => vec![Cond::Type(vec![TypeCategory::Images])],
             Template::Music => vec![Cond::Type(vec![TypeCategory::Music])],
@@ -538,7 +587,7 @@ impl Template {
                 },
             ],
         };
-        let mut rule = Rule::new(&self.title(), Target::Fence(fence), conds);
+        let mut rule = Rule::new(&self.title(), Target::Collection(collection), conds);
         rule.template = Some(self.key().to_string());
         rule
     }
@@ -566,18 +615,18 @@ mod tests {
 
     #[test]
     fn presets_route_by_type_and_default_to_inbox() {
-        let (p, f, d) = (Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4());
+        let (p, f, d) = (ContentId::new(), ContentId::new(), ContentId::new());
         let rs = RuleSet::default_presets(p, f, d);
         assert!(
-            matches!(rs.evaluate(&facts("Steam.lnk")), Decision::Route { target: Target::Fence(t), .. } if t == p)
+            matches!(rs.evaluate(&facts("Steam.lnk")), Decision::Route { target: Target::Collection(t), .. } if t == p)
         );
         let mut folder = facts("Projects");
         folder.is_folder = true;
         assert!(
-            matches!(rs.evaluate(&folder), Decision::Route { target: Target::Fence(t), .. } if t == f)
+            matches!(rs.evaluate(&folder), Decision::Route { target: Target::Collection(t), .. } if t == f)
         );
         assert!(
-            matches!(rs.evaluate(&facts("photo.JPG")), Decision::Route { target: Target::Fence(t), .. } if t == d)
+            matches!(rs.evaluate(&facts("photo.JPG")), Decision::Route { target: Target::Collection(t), .. } if t == d)
         );
         assert_eq!(
             rs.evaluate(&facts("weird.xyz")),
@@ -587,19 +636,19 @@ mod tests {
 
     #[test]
     fn target_class_rules_win_regardless_of_order() {
-        let (a, b) = (Uuid::new_v4(), Uuid::new_v4());
+        let (a, b) = (ContentId::new(), ContentId::new());
         let rs = RuleSet {
             default_target: Target::Inbox,
             keep_updated: true,
             list: vec![
                 Rule::new(
                     "all lnk",
-                    Target::Fence(a),
+                    Target::Collection(a),
                     vec![Cond::Ext(vec!["lnk".into()])],
                 ),
                 Rule::new(
                     "games",
-                    Target::Fence(b),
+                    Target::Collection(b),
                     vec![Cond::ShortcutTarget {
                         op: StrOp::Contains,
                         value: "steam".into(),
@@ -610,7 +659,7 @@ mod tests {
         let mut f = facts("Dota.lnk");
         f.shortcut_target = Some("C:\\Program Files\\Steam\\steam.exe".into());
         assert!(
-            matches!(rs.evaluate(&f), Decision::Route { target: Target::Fence(t), .. } if t == b)
+            matches!(rs.evaluate(&f), Decision::Route { target: Target::Collection(t), .. } if t == b)
         );
     }
 
@@ -641,7 +690,7 @@ mod tests {
 
     #[test]
     fn cleanup_template_gathers_only_idle_installers_and_archives() {
-        let fence = Uuid::new_v4();
+        let fence = ContentId::new();
         let rule = Template::Cleanup.rule(fence);
         assert_eq!(rule.template.as_deref(), Some("cleanup"));
         assert_eq!(rule.priority_class, Class::Type);
@@ -652,7 +701,7 @@ mod tests {
         let mut old_zip = facts("backup.zip");
         old_zip.idle_days = Some(45);
         assert!(
-            matches!(rs.evaluate(&old_zip), Decision::Route { target: Target::Fence(t), .. } if t == fence)
+            matches!(rs.evaluate(&old_zip), Decision::Route { target: Target::Collection(t), .. } if t == fence)
         );
         let mut fresh_zip = facts("backup.zip");
         fresh_zip.idle_days = Some(2);
@@ -669,7 +718,7 @@ mod tests {
 
     #[test]
     fn idle_template_rule_is_recognised_for_ordering() {
-        let f = Uuid::new_v4();
+        let f = ContentId::new();
         let cleanup = Template::Cleanup.rule(f);
         let installers = Template::Installers.rule(f);
         assert!(

@@ -164,6 +164,9 @@ impl App {
     /// Browser link dropped on a fence: write the Internet Shortcut Explorer would write and file
     /// it into `to` (desktop items route through a PendingRoute; a portal's folder shows it).
     pub(super) fn create_url_shortcut(&mut self, url: String, name: Option<String>, to: FenceId) {
+        if !self.state.fence(to).is_some_and(|f| f.content.is_files()) {
+            return;
+        }
         let portal_dir = self.state.portal_path(to);
         let Some(dir) = portal_dir.clone().or_else(shell::user_desktop) else {
             return;

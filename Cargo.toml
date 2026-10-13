@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
     "crates/core",
+    "crates/spm-contracts",
     "crates/plugin-api",
     "crates/plugin-kernel",
     "crates/plugin-spm",
@@ -14,6 +15,7 @@ members = [
     "crates/watchdog",
     "tools/bindgen",
 ]
+exclude = ["vendor/windows-reactor"]
 
 [workspace.package]
 version = "0.0.3"
@@ -22,16 +24,17 @@ rust-version = "1.95"
 license = "Apache-2.0"
 
 [workspace.dependencies]
-# Pinned to spm main @ c09e61357fcadb50075b980b17c29987e7061888 — bump rev explicitly
-# after the provider-side change lands (see docs/PECOFENCE_CORDIS_PLUGIN_ARCHITECTURE.md).
-spm-contracts = { version = "=0.1.0", git = "https://github.com/Tinnci/spm", rev = "e0dd3e058d40ef1c4623c12dba2f0715d2011a1b" }
+# The public wire contract lives here; private SPM consumes an immutable revision
+# of this repository. Neither desktop builds nor protocol tests need backend access.
+spm-contracts = { version = "=0.1.0", path = "crates/spm-contracts" }
 windows-core = "0.100"
 windows-numerics = "0.100"
 windows-window = "0.100"
 windows-canvas = { version = "0.100", features = ["composition"] }
 windows-composition = { version = "0.100", features = ["system"] }
-windows-webview = "0.100"
 windows-bindgen = "0.100"
+# Keep the narrow shutdown fix local while retaining the exact upstream crate identity.
+windows-reactor = { version = "=0.100.0", path = "vendor/windows-reactor" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 uuid = { version = "1", features = ["v4", "serde"] }
@@ -58,6 +61,11 @@ manual_div_ceil = "allow"
 # wrapper does not expose. Drop the patch once upstream ships an equivalent accessor.
 [patch.crates-io]
 windows-composition = { path = "vendor/windows-composition" }
+# The vendored Reactor and platform/render adapters must share one windows-core
+# 0.100 identity; equal registry/Git versions are different Rust types.
+windows-core = { git = "https://github.com/microsoft/windows-rs", rev = "2672e615d9cc0771448a781f3b2fe34e7fd08c6a" }
+windows-collections = { git = "https://github.com/microsoft/windows-rs", rev = "2672e615d9cc0771448a781f3b2fe34e7fd08c6a" }
+windows-time = { git = "https://github.com/microsoft/windows-rs", rev = "2672e615d9cc0771448a781f3b2fe34e7fd08c6a" }
 
 [profile.release]
 opt-level = 3
@@ -69,5 +77,14 @@ panic = "abort"
 strip = false
 debug = "line-tables-only"
 
+# Model/protocol validation is not a render hot path. Keep its generated serde
+# code compact without changing the renderer/platform optimization or symbols.
+[profile.release.package.pecofence-core]
+opt-level = "s"
+
 [profile.dev]
 opt-level = 1
+# Tests inherit this profile. Keep local builds small; enable symbols/incremental
+# compilation through CARGO_PROFILE_{DEV,TEST}_* when needed (docs/DEVELOPMENT.md).
+debug = 0
+incremental = false

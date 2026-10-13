@@ -14,8 +14,8 @@ use crate::layout::{
 };
 use crate::shadow::{ShadowStyle, ShadowWindow};
 use pecofence_core::{
-    CivilDate, DateBucket, FenceId, IconKey, ItemId, ItemKey, SortMode, Spacing, ViewLayout,
-    date_bucket,
+    CivilDate, ContainerId, ContentId, DateBucket, IconKey, ItemId, ItemKey, SortMode, Spacing,
+    ViewLayout, date_bucket,
 };
 use pecofence_platform::dragdrop::{
     self as dragdrop, DragImage, DragPoint, DropEffect, DropHandler, DropImage,
@@ -228,10 +228,10 @@ impl ItemView {
     }
 }
 
-/// One tab of a tabbed fence window (Fences 6): another fence shown inside this window.
+/// One content instance mounted in a container's tab strip.
 #[derive(Clone, Debug)]
 pub struct TabView {
-    pub id: FenceId,
+    pub id: ContentId,
     pub title: String,
     pub color: Option<[u8; 3]>,
     pub title_size: u8,

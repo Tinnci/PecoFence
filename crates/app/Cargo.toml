@@ -11,7 +11,7 @@ path = "src/main.rs"
 [dependencies]
 spm-contracts.workspace = true
 windows-core = { workspace = true }
-windows-webview = { workspace = true }
+windows-reactor = { workspace = true }
 uuid = { workspace = true }
 serde_json = { workspace = true }
 pecofence-core = { path = "../core" }
@@ -25,6 +25,9 @@ pecofence-shell-contract = { path = "../shell-contract" }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 tokio = { workspace = true }
+
+[dev-dependencies]
+windows-reactor = { workspace = true, features = ["test"] }
 
 [lints]
 workspace = true

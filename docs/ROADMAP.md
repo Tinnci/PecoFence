@@ -1,76 +1,122 @@
-# 路线图（Astra 第 5 轮咨询采纳版，2026-09-23）
+# 路线图：应用边界与接口重设计
 
-决策记录：[spm ADR](../../spm/docs/decisions/) · [PecoFence ADR](decisions/)。
+设计入口：[ARCHITECTURE.md](ARCHITECTURE.md) · 决策：[ADR-006](decisions/ADR-006-application-boundaries.md)。
 
-总原则：方向健全，不做重构性转向。优先级：数据语义准确 > 连接生命周期可证明 > 双仓发布组合可验证 > 新功能/新抽象。
+维护者已明确重新设计且不要求后向兼容。此前“不做重构性转向”、兼容读取/双向解码和保留服务内核的约束不再适用。新格式不兼容不等于有权覆盖旧用户文件。
 
-## 阶段 0：可信基线（✅ 已完成 2026-09-23）
+## 基线与完成定义
 
-判据达成记录：manifest 机器校验+负向测试 4 PASS（9d676ea）；ADR a–e 落仓（spm f761db1 / PecoFence 39d81a9）；两仓分支保护必需检查 build 已启用；agent 脚本收敛为 scripts/run-agent.sh（c76912c）；upstream 差异分类完成（docs/upstream-sync-assessment.md，1aff7e6，建议吸收 autostart 修复 73e6e18）。全部相关 CI 绿。
+重设计开始于 `43b6b7d`。此前阶段提供了原生窗口、文件功能、静态 SPM 面板、scope/任务工具和 CI/发布基线；这些是可以复用的实现，不证明新边界已经成立。
 
-目标：候选版本可追溯、决策有记录、主分支有必需检查。
+历史阶段记录见 Git 历史及 [旧实施规划](NEXT_PHASE_ROADMAP_AND_PLANNING.md)、[P0–P2a 蓝图](SOL_ENGINEERING_EXECUTION_PLAN.md)。此前自动化/实机结果只能证明当时受测组合，不能替代本次生命周期、保存或接口验收。
 
-完成判据：
+**每阶段完成条件：**输入 → 校验 → 有界副作用 → 真实结果 → 状态提交 → 呈现全链路可证明；对应旧入口被删除；故障测试与独立核验完成。只添加 trait、只移动文件或只编译通过不算完成。
 
-1. lab 实例 manifest 机器校验覆盖两仓 SHA、contracts 来源、Cargo.lock 哈希、工具链、产物哈希、wire/DB 版本；人为篡改产物或依赖后校验必须失败。
-2. 决策 a–e 各有一页式决策记录，包含选择、否决方案、验收用例和重开条件。
-3. 两仓 `main` 启用必需 CI 状态检查。
-4. 保留的 agent 脚本通过路径检查及 dry-run。
-5. upstream 差异完成一次性分类：必吸收、可选、冲突、无需。
+## A：异步门户观测（第一实施切片）
 
-## 阶段 1：可靠退出与实机恢复（✅ 代码与自动化判据达成 2026-09-24）
+状态：代码已落入工作区并通过自动化核验；Windows GUI/watcher 人工验收未执行，不宣称完整阶段验收结束。
 
-判据达成记录：有界命令队列+取消墓碑（25fafb8）；reader 全路径回收、静默流 2s 内终结（5ef96f3）；握手超时 15s+推送/响应 5s 限时（spm 70ebd85）；百次连接/断开与订阅残留回归（spm aaec41c + 53f83a1）；损坏配置隔离+原因可见（fe2bb59）；双端实例标识与并行不串接实证——lab-a r42 / lab-b r43 同机并行（e0dd3e0 + d4227f6 + f42ca59 rev bump）；DB 重启 revision 延续与来源失败保留测试、daemon 重启重连实机 PASS（dabefb8 + 7a7ddc0）。
-待维护者：docs/P2C-CHECKLIST.md 人工项（多 DPI / Explorer 重启 / Win+D / 视觉确认）。
+- 应用协调器拥有门户来源生命周期、独立请求 ID 和合并重读；持续同路径通知不使当前完整观测失效。
+- 背景 reader 拥有文件/Shell 查询与自己的 COM apartment。
+- 完整结果原子替换；完整空目录确实清空；partial/unavailable 保留同路径最近完整视图并标记健康。
+- 导航、删除/重建、配置/布局替换撤销旧结果；旧路径条目不可作为新路径内容操作。
+- UI 只消费结果和投影，不枚举、不等待 worker；关闭投递早于 HWND 销毁。
+- 空状态与标题区分加载/不可用/真正空目录，覆盖全部十种 UI 语言。内容推导的自动高度与其动画终态不再保存文档。
 
-入口：阶段 0 完成；实验实例可明确隔离。
+自动化：空目录、open/遍历/metadata 失败、迟到/重复结果、刷新突发/持续变动、同路径多个门户、停止；Windows 临时目录/Shell reader 测试；工作区测试、Clippy、绑定一致性、release 构建与 portable 打包。人工：真实 watcher/F5/导航、不可读来源提示、tab/导入/布局切换后不串内容。
 
-完成判据：
+实现入口：[读取契约](../crates/core/src/portal.rs)、[应用协调器](../crates/app/src/portal_runtime.rs)、[STA 读取适配器](../crates/platform/src/portal_reader.rs)、[状态提交](../crates/app/src/state.rs)、[原生投影接线](../crates/app/src/app/portals.rs)。旧同步门户读取入口已删除；整体重构状态见下面各阶段。
 
-1. 分帧、队列满、静默对端、握手超时、阻塞写、scope 撤销均有测试；PecoFence 命令队列收口为有界（`main` 当前是无界，属于已知欠账）。
-2. 受控测试 100 次连接/断开后 reader/订阅计数回到基线；取消后受控任务 2 秒内退出。
-3. 损坏配置（截断、语法错、版本不支持、读取失败）原件保留且原因可见；读取失败不得当作空配置写回。
-4. P2c 实机清单全部有证据：多 DPI 100/150/200 往返；Explorer 重启与 Win+D 各连续 3 次无重复窗口或不可恢复隐藏；daemon 重启后订阅自动恢复且旧 session 不覆盖新状态；来源失败保留最后有效数据并明确标记；DB 重启恢复已提交 revision，且下一次内容变化严格递增。
-5. 双端一致的实例标识（命名管道 + DB/配置路径）；两个不同 fixture 并行启动不串接。
+## B：文档与提交状态
 
-## 阶段 2：语义统一与协议收口（当前）
+状态：B1 规范化模型、载入保护和提交结果已落地；B2-1 串行异步保存、替换屏障和正常退出策略已实现。完整持久/观测分离及跨进程存储保护仍待实现。当前精确范围见 [PERSISTENCE.md](PERSISTENCE.md)。
 
-入口：兼容策略已定（见 ADR-001..004）；关键来源样本齐备。
+已实现：
 
-完成判据：
+- schema-2 `Config.layouts` 使用独立 `ContainerId`、`ContentId` 和单一容器/内容图；旧持久 Fence、tab_host 图、别名与自动迁移已删除。
+- `Workspace` 组件校验创建、标签选择/重排、合并、拆出、删除与结构逆操作；只读 `FenceSnapshot` 适配原生呈现，不成为另一份可变状态。
+- 窗口、几何、外观和自动高度按容器寻址；文件、门户、规则与扩展实例按内容寻址。拆出/挂载不重新创建来源身份。
+- `workspace.v2.json` 使用精确格式；错误载入不开启普通工作区、自动保存或 Explorer 图标隐藏。恢复候选只读，明确接受/导入/新建后才能替换。
+- 明确替换保留唯一原始字节 archive；主文件提交 receipt 与可选备份退化分开。重置/导入/恢复统一重新应用原生设置。
+- 删除/合并后的迟到窗口事件通过可空身份查询拒绝，不再在 `expect("live container")` 中崩溃。
 
-1. a–d 语义测试通过；同一输入在 daemon/panel/widget/export 中业务含义相同。
-2. 历史数据库升级可读取；wire 演进规则落地：crate/wire/DB 三版本分离，minor 扩展由协商结果控制序列化形状，不兼容变化走 major。
-3. 支持的组合通过互操作测试；不支持的组合明确拒绝。
-4. 退出条件满足后删除 v1 wire 与 PS capsule。
+实现：[模型与校验](../crates/core/src/model.rs)、[工作区协调器](../crates/core/src/workspace.rs)、[存储](../crates/core/src/config_store.rs)、[应用状态](../crates/app/src/state.rs)、[组件验收](../crates/core/tests/workspace_model.rs)。
 
-## 阶段 3：稳定发布与受控演进
+文档修订时钟已接入真实主文件结果，dirty 从当前/已提交修订推导。专用 writer 与容量为 1 的渠道串行提交；在途修改合并为最新 snapshot，旧激活结果不确认新文档，较旧 replace 不清较新屏障。正常退出异步等待，失败提供重试/取消/明确放弃；强制 OS 结束仍无保存保证。
 
-入口：已有通过完整验收的发布组合。
+尚未实现：把桌面 metadata 从 `Config.items` 全部移出、合作写入者锁/外部修改 stamp、未知磁盘结果核对与文件操作 journal。正常退出只 drain 文档提交，不能泛化为全部 Shell 副作用的退出保证；真实 Windows 退出/模态行为待人工验收。
 
-完成判据：每次发布自动产出配对清单与诊断信息；升级与回退演练通过（含 DB，回退用备份恢复）；连续两个发布周期无需手工修正配对；跨仓改动记录协调耗时，用实际成本决定仓库组织是否调整。
+## C：类型化 Settings 用例
 
-## 可推迟项（带触发条件，不无限悬置）
+状态：C1 类型化协议、修订/会话接纳、真实保存通知和规则编辑已实现。Reactor/WinUI 3 Settings 已实现五个任务页和十三种规则条件表单；报告的 headless 测试及包含关闭/重开的合成 WinUI 测试通过，但不代表完整功能对等或 release acceptance。`SettingsView`、类型化 `Request`/`Receipt` 与 `DocumentStamp` 继续作为应用 session 边界。C2 OS 集成期望/实际/失败投影及真实 Windows 验收未完成。精确当前协议见 [SETTINGS_PROTOCOL.md](SETTINGS_PROTOCOL.md)；验证分层见[验证门槛](VERIFICATION_GATES.md)。
 
-| 项目 | 推迟条件 | 结束触发 |
-|---|---|---|
-| v1 删除 | 仍有列明的有效消费者 | 消费者清点为零、投影对照通过 |
-| verification 丰富展示 | 来源无法证明统计单位/覆盖分母 | 首个可靠来源接入 |
-| 真实 accent | 固定主题/高对比/可读性已通过 | 明确产品需求 |
-| 多后端管理界面 | 实例参数已满足测试隔离 | 真实用户需要并行切换 |
-| upstream 全量同步 | 差异已分类且无必须吸收项 | 相关安全/稳定性修复出现 |
-| 内核新抽象 | 仅一个插件提出需求 | 第二个真实插件相同需求 |
+- 已实现精确版本、Settings session/workspace 身份、request sequence、expected document revision；最近 32 个决定可重放，已淘汰请求不重新执行。
+- 已删除整 Settings/Rules 替换和 raw JSON Value 命令 switch；属性、目标、规则和操作使用闭合枚举。
+- 内存接纳 receipt 与 persistence 分开；客户端有界单飞队列保留冲突草稿，明确重试/放弃，不因推送自动覆盖。
+- 页面可编辑已有规则、添加/移除 AND 条件及来源条件；文件导入/规则编辑共享验证，通配符不再递归指数展开。
+- C2 仍需将 OS 设置的期望、实际、错误与重试建模为真实操作结果，不能把文档接纳当作注册/隐藏成功。
 
-## 明确不做（6–12 个月）
+已有协议与用例测试覆盖错版本/未知字段/无效数值、重复/跳号/过期请求、跨工作区修订、冲突草稿、晚到保存通知、规则编辑和只读恢复。B2-1 已接入异步保存/失败重试/取消退出状态。报告的 headless 原生 Settings 测试和合成 WinUI 关闭/重开 tour 已通过；最终 Full Windows CI、实际 OS 注册失败和 Windows 退出行为仍须分别验证。
 
-不合仓不拆第三仓；不做插件市场/动态 ABI/热卸载/沙箱；不改增量事件流/事件溯源；不追求 Refresh 持久恰好一次；不做 verification 综合分数；不全面自动化实机验收；不为体积数字牺牲错误提示与数据正确性。
+## D：静态 provider 与类型化 SPM 端口
 
-## 现在值得投资（防未来信息丢失）
+状态：待实现；涉及 SPM wire 的改变需要其 worktree 与配对验证。
 
-已发布版本 fixture 双向解码测试；来源映射与迁移信息保留（原始枚举值/映射政策版本/覆盖状态/时间解释规则/存储版本）；轻量结构化诊断（连接状态/协商版本/session/revision/订阅数/队列满/错误类别/耗时，日志不含业务正文与凭证，有轮转上限）；发布工程（工具链固定 + 产物校验 + 升级演练）；分层测试金字塔；资源预算实测（32 连接 × 4MiB 帧 ≈ 128MiB 线性估算，体积门禁不代表运行资源健康）。
+- 区分组件契约、领域端口和宿主内部生命周期。
+- 删除通用服务定位器/DAG、字符串能力列表、通用字节 IPC、共享 Token 和无效服务。
+- watch/operation 分离，一对一完成关联；接纳后有明确本地终态。
+- owner 关闭后不回调；每个操作有 deadline，已发送后断连/取消/超时但结果不可证明时为 Indeterminate，不自动重放。
+- 复制简报/导航由 daemon 结果到真实 clipboard/navigation 完成；显示业务、连接、freshness 三类状态。
 
-## 协作交付链
+验收：双实例、多个订阅、重复/晚到完成、取消/断连、队列饱和、共享订阅关闭、错 daemon session、无能力与创建回滚。headless 测试不代替真实 daemon 配对。
 
-决策记录 → 验收用例 → 实现 → 独立核验 → 候选产物 → 实机结果。
+## E：帧与原生恢复
 
-代理交接附两仓 SHA、工作区状态、测试命令与结果、未验证项；核验从反例出发：什么输入会让结果看似正常实际错误。
+状态：待实现，可在应用/扩展接口稳定后并行拆分用例。
+
+- paint/hit/semantics/action map 在成功原生提交后发布为同一逻辑帧，失败保留旧帧或禁用输入；拒绝旧 frame/mount。
+- 真实字体测量，主题/metrics/geometry/device 失效分开。
+- render 设备恢复有 retry/backoff；领域实例不随设备重建。
+- Explorer 图标恢复失败保留 ownership marker；watchdog 必须确认成功。
+- 壁纸 I/O/CPU 处理离开 UI，按代际提交；日志后置单实例与有上限轮转。
+
+验收：多 DPI、文字缩放/高对比、旧 action、Explorer 重启/Win+D/Peek、设备故障恢复。现有 [P2C 人工清单](P2C-CHECKLIST.md) 是证据入口，空清单不等于通过。
+
+## 不作为本次交付
+
+动态 ABI、插件市场、热卸载 DLL、沙箱、共享内存总线、事件溯源、通用微内核和盲目拆 crate。不重写 SPM 业务判断、不以本地一次终态承诺远端副作用恰好一次，不为体积牺牲诊断和正确性。
+
+## 构建维护与原生设置当前状态
+
+Actions 使用已核验的 Node 24/复合 action SHA，Dependabot 显式覆盖工作流与本地 action；
+源码检查先于私有凭据。打包/安装使用共用 PE、构建 receipt、payload manifest 校验，
+不删除旧解压目录的用户配置。见 [DEPENDENCIES](DEPENDENCIES.md) 和 [PACKAGING](PACKAGING.md)。
+
+Settings 方向与部署边界见 [ADR-007](decisions/ADR-007-native-settings.md)。已实现五个 Reactor/WinUI 3 任务页和十三种规则条件表单；headless 测试及包含关闭/重开的合成 WinUI tour 报告通过。一次本机探测从暂存运行时加载 18 个 Windows App SDK DLL；抽样 tour 未观察到浏览器模块或子进程，此观察仅覆盖受测路径，不证明全路径缺失。生命周期设计为由
+Reactor 主 STA `Reactor::run_with` 拥有现有 `App`、桌面和托盘；打开或关闭 Settings
+组件窗口不得退出整个应用。已实现原生 WinUI 3 五任务页：常规与外观、窗口与内容、整理规则、
+布局与备份、关于与诊断，以及十三种规则条件表单。页面不能用占位内容代替各项用户需求。所有操作继续通过
+类型化应用 session 和持久化用例，不增加通用服务框架或第二份可变配置状态。
+
+发行方向为自包含 Windows App SDK Runtime 2.5.1，不携带 WebView2 payload；正确自包含的
+发行包不要求普通用户另行安装 Windows App SDK Runtime。Windows SDK 是开发工具链，不是
+随包运行时。App SDK 会增加部署/资源成本，不声称启动、内存或整体体积优化。Full Windows CI
+执行 **6.5 MiB（6,815,744 bytes）EXE 上限**；最终发布测量待补。运行时精确清单、发行包、
+imports、进程树和干净 Windows 的最终验收仍待完成。分层门槛、旧门槛的调整和当前证据边界见
+[VERIFICATION_GATES.md](VERIFICATION_GATES.md)。
+
+用户任务、N01–N08 范围、P0/P1/P2 优先级和验收条件见
+[USER_REQUIREMENTS.md](USER_REQUIREMENTS.md)。原生设置有自动化实现证据，但 feature parity 与真实桌面验收仍未完成：
+
+| 验收项 | 状态 | 证据/下一步 |
+| --- | --- | --- |
+| 五个 WinUI 3 任务页与类型化应用命令/回执 | 五页/十三种规则条件已实现；headless 与合成 tour 报告通过；不等于功能对等或 release acceptance | 最终 Full Windows CI 和 N01–N08 逐项行为证据 |
+| 键盘、焦点顺序、UI Automation、Narrator | 待真实 Windows 验收；不阻塞每个 commit | Windows 版本、读屏软件、步骤与结果 |
+| 100%/150%/200% DPI、文字缩放、高对比度、长译文布局 | 待真实 Windows 验收；需求保留，不作为每个 commit 的手动 gate | 覆盖全部十种语言，记录裁切/可达性结果 |
+| 自包含 Windows App SDK 2.5.1 且无 WebView2 payload | 本机抽样 tour 加载 18 个 app-local SDK DLL，未观察到浏览器模块/子进程；不是完整清单或包验收 | 核验确切运行时清单、PE imports、动态加载、完整进程树、发行包，并在干净系统实际完成设置任务 |
+| EXE 大小/启动/资源测量 | Full Windows CI 的 EXE 上限为 6.5 MiB（6,815,744 bytes）；最终发布测量待补 | 记录可复现条件与实测；不声称启动、内存或整体性能改善 |
+| 桌面核心可靠性、OS 集成和授权企业/SPM 闭环 | 尚非完成状态 | 按各自需求与可授权实机环境单独验证；不得由 Settings 替换推断完成 |
+
+## 每次交付需附
+
+具体替换链路与已删除入口；测试命令和实际结果；未验证的 Windows/daemon 行为；来源/配置文件处理政策；若涉及协议，则列双方 SHA 和支持的精确组合。提交/发布与架构验收是不同动作。

@@ -5,7 +5,7 @@
 rustflags = ["-C", "target-feature=+crt-static"]
 
 # Route git dependencies through the git CLI (and its credential helper) instead of
-# libgit2. Required for private git deps in CI where actions/checkout provides the
-# GITHUB_TOKEN extraheader, and locally it picks up the system proxy configuration.
+# libgit2. The only Git dependency is the pinned public Windows SDK; this also
+# picks up the local system proxy configuration without private credentials.
 [net]
 git-fetch-with-cli = true

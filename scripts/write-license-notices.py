@@ -5,6 +5,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import winappsdk_runtime as runtime
+
 ROOT = Path(__file__).resolve().parents[1]
 metadata = json.loads(subprocess.check_output(
     ["cargo", "metadata", "--locked", "--format-version", "1"], cwd=ROOT
@@ -16,9 +18,8 @@ packages = sorted(
 )
 sections = {}
 lines = [
-    "PecoFence — third-party Rust dependencies",
-    "Includes runtime and build/test dependencies from Cargo.lock.",
-    "WebView2 Loader has its own LICENSE-WebView2Loader.txt.",
+    "PecoFence — third-party dependencies and runtime notices",
+    "Includes runtime and build/test Rust dependencies from Cargo.lock plus the separately licensed Windows App SDK runtime.",
     "",
 ]
 for package in packages:
@@ -42,5 +43,19 @@ for package in packages:
         entry["names"].append(f"{label} / {path.name}")
 for entry in sections.values():
     lines.extend(("", "=" * 72, "\n".join(entry["names"]), "=" * 72, entry["text"]))
+
+sdk = runtime.load_runtime_manifest()
+lines.extend((
+    "", "=" * 72, "Microsoft Windows App SDK Runtime " + runtime.PACKAGE_VERSION,
+    "=" * 72,
+    "Public source: " + sdk["package"]["url"],
+    "NuGet SHA-256: " + sdk["package"]["sha256"],
+    "Redistribution license: WINDOWS-APP-SDK-LICENSE.txt",
+    "License SHA-256: " + sdk["license"]["sha256"],
+    "Runtime inventory provenance: " + sdk["upstreamRuntimeList"]["repository"]
+    + " at " + sdk["upstreamRuntimeList"]["commit"],
+    "Runtime list: " + sdk["upstreamRuntimeList"]["path"],
+    "Runtime list SHA-256: " + sdk["upstreamRuntimeList"]["sha256"],
+))
 Path(sys.argv[1]).write_text("\n".join(lines) + "\n", encoding="utf-8")
 print(f'Bundled {len(sections)} license texts for {len(packages)} dependencies')

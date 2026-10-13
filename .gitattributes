@@ -12,6 +12,10 @@
 *.css text eol=lf
 *.js text eol=lf
 *.html text eol=lf
+third_party/winappsdk/app.manifest text eol=lf
+third_party/winappsdk/runtime.txt text eol=lf
+# Keep upstream CRLF and blank lines byte-exact; the runtime tests verify its hash.
+third_party/winappsdk/WINDOWS-APP-SDK-LICENSE.txt -text -whitespace
 
 # Windows-only scripts keep CRLF
 *.ps1 text eol=crlf

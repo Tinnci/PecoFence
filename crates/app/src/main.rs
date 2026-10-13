@@ -1,7 +1,7 @@
 //! PecoFence — open-source Fences-style desktop organizer for Windows 11.
 // GUI subsystem: no console window when launched from Explorer. Logs go to a file (see
 // `init_logging`); stderr is still used when a console is attached (e.g. `cargo run`).
-#![windows_subsystem = "windows"]
+#![cfg_attr(not(test), windows_subsystem = "windows")]
 
 mod anchor;
 mod app;
@@ -10,8 +10,11 @@ mod fence_window;
 mod icons;
 mod layout;
 mod peek;
+mod persistence;
+mod portal_runtime;
 mod rename;
 mod settings_host;
+mod settings_ui;
 mod shadow;
 mod spm_transport;
 mod state;
@@ -20,6 +23,22 @@ use pecofence_platform::com::OleGuard;
 use pecofence_platform::window;
 use pecofence_shell_contract::{ShellAction, ShellCommand};
 use windows_core::Result;
+
+/// WinUI owns the one STA pump, while this resource owns the existing native
+/// desktop application. Native COM/windows must retire before OLE is uninitialized.
+struct NativeLifetime {
+    cell: app::AppCell,
+    _ole: OleGuard,
+}
+
+impl Drop for NativeLifetime {
+    fn drop(&mut self) {
+        let application = self.cell.borrow_mut().take();
+        if let Some(mut application) = application {
+            application.shutdown();
+        }
+    }
+}
 
 fn parse_args() -> app::Args {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -112,6 +131,20 @@ fn install_panic_hook() {
 }
 
 fn main() -> Result<()> {
+    let mut arguments = std::env::args_os().skip(1);
+    if arguments.next().as_deref() == Some(std::ffi::OsStr::new("--validate-workspace")) {
+        let path = arguments.next().ok_or_else(|| {
+            windows_core::Error::new(
+                windows_core::HRESULT(0x80070057u32 as i32),
+                "workspace path required",
+            )
+        })?;
+        return pecofence_core::ConfigStore::parse_file(std::path::Path::new(&path))
+            .map(|_| ())
+            .map_err(|error| {
+                windows_core::Error::new(windows_core::HRESULT(0x80070057u32 as i32), error)
+            });
+    }
     if std::env::args().any(|arg| arg == "--probe-spm") {
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
@@ -140,7 +173,6 @@ fn main() -> Result<()> {
     }
 
     let args = parse_args();
-    let exit_after = args.exit_after_ms;
     let instance_name = pecofence_core::brand::var("PECOFENCE_INSTANCE").ok();
     let main_instance = instance_name
         .as_deref()
@@ -162,7 +194,6 @@ fn main() -> Result<()> {
     }
 
     window::set_process_dpi_awareness_v2();
-    let _ole = OleGuard::init()?;
 
     // `PECOFENCE_INSTANCE=<name>` runs a second, independent instance (developer testing with
     // `--portable`); the default name keeps one PecoFence per session.
@@ -194,15 +225,11 @@ fn main() -> Result<()> {
         return Ok(());
     };
 
-    let cell = app::App::create(args)?;
-    if let Some(ms) = exit_after {
-        window::quit_after(ms);
-    }
-
-    let code = window::run_message_loop();
-    if let Some(app) = cell.borrow_mut().as_mut() {
-        app.shutdown();
-    }
-    drop(cell);
-    std::process::exit(code);
+    // Unlike run_component, run_with retains this lifetime with zero Settings
+    // windows. WinUI pumps the native HWNDs, timers and posted command queue too.
+    windows_reactor::App::run_with(move |context| {
+        let ole = OleGuard::init()?;
+        let cell = app::App::create(args, context.clone())?;
+        Ok(NativeLifetime { cell, _ole: ole })
+    })
 }

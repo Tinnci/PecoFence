@@ -1,4 +1,4 @@
-//! Regenerates the platform, Composition and GPU glass bindings from Windows metadata.
+//! Regenerates the platform, shell extension, Composition and GPU glass bindings from Windows metadata.
 //!
 //! Run from the workspace root: `cargo run -p tool_bindgen`.
 
@@ -8,6 +8,7 @@ fn main() {
     let etcs: Vec<String> = match std::env::args().skip(1).collect::<Vec<_>>() {
         v if v.is_empty() => vec![
             "tools/bindgen/platform.txt".to_string(),
+            "tools/bindgen/shell-extension.txt".to_string(),
             "tools/bindgen/composition.txt".to_string(),
             "tools/bindgen/gpu-glass.txt".to_string(),
         ],

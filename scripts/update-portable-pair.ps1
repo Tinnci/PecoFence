@@ -228,8 +228,16 @@ try {
   $newFenceExe = Join-Path $pfDir "pecofence.exe"
   $newSpmdExe = Join-Path $spmDir "spmd.exe"
   foreach ($binary in @($newFenceExe, (Join-Path $pfDir "pecofence-watchdog.exe"),
-      (Join-Path $pfDir "WebView2Loader.dll"), $newSpmdExe)) {
+      (Join-Path $pfDir "Microsoft.UI.Xaml.dll"), $newSpmdExe)) {
     if (-not (Test-Path -LiteralPath $binary -PathType Leaf)) { throw "package missing: $binary" }
+  }
+  $workspace = Join-Path $configPath 'workspace.v2.json'
+  if (-not (Test-Path -LiteralPath $workspace) -and (Test-Path -LiteralPath (Join-Path $configPath 'config.json'))) {
+    throw 'Legacy configuration needs an explicit migration decision; current installation was not stopped'
+  }
+  if (Test-Path -LiteralPath $workspace) {
+    $validation = Start-Process -FilePath $newFenceExe -ArgumentList @('--validate-workspace', ('"' + $workspace + '"')) -Wait -PassThru
+    if ($validation.ExitCode -ne 0) { throw 'Candidate rejected existing workspace; current installation was not stopped' }
   }
   & $newSpmdExe --help | Out-Null
   if ($LASTEXITCODE -ne 0) { throw "staged spmd failed its executable preflight" }

@@ -67,7 +67,7 @@ https://github.com/user-attachments/assets/6320cf28-a791-4720-9659-b4575df021a0
 | **익숙한 파일 다루기** | 파일 탐색기 우클릭 메뉴, 끌어서 놓기, 복사/붙여넣기, 다중 선택, 썸네일, 아이콘/목록/자세히 보기. |
 | **필요할 때는 공간을** | 펜스를 제목만 남기고 접어 두고, 마우스를 올리면 펼치세요. 마음에 드는 배치는 잠가 둘 수 있습니다. |
 | **되돌아갈 길** | 배치 스냅샷, 매일 자동 백업, 설정 내보내기 / 가져오기, 디스플레이 간 펜스 교환. |
-| **가벼운 존재감** | Rust로 만든 네이티브 앱. WebView2 설정 패널은 필요할 때만 로드됩니다. |
+| **네이티브 설정** | 설정 화면은 Reactor가 호스팅하는 네이티브 WinUI 3이며 5개 작업 페이지와 13가지 규칙 조건 양식을 구현했습니다. 닫기/다시 열기를 포함한 headless 테스트와 합성 WinUI 둘러보기는 통과했지만, 기능 동등성이나 릴리스 승인이 완료된 것은 아닙니다. 선택한 배포 방식은 자체 포함 Windows App SDK Runtime 2.5.1을 포함해 별도 설치가 필요 없고 WebView2를 제외합니다(최종 패키지 확인은 미완료). 런타임은 배포 및 리소스 비용을 늘립니다. 크기나 시작 시간 개선을 주장하지 않습니다. |
 
 자동 정리 규칙은 파일을 원래 위치에 그대로 둡니다. 직접 파일을 옮길 때는
 파일 탐색기에서처럼 실제 파일이 이동합니다.
@@ -79,20 +79,19 @@ https://github.com/user-attachments/assets/6320cf28-a791-4720-9659-b4575df021a0
 **한국어 · English · 简体中文 · 繁體中文 · 日本語**  
 **Deutsch · Français · Español · Português (Brasil) · Русский**
 
-**설정 → 일반 → 표시 언어**에서 바로 바꾸거나 Windows 설정을 따르세요.
-모든 번역이 내장되어 오프라인에서도 동작합니다. 파일 이름과 직접 지은 이름은 그대로 유지됩니다.
+인터페이스 10개 언어가 모두 내장되어 오프라인에서도 동작합니다. 파일 이름과 직접 지은 이름은 그대로 유지됩니다.
+네이티브 Settings의 언어 선택과 현지화된 양식은 구현했습니다. 시각적 표시, 접근성 및 전체 언어/DPI 조합 승인은 계속 필요합니다.
 
 ## PecoFence 시작하기
 
-<a href="https://apps.microsoft.com/detail/9MV6WG3XNWSX?mode=direct"><img src="https://get.microsoft.com/images/ko%20dark.svg" alt="Microsoft Store에서 받기" width="200"></a>
+이 버전은 [Tinnci/PecoFence](https://github.com/Tinnci/PecoFence)에서 독립적으로 유지 관리하는 버전입니다.
+이 버전의 Microsoft Store 및 winget 배포 채널은 설정되어 있지 않으며, 아직 릴리스가 게시되지 않았습니다.
+사용 가능한 빌드는 이 저장소의 [Releases](https://github.com/Tinnci/PecoFence/releases) 또는
+[CI 아티팩트](https://github.com/Tinnci/PecoFence/actions)에서 확인하거나, 아래 안내에 따라 소스에서 빌드하세요.
 
-Microsoft Store 버전은 Microsoft가 서명하고 자동으로 업데이트되며 SmartScreen 경고가 나타나지 않습니다. ZIP을 원한다면 아래 포터블 빌드도 같은 앱입니다.
-
-1. 이 저장소의 **Releases** 페이지에서 `pecofence-<버전>-x64.zip`을 다운로드합니다.
+1. 포터블 빌드가 제공되면 이 저장소의 Releases 또는 CI 아티팩트에서 `pecofence-<버전>-x64.zip`을 다운로드합니다.
 2. **ZIP 전체**를 한 폴더에 풀고 `pecofence.exe`를 실행합니다.
 3. 이제 정리를 시작하세요. 설정을 열거나 종료하려면 트레이 아이콘을 오른쪽 클릭하면 됩니다.
-
-패키지 관리자를 선호한다면 `winget install DayuanJiang.PecoFence`로 같은 포터블 빌드를 설치할 수 있고, SmartScreen 경고도 나타나지 않습니다.
 
 **Windows 11 x64 · 포터블 ZIP · 계정 불필요 · Apache 2.0 라이선스**
 
@@ -104,17 +103,22 @@ Microsoft Store 버전은 Microsoft가 서명하고 자동으로 업데이트되
 
 - Windows 11 22H2 이상을 대상으로 합니다. 네이티브 테스트는 대부분 25H2에서 진행했으며,
   이전 버전과 다중 디스플레이 하드웨어 조합에 대한 전체 검증은 아직 진행 중입니다.
-- 설정 화면에는 Microsoft Edge WebView2 Runtime이 필요합니다. 함께 제공되는
-  `WebView2Loader.dll`과 `pecofence-watchdog.exe`는 앱 옆에 그대로 두세요.
-- 설정은 `%APPDATA%\PecoFence\config.json`에 저장됩니다. `--portable`로 실행하면
+- 설정 화면에는 Reactor/WinUI 3 네이티브 작업 페이지 5개가 있습니다. 닫기/다시 열기를 포함한 headless
+  테스트와 합성 WinUI 둘러보기는 통과했지만, 기능 동등성이나 릴리스 승인을 뜻하지 않습니다.
+  키보드, UI Automation/Narrator, 고대비, 텍스트 확대, 10개 언어 각각의 100%/150%/200% DPI와
+  깨끗한 시스템 검증은 릴리스 승인에 필수입니다. 최종 패키지, import, 프로세스를 검사해 자체 포함
+  Windows App SDK Runtime과 WebView2 구성 요소를 확인해야 합니다. Full Windows CI의 EXE 상한은
+  6.5 MiB(6,815,744바이트)입니다. 최종 측정은 미기록이며 시작/메모리 개선을 주장하지 않습니다.
+- 바탕 화면 아이콘 복구를 위해 `pecofence-watchdog.exe`를 앱 옆에 두세요.
+- 설정은 `%APPDATA%\PecoFence\workspace.v2.json`에 저장됩니다. `--portable`로 실행하면
   실행 파일 옆의 `config` 폴더에 보관합니다.
-- 기존 설치는 이전 설정 디렉터리를 그대로 사용합니다.
+- 새 형식은 이전 설정을 가져오거나 마이그레이션하지 않습니다.
+  기존 파일은 보존됩니다. 새 작업 공간을 만들거나 지원되는 문서를 가져오세요.
   [업그레이드 안내](../UPGRADING.md)를 참고하세요.
 - 유리 효과는 정적 바탕 화면 배경을 사용합니다. 다른 앱 창이나 동영상 배경 화면은
   굴절하지 않습니다.
 - Windows 자체 대화 상자와 타사 파일 탐색기 메뉴 항목은 Windows 언어를 따릅니다.
-- 포터블 빌드는 코드 서명이 되어 있지 않습니다. 첫 실행 때 Windows SmartScreen이 나타나면 **추가 정보 → 실행**을 선택하세요.
-  Microsoft Store나 winget으로 설치하면 이 경고가 나타나지 않습니다.
+- 포터블 빌드는 코드 서명이 되어 있지 않습니다. 첫 실행 때 Windows SmartScreen이 나타나면 빌드 출처를 신뢰하는 경우에만 **추가 정보 → 실행**을 선택하세요.
 
 [포터블 버전 안내](../PORTABLE.md) · [언어 안내](../LOCALIZATION.md)
 
@@ -131,10 +135,15 @@ PecoFence는 Apache 2.0 라이선스로 공개되어 있습니다. 더 정확한
 <summary><strong>소스에서 빌드하기</strong></summary>
 
 Rust stable과 C++ 워크로드 및 Windows SDK가 포함된 Visual Studio Build Tools를 설치합니다.
+Windows SDK는 개발 도구이며 패키지에 포함되는 Windows App SDK Runtime과 다릅니다.
+공개 빌드는 이 저장소와 공개 레지스트리만 사용하며 `crates/spm-contracts` (0.1.0)를
+포함합니다. 비공개 토큰이나 SPM 체크아웃은 필요하지 않습니다. 선택적 `Tinnci/spm`
+백엔드는 비공개로 유지되며 실시간 SPM 데이터에만 필요합니다. 일반 바탕 화면 그룹의
+컴파일이나 사용에는 필요하지 않고 PecoFence에 포함되어 배포되지 않습니다.
+[SPM 경계](../SPM_BOUNDARY.md)를 참고하세요.
 
 ```powershell
 cargo build --locked --release
-Copy-Item third_party/webview2/WebView2Loader.x64.dll target/release/WebView2Loader.dll
 ```
 
 배포용 포터블 ZIP 만들기:
@@ -143,11 +152,12 @@ Copy-Item third_party/webview2/WebView2Loader.x64.dll target/release/WebView2Loa
 ./scripts/make-portable.ps1
 ```
 
-워크스페이스는 네이티브 앱의 `crates/`, 설정 화면의 `ui/`, 번역의 `locales/`,
-검증 및 패키징 스크립트의 `scripts/`로 구성됩니다.
+워크스페이스는 Rust 앱의 `crates/`, 번역의 `locales/`, 검증 및 패키징 스크립트의
+`scripts/`로 구성됩니다. 설정 화면은 Reactor가 호스팅하는 네이티브 WinUI 3 방향을
+선택했으며 브라우저 UI가 아닙니다.
 `extras/`의 선택적 동영상 프로젝트는 앱 빌드와 무관합니다.
 
-[릴리스 안내](../RELEASING.md) · [소스 구조](../DEVELOPMENT.md#architecture)
+[릴리스 안내](../RELEASING.md) · [소스 구조](../DEVELOPMENT.md#architecture) · [검증 게이트](../VERIFICATION_GATES.md)
 
 </details>
 

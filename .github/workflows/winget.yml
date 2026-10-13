@@ -1,7 +1,6 @@
-# Opens a pull request against microsoft/winget-pkgs for every published, non-prerelease
-# GitHub release (including drafts that are later published). Requires the repository secret WINGET_TOKEN: a classic
-# personal access token with the public_repo scope, used to push to the maintainer's fork
-# of winget-pkgs and open the PR.
+# Optional updates to an independently registered winget package.
+# Requires ENABLE_WINGET_PUBLISH=true, WINGET_PACKAGE_IDENTIFIER and WINGET_TOKEN.
+# The first package version must already have been accepted into winget-pkgs.
 name: Publish to winget
 
 on:
@@ -18,12 +17,40 @@ permissions:
 
 jobs:
   winget:
-    if: ${{ github.event_name == 'workflow_dispatch' || !github.event.release.prerelease }}
+    if: ${{ vars.ENABLE_WINGET_PUBLISH == 'true' && (github.event_name == 'workflow_dispatch' || !github.event.release.prerelease) }}
     runs-on: windows-latest
     steps:
-      - uses: vedantmgoyal9/winget-releaser@main
+      - name: Validate package and release
+        shell: pwsh
+        env:
+          PACKAGE_IDENTIFIER: ${{ vars.WINGET_PACKAGE_IDENTIFIER }}
+          RELEASE_TAG: ${{ inputs.tag || github.event.release.tag_name }}
+          GH_TOKEN: ${{ github.token }}
+          WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          if ($env:PACKAGE_IDENTIFIER -notmatch '^[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)+\z') {
+            throw "Set WINGET_PACKAGE_IDENTIFIER to your independently registered package."
+          }
+          if ($env:RELEASE_TAG -notmatch '^v\d+\.\d+\.\d+\z') {
+            throw "Only stable v<major>.<minor>.<patch> release tags can be published."
+          }
+          if ([string]::IsNullOrWhiteSpace($env:WINGET_TOKEN)) {
+            throw "Configure WINGET_TOKEN before enabling winget publication."
+          }
+          $json = gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --json isDraft,isPrerelease,assets
+          if ($LASTEXITCODE -ne 0) { throw "Cannot read the selected GitHub Release." }
+          $release = $json | ConvertFrom-Json
+          if ($release.isDraft -or $release.isPrerelease) {
+            throw "Drafts and prereleases cannot be published, including manual runs."
+          }
+          $installers = @($release.assets | Where-Object { $_.name -match '-x64\.zip$' })
+          if ($installers.Count -ne 1) { throw "Expected exactly one x64 portable ZIP." }
+      # Pin this wrapper; its cargo-binstall/komac dependencies still require review
+      # before enabling publication (see docs/INDEPENDENCE.md).
+      - uses: vedantmgoyal9/winget-releaser@a8fff44b123f115ce4c21543edf8b677376fc7e0
         with:
-          identifier: DayuanJiang.PecoFence
+          identifier: ${{ vars.WINGET_PACKAGE_IDENTIFIER }}
           installers-regex: '-x64\.zip$'
           release-tag: ${{ inputs.tag || github.event.release.tag_name }}
           max-versions-to-keep: 5

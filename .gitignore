@@ -2,10 +2,10 @@
 /target/
 /dist/
 /config/
-/ui/node_modules/
-/ui/dist/
+# Includes the hash-pinned Windows App SDK NuGet download and staged runtime.
 **/node_modules/
 **/__pycache__/
+/.venv*/
 *.pyc
 *.pdb
 *.dmp
@@ -17,14 +17,13 @@
 **/.capture/
 /docs/_ref/
 /docs/history/
-/third_party/webview2/*.nupkg
-/third_party/webview2/build/
 /extras/pecofence-promo/public/*
 !/extras/pecofence-promo/public/README.md
 /extras/pecofence-promo/out/
 /extras/pecofence-promo/review/
 
 # Local editor and credential files
+/.wrangler/
 .env
 .env.*
 !.env.example

@@ -1,71 +1,116 @@
-# Microsoft Store (MSIX)
+# Optional Microsoft Store packaging (MSIX)
 
-The Store build is the portable build wrapped in an MSIX package. The Store signs the
-package after certification, so no code-signing certificate is needed.
+This edition has no configured Store identity or listing. Packaging and Partner
+Center uploads are local/manual, not a CI Store release. An upstream publisher,
+listing or certification result is not this edition's publishing authority.
+See [INDEPENDENCE.md](INDEPENDENCE.md) for the remaining decisions.
 
-## Files
+## Obtain your own identity
 
-- `packaging/msix/AppxManifest.xml`: manifest template. `runFullTrust` (desktop hooks,
-  icon host, tray), Windows 11 minimum (`10.0.22000.0`), x64, a `windows.startupTask`
-  for run-at-logon, a packaged COM Explorer command for folder backgrounds, tile assets
-  under `Assets\`.
-- `packaging/msix/identity.json`: the identity Partner Center assigned
-  (Product management > Product identity). These values are not secret and must match
-  the manifest exactly or the upload is rejected.
-- `scripts/make-msix-assets.py`: renders every Store/tile PNG from `site/assets/mark.svg`.
-- `scripts/make-msix.ps1`: builds, stages, indexes resources (MakePri) and packs
-  (MakeAppx) into `dist/pecofence-<version>-x64.msix`. It includes
-  `pecofence_shell_extension.dll`; the portable ZIP does not register a shell extension.
+Reserve a product in your own Microsoft Partner Center account if Store publishing
+is desired. Copy the assigned values from **Product management → Product identity**
+into `packaging/msix/identity.json`, or a separate JSON passed with `-Identity`:
 
-See [Explorer context menu](EXPLORER_CONTEXT_MENU.md) for the command contract and
-Windows validation steps.
-
-## Build
-
-```powershell
-./scripts/make-msix.ps1              # build + pack, unsigned (upload this)
-./scripts/make-msix.ps1 -SkipBuild   # reuse target/package/release
-./scripts/make-msix.ps1 -TestSign    # also writes a self-signed copy for local installs
+```json
+{
+  "identityName": "<Partner Center-assigned package identity name>",
+  "publisher": "<Partner Center-assigned publisher>",
+  "publisherDisplayName": "<Partner Center-assigned publisher display name>"
+}
 ```
 
-Requires the Windows SDK (`winget install Microsoft.WindowsSDK.10.0.26100`) and Python
-with Pillow. The package version is `<Cargo.toml version>.0`; the Store requires the
-fourth part to be 0.
+All angle-bracket values above are **placeholders**, not usable identities. The
+checked-in publishing identity fields are `null`. Do not guess values or reuse
+another publisher's identity: the script fails early until the required fields
+are supplied, and the manifest must match Partner Center. Identity values are
+not credentials; keep account tokens and signing private keys out of source files.
 
-Local install test: import `dist/pecofence-test-signing.cer` into
-`Cert:\LocalMachine\TrustedPeople` (administrator), then
-`Add-AppxPackage dist/pecofence-<version>-x64-testsigned.msix`. Exit the running
-PecoFence first; both builds share the single-instance mutex.
+## Prerequisites and build
 
-## Certification notes
+- Windows 11 x64 and the native Rust/MSVC build prerequisites in
+  [DEVELOPMENT.md](DEVELOPMENT.md).
+- Windows SDK tools `MakeAppx`, `MakePri` and, for local signing, `SignTool`.
+  One installation option is `winget install Microsoft.WindowsSDK.10.0.26100`.
+- Python >=3.11 with Pillow for generating tile assets. Use `uv` for an isolated
+  environment and install Pillow from PyPI:
 
-- Submission 1 (2026-09-14) failed policy 10.2.4.1 because the binaries imported
-  `VCRUNTIME140.dll` from the Visual C++ Redistributable. `.cargo/config.toml` now links
-  the MSVC runtime statically (`+crt-static`); verify with a dependency scan before
-  uploading that only `api-ms-win-crt-*` (Universal CRT, part of Windows) and system DLLs
-  remain.
+  ```powershell
+  uv venv --python ">=3.11" .venv-msix
+  uv pip install --python .venv-msix/Scripts/python.exe --index-url https://pypi.org/simple Pillow
+  ```
 
-## Behavior differences in the packaged build
+After configuring your own identity:
 
-- Autostart: HKCU writes are virtualized inside the package, so the Run-key code is
-  skipped (`process::is_packaged()`). The manifest startup task is enabled by default and
-  users manage it under Settings > Apps > Startup; the in-app toggle opens that page.
-- Configuration: `%APPDATA%\PecoFence\config.json` is written into the package's
-  virtualized AppData (`%LOCALAPPDATA%\Packages\DayuanJiang.PecoFence_0bme5nfnaj27p\`).
-  An existing portable config is read on first launch but changes stay in the package.
-- Uninstall removes the virtualized config with the package.
+```powershell
+./scripts/make-msix.ps1 -Python .venv-msix/Scripts/python.exe
+./scripts/make-msix.ps1 -Python .venv-msix/Scripts/python.exe -SkipBuild
+./scripts/make-msix.ps1 -Python .venv-msix/Scripts/python.exe -TestSign
+```
 
-## Submission checklist (Partner Center)
+The first command builds and packs unsigned; `-SkipBuild` requires the verified
+build receipt in `target/package/release`; `-TestSign` additionally creates a
+self-signed copy. ZIP/MSIX payloads share the implementation in [PACKAGING.md](PACKAGING.md).
+To use a separate identity JSON, add `-Identity "path/to/your-identity.json"`
+to any command. With an existing Python/Pillow installation, omit `-Python`.
 
-1. Pricing and availability: free (base price 0 USD), all markets.
-2. Properties: category Productivity, no personal data collected (no privacy policy
-   URL), display mode PC, support URL and website.
-3. Age ratings: IARC questionnaire, utility with no user-generated or online content.
-4. Packages: upload `dist/pecofence-<version>-x64.msix`.
-5. Store listings: en-US, zh-CN, ja. Screenshots are the demo-desktop captures under
-   `extras/pecofence-promo/public/` (2560×1440 PNG, no overlaid text).
-6. Submission options: certification notes explaining that the app hides the real
-   desktop icons by design and restores them on exit (Restore Windows desktop icons in
-   the tray menu).
+`scripts/make-msix-assets.py` draws the package mark directly with Pillow; it
+does not depend on product website assets.
+`packaging/msix/AppxManifest.xml` supplies the manifest template: x64, Windows 11
+minimum (`10.0.22000.0`), `runFullTrust` and a `windows.startupTask`.
+The package version is `<Cargo.toml version>.0`; the Store requires the fourth
+component to be zero. Stable version components must fit 0–65535. The MSIX
+includes the same pinned, 206-file Windows App SDK Runtime 2.5.1 inventory as the
+portable package, plus its redistribution license/provenance and third-party
+notices. Settings use native Win32 controls; no WebView2 loader or Edge WebView2
+Runtime is required.
+Portable and MSIX packages include the license (`LICENSE` / `LICENSE.txt`),
+`NOTICE` and third-party notices; verify these remain in the staged payload.
 
-Store ID `9MV6WG3XNWSX`; listing URL <https://apps.microsoft.com/detail/9MV6WG3XNWSX>.
+## Local install test
+
+Exit running PecoFence instances first: the runtime single-instance identity is
+still shared. On a test machine, import the generated public test certificate
+from an administrator PowerShell, then install the test-signed package:
+
+```powershell
+Import-Certificate -FilePath dist/pecofence-test-signing.cer -CertStoreLocation Cert:\LocalMachine\TrustedPeople
+Add-AppxPackage "dist/pecofence-<version>-x64-testsigned.msix"
+```
+
+Replace `<version>` with the built version. Trusting the certificate changes the
+machine's certificate store; remove that trust when testing is finished.
+The self-signed certificate is **local-test-only**, not a production code-signing
+identity. Never upload the test-signed copy to the Store. Signing now uses a
+temporary non-exportable key in CurrentUser/My and removes it in `finally`;
+only the public `.cer` is exported, never a private PFX/default password.
+
+Packaged startup uses the manifest startup task rather than the normal HKCU Run
+entry; the in-app toggle opens Windows Startup settings. Windows virtualizes the
+normal `%APPDATA%\PecoFence\workspace.v2.json` under the package's own identity-dependent
+AppData location. Only supported schema-2 documents can be imported explicitly;
+there is no automatic migration of portable/old-format data. Packaged writes and
+uninstall behavior depend on Windows virtualization and the assigned identity.
+Test first launch, updates, startup, uninstall and desktop-icon restoration with
+your assigned identity rather than assuming portable/MSIX isolation.
+
+## Manual Store submission
+
+1. Review dependencies before upload, including static MSVC runtime linkage and
+   system DLL requirements; run native/package validation on supported Windows.
+2. Upload the **unsigned** `dist/pecofence-<version>-x64.msix` in your own Partner
+   Center submission. The Store signs accepted packages after certification;
+   Store upload does not require your own production signing certificate.
+3. Decide pricing, markets, category, age ratings, support contacts and privacy
+   disclosures from this edition's actual behavior and policies. No inherited
+   pricing, privacy claim or certification history is promised here.
+4. Supply accurate localized listings and screenshots that you may distribute.
+   Explain desktop-icon hiding/restoration and full-trust desktop integration in
+   certification notes, and verify the tray restoration action.
+
+Store publishing and winget publishing are separate choices. Optional winget
+automation requires `ENABLE_WINGET_PUBLISH=true`, an independently confirmed
+`WINGET_PACKAGE_IDENTIFIER` variable and a `WINGET_TOKEN` secret; drafts and
+prereleases are rejected for manual and automatic submissions. Establish an
+accepted first package version in `winget-pkgs` before enabling the update
+workflow; review its transitive tooling as described in [INDEPENDENCE.md](INDEPENDENCE.md).
+No existing winget identity or Store listing is assigned to this edition.

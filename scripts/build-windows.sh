@@ -16,7 +16,7 @@ PROFILE="${1:-release}"
 if [ "$#" -gt 0 ]; then shift; fi
 PACKAGES=("$@")
 if [ "${#PACKAGES[@]}" -eq 0 ]; then
-  PACKAGES=(pecofence pecofence-watchdog)
+  PACKAGES=(pecofence pecofence-watchdog pecofence-shell-extension)
 fi
 
 # Defense: an ambient CARGO_TARGET_DIR (e.g. the retired Windows user variable)
@@ -48,7 +48,16 @@ esac
 echo "repo     : $(pwd)"
 echo "commit   : $(git rev-parse HEAD)"
 echo "branch   : $(git rev-parse --abbrev-ref HEAD)"
-echo "spm rev  : $(grep -A2 'name = \"spm-contracts\"' Cargo.lock | grep rev | head -1)"
+python3 - <<'PY'
+import pathlib
+import sys
+if sys.version_info < (3, 11):
+    raise SystemExit("Python >=3.11 is required to read public contract provenance")
+import tomllib
+path = pathlib.Path("crates/spm-contracts/Cargo.toml")
+data = tomllib.loads(path.read_text())
+print(f"contracts: {data['package']['version']} (public workspace: {path.parent})")
+PY
 echo "triple   : $TRIPLE  profile: $PROFILE"
 echo "packages : ${PACKAGES[*]}"
 echo "linker   : lld-link"
@@ -64,13 +73,27 @@ if [ "$PROFILE" = test ]; then
   else
     exit 1
   fi
+  python3 scripts/stage-winappsdk-runtime.py stage --target-dir target --profile debug --target-triple "$TRIPLE"
   exit 0
 fi
+case "$PROFILE_DIR" in
+  debug|release) ;;
+  *)
+    echo "cannot stage the pinned Windows App SDK runtime for custom profile: $PROFILE_DIR" >&2
+    exit 1
+    ;;
+esac
 cargo build --locked --target "$TRIPLE" --profile "$PROFILE" "${pkg_flags[@]}"
+
+python3 scripts/stage-winappsdk-runtime.py stage --target-dir target --profile "$PROFILE_DIR" --target-triple "$TRIPLE"
 
 echo
 echo "artifacts under target/$TRIPLE/$PROFILE_DIR:"
 for p in "${PACKAGES[@]}"; do
-  ls -la "target/$TRIPLE/$PROFILE_DIR/$p.exe" 2>/dev/null || true
+  case "$p" in
+    pecofence-shell-extension) artifact=pecofence_shell_extension.dll ;;
+    pecofence|pecofence-watchdog) artifact="$p.exe" ;;
+    *) continue ;;
+  esac
+  ls -la "target/$TRIPLE/$PROFILE_DIR/$artifact"
 done
-echo "runtime dll for deployment: third_party/webview2/WebView2Loader.x64.dll"

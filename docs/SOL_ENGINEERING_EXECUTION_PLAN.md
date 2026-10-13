@@ -1,5 +1,7 @@
 # PecoFence 与 SPM P0–P2a 工程执行蓝图
 
+历史执行蓝图，后续工作以 [统一架构规范](ARCHITECTURE.md) 和 [当前路线图](ROADMAP.md) 为准。本文保留当时跨仓实施约束，不表示旧接口或阶段顺序仍需兼容。
+
 日期：2026-09-21  
 适用基线：PecoFence `9e5ea0b4f3d71971d5a0cd717037fa6be920398e`，SPM `e37e0ee21ee73784a5d5c7c06e8f0899d117fa18`  
 上位约束：`NEXT_PHASE_ROADMAP_AND_PLANNING.md`、`REDESIGN_UIUX_AND_CORDIS_ARCHITECTURE.md`

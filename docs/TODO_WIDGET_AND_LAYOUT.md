@@ -7,13 +7,13 @@
 ## 数据流与保存位置
 
 ```text
-Win32 菜单 → new_widget_near → FenceContentSpec::Panel
+Win32 菜单 → new_widget_near → ContentInstance / ContentSpec::Panel
 点击/输入 → PanelEvent → TodoWidget → HostCommand::PersistConfig
   → App 验证 provider/instance/config → 所有同 instance_id 的布局副本
-  → AppState::mark_dirty → 800 ms 合并保存 → ConfigStore::save
+  → AppState::mark_dirty → 文档修订 → SaveCoordinator 串行异步提交 → ConfigStore
 ```
 
-TODO 任务是 `PanelSpec.config.tasks`，而不是临时的 `StorageService`；后者当前只有进程内存实现。设置在 `Config.settings`，窗口在 `Config.layouts[*].fences[*]`。整个配置保存为 `config.json`：普通安装默认 `%APPDATA%\PecoFence\config.json`，portable 默认 `<exe>\config\config.json`，`--config-dir` 可覆盖。保存采用临时文件、同步写入、旧文件 `.bak` 与每日备份。单个 provider 配置写入限制为 64 KiB。
+TODO 任务是 `PanelSpec.config.tasks`，而不是临时的 `StorageService`；后者当前只有进程内存实现。设置在 `Config.settings`，窗口在 `Config.layouts[*].containers[*]` 与 `contents[*]`。整个配置保存为 `workspace.v2.json`：普通安装默认 `%APPDATA%\PecoFence\workspace.v2.json`，portable 默认 `<exe>\config\workspace.v2.json`，`--config-dir` 可覆盖。保存采用临时文件、同步写入、旧文件 `.bak` 与每日备份。单个 provider 配置写入限制为 64 KiB。
 
 每个 `Layout` 用显示器 device path 集合作指纹。Fence 几何数据 `NormGeometry` 保存显示器、工作区相对位置/大小（DIP）、原工作区尺寸和锚点。恢复时按当前 DPI 与工作区重新计算；靠右/下边的面板保持边缘距离，中央面板按相对中心位置缩放，最后限制在工作区内。因此不是固定像素坐标，分辨率和 DPI 改变后仍可尽量保留排布。
 

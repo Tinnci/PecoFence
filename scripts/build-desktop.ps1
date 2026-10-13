@@ -1,0 +1,14 @@
+# Compile once and bind the exact outputs to source/toolchain fingerprints.
+[CmdletBinding()]
+param([string]$TargetDir = "target/package", [string]$Python = "python")
+$ErrorActionPreference = "Stop"
+Set-Location (Split-Path -Parent $PSScriptRoot)
+$captured = Join-Path $TargetDir "build-inputs.json"
+& $Python scripts/package_desktop.py capture --out $captured
+if ($LASTEXITCODE -ne 0) { throw "Cannot capture build inputs." }
+cargo build --locked --release -p pecofence -p pecofence-watchdog -p pecofence-shell-extension --target-dir $TargetDir
+if ($LASTEXITCODE -ne 0) { throw "Cargo desktop build failed." }
+& $Python scripts/stage-winappsdk-runtime.py stage --target-dir $TargetDir --profile release
+if ($LASTEXITCODE -ne 0) { throw "Pinned Windows App SDK runtime staging failed." }
+& $Python scripts/package_desktop.py record-build --release (Join-Path $TargetDir "release") --captured $captured
+if ($LASTEXITCODE -ne 0) { throw "Cannot verify/stamp desktop build outputs." }

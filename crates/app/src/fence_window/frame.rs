@@ -135,10 +135,35 @@ impl FenceWindow {
             v.queue.clone()
         };
         let rect = window::window_rect(hwnd);
-        queue.push(Command::FenceBoundsChanged {
-            fence: self.id,
-            rect,
-        });
+        if let Some(command) = animation_bounds_command(self.id, rect, rolled_at_end) {
+            queue.push(command);
+        }
         more
+    }
+}
+
+/// Explicit roll/unroll edits are persistent; content-derived height animations are not.
+fn animation_bounds_command(
+    fence: ContainerId,
+    rect: RECT,
+    rolled_at_end: Option<bool>,
+) -> Option<Command> {
+    rolled_at_end.map(|_| Command::FenceBoundsChanged { fence, rect })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn portal_derived_height_does_not_publish_a_persistent_bounds_edit() {
+        let fence = ContainerId::new_v4();
+        assert!(animation_bounds_command(fence, RECT::default(), None).is_none());
+        for rolled in [true, false] {
+            assert!(matches!(
+                animation_bounds_command(fence, RECT::default(), Some(rolled)),
+                Some(Command::FenceBoundsChanged { fence: id, .. }) if id == fence
+            ));
+        }
     }
 }

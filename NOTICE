@@ -13,3 +13,9 @@ and limitations under the License.
 
 Third-party components keep their own licenses; see third_party/README.md and the
 THIRD-PARTY-LICENSES.txt file shipped with each release.
+
+The spm-contracts wire-protocol implementation originated in the SPM project,
+whose package metadata credits SPM Engineering and declares Apache-2.0.
+See crates/spm-contracts/NOTICE and docs/SPM_CONTRACT_PROVENANCE.md for the
+contract-only import and its source revision. Private backend code and data
+are not part of this distribution.

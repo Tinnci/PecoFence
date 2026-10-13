@@ -10,48 +10,27 @@ permissions:
 jobs:
   release:
     runs-on: windows-latest
+    timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
-      - name: Authenticate cargo git fetch for private deps (Tinnci/spm)
-        env:
-          PRIVATE_TOKEN: ${{ secrets.PRIVATE_REPO_TOKEN || github.token }}
-        run: |
-          git config --unset-all http.https://github.com/.extraheader
-          git config --global credential.https://github.com.helper ""
-          git config --global --add credential.https://github.com.helper "!f() { echo username=x-access-token; echo password=$env:PRIVATE_TOKEN; }; f"
-          git ls-remote https://github.com/Tinnci/spm main
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
+          persist-credentials: false
       - name: Check release version
         shell: pwsh
         run: |
           $version = (Select-String -Path Cargo.toml -Pattern '^version = "([^"]+)"').Matches[0].Groups[1].Value
           if ($env:GITHUB_REF_NAME -cne "v$version") { throw "Tag must match Cargo.toml version" }
-      - name: Verify
-        shell: pwsh
-        run: |
-          cargo fmt --all --check
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cargo clippy --workspace --all-targets -- -D warnings
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cargo test --workspace
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python scripts/check-locales.py
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python scripts/check-readme-translations.py
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Package
-        shell: pwsh
-        run: ./scripts/make-portable.ps1
+      - uses: ./.github/actions/build-desktop
+        with:
+          require-clean-source: 'true'
       - name: Create draft GitHub Release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $assets = @(Get-ChildItem dist/pecofence-*-x64.zip,dist/pecofence-*-x64.zip.sha256 | ForEach-Object FullName)
+          $version = $env:GITHUB_REF_NAME.Substring(1)
+          $assets = @("dist/pecofence-$version-x64.zip", "dist/pecofence-$version-x64.zip.sha256")
+          foreach ($asset in $assets) {
+            if (!(Test-Path -LiteralPath $asset -PathType Leaf)) { throw "Missing verified release asset: $asset" }
+          }
           gh release create $env:GITHUB_REF_NAME @assets --draft --verify-tag --generate-notes --title "PecoFence $env:GITHUB_REF_NAME"

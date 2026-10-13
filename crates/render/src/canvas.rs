@@ -146,14 +146,14 @@ impl<'a> Direct2dCanvas<'a> {
 
     fn text_format(&mut self, text: &TextSpec) -> Result<&windows_canvas::TextFormat> {
         let key = (text.font, text.size_dip.to_bits(), text.weight);
-        if !self.formats.contains_key(&key) {
+        if let std::collections::hash_map::Entry::Vacant(entry) = self.formats.entry(key) {
             let format = windows_canvas::TextFormat::with_weight(
                 text_font_family(text.font),
                 text.size_dip,
                 windows_canvas::FontWeight(i32::from(text.weight)),
             )
             .map_err(|error| Error::Backend(error.to_string()))?;
-            self.formats.insert(key, format);
+            entry.insert(format);
         }
         Ok(self.formats.get(&key).expect("format just inserted"))
     }
@@ -260,7 +260,7 @@ impl Canvas for Direct2dCanvas<'_> {
         let format = self.text_format(text)?;
         session.draw_text(
             &text.text,
-            &format,
+            format,
             &windows_canvas::Rect::from_xywh(rect.x, rect.y, rect.w, rect.h),
             &brush,
         );

@@ -386,16 +386,17 @@ pub(super) fn on_ncrbuttonup(
         peek_armed,
         ..
     } = h;
-    let fence_id = h.fence_id;
     if wparam as isize == msg::HTCAPTION {
         // The peek must not open under the TrackPopupMenuEx loop.
         window::kill_timer(hwnd, TIMER_PEEK_OPEN);
         peek_armed.set(false);
-        let fence = view
+        let Some(fence) = view
             .try_borrow()
             .ok()
             .and_then(|g| g.as_ref().map(|v| v.active))
-            .unwrap_or(fence_id);
+        else {
+            return Some(0);
+        };
         queue.push(Command::FenceMenu {
             fence,
             x: msg::lo_i16(lparam),

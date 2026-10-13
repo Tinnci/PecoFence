@@ -254,8 +254,8 @@ impl IClassFactory_Impl for CommandFactory_Impl {
         if lock.as_bool() {
             SERVER_LOCKS.fetch_add(1, Ordering::Relaxed);
         } else {
-            let _ = SERVER_LOCKS
-                .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_sub(1));
+            let _ =
+                SERVER_LOCKS.try_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_sub(1));
         }
         Ok(())
     }
