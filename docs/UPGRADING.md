@@ -1,5 +1,7 @@
 # Upgrading to PecoFence
 
+For paired portable PecoFence + SPM releases, see [Portable paired updates](PORTABLE_UPDATE.md).
+
 PecoFence is the new name of this project. The executable is now `pecofence.exe`,
 with `pecofence-watchdog.exe` beside it.
 
@@ -25,8 +27,10 @@ desktop-icon recovery marker from the older name is recognized.
 
 A normal release launch registers the `PecoFence` startup entry when required.
 The legacy `openFence` entry is removed only after a replacement was registered
-successfully, or when startup is disabled. A working PecoFence entry pointing to
-another copy is preserved.
+successfully, or when startup is disabled. A nonportable release refreshes a
+stale PecoFence entry to point to the running executable. The portable paired
+updater adjusts an existing entry only when it points to the previous executable
+in that installation.
 
 Portable and development launches do not change startup entries. Changing the
 autostart switch in Settings remains an explicit opt-in/out.

@@ -2,6 +2,7 @@
 # Create a PecoFence lab instance directory from local WSL cross-builds.
 # Usage: scripts/lab/new-instance.sh --name NAME [--fixture PATH] [--seed-config PATH]
 #          [--spm-profile release] [--pf-profile release]
+#          [--allow-contract-drift]  (experimental pairings only)
 #
 # --fixture points at the catalog file; its whole PARENT directory is copied
 # (a fixture catalog references sibling files such as snapshots/*.json with
@@ -20,6 +21,7 @@ FIXTURE=""
 SEED_CONFIG=""
 SPM_PROFILE=release
 PF_PROFILE=release
+ALLOW_CONTRACT_DRIFT=0
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --name)        NAME="$2"; shift 2 ;;
@@ -27,6 +29,7 @@ while [ "$#" -gt 0 ]; do
     --seed-config) SEED_CONFIG="$2"; shift 2 ;;
     --spm-profile) SPM_PROFILE="$2"; shift 2 ;;
     --pf-profile)  PF_PROFILE="$2"; shift 2 ;;
+    --allow-contract-drift) ALLOW_CONTRACT_DRIFT=1; shift ;;
     *) echo "unknown arg: $1" >&2; exit 1 ;;
   esac
 done
@@ -37,6 +40,21 @@ esac
 
 SPM_REPO="${SPM_REPO:-$(cd ../spm 2>/dev/null && pwd)}"
 [ -d "$SPM_REPO" ] || { echo "spm repo not found next to PecoFence (set SPM_REPO)" >&2; exit 1; }
+SPM_REV_PINNED="$(grep -A3 '"spm-contracts"' Cargo.lock | grep -oE "[0-9a-f]{40}" | head -1)"
+[ -n "$SPM_REV_PINNED" ] || { echo "cannot read pinned spm-contracts revision from Cargo.lock" >&2; exit 1; }
+git -C "$SPM_REPO" cat-file -e "$SPM_REV_PINNED^{commit}" || {
+  echo "pinned spm-contracts commit is unavailable in spm checkout: $SPM_REV_PINNED" >&2
+  exit 1
+}
+CONTRACT_SOURCE_MATCHES_PIN=true
+if ! git -C "$SPM_REPO" diff --quiet "$SPM_REV_PINNED" -- crates/spm-contracts ||
+   [ -n "$(git -C "$SPM_REPO" ls-files --others --exclude-standard crates/spm-contracts)" ]; then
+  CONTRACT_SOURCE_MATCHES_PIN=false
+  if [ "$ALLOW_CONTRACT_DRIFT" -eq 0 ]; then
+    echo "local spm-contracts differs from PecoFence's pinned revision $SPM_REV_PINNED; bump the pin or use --allow-contract-drift for an experimental instance" >&2
+    exit 1
+  fi
+fi
 
 TRIPLE=x86_64-pc-windows-msvc
 LAB="${PFW_LAB_DIR:-/mnt/c/Users/Administrator/PecoFence-lab}"
@@ -86,7 +104,12 @@ fi
 
 SPM_SHA="$(git -C "$SPM_REPO" rev-parse HEAD)"
 PF_SHA="$(git rev-parse HEAD)"
-SPM_REV_PINNED="$(grep -A3 '"spm-contracts"' Cargo.lock | grep -oE "[0-9a-f]{40}" | head -1)"
+SPM_WORKTREE_DIRTY=false
+PF_WORKTREE_DIRTY=false
+CONTRACT_DRIFT_ALLOWED=false
+[ -z "$(git -C "$SPM_REPO" status --porcelain)" ] || SPM_WORKTREE_DIRTY=true
+[ -z "$(git status --porcelain)" ] || PF_WORKTREE_DIRTY=true
+[ "$ALLOW_CONTRACT_DRIFT" -eq 0 ] || CONTRACT_DRIFT_ALLOWED=true
 
 sha() { sha256sum "$1" | cut -d" " -f1; }
 CARGO_LOCK_SHA="$(sha Cargo.lock)"
@@ -109,6 +132,9 @@ cat > "$INST/run-manifest.json" <<MANIFEST
   "spm_commit": "$SPM_SHA",
   "pecofence_commit": "$PF_SHA",
   "spm_rev_pinned_in_pecofence": "$SPM_REV_PINNED",
+  "contract_source_matches_pin": $CONTRACT_SOURCE_MATCHES_PIN,
+  "contract_drift_allowed": $CONTRACT_DRIFT_ALLOWED,
+  "source_worktrees_dirty": { "spm": $SPM_WORKTREE_DIRTY, "pecofence": $PF_WORKTREE_DIRTY },
   "cargo_lock_sha256": "$CARGO_LOCK_SHA",
   "toolchain": { "rustc": "$RUSTC_VERSION", "windows_sdk": "10.0.26100.0", "msvc": "14.44.35207" },
   "wire_protocol": { "major": $PROTOCOL_MAJOR, "minor": $PROTOCOL_MINOR },

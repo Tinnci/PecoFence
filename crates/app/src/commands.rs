@@ -4,10 +4,13 @@
 use pecofence_core::{FenceId, ItemId};
 use pecofence_platform::window::Window;
 use pecofence_platform::{HWND, RECT, msg};
+use pecofence_plugin_api::InstanceKey;
+use pecofence_shell_contract::ShellCommand;
 use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::rc::Rc;
+use std::sync::Arc;
 
 pub const WM_APP_COMMAND: u32 = msg::WM_APP + 1;
 pub const WM_APP_FS_CHANGED: u32 = msg::WM_APP + 2;
@@ -32,6 +35,8 @@ pub const WM_APP_PEEK_FOCUSED: u32 = msg::WM_APP + 11;
 pub const WM_APP_SHELL_CHANGED: u32 = msg::WM_APP + 12;
 /// Posted by the async plugin transport. Payload stays in the generation-guarded kernel queue.
 pub const WM_APP_PLUGIN_EVENT: u32 = msg::WM_APP + 13;
+/// Sent only to the process's hidden control HWND during a managed upgrade.
+pub const WM_APP_UPDATE_QUIT: u32 = msg::WM_APP + 14;
 
 /// What a file drop does with the dropped paths (Explorer's Move / Copy / Create shortcut, the
 /// effect the drop target reported).
@@ -192,6 +197,20 @@ pub enum Command {
         fence: FenceId,
         title: String,
     },
+    PanelConfigChanged {
+        key: InstanceKey,
+        bytes: Arc<[u8]>,
+    },
+    PanelTextRequested {
+        key: InstanceKey,
+        action: u64,
+        initial: String,
+    },
+    PanelTextCommit {
+        key: InstanceKey,
+        action: u64,
+        text: String,
+    },
     /// F2 / menu on a single selected item: open the inline rename popup.
     RenameItem {
         fence: FenceId,
@@ -228,6 +247,8 @@ pub enum Command {
     EndPeek,
     ApplyRulesNow,
     OpenSettings,
+    /// One of the allowlisted Windows 11 Explorer menu actions.
+    ShellAction(ShellCommand),
     /// Settings window on the 「栅栏」 page with this fence selected.
     OpenOptionsForFence(FenceId),
     RedrawAll,

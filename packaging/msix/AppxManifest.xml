@@ -9,8 +9,11 @@
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
   xmlns:uap10="http://schemas.microsoft.com/appx/manifest/uap/windows10/10"
   xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
+  xmlns:com="http://schemas.microsoft.com/appx/manifest/com/windows10"
+  xmlns:desktop4="http://schemas.microsoft.com/appx/manifest/desktop/windows10/4"
+  xmlns:desktop5="http://schemas.microsoft.com/appx/manifest/desktop/windows10/5"
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
-  IgnorableNamespaces="uap uap10 desktop rescap">
+  IgnorableNamespaces="uap uap10 desktop com desktop4 desktop5 rescap">
 
   <Identity
     Name="__IDENTITY_NAME__"
@@ -68,6 +71,22 @@
         <desktop:Extension Category="windows.startupTask" Executable="pecofence.exe" EntryPoint="Windows.FullTrustApplication">
           <desktop:StartupTask TaskId="PecoFenceStartup" Enabled="true" DisplayName="PecoFence" />
         </desktop:Extension>
+        <com:Extension Category="windows.comServer">
+          <com:ComServer>
+            <com:SurrogateServer DisplayName="PecoFence commands">
+              <com:Class Id="eb39d6c6-6c5e-4e59-a8bb-fd88c429f78f"
+                         Path="pecofence_shell_extension.dll" ThreadingModel="STA" />
+            </com:SurrogateServer>
+          </com:ComServer>
+        </com:Extension>
+        <!-- The Explorer folder background is a supported modern-menu target. -->
+        <desktop4:Extension Category="windows.fileExplorerContextMenus">
+          <desktop4:FileExplorerContextMenus>
+            <desktop5:ItemType Type="Directory\Background">
+              <desktop5:Verb Id="PecoFence" Clsid="eb39d6c6-6c5e-4e59-a8bb-fd88c429f78f" />
+            </desktop5:ItemType>
+          </desktop4:FileExplorerContextMenus>
+        </desktop4:Extension>
       </Extensions>
     </Application>
   </Applications>

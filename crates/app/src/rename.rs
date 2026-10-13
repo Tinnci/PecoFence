@@ -9,6 +9,7 @@ use pecofence_platform::window::{
     self, ClassOptions, MessageHandler, Window, WindowBuilder, WindowClass, style,
 };
 use pecofence_platform::{HWND, RECT, edit, monitors, msg};
+use pecofence_plugin_api::InstanceKey;
 use pecofence_render::ThemeMode;
 use std::cell::RefCell;
 
@@ -24,6 +25,37 @@ thread_local! {
 pub enum RenameTarget {
     Fence(FenceId),
     Item(ItemId),
+    PanelInput { key: InstanceKey, action: u64 },
+}
+
+/// Reuse the native EDIT popup for text requested by a first-party panel.
+pub fn begin_panel_input(
+    fence_hwnd: HWND,
+    key: InstanceKey,
+    action: u64,
+    initial: String,
+    queue: CommandQueue,
+    mode: ThemeMode,
+) {
+    let r = window::window_rect(fence_hwnd);
+    let dpi = monitors::dpi_for_window(fence_hwnd).max(96);
+    let scale = dpi as f32 / 96.0;
+    let inset = (12.0 * scale).round() as i32;
+    let top = r.top + (48.0 * scale).round() as i32;
+    begin_rename_at(
+        RECT {
+            left: r.left + inset,
+            top,
+            right: (r.right - inset).max(r.left + inset + 120),
+            bottom: top + (28.0 * scale).round() as i32,
+        },
+        dpi,
+        RenameTarget::PanelInput { key, action },
+        initial,
+        None,
+        queue,
+        mode,
+    );
 }
 
 struct RenameSession {
@@ -236,6 +268,9 @@ pub fn end_active(commit: bool) {
                 }
                 RenameTarget::Item(item) => {
                     s.queue.push(Command::RenameItemCommit { item, name: text })
+                }
+                RenameTarget::PanelInput { key, action } => {
+                    s.queue.push(Command::PanelTextCommit { key, action, text })
                 }
             }
         } else {

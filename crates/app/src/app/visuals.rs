@@ -335,6 +335,8 @@ impl App {
 
     pub(super) fn on_system_settings_changed(&mut self) {
         self.refresh_language();
+        // Timezone/locale changes share WM_SETTINGCHANGE with ordinary UI settings.
+        self.panel_manager.borrow_mut().time_changed();
         self.ctx
             .motion
             .set_enabled(sysparams::client_area_animation());
@@ -393,10 +395,12 @@ impl App {
                     dark: false,
                     wallpaper_override: None,
                     portable: false,
+                    config_dir: None,
                     no_hide_icons: false,
                     exit_after_ms: None,
                     dump_stats: false,
                     open_settings: false,
+                    shell_action: None,
                     portal: None,
                     test_script: None,
                 },

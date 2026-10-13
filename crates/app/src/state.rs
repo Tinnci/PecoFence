@@ -60,9 +60,11 @@ fn config_dir(portable: bool) -> PathBuf {
 }
 
 impl AppState {
-    pub fn load(work_areas: Vec<WorkArea>, portable: bool) -> Self {
-        let directory = config_dir(portable);
-        let store = if portable {
+    pub fn load(work_areas: Vec<WorkArea>, portable: bool, config_override: Option<&Path>) -> Self {
+        let directory = config_override
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| config_dir(portable));
+        let store = if portable || config_override.is_some() {
             ConfigStore::new(&directory)
         } else {
             ConfigStore::with_legacy(
@@ -553,6 +555,26 @@ impl AppState {
 
     pub fn mark_dirty(&mut self) {
         self.dirty = true;
+    }
+
+    /// Panel identity is shared when a monitor layout is cloned. Keep its data consistent in
+    /// every saved layout so switching monitor arrangements cannot restore stale widget state.
+    pub fn update_panel_config(&mut self, instance_id: u128, config: serde_json::Value) -> bool {
+        let mut changed = false;
+        for layout in &mut self.config.layouts {
+            for fence in &mut layout.fences {
+                if let pecofence_core::FenceContentSpec::Panel { panel } = &mut fence.content
+                    && panel.instance_id.as_u128() == instance_id
+                {
+                    panel.config = config.clone();
+                    changed = true;
+                }
+            }
+        }
+        if changed {
+            self.mark_dirty();
+        }
+        changed
     }
 
     pub fn is_dirty(&self) -> bool {
@@ -1620,6 +1642,20 @@ impl AppState {
         Some(id)
     }
 
+    pub fn new_widget_fence(&mut self, title: &str, rect: RECT, provider: &str) -> Option<FenceId> {
+        let id = self.new_fence(title, rect)?;
+        let fence = self.fence_mut(id)?;
+        fence.content = pecofence_core::FenceContentSpec::Panel {
+            panel: pecofence_core::PanelSpec {
+                provider: provider.to_owned(),
+                instance_id: uuid::Uuid::new_v4(),
+                config_version: 1,
+                config: serde_json::json!({}),
+            },
+        };
+        Some(id)
+    }
+
     /// "快速添加": a fence for `template` at `rect` plus its rule, inserted ahead of the
     /// existing rules so it wins over the broader first-run presets (an installer is also a
     /// program). `Err(existing)` when the template was added before; `existing` is the fence
@@ -1816,6 +1852,45 @@ mod tests {
         };
         state.ensure_layout();
         state
+    }
+
+    #[test]
+    fn panel_config_updates_all_monitor_layouts() {
+        let mut state = test_state();
+        let id = state
+            .new_widget_fence(
+                "Todo",
+                RECT {
+                    left: 100,
+                    top: 100,
+                    right: 520,
+                    bottom: 470,
+                },
+                "pecofence.todo",
+            )
+            .unwrap();
+        let instance_id = match &state.fence(id).unwrap().content {
+            pecofence_core::FenceContentSpec::Panel { panel } => panel.instance_id.as_u128(),
+            _ => unreachable!(),
+        };
+        let mut other_layout = state.config.layouts[0].clone();
+        other_layout.fingerprint[0].device_path = "other-monitor".into();
+        state.config.layouts.push(other_layout);
+        state.dirty = false;
+        let tasks = serde_json::json!({"tasks": [{"title": "Buy milk", "done": true}]});
+        assert!(state.update_panel_config(instance_id, tasks.clone()));
+        assert!(state.dirty);
+        for layout in &state.config.layouts {
+            let panel = layout.fences.iter().find_map(|fence| match &fence.content {
+                pecofence_core::FenceContentSpec::Panel { panel }
+                    if panel.instance_id.as_u128() == instance_id =>
+                {
+                    Some(panel)
+                }
+                _ => None,
+            });
+            assert_eq!(panel.unwrap().config, tasks);
+        }
     }
 
     fn add_item(state: &mut AppState, fence: FenceId, name: &str) -> ItemId {

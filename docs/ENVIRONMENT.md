@@ -31,12 +31,14 @@ Windows 进程写入的文档类文件（.json/.md/.js/.sh 等），git blob 干
 ## Windows 构建（WSL 交叉编译）
 
 - 一键脚本：`~/dev/<repo>/scripts/build-windows.sh [profile] [package ...]`
-  - 默认 release；spm 默认构建 `spmd spm-cli`（产物 `spmd.exe`/`spm.exe`），
+  - 默认 release；spm 默认构建 `spmd spm-cli spm-widget`（产物 `spmd.exe`/`spm.exe`/`spm-widget.exe`），
     PecoFence 默认构建 `pecofence pecofence-watchdog`
   - 工具链：clang-cl-19（C 依赖）+ lld-link（链接），SDK/MSVC 库经 `/mnt/c`
     只读使用；linker 通过 `CARGO_TARGET_*_LINKER` 环境变量选择，不进仓内
     `.cargo/config.toml`（Windows CI 继续用 link.exe）
   - 产物：仓内 `target/x86_64-pc-windows-msvc/<profile>/`（ext4，明文）
+  - spm 发布 ZIP：构建后执行 `python3 scripts/package-windows.py --release-dir target/x86_64-pc-windows-msvc/release`，输出 `dist/spm-<version>-x64.zip` 和校验文件；CI 使用同一脚本。
+  - `scripts/build-windows.sh test spmd` 可在 WSL 编译 Windows 测试 EXE；需显式运行所需测试 EXE（脚本本身不执行）。
   - 脚本防御性 `unset CARGO_TARGET_DIR`：任何全局变量都不得改写仓内 target
 - **已退役**：`C:\Users\Administrator\cargo-target`（双仓共用 NTFS target，
   6.1G）已删除；Windows 用户环境变量 `CARGO_TARGET_DIR` 已移除；
@@ -65,13 +67,28 @@ PecoFence-lab\
 
 - 创建：WSL 侧 `scripts/lab/new-instance.sh --name <n> --fixture <catalog.json>
   [--seed-config <config.json>]`（fixture 拷贝整个父目录——catalog 引用
-  `snapshots/*.json` 相对路径）
+  `snapshots/*.json` 相对路径）。创建时检查本地 `spm-contracts` 与
+  PecoFence 锁定提交一致；仅实验性配对可显式加 `--allow-contract-drift`。
 - 启停：Windows 侧 `scripts/lab/run-instance.ps1 -Name <n>` /
   `stop-instance.ps1 -Name <n>`（spmd 走 fixture 模式 + 实例内绝对路径日志；
   pecofence 走 `--portable --no-hide-icons` + `PECOFENCE_INSTANCE` +
   实例专属 APPDATA/LOCALAPPDATA）
 - 多后端实例通过 spmd 的 `--instance` 与 pecofence 的 `PECOFENCE_INSTANCE`
   使用同名实例标识实现管道级隔离，可并行运行不同 fixture 的场景。
+- 启动脚本会拒绝同一实例目录内仍在运行的进程，并在 spmd 或 PecoFence
+  启动后立即退出时报告错误；停止脚本只根据 PID 结束可执行文件仍位于该目录内的进程。
+- 默认 PecoFence 持有会话内新旧两个单实例互斥体；spmd v2 的首个命名管道实例
+  由进程在初始化数据库前占用。相同用户、会话、实例标识下的新旧 v2 版本不能同时
+  服务同一端点。命名实例在未传 `--db` 时使用独立的稳定哈希数据库文件名；显式
+  `--db` 仍由调用方保证隔离。此前使用旧默认 `spmd-v2.sqlite` 的命名持久实例，
+  升级时应显式传原数据库绝对路径；新默认文件名不会自动迁移旧数据。
+- 命名 PecoFence 实例的配置仍由启动目录（`--portable`）或 `APPDATA` 决定；
+  `PECOFENCE_INSTANCE` 本身只隔离互斥体、日志、WebView2 profile 和 SPM 管道。
+  Lab 为每个实例复制可执行文件并设置独立 APPDATA/LOCALAPPDATA，避免配置互相覆盖。
+- 便携版双程序更新使用 `scripts/update-portable-pair.ps1`，文档见
+  `docs/PORTABLE_UPDATE.md`。新版本使用安装根目录共享 `config/`，先切换并探测
+  spmd，再让 PecoFence 正常退出并重建窗口；失败会回滚 SQLite 文件和进程。
+  旧的 `replace-running-instance.ps1` 已退役，禁止按进程名全局终止实例。
 - **DLP 规则（实测）**：
   - WSL 写入（fixtures/manifest/二进制）→ 明文，必须保持
   - Windows 进程写文档类（实例 config 被应用重写）→ 可能加密；对应用透明，

@@ -93,6 +93,9 @@ u32_consts!(
     SC_SIZE,
 );
 
+/// Winuser.h `WM_TIMECHANGE` (0x001E); not present in the generated binding set.
+pub const WM_TIMECHANGE: u32 = 0x001E;
+
 isize_consts!(
     HTCLIENT,
     HTCAPTION,

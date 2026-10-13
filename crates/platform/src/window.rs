@@ -25,6 +25,65 @@ pub fn set_title(hwnd: HWND, title: &str) {
     }
 }
 
+/// Sends a fixed Explorer command to the main instance's hidden control window. The receiver
+/// only accepts `ShellAction` IDs and enqueues the work outside its window procedure.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ShellDelivery {
+    Delivered,
+    NoInstance,
+    Uncertain,
+}
+
+pub fn send_shell_action(command: pecofence_shell_contract::ShellCommand) -> ShellDelivery {
+    use pecofence_shell_contract::{
+        CONTROL_CLASS, CONTROL_TITLE_MAIN, WM_APP_SHELL_COMMAND, WM_APP_SHELL_COMMAND_AT,
+    };
+    let class = to_wide(CONTROL_CLASS);
+    let title = to_wide(CONTROL_TITLE_MAIN);
+    // SAFETY: both strings remain live for the search and the receiver is our named window.
+    let hwnd = unsafe { FindWindowW(PCWSTR(class.as_ptr()), PCWSTR(title.as_ptr())) };
+    if hwnd.0.is_null() {
+        return ShellDelivery::NoInstance;
+    }
+    let mut accepted = 0usize;
+    // SAFETY: the message carries a fixed ID and two packed signed coordinates, no pointers.
+    let result = unsafe {
+        SendMessageTimeoutW(
+            hwnd,
+            WM_APP_SHELL_COMMAND_AT,
+            WPARAM(command.action as usize),
+            LPARAM(command.point_lparam()),
+            SMTO_ABORTIFHUNG as u32,
+            500,
+            Some(&mut accepted),
+        )
+    };
+    if result.0 == 0 {
+        return ShellDelivery::Uncertain;
+    }
+    if accepted == 1 {
+        return ShellDelivery::Delivered;
+    }
+    // An older running app understands only the action ID. Keep the command useful during
+    // a staged update, at the cost of using that app's current pointer position.
+    let result = unsafe {
+        SendMessageTimeoutW(
+            hwnd,
+            WM_APP_SHELL_COMMAND,
+            WPARAM(command.action as usize),
+            LPARAM(0),
+            SMTO_ABORTIFHUNG as u32,
+            500,
+            Some(&mut accepted),
+        )
+    };
+    if result.0 != 0 && accepted == 1 {
+        ShellDelivery::Delivered
+    } else {
+        ShellDelivery::Uncertain
+    }
+}
+
 struct State {
     handler: std::rc::Rc<dyn Fn(HWND, u32, usize, isize) -> Option<isize>>,
 }

@@ -13,11 +13,17 @@ foreach ($pidFile in @("spmd.pid", "pecofence.pid", "watchdog.pid")) {
   $p = Join-Path $Inst "logs\$pidFile"
   if (Test-Path $p) {
     $procId = Get-Content $p -ErrorAction SilentlyContinue
-    if ($procId) { Stop-Process -Id ([int]$procId) -Force -ErrorAction SilentlyContinue }
+    if ($procId -match '^\d+$') {
+      $proc = Get-Process -Id ([int]$procId) -ErrorAction SilentlyContinue
+      if ($proc -and $proc.Path -and
+          $proc.Path.StartsWith($Inst + '\', [StringComparison]::OrdinalIgnoreCase)) {
+        $proc | Stop-Process -Force -ErrorAction SilentlyContinue
+      }
+    }
     Remove-Item $p -Force -ErrorAction SilentlyContinue
   }
 }
 Get-Process pecofence, pecofence-watchdog, spmd -ErrorAction SilentlyContinue |
-  Where-Object { $_.Path -and $_.Path.StartsWith($Inst, [StringComparison]::OrdinalIgnoreCase) } |
+  Where-Object { $_.Path -and $_.Path.StartsWith($Inst + '\', [StringComparison]::OrdinalIgnoreCase) } |
   Stop-Process -Force -ErrorAction SilentlyContinue
 Write-Host "stopped instance: $Name"

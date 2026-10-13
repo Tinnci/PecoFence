@@ -210,6 +210,7 @@ impl App {
             Some(crate::rename::RenameTarget::Fence(fence)) => {
                 (None, self.window_for(fence).map(|w| w.hwnd()))
             }
+            Some(crate::rename::RenameTarget::PanelInput { .. }) => (None, None),
             None => (None, None),
         };
         for w in self.fences.values() {

@@ -510,6 +510,27 @@ impl FenceWindow {
         });
     }
 
+    /// `None` means a modal handler currently holds the view; the caller must retry.
+    pub(crate) fn try_apply_panel_update(
+        &self,
+        key: pecofence_plugin_api::InstanceKey,
+        update: &pecofence_plugin_api::PanelUpdate,
+    ) -> Option<bool> {
+        let Ok(mut guard) = self.view.try_borrow_mut() else {
+            return None;
+        };
+        let Some(view) = guard.as_mut() else {
+            return Some(false);
+        };
+        if view.plugin_panel.as_ref().map(|panel| panel.key()) != Some(key) {
+            return Some(false);
+        }
+        if let Err(error) = view.apply_plugin_update(update.clone()) {
+            tracing::warn!(%error, "panel update failed");
+        }
+        Some(true)
+    }
+
     #[allow(dead_code)]
     pub fn set_panel_presentation(&self, presentation: pecofence_plugin_api::Presentation) {
         self.with_view(|view| {

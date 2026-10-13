@@ -1,0 +1,17 @@
+--out crates/shell-extension/src/bindings.rs
+--flat --dead-code
+
+--filter
+    IExplorerCommand
+    IEnumExplorerCommand
+    IClassFactory
+    IShellItemArray
+    IBindCtx
+    CoTaskMemAlloc
+    ECF_HASSUBCOMMANDS
+    ECS_ENABLED
+    CLASS_E_CLASSNOTAVAILABLE
+    CLASS_E_NOAGGREGATION
+    E_POINTER
+    E_NOTIMPL
+    S_FALSE

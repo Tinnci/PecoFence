@@ -67,8 +67,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1aa79e62e7697b8e29b513a68abacf485adcd1fe8284a4316c5ae868e6633327"
 dependencies = [
  "iana-time-zone",
+ "js-sys",
  "num-traits",
  "serde",
+ "wasm-bindgen",
  "windows-link 0.2.1",
 ]
 
@@ -237,7 +239,9 @@ dependencies = [
  "pecofence-plugin-api",
  "pecofence-plugin-kernel",
  "pecofence-plugin-spm",
+ "pecofence-plugin-widgets",
  "pecofence-render",
+ "pecofence-shell-contract",
  "serde_json",
  "spm-contracts",
  "tokio",
@@ -262,6 +266,7 @@ name = "pecofence-platform"
 version = "0.0.3"
 dependencies = [
  "pecofence-core",
+ "pecofence-shell-contract",
  "tracing",
  "windows-core 0.100.0",
  "windows-numerics",
@@ -295,6 +300,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "pecofence-plugin-widgets"
+version = "0.0.3"
+dependencies = [
+ "chrono",
+ "pecofence-plugin-api",
+ "pecofence-render",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "pecofence-render"
 version = "0.0.3"
 dependencies = [
@@ -309,6 +325,18 @@ dependencies = [
  "windows-core 0.100.0",
  "windows-numerics",
  "windows-time",
+]
+
+[[package]]
+name = "pecofence-shell-contract"
+version = "0.0.3"
+
+[[package]]
+name = "pecofence-shell-extension"
+version = "0.0.3"
+dependencies = [
+ "pecofence-shell-contract",
+ "windows-core 0.100.0",
 ]
 
 [[package]]

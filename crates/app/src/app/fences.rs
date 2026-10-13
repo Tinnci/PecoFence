@@ -29,6 +29,16 @@ impl App {
         // hundreds of milliseconds before the new window appeared.
         self.ensure_portal_watchers();
         self.state.normalize_tabs();
+        let live_panels: Vec<_> = self
+            .state
+            .fences()
+            .iter()
+            .filter_map(|fence| match &fence.content {
+                pecofence_core::FenceContentSpec::Panel { panel } => Some(panel.clone()),
+                _ => None,
+            })
+            .collect();
+        self.panel_manager.borrow_mut().retain_specs(&live_panels);
         // Only host fences own a window; fences hosted as tabs live inside their host's.
         let hosts = self.state.host_fences();
         let ids: Vec<FenceId> = hosts.iter().map(|f| f.id).collect();
@@ -621,6 +631,32 @@ impl App {
     pub(super) fn new_fence_near(&mut self, x: i32, y: i32) {
         let rect = self.place_new_fence(3, 200.0, x, y, None);
         self.create_fence_at(rect);
+    }
+
+    pub(super) fn new_widget_near(
+        &mut self,
+        provider: &str,
+        x: i32,
+        y: i32,
+        near: Option<FenceId>,
+    ) {
+        let (title, width, height) = match provider {
+            pecofence_plugin_widgets::CLOCK_PROVIDER => ("数字时钟", 340.0, 190.0),
+            pecofence_plugin_widgets::CALENDAR_PROVIDER => ("日历", 420.0, 370.0),
+            pecofence_plugin_widgets::TODO_PROVIDER => ("待办清单", 420.0, 370.0),
+            _ => return,
+        };
+        let rect = self.place_new_fence_dip(width, height, x, y, near);
+        if let Some(id) =
+            self.state
+                .new_widget_fence(pecofence_core::i18n::text(title), rect, provider)
+        {
+            self.resync_windows();
+            if let Some(window) = self.fences.get(&id) {
+                window.show(true);
+            }
+            self.schedule_save();
+        }
     }
 
     /// Work area (device px) containing the point, else the primary one.

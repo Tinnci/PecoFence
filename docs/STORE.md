@@ -7,13 +7,18 @@ package after certification, so no code-signing certificate is needed.
 
 - `packaging/msix/AppxManifest.xml`: manifest template. `runFullTrust` (desktop hooks,
   icon host, tray), Windows 11 minimum (`10.0.22000.0`), x64, a `windows.startupTask`
-  for run-at-logon, tile assets under `Assets\`.
+  for run-at-logon, a packaged COM Explorer command for folder backgrounds, tile assets
+  under `Assets\`.
 - `packaging/msix/identity.json`: the identity Partner Center assigned
   (Product management > Product identity). These values are not secret and must match
   the manifest exactly or the upload is rejected.
 - `scripts/make-msix-assets.py`: renders every Store/tile PNG from `site/assets/mark.svg`.
 - `scripts/make-msix.ps1`: builds, stages, indexes resources (MakePri) and packs
-  (MakeAppx) into `dist/pecofence-<version>-x64.msix`.
+  (MakeAppx) into `dist/pecofence-<version>-x64.msix`. It includes
+  `pecofence_shell_extension.dll`; the portable ZIP does not register a shell extension.
+
+See [Explorer context menu](EXPLORER_CONTEXT_MENU.md) for the command contract and
+Windows validation steps.
 
 ## Build
 

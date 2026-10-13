@@ -6,10 +6,10 @@
 use pecofence_plugin_api::*;
 use serde::{Deserialize, Serialize};
 use spm_contracts::{
-    Body, BuildBriefingRequest, DaemonSessionId, DeliveryScopeId, DetailLevel, Envelope, Event,
-    GateStatus, IdempotencyKey, PROTOCOL_MAJOR, PROTOCOL_MINOR, ProjectId, ProjectQuery,
-    ProjectSnapshot, RefreshRequest, Request, RequestId, ResolveNavigationRequest, Revision,
-    ViewKind,
+    Body, BuildBriefingRequest, DaemonSessionId, DeliveryScopeId, DetailLevel, Envelope, ErrorCode,
+    Event, GateStatus, IdempotencyKey, PROTOCOL_MAJOR, PROTOCOL_MINOR, ProjectId, ProjectQuery,
+    ProjectSnapshot, RefreshRequest, Request, RequestId, ResolveNavigationRequest, Response,
+    Revision, ViewKind,
 };
 use std::rc::Rc;
 use std::sync::Arc;
@@ -896,6 +896,7 @@ impl PanelProvider for SpmPlugin {
             layout_revision: 0,
             frame_revision: 0,
             selected_item: None,
+            action_error: None,
             tokens,
             stopped: false,
         }))
@@ -914,6 +915,7 @@ pub struct SpmPanel {
     layout_revision: u64,
     frame_revision: u64,
     selected_item: Option<usize>,
+    action_error: Option<String>,
     tokens: PanelTokens,
     stopped: bool,
 }
@@ -937,6 +939,34 @@ impl PanelInstance for SpmPanel {
                 bytes,
             } if subscription == self.subscription => {
                 let envelope = decode_event(&bytes)?;
+                if let Body::Error(error) = &envelope.body {
+                    // The host routes action errors to the live instance generation.
+                    // A reconnect may change daemon_session while a local failure is in flight.
+                    self.action_error = Some(match error.code {
+                        ErrorCode::Backpressure => "操作繁忙，请稍后重试".into(),
+                        ErrorCode::DeadlineExceeded => "操作超时，请重试".into(),
+                        ErrorCode::Unavailable => "后台连接中断，请重试".into(),
+                        _ => format!("操作失败：{}", error.message),
+                    });
+                    return Ok(PanelUpdate {
+                        commands: vec![HostCommand::Invalidate],
+                        relayout: false,
+                    });
+                }
+                if let Body::Response(Response::BuildBriefing(briefing)) = &envelope.body {
+                    if envelope.daemon_session == self.snapshot_cursor.accepted_session()
+                        && self
+                            .snapshot
+                            .as_ref()
+                            .is_some_and(|snapshot| snapshot.revision == briefing.revision)
+                    {
+                        let clipboard = self.ctx.clipboard.as_ref().ok_or(Error::Revoked)?;
+                        clipboard.with(|service| {
+                            service.write_text(&self.ctx.scope, briefing.text.clone())
+                        })?;
+                    }
+                    return Ok(PanelUpdate::default());
+                }
                 if !self.snapshot_cursor.accept(&envelope) {
                     return Ok(PanelUpdate::default());
                 }
@@ -944,6 +974,7 @@ impl PanelInstance for SpmPanel {
                     return Ok(PanelUpdate::default());
                 };
                 self.snapshot = Some(snapshot);
+                self.action_error = None;
                 Ok(PanelUpdate {
                     commands: vec![HostCommand::Invalidate],
                     relayout: true,
@@ -970,9 +1001,7 @@ impl PanelInstance for SpmPanel {
                         delivery_scope_id: self.config.delivery_scope_id.clone(),
                         idempotency_key: IdempotencyKey::new(),
                     }))?;
-                    self.ctx
-                        .ipc
-                        .with(|ipc| ipc.send(&self.ctx.scope, payload))?;
+                    self.send_action(payload);
                 } else if action == ACTION_EXPAND {
                     return Ok(PanelUpdate {
                         commands: vec![HostCommand::RequestMode(Presentation::Workspace)],
@@ -1007,9 +1036,7 @@ impl PanelInstance for SpmPanel {
                                 locale: "zh-CN".into(),
                                 timezone: snapshot.project_timezone.clone(),
                             }))?;
-                        self.ctx
-                            .ipc
-                            .with(|ipc| ipc.send(&self.ctx.scope, payload))?;
+                        self.send_action(payload);
                     }
                 } else if let Some(index) = action
                     .checked_sub(ACTION_OPEN_BASE)
@@ -1027,9 +1054,7 @@ impl PanelInstance for SpmPanel {
                                 revision: snapshot.revision,
                             },
                         ))?;
-                        self.ctx
-                            .ipc
-                            .with(|ipc| ipc.send(&self.ctx.scope, payload))?;
+                        self.send_action(payload);
                     }
                 }
                 Ok(PanelUpdate {
@@ -1046,7 +1071,7 @@ impl PanelInstance for SpmPanel {
         let mount_key = self.mount.ok_or(Error::Closed)?;
         self.frame_revision = self.frame_revision.checked_add(1).ok_or(Error::Exhausted)?;
         let visible = input.exposure != Exposure::Hidden && input.active;
-        let view = if visible {
+        let mut view = if visible {
             build_presentation_view_with_selection(
                 self.snapshot.as_ref(),
                 input.presentation,
@@ -1057,6 +1082,24 @@ impl PanelInstance for SpmPanel {
         } else {
             PanelView::default()
         };
+        if let Some(message) = &self.action_error
+            && visible
+        {
+            view.nodes.push(ViewNode {
+                id: u64::MAX,
+                rect: RectDip {
+                    x: 8.0,
+                    y: (input.viewport.h - 40.0).max(0.0),
+                    w: (input.viewport.w - 16.0).max(0.0),
+                    h: 36.0,
+                },
+                role: "status",
+                text: message.clone(),
+                action: None,
+                fill: Some(self.tokens.subtle),
+                foreground: self.tokens.danger,
+            });
+        }
         let candidate = layout_snapshot(&view, self.layout_revision);
         // Text, colors, freshness, and semantic labels may change without invalidating a
         // gesture. Only geometry/action mapping advances the layout revision.
@@ -1093,6 +1136,13 @@ impl PanelInstance for SpmPanel {
 }
 
 impl SpmPanel {
+    fn send_action(&mut self, payload: Arc<[u8]>) {
+        match self.ctx.ipc.with(|ipc| ipc.send(&self.ctx.scope, payload)) {
+            Ok(_) => self.action_error = None,
+            Err(_) => self.action_error = Some("后台暂不可用，请稍后重试".into()),
+        }
+    }
+
     fn action_request(&self, request: Request) -> Result<Arc<[u8]>> {
         let daemon_session = self
             .snapshot_cursor

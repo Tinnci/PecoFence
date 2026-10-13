@@ -30,24 +30,29 @@ fn startup_actions(
     }
 }
 
-/// Preserve a working PecoFence registration, or register this release when
-/// upgrading from the previous name. Remove the legacy entry only after success.
-pub fn reconcile_product(wanted: bool, development: bool) -> Result<()> {
+/// Point login startup at the running release, even when an older copy still exists.
+/// Remove the legacy entry only after the replacement was registered successfully.
+pub fn reconcile_product(
+    wanted: bool,
+    development: bool,
+    config_dir: Option<&std::path::Path>,
+) -> Result<()> {
     use pecofence_core::brand::{LEGACY_AUTOSTART, NAME};
     if crate::process::is_packaged() {
         return Ok(());
     }
-    let current = registered_path(NAME);
+    let desired = format_launch_command(&exe_path(), false, config_dir);
+    let current = registered_command(NAME);
     let actions = startup_actions(
         wanted,
         development,
         current
             .as_deref()
-            .map(|path| std::path::Path::new(path).exists()),
+            .map(|command| command.eq_ignore_ascii_case(&desired)),
         registered_path(LEGACY_AUTOSTART).is_some(),
     );
     if actions.register_current {
-        set_enabled(NAME, true)?;
+        set_enabled_command(NAME, true, &desired)?;
     }
     if actions.remove_current {
         set_enabled(NAME, false)?;
@@ -60,12 +65,17 @@ pub fn reconcile_product(wanted: bool, development: bool) -> Result<()> {
 
 /// Explicit settings changes address both names, avoiding duplicate login launches.
 /// Store (MSIX) installs leave the registry alone: the package startup task owns autostart.
-pub fn set_product_enabled(enabled: bool) -> Result<()> {
+pub fn set_product_enabled(
+    enabled: bool,
+    portable: bool,
+    config_dir: Option<&std::path::Path>,
+) -> Result<()> {
     use pecofence_core::brand::{LEGACY_AUTOSTART, NAME};
     if crate::process::is_packaged() {
         return Ok(());
     }
-    set_enabled(NAME, enabled)?;
+    let command = format_launch_command(&exe_path(), portable, config_dir);
+    set_enabled_command(NAME, enabled, &command)?;
     if registered_path(LEGACY_AUTOSTART).is_some() {
         set_enabled(LEGACY_AUTOSTART, false)?;
     }
@@ -104,12 +114,35 @@ fn open_run_key() -> Result<HKEY> {
 }
 
 pub fn set_enabled(value_name: &str, enabled: bool) -> Result<()> {
+    set_enabled_command(
+        value_name,
+        enabled,
+        &format_launch_command(&exe_path(), false, None),
+    )
+}
+
+fn format_launch_command(
+    exe: &str,
+    portable: bool,
+    config_dir: Option<&std::path::Path>,
+) -> String {
+    let mut command = format!("\"{exe}\"");
+    if portable {
+        command.push_str(" --portable");
+    }
+    if let Some(path) = config_dir {
+        command.push_str(&format!(" --config-dir \"{}\"", path.display()));
+    }
+    command
+}
+
+fn set_enabled_command(value_name: &str, enabled: bool, command: &str) -> Result<()> {
     let hkey = open_run_key()?;
     let name = to_wide(value_name);
     // SAFETY: buffers outlive the calls; key closed afterwards.
     let status = unsafe {
         let s = if enabled {
-            let cmd = to_wide(&format!("\"{}\"", exe_path()));
+            let cmd = to_wide(command);
             let bytes: Vec<u8> = cmd.iter().flat_map(|c| c.to_le_bytes()).collect();
             RegSetValueExW(hkey, PCWSTR(name.as_ptr()), None, REG_SZ, Some(&bytes))
         } else {
@@ -126,8 +159,8 @@ pub fn set_enabled(value_name: &str, enabled: bool) -> Result<()> {
     Ok(())
 }
 
-/// The executable path currently registered for `value_name` (quotes stripped), if any.
-pub fn registered_path(value_name: &str) -> Option<String> {
+/// The full startup command currently registered for `value_name`, if any.
+fn registered_command(value_name: &str) -> Option<String> {
     let key = to_wide(RUN_KEY);
     let name = to_wide(value_name);
     let mut buf = [0u16; 1024];
@@ -150,7 +183,12 @@ pub fn registered_path(value_name: &str) -> Option<String> {
     let chars = (size as usize / 2).min(buf.len());
     let raw = from_wide(&buf[..chars]);
     let raw = raw.trim_end_matches('\0').trim();
-    Some(raw.trim_matches('"').to_string())
+    Some(raw.to_string())
+}
+
+/// The legacy registry entry only needs an existence check.
+pub fn registered_path(value_name: &str) -> Option<String> {
+    registered_command(value_name)
 }
 
 pub fn is_enabled(value_name: &str) -> bool {
@@ -223,5 +261,18 @@ mod tests {
                 StartupActions::default()
             );
         }
+    }
+
+    #[test]
+    fn portable_startup_keeps_its_shared_configuration_directory() {
+        let command = format_launch_command(
+            r"C:\Apps\PecoFence\versions\2\pecofence.exe",
+            true,
+            Some(std::path::Path::new(r"C:\Apps\PecoFence\config")),
+        );
+        assert_eq!(
+            command,
+            r#""C:\Apps\PecoFence\versions\2\pecofence.exe" --portable --config-dir "C:\Apps\PecoFence\config""#
+        );
     }
 }

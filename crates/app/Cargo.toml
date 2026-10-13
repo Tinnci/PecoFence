@@ -20,6 +20,8 @@ pecofence-render = { path = "../render" }
 pecofence-plugin-api = { path = "../plugin-api" }
 pecofence-plugin-kernel = { path = "../plugin-kernel" }
 pecofence-plugin-spm = { path = "../plugin-spm" }
+pecofence-plugin-widgets = { path = "../plugin-widgets" }
+pecofence-shell-contract = { path = "../shell-contract" }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 tokio = { workspace = true }

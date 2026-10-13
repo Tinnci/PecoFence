@@ -22,6 +22,9 @@
 //! merge <title> <into-title> merge a fence into another one's tab strip
 //! delete <title>
 //! new-fence <x> <y> <w> <h>  physical px
+//! new-todo <x> <y>         create a TODO panel near physical px
+//! todo-add <text>          submit a task through the panel input path
+//! todo-toggle <index>      invoke a zero-based task row
 //! drop-desktop <title>       first item of the fence dropped on the bare desktop (inbox + rules)
 //! move <title> <into-title>  first item of the fence moved into another fence (drop minus OLE)
 //! transfer <path> <title>    shell-move a file into the portal fence's folder (worker thread)
@@ -44,6 +47,7 @@ use super::App;
 use crate::commands::Command;
 use pecofence_core::FenceId;
 use pecofence_platform::{RECT, desktop, window};
+use pecofence_plugin_api::PanelEvent;
 use std::time::{Duration, Instant};
 
 pub(super) struct TestScript {
@@ -233,6 +237,52 @@ impl App {
                         bottom: y + h,
                     }));
                 }
+                ["new-todo", x, y] => {
+                    if let (Ok(x), Ok(y)) = (x.parse(), y.parse()) {
+                        self.new_widget_near(pecofence_plugin_widgets::TODO_PROVIDER, x, y, None);
+                    }
+                }
+                ["todo-add", ..] => {
+                    if let Some(title) = line.strip_prefix("todo-add ")
+                        && let Some(key) = self.test_todo_key()
+                    {
+                        self.queue.push(Command::PanelTextCommit {
+                            key,
+                            action: 1,
+                            text: title.to_string(),
+                        });
+                    }
+                }
+                ["todo-toggle", index] => {
+                    if let (Some(key), Ok(index)) = (self.test_todo_key(), index.parse::<u64>()) {
+                        let spec = self.state.fences().iter().find_map(|f| match &f.content {
+                            pecofence_core::FenceContentSpec::Panel { panel }
+                                if panel.instance_id.as_u128() == key.id =>
+                            {
+                                Some(panel.clone())
+                            }
+                            _ => None,
+                        });
+                        if let Some(spec) = spec {
+                            let update =
+                                self.panel_manager.borrow_mut().open_panel(&spec).and_then(
+                                    |handle| {
+                                        handle.event(PanelEvent::Invoke {
+                                            action: 1_000 + index,
+                                            layout_revision: 0,
+                                        })
+                                    },
+                                );
+                            if let Ok(update) = update {
+                                self.pending_panel_updates
+                                    .entry(key)
+                                    .or_default()
+                                    .merge(update);
+                                self.process_panel_events();
+                            }
+                        }
+                    }
+                }
                 ["drop-desktop", title] => {
                     // What a drag-out onto the bare desktop ends in (minus the OLE round
                     // trip): the fence's first item goes back to the inbox and through the rules.
@@ -392,6 +442,22 @@ impl App {
             tracing::warn!(target: "pecofence::test", "no fence titled like {title:?}");
         }
         id
+    }
+
+    fn test_todo_key(&self) -> Option<pecofence_plugin_api::InstanceKey> {
+        let spec = self.state.fences().iter().find_map(|f| match &f.content {
+            pecofence_core::FenceContentSpec::Panel { panel }
+                if panel.provider == pecofence_plugin_widgets::TODO_PROVIDER =>
+            {
+                Some(panel.clone())
+            }
+            _ => None,
+        })?;
+        self.panel_manager
+            .borrow_mut()
+            .open_panel(&spec)
+            .ok()
+            .map(|h| h.key())
     }
 
     /// A point in the first work area's lower-right quarter, away from the default fences.

@@ -116,6 +116,7 @@ pub struct Direct2dCanvas<'a> {
     clips: Vec<RectDip>,
     clip_guards: Vec<pecofence_platform::d2d::AxisAlignedClip>,
     images: Option<&'a std::collections::HashMap<ImageId, windows_canvas::Bitmap>>,
+    formats: std::collections::HashMap<(FontRole, u32, u16), windows_canvas::TextFormat>,
 }
 
 #[cfg(windows)]
@@ -126,6 +127,7 @@ impl<'a> Direct2dCanvas<'a> {
             clips: Vec::new(),
             clip_guards: Vec::new(),
             images: None,
+            formats: std::collections::HashMap::new(),
         }
     }
 
@@ -138,7 +140,22 @@ impl<'a> Direct2dCanvas<'a> {
             clips: Vec::new(),
             clip_guards: Vec::new(),
             images: Some(images),
+            formats: std::collections::HashMap::new(),
         }
+    }
+
+    fn text_format(&mut self, text: &TextSpec) -> Result<&windows_canvas::TextFormat> {
+        let key = (text.font, text.size_dip.to_bits(), text.weight);
+        if !self.formats.contains_key(&key) {
+            let format = windows_canvas::TextFormat::with_weight(
+                text_font_family(text.font),
+                text.size_dip,
+                windows_canvas::FontWeight(i32::from(text.weight)),
+            )
+            .map_err(|error| Error::Backend(error.to_string()))?;
+            self.formats.insert(key, format);
+        }
+        Ok(self.formats.get(&key).expect("format just inserted"))
     }
 
     fn brush(&self, rgba: [f32; 4]) -> Result<windows_canvas::Brush> {
@@ -239,13 +256,9 @@ impl Canvas for Direct2dCanvas<'_> {
             return Ok(());
         };
         let brush = self.brush(rgba)?;
-        let format = windows_canvas::TextFormat::with_weight(
-            text_font_family(text.font),
-            text.size_dip,
-            windows_canvas::FontWeight(i32::from(text.weight)),
-        )
-        .map_err(|error| Error::Backend(error.to_string()))?;
-        self.session.draw_text(
+        let session = self.session;
+        let format = self.text_format(text)?;
+        session.draw_text(
             &text.text,
             &format,
             &windows_canvas::Rect::from_xywh(rect.x, rect.y, rect.w, rect.h),
@@ -276,13 +289,8 @@ impl Canvas for Direct2dCanvas<'_> {
     }
 
     fn measure_text(&mut self, text: &TextSpec, width: f32) -> Result<TextMetrics> {
-        let format = windows_canvas::TextFormat::with_weight(
-            text_font_family(text.font),
-            text.size_dip,
-            windows_canvas::FontWeight(i32::from(text.weight)),
-        )
-        .map_err(|error| Error::Backend(error.to_string()))?;
-        let layout = windows_canvas::TextLayout::new(&text.text, &format, width.max(1.0), 10_000.0)
+        let format = self.text_format(text)?;
+        let layout = windows_canvas::TextLayout::new(&text.text, format, width.max(1.0), 10_000.0)
             .map_err(|error| Error::Backend(error.to_string()))?;
         let metrics = layout.metrics();
         Ok(TextMetrics {

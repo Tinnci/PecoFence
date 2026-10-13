@@ -8,6 +8,7 @@ use std::rc::Rc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
 const RENDER: ServiceKey<dyn RenderService> = ServiceKey::new("host", "render", 1);
 const THEME: ServiceKey<dyn ThemeService> = ServiceKey::new("host", "theme", 1);
@@ -34,7 +35,8 @@ fn spm_endpoint(
 
 #[cfg(test)]
 mod endpoint_tests {
-    use super::spm_endpoint;
+    use super::{PipeState, RELIABLE_EVENT_CAPACITY, ScopeId, SnapshotStamp, Token, spm_endpoint};
+    use std::sync::Arc;
 
     #[test]
     fn instance_scopes_spm_endpoint() {
@@ -49,6 +51,56 @@ mod endpoint_tests {
         assert!(lab_a.starts_with(&(default.clone() + ".i-")));
         assert!(lab_b.starts_with(&(default + ".i-")));
     }
+
+    #[tokio::test]
+    async fn snapshots_coalesce_without_discarding_reliable_results() {
+        let inbox = PipeState::new(pecofence_platform::HWND(std::ptr::null_mut()));
+        let session = spm_contracts::DaemonSessionId::new();
+        let old = SnapshotStamp {
+            session,
+            revision: spm_contracts::Revision(1),
+        };
+        let new = SnapshotStamp {
+            session,
+            revision: spm_contracts::Revision(2),
+        };
+        inbox.publish_snapshot(ScopeId(1), 1, Token(7), old, Arc::from(&b"old"[..]));
+        inbox
+            .publish_reliable(ScopeId(1), 1, Token(7), Arc::from(&b"reply"[..]))
+            .await
+            .unwrap();
+        inbox.publish_snapshot(ScopeId(1), 1, Token(7), new, Arc::from(&b"new"[..]));
+        inbox.publish_snapshot(ScopeId(1), 1, Token(7), old, Arc::from(&b"late-old"[..]));
+        let events = inbox.drain_for_test();
+        assert_eq!(events.len(), 2);
+        assert_eq!(&*events[0].1, b"reply");
+        assert_eq!(&*events[1].1, b"new");
+    }
+
+    #[tokio::test]
+    async fn reliable_results_wait_for_ui_capacity() {
+        let inbox = PipeState::new(pecofence_platform::HWND(std::ptr::null_mut()));
+        for _ in 0..RELIABLE_EVENT_CAPACITY {
+            inbox
+                .publish_reliable(ScopeId(1), 1, Token(7), Arc::from(&b"reply"[..]))
+                .await
+                .unwrap();
+        }
+        assert!(
+            tokio::time::timeout(
+                std::time::Duration::from_millis(10),
+                inbox.publish_reliable(ScopeId(1), 1, Token(7), Arc::from(&b"next"[..])),
+            )
+            .await
+            .is_err()
+        );
+        assert_eq!(inbox.drain_for_test().len(), RELIABLE_EVENT_CAPACITY);
+        inbox
+            .publish_reliable(ScopeId(1), 1, Token(7), Arc::from(&b"next"[..]))
+            .await
+            .unwrap();
+        assert_eq!(inbox.drain_for_test().len(), 1);
+    }
 }
 
 struct InstanceRecord {
@@ -60,6 +112,7 @@ struct InstanceRecord {
     mount_scope: Option<ScopeId>,
     mount_key: Option<MountKey>,
     drain_started: Option<Instant>,
+    wake_at: Option<Instant>,
 }
 
 /// Host composition root for provider descriptors, runtime instances, and mount generations.
@@ -73,6 +126,8 @@ pub(crate) struct PanelManager {
     _runtime: Arc<tokio::runtime::Runtime>,
     supervisor: Rc<RefCell<TaskSupervisor>>,
     ipc_state: Arc<PipeState>,
+    render_invalidations: Arc<Mutex<HashSet<MountKey>>>,
+    notify_hwnd: pecofence_platform::HWND,
 }
 
 impl PanelManager {
@@ -85,6 +140,7 @@ impl PanelManager {
         let runtime = Arc::new(tokio::runtime::Runtime::new().expect("Tokio runtime"));
         let supervisor = Rc::new(RefCell::new(TaskSupervisor::new()));
         let ipc_state = Arc::new(PipeState::new(notify_hwnd));
+        let render_invalidations = Arc::new(Mutex::new(HashSet::new()));
         let instance = pecofence_core::brand::var("PECOFENCE_INSTANCE").ok();
         let endpoint = spm_endpoint(
             pecofence_platform::named_pipe::current_user_sid().expect("current process user SID"),
@@ -120,7 +176,14 @@ impl PanelManager {
             .expect("SPM transport supervisor capacity");
         let mut services = ServiceRegistry::new();
         services
-            .publish(RENDER, service_scope, Box::new(HostRender))
+            .publish(
+                RENDER,
+                service_scope,
+                Box::new(HostRender {
+                    pending: render_invalidations.clone(),
+                    notify_hwnd: notify_hwnd.0 as isize,
+                }),
+            )
             .expect("unique service");
         services
             .publish(THEME, service_scope, Box::new(HostTheme))
@@ -157,6 +220,8 @@ impl PanelManager {
             _runtime: runtime,
             supervisor,
             ipc_state,
+            render_invalidations,
+            notify_hwnd,
         }
     }
 
@@ -290,6 +355,9 @@ impl PanelManager {
         }
         let (panel, _) = transaction.commit().map_err(Error::from)?;
         let handle = PanelHandle::new(key, panel);
+        let wake_at = handle
+            .next_wake_after()
+            .and_then(|delay| Instant::now().checked_add(delay.max(Duration::from_millis(10))));
         self.instances.insert(
             id,
             InstanceRecord {
@@ -301,13 +369,48 @@ impl PanelManager {
                 mount_scope: Some(mount_scope),
                 mount_key: Some(mount_key),
                 drain_started: None,
+                wake_at,
             },
         );
+        self.arm_next_wake();
         Ok(handle)
     }
 
     pub fn open_panel(&mut self, spec: &PanelSpec) -> Result<PanelHandle> {
         self.resolve(spec)
+    }
+
+    pub fn persist_config(
+        &mut self,
+        key: InstanceKey,
+        bytes: Arc<[u8]>,
+    ) -> Result<serde_json::Value> {
+        if bytes.len() > 64 * 1024 {
+            return Err(Error::Invalid("panel configuration exceeds 64 KiB".into()));
+        }
+        let config: serde_json::Value =
+            serde_json::from_slice(&bytes).map_err(|e| Error::Invalid(e.to_string()))?;
+        let record = self.instances.get_mut(&key.id).ok_or(Error::Closed)?;
+        if record.activation != key.activation || record.drain_started.is_some() {
+            return Err(Error::Revoked);
+        }
+        let provider = self.providers.get(&record.provider).ok_or(Error::Closed)?;
+        provider.validate(&PanelConfig {
+            version: provider.descriptor().config_major,
+            bytes,
+        })?;
+        record.config = config.clone();
+        Ok(config)
+    }
+
+    pub fn submit_text(&self, key: InstanceKey, action: u64, text: String) -> Result<PanelUpdate> {
+        let record = self.instances.get(&key.id).ok_or(Error::Closed)?;
+        if record.activation != key.activation || record.drain_started.is_some() {
+            return Err(Error::Revoked);
+        }
+        record
+            .handle
+            .event(PanelEvent::TextSubmitted { action, text })
     }
 
     #[allow(dead_code)]
@@ -350,6 +453,8 @@ impl PanelManager {
         self.scopes.begin_stop(record.scope)?;
         self.supervisor.borrow().cancel_scope(record.scope);
         record.drain_started = Some(Instant::now());
+        record.wake_at = None;
+        self.arm_next_wake();
         Ok(true)
     }
 
@@ -431,8 +536,29 @@ impl PanelManager {
             .collect()
     }
 
-    pub fn poll(&mut self) -> usize {
-        let delivered = self.poll_events();
+    /// Dispose instances no longer present in the saved layout without activating
+    /// inactive tabs. Their timers and subscriptions stop with the instance.
+    pub fn retain_specs(&mut self, desired: &[PanelSpec]) {
+        let wanted: HashSet<_> = desired
+            .iter()
+            .map(|spec| spec.instance_id.as_u128())
+            .collect();
+        let stale: Vec<_> = self
+            .instances
+            .keys()
+            .copied()
+            .filter(|id| !wanted.contains(id))
+            .collect();
+        for id in stale {
+            let _ = self.close_panel(id, StopReason::Deleted);
+        }
+    }
+
+    pub fn poll(&mut self) -> HashMap<InstanceKey, PanelUpdate> {
+        let mut updates = self.poll_events();
+        for (key, update) in self.poll_wakes() {
+            updates.entry(key).or_default().merge(update);
+        }
         let draining: Vec<_> = self
             .instances
             .iter()
@@ -456,7 +582,69 @@ impl PanelManager {
                 let _ = self.scopes.local(scope).map(|scope| scope.quarantine());
             }
         }
-        delivered
+        updates
+    }
+
+    /// The UI thread owns one Win32 timer for all provider wake-ups. No worker
+    /// thread or IPC round trip is needed for local time-based panels.
+    fn arm_next_wake(&self) {
+        let Some(next) = self
+            .instances
+            .values()
+            .filter_map(|record| record.wake_at)
+            .min()
+        else {
+            pecofence_platform::window::kill_timer(self.notify_hwnd, super::TIMER_PANEL_WAKE);
+            return;
+        };
+        let millis = next
+            .saturating_duration_since(Instant::now())
+            .as_millis()
+            .clamp(10, u32::MAX as u128) as u32;
+        pecofence_platform::window::set_timer(self.notify_hwnd, super::TIMER_PANEL_WAKE, millis);
+    }
+
+    fn poll_wakes(&mut self) -> HashMap<InstanceKey, PanelUpdate> {
+        let now = Instant::now();
+        let mut updates: HashMap<InstanceKey, PanelUpdate> = HashMap::new();
+        let mut fired = false;
+        for record in self.instances.values_mut() {
+            if record.drain_started.is_some() || !record.wake_at.is_some_and(|at| at <= now) {
+                continue;
+            }
+            fired = true;
+            let result = record.handle.event(PanelEvent::Wake);
+            record.wake_at = record
+                .handle
+                .next_wake_after()
+                .and_then(|delay| Instant::now().checked_add(delay.max(Duration::from_millis(10))));
+            match result {
+                Ok(update) => updates
+                    .entry(record.handle.key())
+                    .or_default()
+                    .merge(update),
+                Err(error) => tracing::warn!(%error, "panel wake rejected"),
+            }
+        }
+        if fired {
+            self.arm_next_wake();
+        }
+        updates
+    }
+
+    pub fn time_changed(&mut self) {
+        let now = Instant::now();
+        for record in self.instances.values_mut() {
+            if record.wake_at.is_some() && record.drain_started.is_none() {
+                record.wake_at = Some(now);
+            }
+        }
+        pecofence_platform::window::post_message(
+            self.notify_hwnd,
+            crate::commands::WM_APP_PLUGIN_EVENT,
+            0,
+            0,
+        );
     }
 
     pub fn shutdown(&mut self) {
@@ -466,14 +654,9 @@ impl PanelManager {
         }
     }
 
-    pub fn poll_events(&mut self) -> usize {
-        let events: Vec<_> = self
-            .ipc_state
-            .events
-            .lock()
-            .map(|mut events| events.drain(..).collect())
-            .unwrap_or_default();
-        let mut delivered = 0;
+    pub fn poll_events(&mut self) -> HashMap<InstanceKey, PanelUpdate> {
+        let events = self.ipc_state.drain();
+        let mut updates: HashMap<InstanceKey, PanelUpdate> = HashMap::new();
         for event in events {
             let Some(record) = self
                 .instances
@@ -493,15 +676,43 @@ impl PanelManager {
                 subscription: event.subscription,
                 bytes: event.bytes,
             }) {
-                Ok(_) => delivered += 1,
+                Ok(update) if update.relayout || !update.commands.is_empty() => {
+                    updates
+                        .entry(record.handle.key())
+                        .or_default()
+                        .merge(update);
+                }
+                Ok(_) => {}
                 Err(error) => tracing::warn!(%error, "plugin IPC event rejected"),
             }
         }
-        delivered
+        let invalidations: Vec<_> = self
+            .render_invalidations
+            .lock()
+            .map(|mut pending| pending.drain().collect())
+            .unwrap_or_default();
+        for mount in invalidations {
+            if let Some(record) = self.instances.get(&mount.instance.id)
+                && record.mount_key == Some(mount)
+                && record.drain_started.is_none()
+            {
+                updates
+                    .entry(mount.instance)
+                    .or_default()
+                    .merge(PanelUpdate {
+                        commands: vec![HostCommand::Invalidate],
+                        relayout: false,
+                    });
+            }
+        }
+        updates
     }
 }
 
-struct HostRender;
+struct HostRender {
+    pending: Arc<Mutex<HashSet<MountKey>>>,
+    notify_hwnd: isize,
+}
 impl RenderService for HostRender {
     fn measure(&self, text: &TextSpec, width: f32) -> Result<TextMetrics> {
         Ok(TextMetrics {
@@ -509,7 +720,17 @@ impl RenderService for HostRender {
             height: text.size_dip * 1.45,
         })
     }
-    fn invalidate(&self, _mount: MountKey, _rect: Option<RectDip>) -> Result<()> {
+    fn invalidate(&self, mount: MountKey, _rect: Option<RectDip>) -> Result<()> {
+        self.pending
+            .lock()
+            .map_err(|_| Error::Backend("render invalidation mutex poisoned".into()))?
+            .insert(mount);
+        pecofence_platform::window::post_message(
+            pecofence_platform::HWND(self.notify_hwnd as *mut core::ffi::c_void),
+            crate::commands::WM_APP_PLUGIN_EVENT,
+            0,
+            0,
+        );
         Ok(())
     }
 }
@@ -635,11 +856,27 @@ impl DesktopService for HostDesktop {
 }
 
 struct PipeEvent {
+    sequence: u64,
+    snapshot_stamp: Option<SnapshotStamp>,
     scope: ScopeId,
     generation: u64,
     subscription: Token,
     bytes: Arc<[u8]>,
 }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct SnapshotStamp {
+    pub session: spm_contracts::DaemonSessionId,
+    pub revision: spm_contracts::Revision,
+}
+
+#[derive(Default)]
+struct PipeInbox {
+    snapshots: HashMap<(ScopeId, u64, Token), PipeEvent>,
+    reliable: VecDeque<(PipeEvent, OwnedSemaphorePermit)>,
+}
+
+const RELIABLE_EVENT_CAPACITY: usize = 128;
 
 struct PipeCommand {
     owner: ScopeId,
@@ -648,8 +885,10 @@ struct PipeCommand {
 
 pub(crate) struct PipeState {
     next: AtomicU64,
+    next_event: AtomicU64,
     notify_hwnd: isize,
-    events: Mutex<VecDeque<PipeEvent>>,
+    inbox: Mutex<PipeInbox>,
+    reliable_slots: Arc<Semaphore>,
     commands: Mutex<HashMap<Token, PipeCommand>>,
 }
 
@@ -657,8 +896,10 @@ impl PipeState {
     pub(crate) fn new(notify_hwnd: pecofence_platform::HWND) -> Self {
         Self {
             next: AtomicU64::new(1),
+            next_event: AtomicU64::new(1),
             notify_hwnd: notify_hwnd.0 as isize,
-            events: Mutex::new(VecDeque::new()),
+            inbox: Mutex::new(PipeInbox::default()),
+            reliable_slots: Arc::new(Semaphore::new(RELIABLE_EVENT_CAPACITY)),
             commands: Mutex::new(HashMap::new()),
         }
     }
@@ -673,30 +914,103 @@ impl PipeState {
         Ok(Token(value))
     }
 
-    pub(crate) fn publish(
+    fn event(
         &self,
         scope: ScopeId,
         generation: u64,
         subscription: Token,
         bytes: Arc<[u8]>,
-    ) {
-        if let Ok(mut events) = self.events.lock() {
-            if events.len() == 128 {
-                events.pop_front();
-            }
-            events.push_back(PipeEvent {
-                scope,
-                generation,
-                subscription,
-                bytes,
-            });
+    ) -> PipeEvent {
+        PipeEvent {
+            sequence: self.next_event.fetch_add(1, Ordering::Relaxed),
+            snapshot_stamp: None,
+            scope,
+            generation,
+            subscription,
+            bytes,
         }
+    }
+
+    fn notify(&self) {
         pecofence_platform::window::post_message(
             pecofence_platform::HWND(self.notify_hwnd as *mut core::ffi::c_void),
             crate::commands::WM_APP_PLUGIN_EVENT,
             0,
             0,
         );
+    }
+
+    pub(crate) fn publish_snapshot(
+        &self,
+        scope: ScopeId,
+        generation: u64,
+        subscription: Token,
+        stamp: SnapshotStamp,
+        bytes: Arc<[u8]>,
+    ) {
+        let mut event = self.event(scope, generation, subscription, bytes);
+        event.snapshot_stamp = Some(stamp);
+        if let Ok(mut inbox) = self.inbox.lock() {
+            let key = (scope, generation, subscription);
+            if inbox.snapshots.get(&key).is_some_and(|old| {
+                old.snapshot_stamp.is_some_and(|old_stamp| {
+                    old_stamp.session == stamp.session && old_stamp.revision >= stamp.revision
+                })
+            }) {
+                return;
+            }
+            let wake = inbox.snapshots.is_empty() && inbox.reliable.is_empty();
+            inbox.snapshots.insert(key, event);
+            drop(inbox);
+            if wake {
+                self.notify();
+            }
+        }
+    }
+
+    pub(crate) async fn publish_reliable(
+        &self,
+        scope: ScopeId,
+        generation: u64,
+        subscription: Token,
+        bytes: Arc<[u8]>,
+    ) -> Result<()> {
+        let permit = self
+            .reliable_slots
+            .clone()
+            .acquire_owned()
+            .await
+            .map_err(|_| Error::Closed)?;
+        let event = self.event(scope, generation, subscription, bytes);
+        let mut inbox = self
+            .inbox
+            .lock()
+            .map_err(|_| Error::Backend("IPC inbox mutex poisoned".into()))?;
+        let wake = inbox.snapshots.is_empty() && inbox.reliable.is_empty();
+        inbox.reliable.push_back((event, permit));
+        drop(inbox);
+        if wake {
+            self.notify();
+        }
+        Ok(())
+    }
+
+    fn drain(&self) -> Vec<PipeEvent> {
+        let Ok(mut inbox) = self.inbox.lock() else {
+            return Vec::new();
+        };
+        let mut events: Vec<_> = inbox.snapshots.drain().map(|(_, event)| event).collect();
+        events.extend(inbox.reliable.drain(..).map(|(event, _permit)| event));
+        events.sort_unstable_by_key(|event| event.sequence);
+        events
+    }
+
+    #[cfg(test)]
+    pub(crate) fn drain_for_test(&self) -> Vec<(Token, Arc<[u8]>)> {
+        self.drain()
+            .into_iter()
+            .map(|event| (event.subscription, event.bytes))
+            .collect()
     }
 }
 
@@ -733,21 +1047,17 @@ impl IpcService for PipeIpc {
             .commands
             .lock()
             .map_err(|_| Error::Backend("IPC command mutex poisoned".into()))?;
-        let mut accepted = false;
-        for (subscription, _command) in commands
+        let subscription = commands
             .iter()
             .filter(|(_, command)| command.owner == owner && command.generation == generation)
-        {
-            let envelope: spm_contracts::Envelope = serde_json::from_slice(&payload)
-                .map_err(|error| Error::Invalid(error.to_string()))?;
-            self.transport
-                .request(*subscription, envelope)
-                .map_err(|_| Error::Backend("SPM transport stopped".into()))?;
-            accepted = true;
-        }
-        if !accepted {
-            return Err(Error::Revoked);
-        }
+            .map(|(subscription, _)| *subscription)
+            .min_by_key(|subscription| subscription.0)
+            .ok_or(Error::Revoked)?;
+        let envelope: spm_contracts::Envelope =
+            serde_json::from_slice(&payload).map_err(|error| Error::Invalid(error.to_string()))?;
+        self.transport
+            .request(subscription, envelope)
+            .map_err(|_| Error::Backend("SPM transport unavailable or busy".into()))?;
         self.state.token()
     }
     fn cancel(&self, token: Token) -> Result<()> {

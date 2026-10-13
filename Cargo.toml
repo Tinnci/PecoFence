@@ -5,6 +5,9 @@ members = [
     "crates/plugin-api",
     "crates/plugin-kernel",
     "crates/plugin-spm",
+    "crates/plugin-widgets",
+    "crates/shell-contract",
+    "crates/shell-extension",
     "crates/platform",
     "crates/render",
     "crates/app",
@@ -35,6 +38,7 @@ uuid = { version = "1", features = ["v4", "serde"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "net", "io-util", "macros"] }
+chrono = "0.4"
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "warn"

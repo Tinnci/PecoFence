@@ -35,6 +35,8 @@ Copy-Item -LiteralPath "third_party/webview2/LICENSE.txt" -Destination (Join-Pat
 Copy-Item -LiteralPath "LICENSE" -Destination $stage
 Copy-Item -LiteralPath "docs/PORTABLE.md" -Destination (Join-Path $stage "README.md")
 Copy-Item -LiteralPath "docs/UPGRADING.md" -Destination (Join-Path $stage "UPGRADING.md")
+Copy-Item -LiteralPath "docs/PORTABLE_UPDATE.md" -Destination (Join-Path $stage "PORTABLE_UPDATE.md")
+Copy-Item -LiteralPath "scripts/update-portable-pair.ps1" -Destination (Join-Path $stage "update-portable-pair.ps1")
 & $Python scripts/write-license-notices.py (Join-Path $stage "THIRD-PARTY-LICENSES.txt")
 if ($LASTEXITCODE -ne 0) { throw "License notice generation failed" }
 

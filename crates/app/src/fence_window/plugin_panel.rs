@@ -2,9 +2,10 @@
 
 use super::*;
 use pecofence_plugin_api::{
-    Exposure, FrameInput, Grouping, InstanceKey, MountContext, MountKey, PanelEvent, PanelInstance,
-    PreparedFrame, Presentation, RectDip, StopReason,
+    Exposure, FrameInput, Grouping, HostCommand, InstanceKey, MountContext, MountKey, PanelEvent,
+    PanelInstance, PanelUpdate, PreparedFrame, Presentation, RectDip, StopReason,
 };
+use std::time::Duration;
 
 #[derive(Clone)]
 pub(crate) struct PanelHandle {
@@ -19,10 +20,11 @@ pub(crate) struct PanelHandle {
 
 impl PanelHandle {
     pub(crate) fn new(key: InstanceKey, panel: Box<dyn PanelInstance>) -> Self {
+        let presentation = panel.initial_presentation();
         Self {
             key,
             panel: Rc::new(RefCell::new(panel)),
-            presentation: Rc::new(Cell::new(Presentation::Workspace)),
+            presentation: Rc::new(Cell::new(presentation)),
             grouping: Rc::new(Cell::new(Grouping::Single)),
             exposure: Rc::new(Cell::new(Exposure::Desktop)),
             active: Rc::new(Cell::new(true)),
@@ -79,6 +81,10 @@ impl PanelHandle {
         self.exposure.get()
     }
 
+    pub(crate) fn next_wake_after(&self) -> Option<Duration> {
+        self.panel.borrow().next_wake_after()
+    }
+
     pub(crate) fn set_container_state(&self, grouping: Grouping, exposure: Exposure, active: bool) {
         self.grouping.set(grouping);
         self.exposure.set(exposure);
@@ -90,6 +96,7 @@ pub(super) struct PluginPanelContent {
     handle: PanelHandle,
     committed: Option<Rc<dyn PreparedFrame>>,
     pressed: Option<(u64, Rc<dyn PreparedFrame>)>,
+    pub(super) dirty: bool,
 }
 
 impl PluginPanelContent {
@@ -98,6 +105,7 @@ impl PluginPanelContent {
             handle,
             committed: None,
             pressed: None,
+            dirty: false,
         }
     }
 
@@ -151,6 +159,7 @@ impl PluginPanelContent {
         }
         let candidate = match self.handle.panel.borrow_mut().prepare_frame(FrameInput {
             viewport,
+            locale: pecofence_core::i18n::language().tag(),
             presentation: self.handle.presentation.get(),
             grouping: self.handle.grouping.get(),
             exposure: self.handle.exposure.get(),
@@ -184,6 +193,7 @@ impl PluginPanelContent {
             tracing::warn!(%error, "panel paint rejected");
         } else if drawn {
             self.committed = Some(candidate);
+            self.dirty = false;
         }
         Ok(drawn)
     }
@@ -196,6 +206,71 @@ impl PluginPanelContent {
             .rev()
             .find(|node| node.rect.contains(x, y))
             .map(|node| node.action)
+    }
+}
+
+impl FenceViewState {
+    pub(super) fn apply_plugin_update(&mut self, update: PanelUpdate) -> Result<()> {
+        let mut redraw_content = update.relayout;
+        let mut redraw_chrome = false;
+        let mut relayout = update.relayout;
+        for command in update.commands {
+            match command {
+                HostCommand::Invalidate => redraw_content = true,
+                HostCommand::SetTitle(title) => {
+                    if self.title != title {
+                        self.title = title.clone();
+                        if let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == self.active) {
+                            tab.title = title;
+                        }
+                        redraw_chrome = true;
+                    }
+                }
+                HostCommand::RequestMode(mode) => {
+                    if let Some(panel) = &self.plugin_panel {
+                        panel.set_presentation(mode);
+                    }
+                    relayout = true;
+                    redraw_content = true;
+                }
+                HostCommand::PersistConfig(bytes) => {
+                    if let Some(panel) = &self.plugin_panel {
+                        self.queue.push(Command::PanelConfigChanged {
+                            key: panel.key(),
+                            bytes,
+                        });
+                    }
+                }
+                HostCommand::RequestTextInput { action, initial } => {
+                    if let Some(panel) = &self.plugin_panel {
+                        self.queue.push(Command::PanelTextRequested {
+                            key: panel.key(),
+                            action,
+                            initial,
+                        });
+                    }
+                }
+            }
+        }
+        if !desktop::is_visible(self.hwnd) {
+            if redraw_content && let Some(panel) = &mut self.plugin_panel {
+                panel.dirty = true;
+            }
+            return Ok(());
+        }
+        if relayout {
+            let (width, height) = window::window_rect_size(self.hwnd);
+            self.layout_panels(width, height)?;
+        }
+        if redraw_chrome {
+            self.redraw_chrome_only()?;
+        }
+        if redraw_content && (!self.rolled_up || self.roll_anim.is_some()) {
+            self.redraw_content()?;
+        } else if redraw_content && let Some(panel) = &mut self.plugin_panel {
+            panel.dirty = true;
+        }
+        Ok(())
     }
 }
 
@@ -263,13 +338,17 @@ pub(super) fn handle_message(
                 .then_some((action, down_identity.layout_revision))
             });
             if let Some((action, layout_revision)) = invoke {
-                if let Err(error) = panel.handle.panel.borrow_mut().event(PanelEvent::Invoke {
+                match panel.handle.event(PanelEvent::Invoke {
                     action,
                     layout_revision,
                 }) {
-                    tracing::warn!(%error, "panel event rejected");
+                    Ok(update) => {
+                        if let Err(error) = view.apply_plugin_update(update) {
+                            tracing::warn!(%error, "panel update failed");
+                        }
+                    }
+                    Err(error) => tracing::warn!(%error, "panel event rejected"),
                 }
-                let _ = view.redraw_content();
             }
             drop(guard);
             window::release_capture();

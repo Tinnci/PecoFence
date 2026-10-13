@@ -473,26 +473,17 @@ unsafe fn hbitmap_to_bgra(hbitmap: HBITMAP, max_px: u32) -> Result<ShellImage> {
     }
 }
 
-/// Minifies `source` to fit `max_px` (Fant) and converts it to tightly packed premultiplied
-/// BGRA.
+/// Converts to premultiplied BGRA before minifying with Fant. Filtering straight-alpha colour
+/// first would pull RGB from fully transparent pixels into an icon's silhouette.
 unsafe fn wic_to_bgra(
     factory: &IWICImagingFactory,
-    mut source: IWICBitmapSource,
+    source: IWICBitmapSource,
     max_px: u32,
 ) -> Result<ShellImage> {
     // SAFETY: WIC calls on live objects; the pixel buffer is sized from the reported size.
     unsafe {
         let (mut w, mut h) = (0u32, 0u32);
         source.GetSize(&mut w, &mut h).ok()?;
-        if let Some((dst_w, dst_h)) = fit_within(w, h, max_px) {
-            let scaler = factory.CreateBitmapScaler()?;
-            scaler
-                .Initialize(&source, dst_w, dst_h, WICBitmapInterpolationModeFant)
-                .ok()?;
-            source = scaler.cast()?;
-            (w, h) = (dst_w, dst_h);
-        }
-        // Convert to PBGRA in case the DIB was 24-bit or straight alpha.
         let converter = factory.CreateFormatConverter()?;
         converter
             .Initialize(
@@ -504,11 +495,19 @@ unsafe fn wic_to_bgra(
                 WICBitmapPaletteTypeMedianCut,
             )
             .ok()?;
-        let converted: IWICBitmapSource = converter.cast()?;
+        let mut pixels: IWICBitmapSource = converter.cast()?;
+        if let Some((dst_w, dst_h)) = fit_within(w, h, max_px) {
+            let scaler = factory.CreateBitmapScaler()?;
+            scaler
+                .Initialize(&pixels, dst_w, dst_h, WICBitmapInterpolationModeFant)
+                .ok()?;
+            pixels = scaler.cast()?;
+            (w, h) = (dst_w, dst_h);
+        }
         let stride = w * 4;
         let mut bgra = vec![0u8; (stride * h) as usize];
-        (Interface::vtable(&converted).CopyPixels)(
-            Interface::as_raw(&converted),
+        (Interface::vtable(&pixels).CopyPixels)(
+            Interface::as_raw(&pixels),
             core::ptr::null(),
             stride,
             bgra.len() as u32,
@@ -702,7 +701,7 @@ pub fn url_shortcut_target(path: &Path) -> Option<String> {
 
 #[cfg(test)]
 mod scale_tests {
-    use super::fit_within;
+    use super::*;
 
     /// Only oversized shell images are minified: exact / smaller returns stay untouched, the
     /// aspect is kept and the long side lands on the requested size.
@@ -717,6 +716,33 @@ mod scale_tests {
         assert_eq!(fit_within(0, 256, 96), None);
         assert_eq!(fit_within(256, 256, 0), None);
         assert_eq!(fit_within(1000, 1, 96), Some((96, 1)));
+    }
+
+    #[test]
+    fn minification_does_not_bleed_colour_from_transparent_icon_pixels() {
+        let _ole = crate::com::OleGuard::init().unwrap();
+        // One opaque red pixel beside a transparent blue pixel in straight-alpha BGRA.
+        let source_pixels = [0, 0, 255, 255, 255, 0, 0, 0];
+        let image = unsafe {
+            let factory: IWICImagingFactory =
+                CoCreateInstance(&CLSID_WICImagingFactory, None, CLSCTX_INPROC_SERVER).unwrap();
+            let source = factory
+                .CreateBitmapFromMemory(
+                    2,
+                    1,
+                    &GUID_WICPixelFormat32bppBGRA,
+                    8,
+                    source_pixels.len() as u32,
+                    source_pixels.as_ptr(),
+                )
+                .unwrap();
+            wic_to_bgra(&factory, source.cast().unwrap(), 1).unwrap()
+        };
+        assert_eq!((image.width, image.height), (1, 1));
+        let [blue, _green, red, alpha]: [u8; 4] = image.bgra.try_into().unwrap();
+        assert!((120..=136).contains(&alpha));
+        assert!(red >= 120 && red <= alpha);
+        assert_eq!(blue, 0, "transparent blue must not tint the red edge");
     }
 }
 

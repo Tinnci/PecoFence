@@ -8,6 +8,7 @@ use std::cell::Cell;
 use std::fmt;
 use std::rc::{Rc, Weak};
 use std::sync::Arc;
+use std::time::Duration;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct InstanceKey {
@@ -250,7 +251,7 @@ pub struct ThemeSnapshot {
 
 /// Which theme font role a [`TextSpec`] should render with. The host design
 /// system owns the concrete family per role (see `render::theme::FONT_*`).
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum FontRole {
     #[default]
     Text,
@@ -369,6 +370,8 @@ pub struct MountContext {
 #[derive(Clone, Copy, Debug)]
 pub struct FrameInput {
     pub viewport: RectDip,
+    /// Resolved host UI language tag, such as `zh-CN` or `en`.
+    pub locale: &'static str,
     pub presentation: Presentation,
     pub grouping: Grouping,
     pub exposure: Exposure,
@@ -452,9 +455,15 @@ pub trait PreparedFrame {
 }
 
 pub enum PanelEvent {
+    /// Host-scheduled wake-up. Read the current source state again; timer delivery may be late.
+    Wake,
     Invoke {
         action: u64,
         layout_revision: u64,
+    },
+    TextSubmitted {
+        action: u64,
+        text: String,
     },
     Snapshot {
         subscription: Token,
@@ -478,12 +487,48 @@ pub enum HostCommand {
     Invalidate,
     SetTitle(String),
     RequestMode(Presentation),
+    /// Save provider-owned JSON alongside the fence geometry in the host configuration.
+    PersistConfig(Arc<[u8]>),
+    /// Open the host's native single-line editor and return TextSubmitted on commit.
+    RequestTextInput {
+        action: u64,
+        initial: String,
+    },
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct PanelUpdate {
     pub commands: Vec<HostCommand>,
     pub relayout: bool,
+}
+
+impl PanelUpdate {
+    /// Combine updates while a window is busy. Keep only the latest value for each
+    /// idempotent host command so a long modal loop cannot grow the pending queue.
+    pub fn merge(&mut self, newer: Self) {
+        self.relayout |= newer.relayout;
+        for command in newer.commands {
+            match &command {
+                HostCommand::Invalidate if self.commands.contains(&HostCommand::Invalidate) => {
+                    continue;
+                }
+                HostCommand::SetTitle(_) => {
+                    self.commands
+                        .retain(|old| !matches!(old, HostCommand::SetTitle(_)));
+                }
+                HostCommand::RequestMode(_) => {
+                    self.commands
+                        .retain(|old| !matches!(old, HostCommand::RequestMode(_)));
+                }
+                HostCommand::PersistConfig(_) => {
+                    self.commands
+                        .retain(|old| !matches!(old, HostCommand::PersistConfig(_)));
+                }
+                _ => {}
+            }
+            self.commands.push(command);
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -502,11 +547,20 @@ pub trait PanelProvider {
 }
 
 pub trait PanelInstance {
+    /// Initial host sizing policy for a newly activated panel.
+    fn initial_presentation(&self) -> Presentation {
+        Presentation::Workspace
+    }
     fn mount(&mut self, ctx: MountContext) -> Result<()>;
     fn event(&mut self, event: PanelEvent) -> Result<PanelUpdate>;
     fn prepare_frame(&mut self, input: FrameInput) -> Result<Rc<dyn PreparedFrame>>;
     fn unmount(&mut self, key: MountKey);
     fn begin_stop(&mut self, reason: StopReason);
+    /// Optional one-shot wake-up interval. The host re-queries it after each wake.
+    /// Providers that only react to snapshots and input can use the default.
+    fn next_wake_after(&self) -> Option<Duration> {
+        None
+    }
 }
 
 pub fn validate_provider(provider: &dyn PanelProvider, config: &PanelConfig) -> Result<()> {
@@ -584,5 +638,37 @@ mod tests {
         fn accepts_frame(_: &dyn PreparedFrame) {}
         let _ = accepts_canvas;
         let _ = accepts_frame;
+    }
+
+    #[test]
+    fn pending_panel_updates_keep_latest_commands() {
+        let mut pending = PanelUpdate::default();
+        for i in 0..1000 {
+            pending.merge(PanelUpdate {
+                commands: vec![
+                    HostCommand::Invalidate,
+                    HostCommand::SetTitle(format!("title-{i}")),
+                    HostCommand::RequestMode(if i % 2 == 0 {
+                        Presentation::Compact
+                    } else {
+                        Presentation::Workspace
+                    }),
+                ],
+                relayout: i == 0,
+            });
+        }
+        assert!(pending.relayout);
+        assert_eq!(pending.commands.len(), 3);
+        assert!(pending.commands.contains(&HostCommand::Invalidate));
+        assert!(
+            pending
+                .commands
+                .contains(&HostCommand::SetTitle("title-999".into()))
+        );
+        assert!(
+            pending
+                .commands
+                .contains(&HostCommand::RequestMode(Presentation::Workspace))
+        );
     }
 }

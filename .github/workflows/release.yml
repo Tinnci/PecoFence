@@ -12,6 +12,14 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Authenticate cargo git fetch for private deps (Tinnci/spm)
+        env:
+          PRIVATE_TOKEN: ${{ secrets.PRIVATE_REPO_TOKEN || github.token }}
+        run: |
+          git config --unset-all http.https://github.com/.extraheader
+          git config --global credential.https://github.com.helper ""
+          git config --global --add credential.https://github.com.helper "!f() { echo username=x-access-token; echo password=$env:PRIVATE_TOKEN; }; f"
+          git ls-remote https://github.com/Tinnci/spm main
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy

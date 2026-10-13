@@ -3,7 +3,8 @@
 use crate::anchor::{self, AnchorCell, DesktopAnchor, ShowDesktopBehavior, ZMode};
 use crate::commands::{
     Command, CommandQueue, TransferMode, WM_APP_COMMAND, WM_APP_FRAME, WM_APP_FS_CHANGED,
-    WM_APP_PEEK_FOCUSED, WM_APP_PLUGIN_EVENT, WM_APP_SHELL_CHANGED, WM_APP_TRAY, WM_APP_WALLPAPER,
+    WM_APP_PEEK_FOCUSED, WM_APP_PLUGIN_EVENT, WM_APP_SHELL_CHANGED, WM_APP_TRAY,
+    WM_APP_UPDATE_QUIT, WM_APP_WALLPAPER,
 };
 use crate::fence_window::{
     BackdropMode, BackdropSets, Behavior, FenceContext, FenceWindow, ItemView, TabView,
@@ -37,6 +38,7 @@ use pecofence_render::motion::Motion;
 use pecofence_render::{
     BitmapCache, Image, MonitorBackdrop, RenderStack, Theme, ThemeMode, WallpaperPosition,
 };
+use pecofence_shell_contract::{ShellAction, ShellCommand};
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -95,6 +97,10 @@ const TIMER_PEEK_FOCUS_RETRY: usize = 49;
 const TIMER_WALLPAPER_POLL: usize = 50;
 /// Read only the 16-byte desktop identity, never images/COM, while otherwise idle.
 const TIMER_DESKTOP_ID: usize = 51;
+/// Retry panel delivery after a modal loop temporarily borrows the App.
+const TIMER_PLUGIN_RETRY: usize = 52;
+/// Earliest one-shot wake requested by an in-process panel.
+const TIMER_PANEL_WAKE: usize = 53;
 const SPI_SETDESKWALLPAPER: usize = 0x0014;
 const SPI_SETWORKAREA: usize = 0x002F;
 const TRAY_ID: u32 = 1;
@@ -128,10 +134,12 @@ pub struct Args {
     pub dark: bool,
     pub wallpaper_override: Option<String>,
     pub portable: bool,
+    pub config_dir: Option<std::path::PathBuf>,
     pub no_hide_icons: bool,
     pub exit_after_ms: Option<u32>,
     pub dump_stats: bool,
     pub open_settings: bool,
+    pub shell_action: Option<ShellCommand>,
     /// `--portal <folder>`: create (or reveal) a folder-portal fence for this folder at start.
     pub portal: Option<String>,
     /// `--test-script <file>`: drive the app from a script (see `testscript.rs`).
@@ -177,6 +185,8 @@ pub struct App {
     frame_run: FrameRun,
     /// `--no-hide-icons`: keep Explorer's icons visible this run without persisting the choice.
     no_hide_icons: bool,
+    launch_portable: bool,
+    launch_config_dir: Option<std::path::PathBuf>,
     /// `--light` / `--dark`: pin the theme this run.
     theme_override: Option<ThemeMode>,
     peek_class: WindowClass,
@@ -201,6 +211,9 @@ pub struct App {
     cut_clip_seq: u32,
     /// Composition root for built-in panel providers and their instance lifetimes.
     panel_manager: Rc<RefCell<PanelManager>>,
+    /// Updates waiting for a window temporarily borrowed by a native modal handler.
+    pending_panel_updates:
+        HashMap<pecofence_plugin_api::InstanceKey, pecofence_plugin_api::PanelUpdate>,
 }
 
 pub type AppCell = Rc<RefCell<Option<App>>>;
@@ -227,7 +240,7 @@ impl App {
         for w in &areas {
             tracing::info!(name = %w.device_path, dpi = w.dpi, work = ?(w.left, w.top, w.right, w.bottom), "monitor");
         }
-        let state = AppState::load(areas, args.portable);
+        let state = AppState::load(areas, args.portable, args.config_dir.as_deref());
         tracing::info!(path = %state.config_path().display(), first_run = state.first_run, fences = state.fences().len(), "config loaded");
         if let Some(p) = &state.recovered_from {
             tracing::warn!(from = %p.display(), "config recovered from backup");
@@ -252,9 +265,14 @@ impl App {
         let queue = CommandQueue::new();
 
         // Control window: timers, tray callbacks, command pump.
-        let control_class = WindowClass::register("PecoFence.Control", ClassOptions::default())?;
+        let control_class = WindowClass::register(
+            pecofence_shell_contract::CONTROL_CLASS,
+            ClassOptions::default(),
+        )?;
         let control_handler: MessageHandler = {
             let cell = cell.clone();
+            let update_quit_queue = queue.clone();
+            let shell_command_queue = queue.clone();
             // Folder-watcher debounce state (see WM_APP_FS_CHANGED / TIMER_FS).
             let fs_armed = Cell::new(false);
             let fs_flushed: Cell<Option<Instant>> = Cell::new(None);
@@ -275,6 +293,31 @@ impl App {
             Box::new(
                 move |hwnd: HWND, message: u32, wparam: usize, lparam: isize| -> Option<isize> {
                     match message {
+                        WM_APP_UPDATE_QUIT => {
+                            update_quit_queue.push(Command::Quit);
+                            Some(0)
+                        }
+                        pecofence_shell_contract::WM_APP_SHELL_COMMAND_AT => {
+                            if let Some(command) = ShellCommand::from_wire(wparam, lparam) {
+                                shell_command_queue.push(Command::ShellAction(command));
+                                Some(1)
+                            } else {
+                                Some(0)
+                            }
+                        }
+                        pecofence_shell_contract::WM_APP_SHELL_COMMAND => {
+                            if let Some(action) =
+                                u32::try_from(wparam).ok().and_then(ShellAction::from_id)
+                            {
+                                let point = window::cursor_pos();
+                                shell_command_queue.push(Command::ShellAction(ShellCommand::new(
+                                    action, point.x, point.y,
+                                )));
+                                Some(1)
+                            } else {
+                                Some(0)
+                            }
+                        }
                         WM_APP_COMMAND => {
                             if let Ok(mut guard) = cell.try_borrow_mut() {
                                 if let Some(app) = guard.as_mut() {
@@ -294,7 +337,7 @@ impl App {
                             {
                                 app.process_panel_events();
                             } else {
-                                window::set_timer(hwnd, TIMER_CMD_RETRY, 50);
+                                window::set_timer(hwnd, TIMER_PLUGIN_RETRY, 50);
                             }
                             Some(0)
                         }
@@ -444,6 +487,19 @@ impl App {
                                     window::kill_timer(hwnd, TIMER_CMD_RETRY);
                                     window::post_message(hwnd, WM_APP_COMMAND, 0, 0);
                                 }
+                                TIMER_PLUGIN_RETRY => {
+                                    window::kill_timer(hwnd, TIMER_PLUGIN_RETRY);
+                                    window::post_message(hwnd, WM_APP_PLUGIN_EVENT, 0, 0);
+                                }
+                                TIMER_PANEL_WAKE => {
+                                    if let Ok(mut guard) = cell.try_borrow_mut()
+                                        && let Some(app) = guard.as_mut()
+                                    {
+                                        app.process_panel_events();
+                                    } else {
+                                        window::set_timer(hwnd, TIMER_PANEL_WAKE, 50);
+                                    }
+                                }
                                 TIMER_FRAME_RETRY => {
                                     window::kill_timer(hwnd, TIMER_FRAME_RETRY);
                                     window::post_message(hwnd, WM_APP_FRAME, 0, 0);
@@ -525,6 +581,16 @@ impl App {
                             }
                             None
                         }
+                        msg::WM_TIMECHANGE => {
+                            if let Ok(mut guard) = cell.try_borrow_mut()
+                                && let Some(app) = guard.as_mut()
+                            {
+                                app.panel_manager.borrow_mut().time_changed();
+                            } else {
+                                window::set_timer(hwnd, TIMER_PANEL_WAKE, 50);
+                            }
+                            Some(0)
+                        }
                         msg::WM_DISPLAYCHANGE => {
                             if let Ok(mut guard) = cell.try_borrow_mut()
                                 && let Some(app) = guard.as_mut()
@@ -550,8 +616,14 @@ impl App {
                 },
             )
         };
+        let control_title = pecofence_core::brand::var("PECOFENCE_INSTANCE")
+            .ok()
+            .map(|name| name.trim().to_string())
+            .filter(|name| !name.is_empty())
+            .map(|name| format!("PecoFence.Control.{name}"))
+            .unwrap_or_else(|| pecofence_shell_contract::CONTROL_TITLE_MAIN.to_string());
         let control = WindowBuilder::new(&control_class)
-            .title("PecoFence")
+            .title(&control_title)
             .style(style::POPUP)
             .ex_style(style::EX_TOOLWINDOW | style::EX_NOACTIVATE)
             .bounds(0, 0, 0, 0)
@@ -599,6 +671,33 @@ impl App {
         panel_manager
             .borrow_mut()
             .register_provider(Rc::new(pecofence_plugin_spm::SpmPlugin))
+            .map_err(|error| {
+                windows_core::Error::new(
+                    windows_core::HRESULT(0x80004005u32 as i32),
+                    error.to_string(),
+                )
+            })?;
+        panel_manager
+            .borrow_mut()
+            .register_provider(Rc::new(pecofence_plugin_widgets::ClockPlugin))
+            .map_err(|error| {
+                windows_core::Error::new(
+                    windows_core::HRESULT(0x80004005u32 as i32),
+                    error.to_string(),
+                )
+            })?;
+        panel_manager
+            .borrow_mut()
+            .register_provider(Rc::new(pecofence_plugin_widgets::CalendarPlugin))
+            .map_err(|error| {
+                windows_core::Error::new(
+                    windows_core::HRESULT(0x80004005u32 as i32),
+                    error.to_string(),
+                )
+            })?;
+        panel_manager
+            .borrow_mut()
+            .register_provider(Rc::new(pecofence_plugin_widgets::TodoPlugin))
             .map_err(|error| {
                 windows_core::Error::new(
                     windows_core::HRESULT(0x80004005u32 as i32),
@@ -715,6 +814,8 @@ impl App {
             frame_prev: None,
             frame_run: FrameRun::default(),
             no_hide_icons: args.no_hide_icons,
+            launch_portable: args.portable,
+            launch_config_dir: args.config_dir.clone(),
             theme_override: if args.light {
                 Some(ThemeMode::Light)
             } else if args.dark {
@@ -735,6 +836,7 @@ impl App {
             wallpaper_sig,
             wallpaper_cache: BackdropCache::default(),
             panel_manager,
+            pending_panel_updates: HashMap::new(),
         };
         if let Some(signature) = app.wallpaper_sig.clone() {
             app.wallpaper_cache
@@ -840,6 +942,7 @@ impl App {
             if let Err(error) = pecofence_platform::autostart::reconcile_product(
                 app.state.config.settings.autostart,
                 cfg!(debug_assertions),
+                args.config_dir.as_deref(),
             ) {
                 tracing::warn!(%error, "autostart reconciliation failed");
             }
@@ -853,6 +956,9 @@ impl App {
 
         if args.open_settings {
             app.queue.push(Command::OpenSettings);
+        }
+        if let Some(action) = args.shell_action {
+            app.queue.push(Command::ShellAction(action));
         }
         if let Some(path) = args.test_script.as_deref() {
             app.test = testscript::TestScript::load(path);
@@ -1211,6 +1317,62 @@ impl App {
                     w.redraw();
                 }
             }
+            Command::PanelConfigChanged { key, bytes } => {
+                let active_fence = self.state.fences().iter().find_map(|f| match &f.content {
+                    pecofence_core::FenceContentSpec::Panel { panel }
+                        if panel.instance_id.as_u128() == key.id =>
+                    {
+                        Some(f.id)
+                    }
+                    _ => None,
+                });
+                if active_fence.is_some() {
+                    match self.panel_manager.borrow_mut().persist_config(key, bytes) {
+                        Ok(config) => {
+                            if self.state.update_panel_config(key.id, config) {
+                                self.schedule_save();
+                            }
+                        }
+                        Err(error) => tracing::warn!(%error, "panel config update rejected"),
+                    }
+                }
+            }
+            Command::PanelTextRequested {
+                key,
+                action,
+                initial,
+            } => {
+                let hwnd = self.state.fences().iter().find_map(|f| match &f.content {
+                    pecofence_core::FenceContentSpec::Panel { panel }
+                        if panel.instance_id.as_u128() == key.id =>
+                    {
+                        self.window_for(f.id).map(|w| w.hwnd())
+                    }
+                    _ => None,
+                });
+                if let Some(hwnd) = hwnd {
+                    crate::rename::begin_panel_input(
+                        hwnd,
+                        key,
+                        action,
+                        initial,
+                        self.queue.clone(),
+                        self.theme_mode,
+                    );
+                }
+            }
+            Command::PanelTextCommit { key, action, text } => {
+                match self.panel_manager.borrow().submit_text(key, action, text) {
+                    Ok(update) => {
+                        self.pending_panel_updates
+                            .entry(key)
+                            .or_default()
+                            .merge(update);
+                    }
+                    Err(error) => tracing::warn!(%error, "panel text input rejected"),
+                }
+                self.process_panel_events();
+            }
             Command::DeleteFence(fence) => self.delete_fence(fence),
             Command::NewFence { x, y } => self.new_fence_near(x, y),
             Command::NewFenceRect(rect) => self.offer_new_fence(rect),
@@ -1261,6 +1423,26 @@ impl App {
                 }
             }
             Command::OpenSettings => self.open_settings(),
+            Command::ShellAction(command) => {
+                // The private window can receive messages from other processes. Keep an
+                // out-of-range coordinate from reaching placement arithmetic.
+                let (x, y) = self
+                    .work_area_at(command.x, command.y)
+                    .map(|work| {
+                        (
+                            command.x.clamp(work.left, work.right.saturating_sub(1)),
+                            command.y.clamp(work.top, work.bottom.saturating_sub(1)),
+                        )
+                    })
+                    .unwrap_or((0, 0));
+                match command.action {
+                    ShellAction::NewFence => self.new_fence_near(x, y),
+                    ShellAction::NewTodo => {
+                        self.new_widget_near(pecofence_plugin_widgets::TODO_PROVIDER, x, y, None)
+                    }
+                    ShellAction::OpenSettings => self.open_settings(),
+                }
+            }
             Command::OpenOptionsForFence(fence) => self.open_fence_options(fence),
             Command::RedrawAll => {
                 // Also the rename edit's cancel path: the edited label may unfold again.
@@ -1302,12 +1484,30 @@ impl App {
     }
 
     fn process_panel_events(&mut self) {
-        let delivered = self.panel_manager.borrow_mut().poll();
-        if delivered == 0 {
+        for (key, update) in self.panel_manager.borrow_mut().poll() {
+            self.pending_panel_updates
+                .entry(key)
+                .or_default()
+                .merge(update);
+        }
+        if self.pending_panel_updates.is_empty() {
             return;
         }
-        for window in self.fences.values() {
-            window.redraw();
+        let mut borrowed_view = false;
+        self.pending_panel_updates.retain(|key, update| {
+            let mut retry = false;
+            for window in self.fences.values() {
+                match window.try_apply_panel_update(*key, update) {
+                    Some(true) => return false,
+                    Some(false) => {}
+                    None => retry = true,
+                }
+            }
+            borrowed_view |= retry;
+            retry
+        });
+        if borrowed_view {
+            window::set_timer(self.control.hwnd(), TIMER_PLUGIN_RETRY, 50);
         }
     }
 }

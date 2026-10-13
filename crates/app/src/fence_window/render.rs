@@ -317,7 +317,7 @@ impl FenceViewState {
         }
         let roll_t = self.roll_t.value_at(now);
         // The count is drawn while it fades out after expanding, not only while rolled.
-        let count = (rolled || state.count > 0.0)
+        let count = (self.plugin_panel.is_none() && (rolled || state.count > 0.0))
             .then(|| pecofence_core::i18n::format("{0} 项", &[format!("{}", self.items.len())]));
         let opacity = self.material_opacity();
         let theme = self.material_foreground();

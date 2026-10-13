@@ -15,6 +15,13 @@ if (-not $manifest.fixture.path) { throw "manifest has no fixture; DB-mode start
 $fixture = Join-Path $LabRoot $manifest.fixture.path
 if (-not (Test-Path $fixture)) { throw "fixture missing: $fixture" }
 
+# Fail before touching logs if either executable from this instance is still running.
+$alreadyRunning = @(Get-Process spmd, pecofence -ErrorAction SilentlyContinue |
+  Where-Object { $_.Path -and $_.Path.StartsWith($Inst + '\', [StringComparison]::OrdinalIgnoreCase) })
+if ($alreadyRunning.Count -gt 0) {
+  throw "instance $Name is already running (PID(s): $($alreadyRunning.Id -join ', ')); stop it before starting again"
+}
+
 foreach ($log in @("spmd.stderr.log", "spmd.stdout.log", "pecofence.stderr.log", "pecofence.stdout.log")) {
   $p = Join-Path $Inst "logs\$log"
   if (Test-Path $p) { Remove-Item $p -Force -ErrorAction SilentlyContinue }
@@ -29,6 +36,11 @@ $spmd = Start-Process -FilePath (Join-Path $Inst "spmd.exe") `
   -PassThru
 Set-Content -Path (Join-Path $Inst "logs\spmd.pid") -Value $spmd.Id
 Start-Sleep -Milliseconds 800
+$spmd.Refresh()
+if ($spmd.HasExited) {
+  $reason = Get-Content (Join-Path $Inst "logs\spmd.stderr.log") -Raw -ErrorAction SilentlyContinue
+  throw "spmd exited before PecoFence started (exit $($spmd.ExitCode)): $reason"
+}
 
 # 2. pecofence: portable config lives next to the exe; isolate APPDATA /
 #    LOCALAPPDATA (logs, crash dumps, WebView2 profile) and the single-instance
@@ -52,6 +64,13 @@ try {
   $env:PECOFENCE_INSTANCE = $oldInstance
 }
 Set-Content -Path (Join-Path $Inst "logs\pecofence.pid") -Value $pf.Id
+Start-Sleep -Milliseconds 800
+$pf.Refresh()
+if ($pf.HasExited) {
+  $reason = Get-Content (Join-Path $Inst "logs\pecofence.stderr.log") -Raw -ErrorAction SilentlyContinue
+  Stop-Process -Id $spmd.Id -Force -ErrorAction SilentlyContinue
+  throw "PecoFence exited immediately (exit $($pf.ExitCode)): $reason"
+}
 
 Write-Host "instance  : $Name"
 Write-Host "spmd pid  : $($spmd.Id)  fixture: $($manifest.fixture.path)"

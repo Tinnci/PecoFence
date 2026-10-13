@@ -11,6 +11,9 @@ const CMD_REPAIR_ICONS: u32 = 5;
 const CMD_HIDE_ICONS_AGAIN: u32 = 6;
 const CMD_EXIT: u32 = 9;
 const CMD_PEEK: u32 = 10;
+const CMD_NEW_CLOCK: u32 = 11;
+const CMD_NEW_CALENDAR: u32 = 12;
+const CMD_NEW_TODO: u32 = 13;
 const CMD_ITEM_OPEN: u32 = 100;
 const CMD_ITEM_LOCATION: u32 = 101;
 const CMD_ITEM_PROPERTIES: u32 = 102;
@@ -19,6 +22,9 @@ const CMD_ITEM_PORTAL: u32 = 104;
 const CMD_ITEM_RENAME: u32 = 105;
 const CMD_ITEM_DELETE: u32 = 106;
 const CMD_FENCE_OPEN_FOLDER: u32 = 332;
+const CMD_FENCE_NEW_CLOCK: u32 = 334;
+const CMD_FENCE_NEW_CALENDAR: u32 = 335;
+const CMD_FENCE_NEW_TODO: u32 = 336;
 const CMD_ITEM_MOVE_BASE: u32 = 200;
 const CMD_NEW_FENCE_HERE: u32 = 250;
 /// Command-id range handed to Explorer's `IContextMenu`.
@@ -94,6 +100,24 @@ impl App {
             false,
         )
         .item(
+            CMD_NEW_CLOCK,
+            pecofence_core::i18n::text("新建数字时钟"),
+            false,
+            false,
+        )
+        .item(
+            CMD_NEW_CALENDAR,
+            pecofence_core::i18n::text("新建日历"),
+            false,
+            false,
+        )
+        .item(
+            CMD_NEW_TODO,
+            pecofence_core::i18n::text("新建待办清单"),
+            false,
+            false,
+        )
+        .item(
             CMD_PEEK,
             &match self.peek_hotkey {
                 Some(h) => pecofence_core::i18n::format(
@@ -148,6 +172,15 @@ impl App {
             CMD_TOGGLE_FENCES => self.toggle_all_fences(),
             CMD_PEEK => self.queue.push(Command::TogglePeek),
             CMD_NEW_FENCE => self.queue.push(Command::NewFence { x, y: y - 300 }),
+            CMD_NEW_CLOCK => {
+                self.new_widget_near(pecofence_plugin_widgets::CLOCK_PROVIDER, x, y, None)
+            }
+            CMD_NEW_CALENDAR => {
+                self.new_widget_near(pecofence_plugin_widgets::CALENDAR_PROVIDER, x, y, None)
+            }
+            CMD_NEW_TODO => {
+                self.new_widget_near(pecofence_plugin_widgets::TODO_PROVIDER, x, y, None)
+            }
             CMD_APPLY_RULES => self.queue.push(Command::ApplyRulesNow),
             CMD_REPAIR_ICONS => self.set_desktop_icons_hidden(false),
             CMD_HIDE_ICONS_AGAIN => {
@@ -403,133 +436,156 @@ impl App {
             }
         }
         menu.separator();
-        let view_menu = PopupMenu::new();
-        view_menu
+        if f.content.is_files() {
+            let view_menu = PopupMenu::new();
+            view_menu
+                .item(
+                    CMD_FENCE_VIEW_ICONS,
+                    pecofence_core::i18n::text("图标"),
+                    f.view.layout == ViewLayout::Icons,
+                    false,
+                )
+                .item(
+                    CMD_FENCE_VIEW_LIST,
+                    pecofence_core::i18n::text("列表"),
+                    f.view.layout == ViewLayout::List,
+                    false,
+                )
+                .item(
+                    CMD_FENCE_VIEW_DETAILS,
+                    pecofence_core::i18n::text("详细信息"),
+                    f.view.layout == ViewLayout::Details,
+                    false,
+                )
+                .separator()
+                .item(
+                    CMD_FENCE_ICON_32,
+                    pecofence_core::i18n::text("小图标"),
+                    f.view.icon_size == 32,
+                    false,
+                )
+                .item(
+                    CMD_FENCE_ICON_48,
+                    pecofence_core::i18n::text("中图标"),
+                    f.view.icon_size == 48,
+                    false,
+                )
+                .item(
+                    CMD_FENCE_ICON_64,
+                    pecofence_core::i18n::text("较大图标"),
+                    f.view.icon_size == 64,
+                    false,
+                )
+                .item(
+                    CMD_FENCE_ICON_96,
+                    pecofence_core::i18n::text("大图标"),
+                    f.view.icon_size == 96,
+                    false,
+                );
+            menu.submenu(pecofence_core::i18n::text("视图"), view_menu);
+            let sort_menu = PopupMenu::new();
+            sort_menu
+                .item(
+                    CMD_FENCE_SORT_MANUAL,
+                    pecofence_core::i18n::text("手动"),
+                    f.view.sort == SortMode::Manual,
+                    false,
+                )
+                .item(
+                    CMD_FENCE_SORT_NAME,
+                    pecofence_core::i18n::text("按名称"),
+                    f.view.sort == SortMode::Name,
+                    false,
+                )
+                .item(
+                    CMD_FENCE_SORT_TYPE,
+                    pecofence_core::i18n::text("按类型"),
+                    f.view.sort == SortMode::Type,
+                    false,
+                )
+                .item(
+                    CMD_FENCE_SORT_DATE,
+                    pecofence_core::i18n::text("按修改日期"),
+                    f.view.sort == SortMode::Date,
+                    false,
+                )
+                .item(
+                    CMD_FENCE_SORT_SIZE,
+                    pecofence_core::i18n::text("按大小"),
+                    f.view.sort == SortMode::Size,
+                    false,
+                )
+                .item(
+                    CMD_FENCE_SORT_OPENED,
+                    pecofence_core::i18n::text("按打开次数"),
+                    f.view.sort == SortMode::OpenCount,
+                    false,
+                )
+                .separator()
+                .item(
+                    CMD_FENCE_SORT_REVERSE,
+                    pecofence_core::i18n::text("倒序"),
+                    f.view.reverse,
+                    false,
+                )
+                .separator()
+                .item(
+                    CMD_FENCE_SORT_GROUP,
+                    pecofence_core::i18n::text("按时间分组"),
+                    f.view.group_by_date,
+                    false,
+                );
+            menu.submenu(pecofence_core::i18n::text("排序方式"), sort_menu);
+            let new_menu = PopupMenu::new();
+            new_menu
+                .item(
+                    CMD_FENCE_NEW_FOLDER,
+                    pecofence_core::i18n::text("文件夹"),
+                    false,
+                    false,
+                )
+                .item(
+                    CMD_FENCE_NEW_TEXT,
+                    pecofence_core::i18n::text("文本文档"),
+                    false,
+                    false,
+                )
+                .separator()
+                .item(
+                    CMD_TAB_NEW,
+                    pecofence_core::i18n::text("标签页"),
+                    false,
+                    false,
+                );
+            menu.submenu(pecofence_core::i18n::text("新建"), new_menu);
+            menu.item(
+                CMD_FENCE_PASTE,
+                pecofence_core::i18n::text("粘贴\tCtrl+V"),
+                false,
+                !clipboard::has_file_list(),
+            );
+        }
+        let widget_menu = PopupMenu::new();
+        widget_menu
             .item(
-                CMD_FENCE_VIEW_ICONS,
-                pecofence_core::i18n::text("图标"),
-                f.view.layout == ViewLayout::Icons,
+                CMD_FENCE_NEW_CLOCK,
+                pecofence_core::i18n::text("数字时钟"),
+                false,
                 false,
             )
             .item(
-                CMD_FENCE_VIEW_LIST,
-                pecofence_core::i18n::text("列表"),
-                f.view.layout == ViewLayout::List,
+                CMD_FENCE_NEW_CALENDAR,
+                pecofence_core::i18n::text("日历"),
+                false,
                 false,
             )
             .item(
-                CMD_FENCE_VIEW_DETAILS,
-                pecofence_core::i18n::text("详细信息"),
-                f.view.layout == ViewLayout::Details,
+                CMD_FENCE_NEW_TODO,
+                pecofence_core::i18n::text("待办清单"),
                 false,
-            )
-            .separator()
-            .item(
-                CMD_FENCE_ICON_32,
-                pecofence_core::i18n::text("小图标"),
-                f.view.icon_size == 32,
-                false,
-            )
-            .item(
-                CMD_FENCE_ICON_48,
-                pecofence_core::i18n::text("中图标"),
-                f.view.icon_size == 48,
-                false,
-            )
-            .item(
-                CMD_FENCE_ICON_64,
-                pecofence_core::i18n::text("较大图标"),
-                f.view.icon_size == 64,
-                false,
-            )
-            .item(
-                CMD_FENCE_ICON_96,
-                pecofence_core::i18n::text("大图标"),
-                f.view.icon_size == 96,
                 false,
             );
-        menu.submenu(pecofence_core::i18n::text("视图"), view_menu);
-        let sort_menu = PopupMenu::new();
-        sort_menu
-            .item(
-                CMD_FENCE_SORT_MANUAL,
-                pecofence_core::i18n::text("手动"),
-                f.view.sort == SortMode::Manual,
-                false,
-            )
-            .item(
-                CMD_FENCE_SORT_NAME,
-                pecofence_core::i18n::text("按名称"),
-                f.view.sort == SortMode::Name,
-                false,
-            )
-            .item(
-                CMD_FENCE_SORT_TYPE,
-                pecofence_core::i18n::text("按类型"),
-                f.view.sort == SortMode::Type,
-                false,
-            )
-            .item(
-                CMD_FENCE_SORT_DATE,
-                pecofence_core::i18n::text("按修改日期"),
-                f.view.sort == SortMode::Date,
-                false,
-            )
-            .item(
-                CMD_FENCE_SORT_SIZE,
-                pecofence_core::i18n::text("按大小"),
-                f.view.sort == SortMode::Size,
-                false,
-            )
-            .item(
-                CMD_FENCE_SORT_OPENED,
-                pecofence_core::i18n::text("按打开次数"),
-                f.view.sort == SortMode::OpenCount,
-                false,
-            )
-            .separator()
-            .item(
-                CMD_FENCE_SORT_REVERSE,
-                pecofence_core::i18n::text("倒序"),
-                f.view.reverse,
-                false,
-            )
-            .separator()
-            .item(
-                CMD_FENCE_SORT_GROUP,
-                pecofence_core::i18n::text("按时间分组"),
-                f.view.group_by_date,
-                false,
-            );
-        menu.submenu(pecofence_core::i18n::text("排序方式"), sort_menu);
-        let new_menu = PopupMenu::new();
-        new_menu
-            .item(
-                CMD_FENCE_NEW_FOLDER,
-                pecofence_core::i18n::text("文件夹"),
-                false,
-                false,
-            )
-            .item(
-                CMD_FENCE_NEW_TEXT,
-                pecofence_core::i18n::text("文本文档"),
-                false,
-                false,
-            )
-            .separator()
-            .item(
-                CMD_TAB_NEW,
-                pecofence_core::i18n::text("标签页"),
-                false,
-                false,
-            );
-        menu.submenu(pecofence_core::i18n::text("新建"), new_menu);
-        menu.item(
-            CMD_FENCE_PASTE,
-            pecofence_core::i18n::text("粘贴\tCtrl+V"),
-            false,
-            !clipboard::has_file_list(),
-        );
+        menu.submenu(pecofence_core::i18n::text("新建小组件"), widget_menu);
         // Tabbed fences (Fences 6): split a tab out, move it along the strip, or merge this
         // fence into another window. Hidden when none of that applies.
         let tabs = self.state.tabs_of(host);
@@ -661,6 +717,18 @@ impl App {
             }
             CMD_FENCE_NEW_FOLDER => self.create_desktop_item(fence, true),
             CMD_FENCE_NEW_TEXT => self.create_desktop_item(fence, false),
+            CMD_FENCE_NEW_CLOCK => {
+                self.new_widget_near(pecofence_plugin_widgets::CLOCK_PROVIDER, x, y, Some(host))
+            }
+            CMD_FENCE_NEW_CALENDAR => self.new_widget_near(
+                pecofence_plugin_widgets::CALENDAR_PROVIDER,
+                x,
+                y,
+                Some(host),
+            ),
+            CMD_FENCE_NEW_TODO => {
+                self.new_widget_near(pecofence_plugin_widgets::TODO_PROVIDER, x, y, Some(host))
+            }
             CMD_FENCE_ICON_32 | CMD_FENCE_ICON_48 | CMD_FENCE_ICON_64 | CMD_FENCE_ICON_96 => {
                 let size = match cmd {
                     CMD_FENCE_ICON_32 => 32,
