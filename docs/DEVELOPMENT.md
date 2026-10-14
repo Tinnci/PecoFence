@@ -145,3 +145,11 @@ Regenerate Win32 bindings with `cargo run -p tool_bindgen`. The definitions in
 
 `vendor/windows-composition` carries the small upstream wrapper patch needed by
 the renderer. Preserve its license files when changing or distributing it.
+
+## Python verification tooling
+
+The Python helpers require Python 3.11+ (including `tomllib`). Use `uv sync --locked`
+and `uv run --locked ruff check scripts` to reproduce the declared development
+tooling. The root pyproject is a virtual tools project; it is not the native
+application and must not be uploaded to PyPI. Existing script diagnostics are
+tracked separately from the configuration of this environment.
