@@ -1,0 +1,4 @@
+interface:
+  display_name: "pecofence"
+  short_description: "Verify Windows desktop packages and preserve workspaces"
+  default_prompt: "Use $pecofence for the requested workflow, inspecting command help and effects first."

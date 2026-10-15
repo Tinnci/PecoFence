@@ -179,3 +179,9 @@ The optional video project in `extras/` is independent of the app build.
 ## CLI 与 Agent 引导
 
 命令用途、示例、副作用、错误协议及离线验收见 [CLI 与 Agent 引导](docs/AGENT_CLI_GUIDANCE.md)。
+
+## Agent skill
+
+[标准技能说明](skills/pecofence/SKILL.md) 包含用途、发现命令、平台限制、输出和写入边界。
+本地注册时将该技能目录链接到 `~/.agents/skills/pecofence`；Claude Code 可使用 `~/.claude/skills/pecofence`。
+技能注册不授予远端写入、数据外发或导出权限。
