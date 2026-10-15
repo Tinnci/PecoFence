@@ -11,7 +11,9 @@ const ADD: u64 = 1;
 const CLEAR_DONE: u64 = 2;
 const PREVIOUS_PAGE: u64 = 3;
 const NEXT_PAGE: u64 = 4;
+const UNDO: u64 = 5;
 const TASK_BASE: u64 = 1_000;
+const EDIT_BASE: u64 = 2_000;
 const MAX_TASKS: usize = 128;
 const MAX_TITLE_CHARS: usize = 160;
 const MAX_CONFIG_BYTES: usize = 64 * 1024;
@@ -75,6 +77,7 @@ impl PanelProvider for TodoPlugin {
             key: input.key,
             mount: None,
             config: parse(&input.config)?,
+            undo: None,
             page: 0,
             frame_revision: 0,
             layout_revision: 0,
@@ -88,6 +91,7 @@ struct TodoWidget {
     key: InstanceKey,
     mount: Option<MountKey>,
     config: TodoConfig,
+    undo: Option<TodoConfig>,
     page: usize,
     theme: Option<Arc<ThemeSnapshot>>,
     frame_revision: u64,
@@ -104,17 +108,12 @@ impl TodoWidget {
         }
     }
 
-    fn persist(&mut self) -> Result<PanelUpdate> {
-        let bytes = serde_json::to_vec(&self.config).map_err(|e| Error::Backend(e.to_string()))?;
-        if bytes.len() > MAX_CONFIG_BYTES {
-            return Err(Error::Invalid(
-                "TODO list exceeds configuration size limit".into(),
-            ));
-        }
+    fn change(&mut self, next: TodoConfig) -> Result<PanelUpdate> {
+        let Some(bytes) = apply_change(&mut self.config, &mut self.undo, next)? else {
+            return Ok(PanelUpdate::default());
+        };
         let mut update = self.redraw();
-        update
-            .commands
-            .push(HostCommand::PersistConfig(bytes.into()));
+        update.commands.push(HostCommand::PersistConfig(bytes));
         Ok(update)
     }
 }
@@ -143,24 +142,30 @@ impl PanelInstance for TodoWidget {
                 self.theme = self.ctx.theme.with(|service| service.snapshot()).ok();
                 Ok(self.redraw())
             }
-            PanelEvent::Invoke { action: ADD, .. } => Ok(PanelUpdate {
-                commands: vec![HostCommand::RequestTextInput {
-                    action: ADD,
-                    initial: String::new(),
-                }],
-                relayout: false,
-            }),
-            PanelEvent::Invoke {
-                action: CLEAR_DONE, ..
-            } => {
-                let count = self.config.tasks.len();
-                self.config.tasks.retain(|task| !task.done);
-                if self.config.tasks.len() != count {
-                    self.page = 0;
-                    self.persist()
+            PanelEvent::Invoke { action: ADD, .. } if self.config.tasks.len() < MAX_TASKS => {
+                Ok(PanelUpdate {
+                    commands: vec![HostCommand::RequestTextInput {
+                        action: ADD,
+                        initial: String::new(),
+                    }],
+                    relayout: false,
+                })
+            }
+            PanelEvent::Invoke { action: UNDO, .. } => {
+                if let Some(previous) = self.undo.clone() {
+                    let update = self.change(previous)?;
+                    self.undo = None;
+                    Ok(update)
                 } else {
                     Ok(PanelUpdate::default())
                 }
+            }
+            PanelEvent::Invoke {
+                action: CLEAR_DONE, ..
+            } => {
+                let mut next = self.config.clone();
+                next.tasks.retain(|task| !task.done);
+                self.change(next)
             }
             PanelEvent::Invoke {
                 action: PREVIOUS_PAGE,
@@ -175,36 +180,62 @@ impl PanelInstance for TodoWidget {
                 self.page = self.page.saturating_add(1);
                 Ok(self.redraw())
             }
-            PanelEvent::Invoke { action, .. } if action >= TASK_BASE => {
-                if let Some(task) = self.config.tasks.get_mut((action - TASK_BASE) as usize) {
+            PanelEvent::Invoke { action, .. }
+                if (TASK_BASE..TASK_BASE + MAX_TASKS as u64).contains(&action) =>
+            {
+                let mut next = self.config.clone();
+                if let Some(task) = next.tasks.get_mut((action - TASK_BASE) as usize) {
                     task.done = !task.done;
-                    self.persist()
+                }
+                self.change(next)
+            }
+            PanelEvent::Invoke { action, .. }
+                if (EDIT_BASE..EDIT_BASE + MAX_TASKS as u64).contains(&action) =>
+            {
+                if let Some(task) = self.config.tasks.get((action - EDIT_BASE) as usize) {
+                    Ok(PanelUpdate {
+                        commands: vec![HostCommand::RequestTextInput {
+                            action,
+                            initial: task.title.clone(),
+                        }],
+                        relayout: false,
+                    })
                 } else {
                     Ok(PanelUpdate::default())
                 }
             }
-            PanelEvent::TextSubmitted { action: ADD, text } => {
+            PanelEvent::TextSubmitted { action, text }
+                if action == ADD || (EDIT_BASE..EDIT_BASE + MAX_TASKS as u64).contains(&action) =>
+            {
                 let title = text.trim();
                 if title.is_empty() {
                     return Ok(PanelUpdate::default());
                 }
-                if title.chars().count() > MAX_TITLE_CHARS || self.config.tasks.len() >= MAX_TASKS {
-                    return Err(Error::Invalid("TODO title or list is too long".into()));
+                if title.chars().count() > MAX_TITLE_CHARS {
+                    return Err(Error::Invalid(
+                        "TODO title must contain at most 160 characters".into(),
+                    ));
                 }
-                self.config.tasks.push(TodoTask {
-                    title: title.into(),
-                    done: false,
-                });
-                match self.persist() {
-                    Ok(update) => {
-                        self.page = usize::MAX; // clamped to the last page by prepare_frame
-                        Ok(update)
+                let mut next = self.config.clone();
+                if action == ADD {
+                    if next.tasks.len() >= MAX_TASKS {
+                        return Err(Error::Invalid(
+                            "TODO list is full (128 tasks); clear completed tasks first".into(),
+                        ));
                     }
-                    Err(error) => {
-                        self.config.tasks.pop();
-                        Err(error)
-                    }
+                    next.tasks.push(TodoTask {
+                        title: title.into(),
+                        done: false,
+                    });
+                } else if let Some(task) = next.tasks.get_mut((action - EDIT_BASE) as usize) {
+                    task.title = title.into();
                 }
+                let changed = next != self.config;
+                let update = self.change(next)?;
+                if action == ADD && changed {
+                    self.page = usize::MAX; // clamped to the last page by prepare_frame
+                }
+                Ok(update)
             }
             _ => Ok(PanelUpdate::default()),
         }
@@ -222,6 +253,7 @@ impl PanelInstance for TodoWidget {
             &self.config,
             self.page,
             capacity,
+            self.undo.is_some(),
             Colors::from_theme(self.theme.as_deref()),
             input.locale.starts_with("zh"),
         );
@@ -240,6 +272,27 @@ impl PanelInstance for TodoWidget {
     }
 }
 
+// Serialize and validate before changing either the live list or its undo snapshot.
+// The host remains responsible for acknowledging durable configuration saves.
+fn apply_change(
+    config: &mut TodoConfig,
+    undo: &mut Option<TodoConfig>,
+    next: TodoConfig,
+) -> Result<Option<Arc<[u8]>>> {
+    if next == *config {
+        return Ok(None);
+    }
+    let bytes: Arc<[u8]> = serde_json::to_vec(&next)
+        .map_err(|e| Error::Backend(e.to_string()))?
+        .into();
+    parse(&PanelConfig {
+        version: 1,
+        bytes: bytes.clone(),
+    })?;
+    *undo = Some(std::mem::replace(config, next));
+    Ok(Some(bytes))
+}
+
 fn page_capacity(height: f32) -> usize {
     ((height - 112.0) / 42.0).floor().max(1.0) as usize
 }
@@ -249,6 +302,7 @@ fn build_todo(
     config: &TodoConfig,
     page: usize,
     capacity: usize,
+    can_undo: bool,
     colors: Colors,
     chinese: bool,
 ) {
@@ -259,7 +313,7 @@ fn build_todo(
         RectDip {
             x: v.x + 14.0,
             y: v.y + 12.0,
-            w: width - 74.0,
+            w: (width - 74.0).max(0.0),
             h: 34.0,
         },
         if chinese {
@@ -282,14 +336,40 @@ fn build_todo(
             w: 60.0,
             h: 34.0,
         },
-        if chinese { "＋ 添加" } else { "+ Add" },
+        if config.tasks.len() >= MAX_TASKS {
+            if chinese { "已满" } else { "Full" }
+        } else if chinese {
+            "＋ 添加"
+        } else {
+            "+ Add"
+        },
         14.0,
         600,
         colors.accent,
         Some(colors.subtle),
         6.0,
-        Some(ADD),
+        (config.tasks.len() < MAX_TASKS).then_some(ADD),
         "button",
+    );
+    frame.add(
+        RectDip {
+            x: v.x + 14.0,
+            y: v.y + 44.0,
+            w: width,
+            h: 20.0,
+        },
+        if chinese {
+            "点击标题编辑 · 勾选框完成或恢复"
+        } else {
+            "Click a title to edit; check to complete or restore"
+        },
+        11.0,
+        400,
+        colors.secondary,
+        None,
+        0.0,
+        None,
+        "text",
     );
     if config.tasks.is_empty() {
         frame.add(
@@ -322,12 +402,7 @@ fn build_todo(
         .take(capacity)
         .enumerate()
     {
-        let y = v.y + 59.0 + slot as f32 * 42.0;
-        let title: String = task
-            .title
-            .chars()
-            .take(((width - 34.0) / 8.0).max(4.0) as usize)
-            .collect();
+        let y = v.y + 68.0 + slot as f32 * 42.0;
         frame.add(
             RectDip {
                 x: v.x + 14.0,
@@ -335,7 +410,7 @@ fn build_todo(
                 w: width,
                 h: 37.0,
             },
-            format!("{}  {}", if task.done { "☑" } else { "□" }, title),
+            "",
             15.0,
             400,
             if task.done {
@@ -345,9 +420,77 @@ fn build_todo(
             },
             Some(colors.subtle),
             6.0,
+            None,
+            "group",
+        );
+        frame.add(
+            RectDip {
+                x: v.x + 14.0,
+                y,
+                w: 36.0,
+                h: 37.0,
+            },
+            if task.done { "☑" } else { "□" },
+            19.0,
+            400,
+            if task.done {
+                colors.accent
+            } else {
+                colors.primary
+            },
+            None,
+            0.0,
             Some(TASK_BASE + index as u64),
             "checkbox",
         );
+        if let Some(node) = frame.semantics.last_mut() {
+            node.name = if chinese {
+                format!(
+                    "{}：{}",
+                    if task.done {
+                        "已完成，点击恢复"
+                    } else {
+                        "未完成，点击完成"
+                    },
+                    task.title
+                )
+            } else {
+                format!(
+                    "{}: {}",
+                    if task.done {
+                        "Completed, mark pending"
+                    } else {
+                        "Pending, mark complete"
+                    },
+                    task.title
+                )
+            };
+        }
+        // Keep the complete title in the text/semantic node. The renderer clips
+        // to this rectangle; opening the editor reveals the complete text.
+        frame.add(
+            RectDip {
+                x: v.x + 50.0,
+                y,
+                w: (width - 36.0).max(0.0),
+                h: 37.0,
+            },
+            &task.title,
+            15.0,
+            400,
+            if task.done {
+                colors.secondary
+            } else {
+                colors.primary
+            },
+            None,
+            0.0,
+            Some(EDIT_BASE + index as u64),
+            "button",
+        );
+        if let Some(node) = frame.nodes.last_mut() {
+            node.clip_text = true;
+        }
     }
     let footer_y = v.y + v.h - 37.0;
     if config.tasks.iter().any(|task| task.done) {
@@ -369,6 +512,28 @@ fn build_todo(
             None,
             0.0,
             Some(CLEAR_DONE),
+            "button",
+        );
+    }
+    if can_undo {
+        frame.add(
+            RectDip {
+                x: v.x + 130.0,
+                y: footer_y,
+                w: 115.0,
+                h: 26.0,
+            },
+            if chinese {
+                "撤销上一步"
+            } else {
+                "Undo last"
+            },
+            12.0,
+            600,
+            colors.accent,
+            None,
+            0.0,
+            Some(UNDO),
             "button",
         );
     }
@@ -462,6 +627,71 @@ mod tests {
     }
 
     #[test]
+    fn rejected_changes_preserve_tasks_and_previous_undo() {
+        let original = TodoConfig {
+            tasks: vec![TodoTask {
+                title: "Original".into(),
+                done: true,
+            }],
+        };
+        let mut config = original.clone();
+        let previous = TodoConfig::default();
+        let mut undo = Some(previous.clone());
+        let mut invalid = original.clone();
+        invalid.tasks[0].title = "x".repeat(MAX_TITLE_CHARS + 1);
+        assert!(apply_change(&mut config, &mut undo, invalid).is_err());
+        assert_eq!(config, original);
+        assert_eq!(undo, Some(previous.clone()));
+        let unchanged = config.clone();
+        assert!(
+            apply_change(&mut config, &mut undo, unchanged)
+                .unwrap()
+                .is_none()
+        );
+        assert_eq!(undo, Some(previous));
+    }
+
+    #[test]
+    fn edited_and_cleared_tasks_can_be_restored_without_losing_completion() {
+        let original = TodoConfig {
+            tasks: vec![TodoTask {
+                title: "原始标题".into(),
+                done: true,
+            }],
+        };
+        let mut config = original.clone();
+        let mut undo = None;
+        let mut edited = original.clone();
+        edited.tasks[0].title = "修正后的标题".into();
+        let saved = apply_change(&mut config, &mut undo, edited.clone())
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            parse(&PanelConfig {
+                version: 1,
+                bytes: saved
+            })
+            .unwrap(),
+            edited
+        );
+        assert_eq!(undo, Some(original));
+        apply_change(&mut config, &mut undo, TodoConfig::default()).unwrap();
+        assert!(config.tasks.is_empty());
+        let restore = undo.clone().unwrap();
+        let saved = apply_change(&mut config, &mut undo, restore)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            parse(&PanelConfig {
+                version: 1,
+                bytes: saved
+            })
+            .unwrap(),
+            edited
+        );
+    }
+
+    #[test]
     fn todo_frame_paginates_visible_rows() {
         let input = FrameInput {
             viewport: RectDip {
@@ -505,6 +735,7 @@ mod tests {
             &config,
             1,
             capacity,
+            true,
             Colors::from_theme(None),
             false,
         );
@@ -512,10 +743,35 @@ mod tests {
             frame
                 .hit_tree()
                 .iter()
-                .filter(|n| n.action >= TASK_BASE)
+                .filter(|n| (TASK_BASE..EDIT_BASE).contains(&n.action))
                 .count(),
             capacity
         );
+        assert!(frame.hit_tree().iter().any(|node| node.action == UNDO));
+        for slot in 0..capacity {
+            let index = capacity + slot;
+            let toggle = frame
+                .hit_tree()
+                .iter()
+                .find(|n| n.action == TASK_BASE + index as u64)
+                .unwrap();
+            let edit = frame
+                .hit_tree()
+                .iter()
+                .find(|n| n.action == EDIT_BASE + index as u64)
+                .unwrap();
+            assert!(toggle.rect.x + toggle.rect.w <= edit.rect.x);
+            assert!(!toggle.rect.contains(edit.rect.x + 1.0, edit.rect.y + 1.0));
+            assert_eq!(
+                frame
+                    .semantics
+                    .iter()
+                    .find(|n| n.action == Some(EDIT_BASE + index as u64))
+                    .unwrap()
+                    .name,
+                config.tasks[index].title
+            );
+        }
         let mut canvas = HeadlessCanvas::default();
         frame.paint(&mut canvas).unwrap();
         assert!(canvas.is_balanced());

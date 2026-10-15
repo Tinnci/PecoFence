@@ -34,6 +34,22 @@ Set-Content -Path $scriptPath -Encoding UTF8 -Value @(
   'todo-add Write report'
   'sleep 400'
   'todo-toggle 0'
+  'sleep 200'
+  'todo-undo'
+  'sleep 200'
+  'todo-toggle 0'
+  'sleep 200'
+  'todo-edit 0 Buy oat milk'
+  'sleep 200'
+  'todo-clear'
+  'sleep 200'
+  'todo-undo'
+  'sleep 200'
+  'todo-add Temporary task'
+  'sleep 200'
+  'todo-undo'
+  'sleep 200'
+  'todo-undo'
   'sleep 500'
   'exit'
 )
@@ -49,7 +65,7 @@ try {
   $todo = @($saved.layouts.contents | Where-Object { $_.content.panel.provider -eq 'pecofence.todo' })
   if ($todo.Count -ne 1) { throw "Expected one TODO fence; found $($todo.Count)" }
   $tasks = @($todo[0].content.panel.config.tasks)
-  if ($tasks.Count -ne 2 -or $tasks[0].title -ne 'Buy milk' -or !$tasks[0].done -or $tasks[1].title -ne 'Write report' -or $tasks[1].done) {
+  if ($tasks.Count -ne 2 -or $tasks[0].title -ne 'Buy oat milk' -or !$tasks[0].done -or $tasks[1].title -ne 'Write report' -or $tasks[1].done) {
     throw "TODO contents were not saved: $($tasks | ConvertTo-Json -Compress)"
   }
   $before = $saved.layouts.containers | ConvertTo-Json -Compress -Depth 20
@@ -61,12 +77,12 @@ try {
   $restored = @($reloaded.layouts.contents | Where-Object { $_.content.panel.provider -eq 'pecofence.todo' })
   if ($restored.Count -ne 1) { throw 'TODO fence was lost after restart' }
   $restoredTasks = @($restored[0].content.panel.config.tasks)
-  if ($restoredTasks.Count -ne 2 -or !$restoredTasks[0].done -or $restoredTasks[1].done) {
+  if ($restoredTasks.Count -ne 2 -or $restoredTasks[0].title -ne 'Buy oat milk' -or !$restoredTasks[0].done -or $restoredTasks[1].done) {
     throw 'TODO tasks changed after restart'
   }
   $after = $reloaded.layouts.containers | ConvertTo-Json -Compress -Depth 20
   if ($before -ne $after) { throw 'TODO fence position changed after restart' }
-  Write-Output "PASS: TODO add, toggle, config save and geometry restore ($instance)"
+  Write-Output "PASS: TODO add, edit, toggle, clear, undo, config save and geometry restore ($instance)"
   $passed = $true
 } finally {
   $env:PECOFENCE_INSTANCE = $previousInstance

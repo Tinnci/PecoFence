@@ -24,7 +24,10 @@
 //! new-fence <x> <y> <w> <h>  physical px
 //! new-todo <x> <y>         create a TODO panel near physical px
 //! todo-add <text>          submit a task through the panel input path
-//! todo-toggle <index>      invoke a zero-based task row
+//! todo-toggle <index>      toggle a zero-based task checkbox
+//! todo-edit <index> <text> edit a task through the panel input path
+//! todo-clear               clear completed tasks
+//! todo-undo                undo the last task change
 //! drop-desktop <title>       first item of the fence dropped on the bare desktop (inbox + rules)
 //! move <title> <into-title>  first item of the fence moved into another fence (drop minus OLE)
 //! transfer <path> <title>    shell-move a file into the portal fence's folder (worker thread)
@@ -337,8 +340,34 @@ impl App {
                         });
                     }
                 }
-                ["todo-toggle", index] => {
-                    if let (Some(key), Ok(index)) = (self.test_todo_key(), index.parse::<u64>()) {
+                ["todo-edit", ..] => {
+                    if let Some(rest) = line.strip_prefix("todo-edit ")
+                        && let Some((index, title)) = rest.split_once(' ')
+                        && let Ok(index) = index.parse::<u64>()
+                        && index < 128
+                        && let Some(key) = self.test_todo_key()
+                    {
+                        self.queue.push(Command::PanelTextCommit {
+                            key,
+                            action: 2_000 + index,
+                            text: title.to_string(),
+                        });
+                    }
+                }
+                [command, args @ ..]
+                    if matches!(*command, "todo-toggle" | "todo-clear" | "todo-undo") =>
+                {
+                    let action = match (*command, args) {
+                        ("todo-toggle", [index]) => index
+                            .parse::<u64>()
+                            .ok()
+                            .filter(|index| *index < 128)
+                            .map(|index| 1_000 + index),
+                        ("todo-clear", []) => Some(2),
+                        ("todo-undo", []) => Some(5),
+                        _ => None,
+                    };
+                    if let (Some(key), Some(action)) = (self.test_todo_key(), action) {
                         let spec = self.state.fences().iter().find_map(|f| match &f.content {
                             pecofence_core::FenceContentSpec::Panel { panel }
                                 if panel.instance_id.as_u128() == key.id =>
@@ -352,7 +381,7 @@ impl App {
                                 self.panel_manager.borrow_mut().open_panel(&spec).and_then(
                                     |handle| {
                                         handle.event(PanelEvent::Invoke {
-                                            action: 1_000 + index,
+                                            action,
                                             layout_revision: 0,
                                         })
                                     },

@@ -287,6 +287,7 @@ struct Node {
     foreground: [f32; 4],
     fill: Option<[f32; 4]>,
     radius: f32,
+    clip_text: bool,
 }
 
 pub(crate) struct WidgetFrame {
@@ -352,6 +353,7 @@ impl WidgetFrame {
             foreground,
             fill,
             radius,
+            clip_text: false,
         });
     }
 }
@@ -374,7 +376,10 @@ impl PreparedFrame for WidgetFrame {
                     canvas.fill_rounded_rect(node.rect, node.radius, fill)?;
                 }
                 if !node.text.is_empty() {
-                    canvas.draw_text(
+                    if node.clip_text {
+                        canvas.push_clip(node.rect)?;
+                    }
+                    let result = canvas.draw_text(
                         node.rect,
                         &TextSpec {
                             text: node.text.clone(),
@@ -383,7 +388,12 @@ impl PreparedFrame for WidgetFrame {
                             font: FontRole::Text,
                         },
                         node.foreground,
-                    )?;
+                    );
+                    if node.clip_text {
+                        result.and(canvas.pop_clip())?;
+                    } else {
+                        result?;
+                    }
                 }
             }
             Ok(())
