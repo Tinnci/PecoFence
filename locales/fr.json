@@ -630,5 +630,8 @@
   "删除此规则后无法从设置中恢复。是否继续？": "Cette règle ne pourra pas être restaurée depuis les paramètres après sa suppression. Continuer ?",
   "恢复快照将替换当前布局，是否继续？": "La restauration de l’instantané remplacera la disposition actuelle. Continuer ?",
   "便笺": "Note",
-  "新建便笺": "Nouvelle note"
+  "新建便笺": "Nouvelle note",
+  "所有更改已保存。": "Toutes les modifications sont enregistrées.",
+  "正在应用更改…": "Application des modifications…",
+  "更改已应用，正在等待保存。": "Modifications appliquées ; en attente d’enregistrement."
 }

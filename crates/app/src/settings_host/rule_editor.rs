@@ -388,35 +388,33 @@ pub(super) fn view(
     let target_index = draft.and_then(|draft| draft.target).and_then(|target| {
         (0..targets.len()).find(|index| component.collection_target(*index) == Some(target))
     });
-    let mut rows = vec![
-        TextBlock::new().text(tr("自动整理")).into(),
-        CheckBox::new()
-            .content(tr("有新项目时自动归类"))
-            .is_checked(projected.rules.keep_updated)
-            .is_enabled(enabled)
-            .on_is_checked_changed(
-                context
-                    .callback(|value: Option<bool>| Message::KeepUpdated(value.unwrap_or(false))),
-            )
-            .into(),
-        ComboBox::new()
-            .header(tr("默认目标"))
-            .items_source(targets.clone())
-            .selected_index(
-                (0..targets.len()).find(|i| {
+    let mut rows =
+        vec![
+            TextBlock::new().text(tr("自动整理")).into(),
+            super::pages::switch(
+                "有新项目时自动归类",
+                projected.rules.keep_updated,
+                enabled,
+                context.callback(Message::KeepUpdated),
+            ),
+            ComboBox::new()
+                .width(320.0)
+                .horizontal_alignment(windows_reactor::HorizontalAlignment::Left)
+                .header(tr("默认目标"))
+                .items_source(targets.clone())
+                .selected_index((0..targets.len()).find(|i| {
                     component.collection_target(*i) == Some(projected.rules.default_target)
-                }),
-            )
-            .is_enabled(enabled && !targets.is_empty())
-            .on_selection_changed(context.callback(Message::DefaultTarget))
-            .into(),
-        Button::new()
-            .content(tr("立即应用规则"))
-            .is_enabled(enabled)
-            .on_click(context.message(Message::RunAction(Action::ApplyRules)))
-            .into(),
-        TextBlock::new().text(tr("快速添加内置模板")).into(),
-    ];
+                }))
+                .is_enabled(enabled && !targets.is_empty())
+                .on_selection_changed(context.callback(Message::DefaultTarget))
+                .into(),
+            Button::new()
+                .content(tr("立即应用规则"))
+                .is_enabled(enabled)
+                .on_click(context.message(Message::RunAction(Action::ApplyRules)))
+                .into(),
+            TextBlock::new().text(tr("快速添加内置模板")).into(),
+        ];
     let templates = [
         ("images", "图片"),
         ("music", "音乐"),
@@ -452,7 +450,13 @@ pub(super) fn view(
             )
             .into(),
     );
-    rows.push(TextBlock::new().text(tr("规则列表")).font_size(20.0).into());
+    rows.push(
+        TextBlock::new()
+            .text(tr("规则列表"))
+            .font_size(20.0)
+            .automation_heading_level(windows_reactor::AutomationHeadingLevel::Level2)
+            .into(),
+    );
     rows.push(
         StackPanel::new()
             .spacing(8.0)
@@ -478,16 +482,15 @@ pub(super) fn view(
                                             .join(" AND "),
                                     )
                                     .text_wrapping(windows_reactor::TextWrapping::Wrap),
-                                CheckBox::new()
-                                    .content(tr("启用"))
-                                    .is_checked(rule.enabled)
-                                    .is_enabled(enabled)
-                                    .on_is_checked_changed(context.callback({
+                                super::pages::switch(
+                                    "启用",
+                                    rule.enabled,
+                                    enabled,
+                                    context.callback({
                                         let id = rule.id;
-                                        move |value: Option<bool>| {
-                                            Message::RuleEnabled(id, value.unwrap_or(false))
-                                        }
-                                    })),
+                                        move |value| Message::RuleEnabled(id, value)
+                                    }),
+                                ),
                                 StackPanel::new()
                                     .orientation(windows_reactor::Orientation::Horizontal)
                                     .spacing(4.0)
@@ -551,6 +554,7 @@ fn editor_view(
                 tr("新建规则")
             })
             .font_size(20.0)
+            .automation_heading_level(windows_reactor::AutomationHeadingLevel::Level2)
             .into(),
         TextBox::new(draft.name.clone())
             .header(tr("规则名称"))
@@ -560,6 +564,8 @@ fn editor_view(
             )
             .into(),
         ComboBox::new()
+            .width(320.0)
+            .horizontal_alignment(windows_reactor::HorizontalAlignment::Left)
             .header(tr("目标文件集合"))
             .items_source(targets.iter().cloned())
             .selected_index(target_index)
@@ -577,6 +583,8 @@ fn editor_view(
             )
             .into(),
         ComboBox::new()
+            .width(320.0)
+            .horizontal_alignment(windows_reactor::HorizontalAlignment::Left)
             .header(tr("条件类型"))
             .items_source(ConditionKind::ALL.iter().map(|kind| tr(kind.label())))
             .selected_index(Some(draft.form.kind.index()))
@@ -661,6 +669,8 @@ fn form_fields(
         ConditionKind::CreatedWeekday => weekday_checkboxes(&form.weekdays, enabled, context),
         ConditionKind::Name | ConditionKind::ShortcutTarget => vec![
             ComboBox::new()
+                .width(320.0)
+                .horizontal_alignment(windows_reactor::HorizontalAlignment::Left)
                 .header(tr("匹配方式"))
                 .items_source([
                     tr("包含"),
@@ -727,6 +737,8 @@ fn form_fields(
         ConditionKind::Origin => {
             vec![
                 ComboBox::new()
+                    .width(320.0)
+                    .horizontal_alignment(windows_reactor::HorizontalAlignment::Left)
                     .header(tr("来源"))
                     .items_source([tr("用户桌面"), tr("公共桌面"), tr("系统项目")])
                     .selected_index(Some(match form.origin {

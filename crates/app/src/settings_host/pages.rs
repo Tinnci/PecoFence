@@ -5,23 +5,70 @@ use pecofence_core::settings_protocol::{
 };
 use pecofence_core::{Spacing, TitleSize};
 use windows_reactor::{
-    Button, CheckBox, ComboBox, NumberBox, Slider, StackPanel, TextBlock, TextBox, View,
-    ViewContext,
+    Border, Button, ComboBox, Grid, GridLength, HorizontalAlignment, InfoBar, InfoBarSeverity,
+    NumberBox, ProgressRing, Slider, StackPanel, TextBlock, TextBox, ThemeBrush, ToggleSwitch,
+    VerticalAlignment, View, ViewContext,
 };
 
 pub(super) fn notice(error: bool, message: &str) -> View {
-    StackPanel::new()
-        .spacing(4.0)
-        .children((
-            TextBlock::new().text(if error {
-                tr("需要检查")
-            } else {
-                tr("状态")
-            }),
-            TextBlock::new()
-                .text(message)
-                .text_wrapping(windows_reactor::TextWrapping::Wrap),
-        ))
+    InfoBar::new()
+        .title(if error {
+            tr("需要检查")
+        } else {
+            tr("状态")
+        })
+        .message(message)
+        .severity(if error {
+            InfoBarSeverity::Error
+        } else {
+            InfoBarSeverity::Informational
+        })
+        .is_open(true)
+        .is_closable(false)
+        .into()
+}
+
+/// An immediate setting: a labelled, accessible native switch in a themed settings row.
+pub(super) fn switch(
+    label: &'static str,
+    value: bool,
+    enabled: bool,
+    callback: windows_reactor::Callback<bool>,
+) -> View {
+    card(
+        Grid::new()
+            .columns([GridLength::STAR, GridLength::Auto])
+            .children((
+                TextBlock::new()
+                    .text(tr(label))
+                    .text_wrapping(windows_reactor::TextWrapping::Wrap)
+                    .vertical_alignment(VerticalAlignment::Center)
+                    .margin(windows_reactor::Thickness {
+                        right: 24.0,
+                        left: 0.0,
+                        top: 0.0,
+                        bottom: 0.0,
+                    }),
+                ToggleSwitch::new()
+                    .grid_column(1)
+                    .automation_name(tr(label))
+                    .vertical_alignment(VerticalAlignment::Center)
+                    .is_on(value)
+                    .is_enabled(enabled)
+                    .on_toggled(callback),
+            ))
+            .into(),
+    )
+}
+
+pub(super) fn card(content: View) -> View {
+    Border::new()
+        .background(ThemeBrush::CardBackground)
+        .border_brush(ThemeBrush::CardStroke)
+        .border_thickness(1.0)
+        .corner_radius(8.0)
+        .padding(12.0)
+        .content(content)
         .into()
 }
 
@@ -35,7 +82,19 @@ pub(super) fn page(
     context: &mut ViewContext<SettingsComponent>,
 ) -> View {
     let Some(view) = projected else {
-        return TextBlock::new().text(tr("正在加载设置工作区…")).into();
+        return StackPanel::new()
+            .spacing(12.0)
+            .children((
+                ProgressRing::new()
+                    .width(24.0)
+                    .height(24.0)
+                    .is_active(true)
+                    .is_indeterminate(true)
+                    .automation_name(tr("正在加载设置工作区…"))
+                    .horizontal_alignment(HorizontalAlignment::Left),
+                TextBlock::new().text(tr("正在加载设置工作区…")),
+            ))
+            .into();
     };
     match component.page {
         Page::General => general(view, context),
@@ -53,6 +112,7 @@ fn general(view: &SettingsView, context: &mut ViewContext<SettingsComponent>) ->
         TextBlock::new()
             .text(tr("桌面与启动"))
             .font_size(20.0)
+            .automation_heading_level(windows_reactor::AutomationHeadingLevel::Level2)
             .into(),
         toggle(
             "随 Windows 启动",
@@ -88,7 +148,11 @@ fn general(view: &SettingsView, context: &mut ViewContext<SettingsComponent>) ->
                 }))
             }),
         ),
-        TextBlock::new().text(tr("外观")).font_size(20.0).into(),
+        TextBlock::new()
+            .text(tr("外观"))
+            .font_size(20.0)
+            .automation_heading_level(windows_reactor::AutomationHeadingLevel::Level2)
+            .into(),
         field_combo(
             "主题风格",
             &["Fluent", "Liquid Glass"],
@@ -159,7 +223,6 @@ fn general(view: &SettingsView, context: &mut ViewContext<SettingsComponent>) ->
                 ))
             }),
         ),
-        TextBlock::new().text(tr("图标着色")).into(),
     ];
     let current_tint = s.icons.tint_rgb;
     let mut tint_items = vec![tr("不着色")];
@@ -186,6 +249,8 @@ fn general(view: &SettingsView, context: &mut ViewContext<SettingsComponent>) ->
         .unwrap_or(0);
     rows.push(
         ComboBox::new()
+            .width(320.0)
+            .horizontal_alignment(windows_reactor::HorizontalAlignment::Left)
             .header(tr("图标着色"))
             .items_source(tint_items)
             .selected_index(Some(tint_index))
@@ -301,16 +366,12 @@ fn toggle(
     context: &mut ViewContext<SettingsComponent>,
     change: fn(bool) -> SettingChange,
 ) -> View {
-    CheckBox::new()
-        .content(tr(label))
-        .is_checked(value)
-        .is_enabled(enabled)
-        .on_is_checked_changed(
-            context.callback(move |value: Option<bool>| {
-                Message::Setting(change(value.unwrap_or(false)))
-            }),
-        )
-        .into()
+    switch(
+        label,
+        value,
+        enabled,
+        context.callback(move |value| Message::Setting(change(value))),
+    )
 }
 
 fn field_combo(
@@ -321,6 +382,8 @@ fn field_combo(
     callback: windows_reactor::Callback<Option<usize>>,
 ) -> View {
     ComboBox::new()
+        .width(320.0)
+        .horizontal_alignment(windows_reactor::HorizontalAlignment::Left)
         .header(tr(label))
         .items_source(choices.iter().map(|choice| tr(choice)))
         .selected_index(Some(selected))
@@ -388,6 +451,8 @@ fn content(
     });
     rows.push(
         ComboBox::new()
+            .width(320.0)
+            .horizontal_alignment(windows_reactor::HorizontalAlignment::Left)
             .header(tr("内容与所属窗口"))
             .items_source(labels)
             .selected_index(selected_index)
@@ -462,7 +527,13 @@ fn content(
             .text_wrapping(windows_reactor::TextWrapping::Wrap)
             .into(),
     );
-    rows.push(TextBlock::new().text(tr("内容选项")).font_size(20.0).into());
+    rows.push(
+        TextBlock::new()
+            .text(tr("内容选项"))
+            .font_size(20.0)
+            .automation_heading_level(windows_reactor::AutomationHeadingLevel::Level2)
+            .into(),
+    );
     let icon_sizes = ["32", "48", "64", "96"];
     rows.push(field_combo(
         "图标大小",
@@ -523,6 +594,7 @@ fn content(
             TextBlock::new()
                 .text(tr("文件夹门户"))
                 .font_size(20.0)
+                .automation_heading_level(windows_reactor::AutomationHeadingLevel::Level2)
                 .into(),
         );
         rows.push(container_toggle(
@@ -546,6 +618,7 @@ fn content(
         TextBlock::new()
             .text(tr("整个窗口（包括所有标签页）"))
             .font_size(20.0)
+            .automation_heading_level(windows_reactor::AutomationHeadingLevel::Level2)
             .into(),
     );
     rows.push(
@@ -588,6 +661,8 @@ fn content(
         });
     rows.push(
         ComboBox::new()
+            .width(320.0)
+            .horizontal_alignment(windows_reactor::HorizontalAlignment::Left)
             .header(tr("窗口色调"))
             .items_source(tint_items)
             .selected_index(Some(tint_index))
@@ -611,6 +686,8 @@ fn content(
     };
     rows.push(
         ComboBox::new()
+            .width(320.0)
+            .horizontal_alignment(windows_reactor::HorizontalAlignment::Left)
             .header(tr("标题颜色"))
             .items_source([tr("跟随主题"), tr("跟随色调"), tr("白色"), tr("黑色")])
             .selected_index(title_color_index)
@@ -733,14 +810,12 @@ fn container_toggle(
     field: super::ContainerField,
     context: &mut ViewContext<SettingsComponent>,
 ) -> View {
-    CheckBox::new()
-        .content(tr(label))
-        .is_checked(value)
-        .is_enabled(enabled)
-        .on_is_checked_changed(context.callback(move |value: Option<bool>| {
-            Message::ContainerToggle(key, field, value.unwrap_or(false))
-        }))
-        .into()
+    switch(
+        label,
+        value,
+        enabled,
+        context.callback(move |value| Message::ContainerToggle(key, field, value)),
+    )
 }
 
 fn layout(
@@ -749,7 +824,11 @@ fn layout(
     context: &mut ViewContext<SettingsComponent>,
 ) -> View {
     let mut rows = vec![
-        TextBlock::new().text(tr("布局快照")).font_size(20.0).into(),
+        TextBlock::new()
+            .text(tr("布局快照"))
+            .font_size(20.0)
+            .automation_heading_level(windows_reactor::AutomationHeadingLevel::Level2)
+            .into(),
         TextBox::new(component.snapshot_name.clone())
             .header(tr("快照名称（可选）"))
             .is_enabled(view.writable)
@@ -801,7 +880,13 @@ fn layout(
             }))
             .into(),
     );
-    rows.push(TextBlock::new().text(tr("多显示器")).font_size(20.0).into());
+    rows.push(
+        TextBlock::new()
+            .text(tr("多显示器"))
+            .font_size(20.0)
+            .automation_heading_level(windows_reactor::AutomationHeadingLevel::Level2)
+            .into(),
+    );
     if view.monitors.len() < 2 {
         rows.push(
             TextBlock::new()
@@ -824,6 +909,8 @@ fn layout(
             .and_then(|id| view.monitors.iter().position(|monitor| &monitor.id == id));
         rows.push(
             ComboBox::new()
+                .width(320.0)
+                .horizontal_alignment(windows_reactor::HorizontalAlignment::Left)
                 .header(tr("第一个显示器"))
                 .items_source(labels.clone())
                 .selected_index(first)
@@ -832,6 +919,8 @@ fn layout(
         );
         rows.push(
             ComboBox::new()
+                .width(320.0)
+                .horizontal_alignment(windows_reactor::HorizontalAlignment::Left)
                 .header(tr("第二个显示器"))
                 .items_source(labels)
                 .selected_index(second)
@@ -853,6 +942,7 @@ fn layout(
         TextBlock::new()
             .text(tr("配置与恢复"))
             .font_size(20.0)
+            .automation_heading_level(windows_reactor::AutomationHeadingLevel::Level2)
             .into(),
         Button::new()
             .content(tr("导出配置…"))
@@ -1013,6 +1103,7 @@ fn about(
         TextBlock::new()
             .text(tr("许可与归属信息"))
             .font_size(20.0)
+            .automation_heading_level(windows_reactor::AutomationHeadingLevel::Level2)
             .into(),
         TextBlock::new()
             .text(tr(

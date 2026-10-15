@@ -810,38 +810,33 @@ impl SettingsComponent {
 
     fn render(&self, context: &mut ViewContext<Self>) -> View {
         let view = self.projected_view();
-        let mut body = vec![
+        let mut header = vec![
             keyed(
                 "heading",
                 windows_reactor::TextBlock::new()
                     .text(tr(self.page.title()))
-                    .font_size(26.0),
+                    .font_size(26.0)
+                    .automation_heading_level(windows_reactor::AutomationHeadingLevel::Level1),
             ),
-            keyed(
-                "status",
-                windows_reactor::TextBlock::new()
-                    .text(self.status_text(view.as_ref()))
-                    .text_wrapping(windows_reactor::TextWrapping::Wrap),
-            ),
+            keyed("status", self.status_view(view.as_ref())),
         ];
         if let Some(notice) = &self.notice {
-            body.push(keyed("notice", pages::notice(notice.error, &notice.text)));
+            header.push(keyed("notice", pages::notice(notice.error, &notice.text)));
         }
-        body.push(keyed(
+        let mut body = vec![keyed(
             format!("page-{:?}", self.page),
             pages::page(self, view.as_ref(), context),
-        ));
+        )];
         if let Some(draft) = &self.rule_draft
             && draft.needs_review
         {
             body.push(keyed(
                 "rule-review",
                 windows_reactor::StackPanel::new().spacing(8.0).children((
-                    windows_reactor::TextBlock::new()
-                        .text(tr(
-                            "规则草稿基于较旧的修订。检查草稿后，明确选择重试或放弃。",
-                        ))
-                        .text_wrapping(windows_reactor::TextWrapping::Wrap),
+                    pages::notice(
+                        true,
+                        &tr("规则草稿基于较旧的修订。检查草稿后，明确选择重试或放弃。"),
+                    ),
                     windows_reactor::StackPanel::new()
                         .orientation(windows_reactor::Orientation::Horizontal)
                         .spacing(8.0)
@@ -854,6 +849,9 @@ impl SettingsComponent {
         }
         if let Some(confirmation) = &self.confirm_action {
             let token = confirmation.token;
+            let action_label = tr(confirmation_label(&confirmation.command))
+                .trim_end_matches('…')
+                .to_owned();
             let text = match &confirmation.command {
                 SettingsCommand::Action { action } => action_confirmation_text(action),
                 SettingsCommand::Rule {
@@ -868,8 +866,8 @@ impl SettingsComponent {
                 windows_reactor::Border::new().content_dialog(
                     ContentDialog::new()
                         .is_open(true)
-                        .title(tr("请确认此操作。"))
-                        .primary_button_text(tr("确认并继续"))
+                        .title(&action_label)
+                        .primary_button_text(&action_label)
                         .close_button_text(tr("取消"))
                         .content(
                             windows_reactor::TextBlock::new()
@@ -911,20 +909,36 @@ impl SettingsComponent {
             .on_selected_tag_changed(context.callback(Message::SelectPage))
             .keyed_menu_items(Page::all().map(item))
             .content(
-                windows_reactor::ScrollViewer::new().content(
-                    windows_reactor::Border::new()
-                        .padding(windows_reactor::Thickness {
-                            left: 24.0,
-                            top: 16.0,
-                            right: 24.0,
-                            bottom: 24.0,
-                        })
-                        .content(
-                            windows_reactor::StackPanel::new()
-                                .spacing(14.0)
-                                .keyed_children(body),
+                Grid::new()
+                    .rows([GridLength::Auto, GridLength::STAR])
+                    .children((
+                        windows_reactor::Border::new()
+                            .padding(windows_reactor::Thickness {
+                                left: 24.0,
+                                top: 16.0,
+                                right: 24.0,
+                                bottom: 12.0,
+                            })
+                            .content(
+                                windows_reactor::StackPanel::new()
+                                    .spacing(10.0)
+                                    .keyed_children(header),
+                            ),
+                        windows_reactor::ScrollViewer::new().grid_row(1).content(
+                            windows_reactor::Border::new()
+                                .padding(windows_reactor::Thickness {
+                                    left: 24.0,
+                                    top: 4.0,
+                                    right: 24.0,
+                                    bottom: 24.0,
+                                })
+                                .content(
+                                    windows_reactor::StackPanel::new()
+                                        .spacing(14.0)
+                                        .keyed_children(body),
+                                ),
                         ),
-                ),
+                    )),
             )
             .into()
     }
@@ -957,6 +971,39 @@ impl SettingsComponent {
         Some(view)
     }
 
+    fn status_view(&self, view: Option<&SettingsView>) -> View {
+        let text = self.status_text(view);
+        let issue = view.and_then(|view| view.save_issue.as_ref().or(view.load_issue.as_ref()));
+        let busy = issue.is_none()
+            && view.is_some_and(|view| {
+                view.saving || view.closing || self.inflight.is_some() || !self.pending.is_empty()
+            });
+        let mut rows = Vec::new();
+        if busy {
+            rows.push(keyed(
+                "progress",
+                windows_reactor::ProgressBar::new()
+                    .is_indeterminate(true)
+                    .height(3.0)
+                    .automation_name(&text),
+            ));
+        }
+        if let Some(issue) = issue {
+            rows.push(keyed("problem", pages::notice(true, issue)));
+        } else {
+            rows.push(keyed(
+                "summary",
+                windows_reactor::TextBlock::new()
+                    .text(text)
+                    .text_wrapping(windows_reactor::TextWrapping::Wrap),
+            ));
+        }
+        windows_reactor::StackPanel::new()
+            .spacing(8.0)
+            .keyed_children(rows)
+            .into()
+    }
+
     fn status_text(&self, view: Option<&SettingsView>) -> String {
         let Some(view) = view else {
             return tr("正在连接设置工作区…");
@@ -971,7 +1018,7 @@ impl SettingsComponent {
             return tr("正在保存…");
         }
         if self.inflight.is_some() || !self.pending.is_empty() {
-            return tr("正在提交；接纳不等于已保存。");
+            return tr("正在应用更改…");
         }
         if self.accepted.last().is_some_and(|accepted| {
             accepted.stamp.workspace == view.stamp.workspace
@@ -979,7 +1026,7 @@ impl SettingsComponent {
                     .committed_revision
                     .is_none_or(|revision| revision < accepted.stamp.revision)
         }) {
-            return tr("修改已接纳，尚未确认保存。");
+            return tr("更改已应用，正在等待保存。");
         }
         if self.rule_draft.as_ref().is_some_and(|draft| draft.dirty) {
             return tr("规则草稿尚未提交。");
@@ -999,7 +1046,7 @@ impl SettingsComponent {
             .committed_revision
             .is_some_and(|revision| revision >= view.stamp.revision)
         {
-            return tr("当前工作区修订已保存。");
+            return tr("所有更改已保存。");
         }
         tr("等待保存状态…")
     }
@@ -1528,7 +1575,7 @@ impl SettingsComponent {
         if self.inflight.iter().chain(self.pending.iter()).any(|pending| {
             matches!(pending.kind, RequestKind::RuleDraft(token, _) if token == draft.token)
         }) {
-            self.notice = Some(Notice { text: tr("正在提交；接纳不等于已保存。"), error: false });
+            self.notice = Some(Notice { text: tr("正在应用更改…"), error: false });
             return;
         }
         if draft.needs_review {
@@ -1798,6 +1845,24 @@ fn action_confirmation_text(action: &Action) -> String {
             tr("新建工作区会替换当前工作区。现有配置文件会保留。是否继续？")
         }
         _ => tr("请确认此操作。"),
+    }
+}
+
+fn confirmation_label(command: &SettingsCommand) -> &'static str {
+    match command {
+        SettingsCommand::Action { action } => match action {
+            Action::RestoreSnapshot { .. } => "恢复",
+            Action::DeleteSnapshot { .. } => "删除",
+            Action::RestoreBackup { .. } => "恢复此备份",
+            Action::ImportConfig { .. } => "导入配置",
+            Action::AcceptRecovery { .. } => "接受恢复候选…",
+            Action::NewWorkspace { .. } => "新建工作区",
+            _ => "确认并继续",
+        },
+        SettingsCommand::Rule {
+            change: RuleChange::Delete { .. },
+        } => "删除",
+        _ => "确认并继续",
     }
 }
 

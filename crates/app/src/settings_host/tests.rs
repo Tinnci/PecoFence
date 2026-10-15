@@ -651,6 +651,7 @@ fn notices_and_conflicts_do_not_recreate_dirty_native_text_controls() {
     let title = text_object(&host, "FOCUS_DRAFT_UNIQUE");
     let color = text_object(&host, "#AABBCC");
     view.stamp.revision += 1;
+    view.save_issue = Some("Synthetic save failure while editing".into());
     assert!(sender.send(Message::HostUpdate(client, Box::new(view))));
     assert!(sender.send(Message::HostNotice(
         "Synthetic background update".into(),
@@ -660,6 +661,132 @@ fn notices_and_conflicts_do_not_recreate_dirty_native_text_controls() {
     host.drain(100).unwrap();
     assert_eq!(text_object(&host, "FOCUS_DRAFT_UNIQUE"), title);
     assert_eq!(text_object(&host, "#AABBCC"), color);
+}
+
+#[test]
+fn immediate_switch_emits_one_typed_request_and_tracks_read_only_projection() {
+    use windows_reactor::{
+        EventDispatch, EventId, EventPayload, ObjectType, PropertyId, PropertyValue,
+    };
+    let input = input();
+    let mut host = ComponentHost::mount(
+        RecordingAdapter::new(),
+        [component::<SettingsComponent>("settings", input.clone())],
+    )
+    .unwrap();
+    let sender = input.shared.sender.borrow().as_ref().unwrap().clone();
+    let client = Uuid::new_v4();
+    let mut view = projection();
+    assert!(sender.send(Message::HostUpdate(client, Box::new(view.clone()))));
+    host.drain(100).unwrap();
+    assert!(
+        input.queue.drain().is_empty(),
+        "rendering must never submit settings"
+    );
+    let switch = host
+        .runtime()
+        .graph()
+        .objects()
+        .find(|object| {
+            host.runtime().graph().kind(*object) == Some(ObjectType::ToggleSwitch)
+                && host
+                    .runtime()
+                    .graph()
+                    .properties(*object)
+                    .unwrap()
+                    .iter()
+                    .any(|property| {
+                        property.id == PropertyId::AutomationName
+                            && property.value
+                                == PropertyValue::String(tr("双击桌面空白处快速隐藏").into())
+                    })
+        })
+        .expect("labelled native switch");
+    let callback = host
+        .runtime()
+        .graph()
+        .events(switch)
+        .unwrap()
+        .iter()
+        .find(|event| event.id == EventId::Toggled)
+        .unwrap()
+        .value
+        .clone();
+    host.test_adapter_mut().queue_event(EventDispatch::new(
+        switch,
+        EventId::Toggled,
+        callback,
+        EventPayload::Bool(false),
+    ));
+    host.drain(100).unwrap();
+    let commands = input.queue.drain();
+    assert!(
+        matches!(commands.as_slice(), [Command::SettingsRequest { request, .. }]
+        if request.command == SettingsCommand::SetSetting { change: SettingChange::QuickHideEnabled(false) })
+    );
+    view.writable = false;
+    assert!(sender.send(Message::HostUpdate(client, Box::new(view))));
+    host.drain(100).unwrap();
+    assert!(
+        host.runtime()
+            .graph()
+            .properties(switch)
+            .unwrap()
+            .iter()
+            .any(|property| property.id == PropertyId::IsEnabled
+                && property.value == PropertyValue::Bool(false))
+    );
+    assert!(
+        input.queue.drain().is_empty(),
+        "projection changes must not echo as user input"
+    );
+}
+
+#[test]
+fn save_failures_stop_progress_and_surface_as_native_infobar() {
+    use windows_reactor::{ObjectType, PropertyId, PropertyValue};
+    let input = input();
+    let mut host = ComponentHost::mount(
+        RecordingAdapter::new(),
+        [component::<SettingsComponent>("settings", input.clone())],
+    )
+    .unwrap();
+    let sender = input.shared.sender.borrow().as_ref().unwrap().clone();
+    let client = Uuid::new_v4();
+    let mut view = projection();
+    view.saving = true;
+    assert!(sender.send(Message::HostUpdate(client, Box::new(view.clone()))));
+    host.drain(100).unwrap();
+    assert!(
+        host.runtime()
+            .graph()
+            .objects()
+            .any(|object| host.runtime().graph().kind(object) == Some(ObjectType::ProgressBar))
+    );
+    view.save_issue = Some("Synthetic disk write failure".into());
+    assert!(sender.send(Message::HostUpdate(client, Box::new(view))));
+    host.drain(100).unwrap();
+    assert!(
+        !host
+            .runtime()
+            .graph()
+            .objects()
+            .any(|object| host.runtime().graph().kind(object) == Some(ObjectType::ProgressBar))
+    );
+    assert!(host.runtime().graph().objects().any(|object| {
+        host.runtime().graph().kind(object) == Some(ObjectType::InfoBar)
+            && host
+                .runtime()
+                .graph()
+                .properties(object)
+                .unwrap()
+                .iter()
+                .any(|property| {
+                    property.id == PropertyId::Message
+                        && property.value
+                            == PropertyValue::String("Synthetic disk write failure".into())
+                })
+    }));
 }
 
 #[test]
@@ -688,7 +815,8 @@ fn live_self_contained_pages_close_and_reopen_without_desktop_side_effects() {
     let queue_ui = queue.clone();
     windows_reactor::App::run_with(move |context| {
         let host = SettingsHost::open(context, ThemeMode::Light, false, queue_ui.clone())?;
-        host.update(Uuid::new_v4(), projection());
+        let client = Uuid::new_v4();
+        host.update(client, projection());
         let host = Rc::new(RefCell::new(host));
         let phase = Cell::new(0);
         let ticks = Cell::new(0);
@@ -703,9 +831,20 @@ fn live_self_contained_pages_close_and_reopen_without_desktop_side_effects() {
             let current = phase.get();
             eprintln!("native Settings tour phase {current}");
             match current {
-                0..=4 => host
-                    .borrow()
-                    .send(Message::Navigate(Page::all()[current as usize])),
+                0..=4 => {
+                    let mut view = projection();
+                    if current == 0 {
+                        view.saving = true;
+                    } else if current == 1 {
+                        view.save_issue = Some("Synthetic save failure; retry is available".into());
+                    } else if current == 2 {
+                        view.load_issue = Some("Synthetic recovery mode".into());
+                        view.writable = false;
+                    }
+                    host.borrow().update(client, view);
+                    host.borrow()
+                        .send(Message::Navigate(Page::all()[current as usize]));
+                }
                 5 => {
                     host.borrow().send(Message::Navigate(Page::Rules));
                     host.borrow().send(Message::RuleNew);

@@ -630,5 +630,8 @@
   "删除此规则后无法从设置中恢复。是否继续？": "Diese Regel kann nach dem Löschen nicht über die Einstellungen wiederhergestellt werden. Fortfahren?",
   "恢复快照将替换当前布局，是否继续？": "Durch das Wiederherstellen des Snapshots wird das aktuelle Layout ersetzt. Fortfahren?",
   "便笺": "Notiz",
-  "新建便笺": "Neue Notiz"
+  "新建便笺": "Neue Notiz",
+  "所有更改已保存。": "Alle Änderungen gespeichert.",
+  "正在应用更改…": "Änderungen werden angewendet…",
+  "更改已应用，正在等待保存。": "Änderungen angewendet; Speichern steht noch aus."
 }

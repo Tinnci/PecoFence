@@ -630,5 +630,8 @@
   "删除此规则后无法从设置中恢复。是否继续？": "This rule cannot be restored from Settings after it is deleted. Continue?",
   "恢复快照将替换当前布局，是否继续？": "Restoring the snapshot will replace the current layout. Continue?",
   "便笺": "Note",
-  "新建便笺": "New note"
+  "新建便笺": "New note",
+  "所有更改已保存。": "All changes saved.",
+  "正在应用更改…": "Applying changes…",
+  "更改已应用，正在等待保存。": "Changes applied; waiting to save."
 }
