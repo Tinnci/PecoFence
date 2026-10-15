@@ -379,6 +379,8 @@ struct SettingsComponent {
     liquid_glass: bool,
     page: Page,
     pane_open: bool,
+    /// None uses adaptive defaults; a user close persists until the hamburger reopens it.
+    pane_override: Option<bool>,
     navigation_mode: NavigationViewDisplayMode,
     view: Option<SettingsView>,
     client: Option<Uuid>,
@@ -473,15 +475,32 @@ impl Component for SettingsComponent {
                     self.navigate(page);
                 }
             }
-            Message::TogglePane => self.pane_open = !self.pane_open,
-            Message::PaneOpenChanged(open) => self.pane_open = open,
+            Message::TogglePane => {
+                self.pane_open = !self.pane_open;
+                self.pane_override = Some(self.pane_open);
+                tracing::debug!(open = self.pane_open, mode = ?self.navigation_mode, "settings: pane toggle requested");
+            }
+            Message::PaneOpenChanged(open) => {
+                self.pane_open = open && self.pane_override != Some(false);
+                tracing::debug!(observed_open = open, open = self.pane_open, requested = ?self.pane_override, mode = ?self.navigation_mode, "settings: native pane state observed");
+            }
             Message::NavigationModeChanged(mode) => {
                 #[cfg(test)]
                 self.shared.navigation_mode.set(mode);
+                // Choose adaptive defaults until the first hamburger interaction. After
+                // that, display-mode notifications must not override the user's request
+                // or write IsPaneOpen in the middle of WinUI's own transition.
                 if self.navigation_mode != mode {
                     self.navigation_mode = mode;
-                    self.pane_open = mode == NavigationViewDisplayMode::Expanded;
+                    if self.pane_override.is_none() {
+                        self.pane_open = mode == NavigationViewDisplayMode::Expanded;
+                    }
                 }
+                tracing::debug!(
+                    open = self.pane_open,
+                    ?mode,
+                    "settings: navigation display mode observed"
+                );
             }
             Message::Setting(change) => self.submit(
                 SettingsCommand::SetSetting { change },
@@ -753,7 +772,9 @@ impl Component for SettingsComponent {
                     .icon(Page::General.icon())
                     .is_back_button_visible(false)
                     .is_pane_toggle_button_visible(true)
-                    .on_pane_toggle_requested(context.message(Message::TogglePane)),
+                    // A capture-free mapping keeps the native listener identity stable so
+                    // background renders cannot retire a queued hamburger click.
+                    .on_pane_toggle_requested(context.callback(|()| Message::TogglePane)),
                 windows_reactor::Border::new().grid_row(1).content(content),
             ))
             .into()
@@ -784,6 +805,7 @@ impl SettingsComponent {
             liquid_glass: input.liquid_glass,
             page: Page::General,
             pane_open: true,
+            pane_override: None,
             navigation_mode: NavigationViewDisplayMode::Expanded,
             view: None,
             client: None,

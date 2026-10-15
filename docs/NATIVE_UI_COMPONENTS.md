@@ -23,6 +23,12 @@ Card backgrounds and borders use `CardBackgroundFillColorDefaultBrush` and
 `CardStrokeColorDefaultBrush`, resolved by WinUI on theme changes. Page and section
 headings expose native accessibility heading levels.
 
+Navigation display mode describes the available width, not the open state of the
+pane. Adaptive defaults apply until the first hamburger interaction. After that,
+an explicit close remains closed across resize events; native pane changes still
+synchronize light dismissal. The title-bar callback has stable identity so a
+background render cannot retire queued clicks.
+
 Other useful native controls include `Expander` for optional advanced settings,
 `AutoSuggestBox` for searchable content pickers, `ColorPicker` for custom colors,
 and `CommandBarFlyout` for compact editing actions. Introduce them when the
@@ -42,6 +48,11 @@ tour exercises all pages, ten languages, three adaptive navigation widths,
 light/dark windows, dialog cancellation and repeated reopening with the staged
 self-contained runtime. Use a separate instance and configuration directory for
 visual checks and real switch-persistence tests.
+
+Run `scripts/test-settings-navigation.ps1 -Binary <pecofence.exe>` on Windows for
+the pane regression. It uses a separate workspace, invokes the real native
+hamburger, switches all five pages, resizes through compact/minimal/expanded
+widths, and checks the content gutter using DPI-adjusted UI Automation bounds.
 
 Guidance: [toggle switches](https://learn.microsoft.com/en-us/windows/apps/design/controls/toggles),
 [InfoBar](https://learn.microsoft.com/en-us/windows/apps/design/controls/infobar),

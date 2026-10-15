@@ -520,8 +520,57 @@ fn native_titlebar_hamburger_controls_adaptive_navigation_without_resetting_draf
         property(&host, nav, PropertyId::IsPaneOpen),
         PropertyValue::Bool(false)
     );
+    for mode in [
+        NavigationViewDisplayMode::Compact,
+        NavigationViewDisplayMode::Expanded,
+    ] {
+        emit(
+            &mut host,
+            nav,
+            EventId::DisplayModeChanged,
+            EventPayload::NavigationViewDisplayMode(mode),
+        );
+        assert_eq!(
+            property(&host, nav, PropertyId::IsPaneOpen),
+            PropertyValue::Bool(false),
+            "an adaptive mode notification must not override a user close"
+        );
+    }
+    emit(
+        &mut host,
+        nav,
+        EventId::IsPaneOpenChanged,
+        EventPayload::Bool(true),
+    );
+    assert_eq!(
+        property(&host, nav, PropertyId::IsPaneOpen),
+        PropertyValue::Bool(false),
+        "an adaptive auto-open must not undo an explicit hamburger close"
+    );
+    let toggle_listener = host
+        .runtime()
+        .graph()
+        .events(title)
+        .unwrap()
+        .iter()
+        .find(|event| event.id == EventId::PaneToggleRequested)
+        .unwrap()
+        .value
+        .clone();
     assert!(sender.send(Message::HostNotice("Background notice".into(), false)));
     host.drain(100).unwrap();
+    assert_eq!(
+        host.runtime()
+            .graph()
+            .events(title)
+            .unwrap()
+            .iter()
+            .find(|event| event.id == EventId::PaneToggleRequested)
+            .unwrap()
+            .value,
+        toggle_listener,
+        "background renders must not retire already queued hamburger clicks"
+    );
     assert_eq!(
         property(&host, nav, PropertyId::IsPaneOpen),
         PropertyValue::Bool(false)
@@ -546,6 +595,28 @@ fn native_titlebar_hamburger_controls_adaptive_navigation_without_resetting_draf
     assert_eq!(
         property(&host, nav, PropertyId::IsPaneOpen),
         PropertyValue::Bool(true)
+    );
+    emit(
+        &mut host,
+        nav,
+        EventId::DisplayModeChanged,
+        EventPayload::NavigationViewDisplayMode(NavigationViewDisplayMode::Compact),
+    );
+    assert_eq!(
+        property(&host, nav, PropertyId::IsPaneOpen),
+        PropertyValue::Bool(true),
+        "a mode event must not interrupt an explicit overlay open"
+    );
+    emit(
+        &mut host,
+        nav,
+        EventId::IsPaneOpenChanged,
+        EventPayload::Bool(false),
+    );
+    assert_eq!(
+        property(&host, nav, PropertyId::IsPaneOpen),
+        PropertyValue::Bool(false),
+        "native light dismissal must still synchronize the component"
     );
     emit(
         &mut host,
