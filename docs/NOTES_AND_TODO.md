@@ -6,7 +6,7 @@ https://support.microsoft.com/en-us/windows/apps/stickynotes/create-a-sticky-not
 ## 创建与呈现
 
 托盘和面板右键的“新建小组件”复用同一个菜单：便笺、待办清单、数字时钟、日历。
-Windows Explorer 扩展并列提供“新建便笺”和“新建待办清单”。新增 Shell action 使用 ID 4，保留已有 1–3 的含义与 GUID。
+MSIX 的 Windows Explorer 文件夹背景菜单扩展并列提供“新建便笺”和“新建待办清单”；普通 ZIP 安装不自动注册该扩展。新增 Shell action 使用 ID 4，保留已有 1–3 的含义与 GUID。
 便笺与待办使用相同的 420×370 DIP 初始尺寸、主题颜色、14 DIP 内容边距、标题/操作/说明区；沿用相邻放置、碰撞避让和 DPI 恢复。
 创建后立即打开对应输入框，取消输入保留空面板。通过外框重命名、移动、缩放或删除组件，便笺组件不另设不同的窗口管理方式。
 

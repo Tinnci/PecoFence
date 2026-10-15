@@ -1,8 +1,8 @@
 # Windows 11 Explorer context menu
 
 The MSIX build registers a native `IExplorerCommand` COM DLL for
-`Directory\Background`. The `PecoFence` flyout contains **New fence**, **New to-do
-list**, and **Settings**. Titles follow the Windows UI language; Chinese simplified is
+`Directory\Background`. The `PecoFence` flyout contains **New fence**, **New note**,
+**New to-do list**, and **Settings**. Titles follow the Windows UI language; Chinese simplified is
 the source language and English is the fallback.
 
 ## Flow
@@ -53,7 +53,7 @@ from PowerShell to validate the manifest with MakePri and MakeAppx. The resultin
 unsigned MSIX can be inspected without installation.
 
 On a Windows 11 test machine, install a test-signed MSIX, right-click inside an
-Explorer folder's empty area, check all three flyout actions with the app both
+Explorer folder's empty area, check all four flyout actions with the app both
 running and stopped, and verify single-instance behavior. Restart Explorer after
 package updates if it still shows an old registration. Test the packaged app's
 launch fallback and menu positioning there; a WSL cross-build cannot establish
