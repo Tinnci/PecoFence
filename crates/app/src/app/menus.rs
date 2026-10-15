@@ -2,6 +2,19 @@
 
 use super::*;
 
+fn new_widget_menu(clock: u32, calendar: u32, note: u32, todo: u32) -> PopupMenu {
+    let menu = PopupMenu::new();
+    for (id, title) in [
+        (note, "便笺"),
+        (todo, "待办清单"),
+        (clock, "数字时钟"),
+        (calendar, "日历"),
+    ] {
+        menu.item(id, pecofence_core::i18n::text(title), false, false);
+    }
+    menu
+}
+
 // Tray / menu command ids.
 const CMD_TOGGLE_FENCES: u32 = 1;
 const CMD_NEW_FENCE: u32 = 2;
@@ -14,6 +27,7 @@ const CMD_PEEK: u32 = 10;
 const CMD_NEW_CLOCK: u32 = 11;
 const CMD_NEW_CALENDAR: u32 = 12;
 const CMD_NEW_TODO: u32 = 13;
+const CMD_NEW_NOTE: u32 = 14;
 const CMD_ITEM_OPEN: u32 = 100;
 const CMD_ITEM_LOCATION: u32 = 101;
 const CMD_ITEM_PROPERTIES: u32 = 102;
@@ -25,6 +39,7 @@ const CMD_FENCE_OPEN_FOLDER: u32 = 332;
 const CMD_FENCE_NEW_CLOCK: u32 = 334;
 const CMD_FENCE_NEW_CALENDAR: u32 = 335;
 const CMD_FENCE_NEW_TODO: u32 = 336;
+const CMD_FENCE_NEW_NOTE: u32 = 337;
 const CMD_ITEM_MOVE_BASE: u32 = 200;
 const CMD_NEW_FENCE_HERE: u32 = 250;
 /// Command-id range handed to Explorer's `IContextMenu`.
@@ -99,23 +114,9 @@ impl App {
             false,
             false,
         )
-        .item(
-            CMD_NEW_CLOCK,
-            pecofence_core::i18n::text("新建数字时钟"),
-            false,
-            false,
-        )
-        .item(
-            CMD_NEW_CALENDAR,
-            pecofence_core::i18n::text("新建日历"),
-            false,
-            false,
-        )
-        .item(
-            CMD_NEW_TODO,
-            pecofence_core::i18n::text("新建待办清单"),
-            false,
-            false,
+        .submenu(
+            pecofence_core::i18n::text("新建小组件"),
+            new_widget_menu(CMD_NEW_CLOCK, CMD_NEW_CALENDAR, CMD_NEW_NOTE, CMD_NEW_TODO),
         )
         .item(
             CMD_PEEK,
@@ -184,6 +185,9 @@ impl App {
             }
             CMD_NEW_CALENDAR => {
                 self.new_widget_near(pecofence_plugin_widgets::CALENDAR_PROVIDER, x, y, None)
+            }
+            CMD_NEW_NOTE => {
+                self.new_widget_near(pecofence_plugin_widgets::NOTE_PROVIDER, x, y, None)
             }
             CMD_NEW_TODO => {
                 self.new_widget_near(pecofence_plugin_widgets::TODO_PROVIDER, x, y, None)
@@ -583,27 +587,15 @@ impl App {
                 !clipboard::has_file_list(),
             );
         }
-        let widget_menu = PopupMenu::new();
-        widget_menu
-            .item(
+        menu.submenu(
+            pecofence_core::i18n::text("新建小组件"),
+            new_widget_menu(
                 CMD_FENCE_NEW_CLOCK,
-                pecofence_core::i18n::text("数字时钟"),
-                false,
-                false,
-            )
-            .item(
                 CMD_FENCE_NEW_CALENDAR,
-                pecofence_core::i18n::text("日历"),
-                false,
-                false,
-            )
-            .item(
+                CMD_FENCE_NEW_NOTE,
                 CMD_FENCE_NEW_TODO,
-                pecofence_core::i18n::text("待办清单"),
-                false,
-                false,
-            );
-        menu.submenu(pecofence_core::i18n::text("新建小组件"), widget_menu);
+            ),
+        );
         // Tabbed fences (Fences 6): split a tab out, move it along the strip, or merge this
         // fence into another window. Hidden when none of that applies.
         let tabs = self.state.tabs_of(host);
@@ -747,6 +739,9 @@ impl App {
                 y,
                 Some(host),
             ),
+            CMD_FENCE_NEW_NOTE => {
+                self.new_widget_near(pecofence_plugin_widgets::NOTE_PROVIDER, x, y, Some(host))
+            }
             CMD_FENCE_NEW_TODO => {
                 self.new_widget_near(pecofence_plugin_widgets::TODO_PROVIDER, x, y, Some(host))
             }

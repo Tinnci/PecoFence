@@ -185,3 +185,5 @@ The optional video project in `extras/` is independent of the app build.
 [标准技能说明](skills/pecofence/SKILL.md) 包含用途、发现命令、平台限制、输出和写入边界。
 本地注册时将该技能目录链接到 `~/.agents/skills/pecofence`；Claude Code 可使用 `~/.claude/skills/pecofence`。
 技能注册不授予远端写入、数据外发或导出权限。
+
+便笺与待办的统一创建、编辑和保存方式见 [组件体验说明](docs/NOTES_AND_TODO.md)。

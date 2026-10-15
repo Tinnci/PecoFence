@@ -493,10 +493,11 @@ pub enum HostCommand {
     RequestMode(Presentation),
     /// Save provider-owned JSON alongside the fence geometry in the host configuration.
     PersistConfig(Arc<[u8]>),
-    /// Open the host's native single-line editor and return TextSubmitted on commit.
+    /// Open the host's native editor and return TextSubmitted on commit.
     RequestTextInput {
         action: u64,
         initial: String,
+        multiline: bool,
     },
 }
 

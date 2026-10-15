@@ -627,5 +627,7 @@
   "默认目标": "Default target",
   "工作区已变化；请重新确认此操作。": "The workspace has changed. Please confirm this action again.",
   "删除此规则后无法从设置中恢复。是否继续？": "This rule cannot be restored from Settings after it is deleted. Continue?",
-  "恢复快照将替换当前布局，是否继续？": "Restoring the snapshot will replace the current layout. Continue?"
+  "恢复快照将替换当前布局，是否继续？": "Restoring the snapshot will replace the current layout. Continue?",
+  "便笺": "Note",
+  "新建便笺": "New note"
 }

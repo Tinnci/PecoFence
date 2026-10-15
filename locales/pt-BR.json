@@ -627,5 +627,7 @@
   "默认目标": "Destino padrão",
   "工作区已变化；请重新确认此操作。": "O espaço de trabalho foi alterado; confirme esta ação novamente.",
   "删除此规则后无法从设置中恢复。是否继续？": "Esta regra não poderá ser restaurada nas Configurações depois de excluída. Continuar?",
-  "恢复快照将替换当前布局，是否继续？": "Restaurar o instantâneo substituirá o layout atual. Continuar?"
+  "恢复快照将替换当前布局，是否继续？": "Restaurar o instantâneo substituirá o layout atual. Continuar?",
+  "便笺": "Nota",
+  "新建便笺": "Nova nota"
 }

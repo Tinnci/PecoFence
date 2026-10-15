@@ -205,6 +205,7 @@ pub enum Command {
         key: InstanceKey,
         action: u64,
         initial: String,
+        multiline: bool,
     },
     PanelTextCommit {
         key: InstanceKey,

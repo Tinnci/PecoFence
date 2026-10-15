@@ -36,18 +36,31 @@ pub fn begin_panel_input(
     initial: String,
     queue: CommandQueue,
     mode: ThemeMode,
+    multiline: bool,
 ) {
     let r = window::window_rect(fence_hwnd);
     let dpi = monitors::dpi_for_window(fence_hwnd).max(96);
     let scale = dpi as f32 / 96.0;
     let inset = (12.0 * scale).round() as i32;
-    let top = r.top + (48.0 * scale).round() as i32;
+    let top = r.top + (if multiline { 96.0 } else { 48.0 } * scale).round() as i32;
+    let initial = if multiline {
+        initial
+            .replace("\r\n", "\n")
+            .replace('\r', "\n")
+            .replace('\n', "\r\n")
+    } else {
+        initial
+    };
     begin_rename_at(
         RECT {
             left: r.left + inset,
             top,
             right: (r.right - inset).max(r.left + inset + 120),
-            bottom: top + (28.0 * scale).round() as i32,
+            bottom: if multiline {
+                (r.bottom - inset).max(top + (100.0 * scale) as i32)
+            } else {
+                top + (28.0 * scale).round() as i32
+            },
         },
         dpi,
         RenameTarget::PanelInput { key, action },
@@ -55,6 +68,7 @@ pub fn begin_panel_input(
         None,
         queue,
         mode,
+        multiline,
     );
 }
 
@@ -94,6 +108,7 @@ pub fn begin_inline_rename(
         None,
         queue,
         mode,
+        false,
     );
 }
 
@@ -161,6 +176,7 @@ pub fn begin_item_rename(
         select_end,
         queue,
         mode,
+        false,
     );
 }
 
@@ -172,6 +188,7 @@ fn begin_rename_at(
     select_end: Option<usize>,
     queue: CommandQueue,
     mode: ThemeMode,
+    multiline: bool,
 ) {
     end_active(false);
     CLASS.with(|c| {
@@ -208,22 +225,32 @@ fn begin_rename_at(
             .ok()
     });
     let Some(window) = created else { return };
-    let Ok(ctl) = edit::EditControl::create(
+    let create = if multiline {
+        edit::EditControl::create_multiline
+    } else {
+        edit::EditControl::create
+    };
+    let Ok(ctl) = create(
         window.hwnd(),
         w,
         h,
         dpi,
         &current,
         mode == ThemeMode::Dark,
-        on_key,
+        if multiline { on_multiline_key } else { on_key },
     ) else {
         return;
     };
     window::show_normal(window.hwnd());
     window::bring_to_front(window.hwnd());
-    match select_end {
-        Some(n) => ctl.focus_and_select(0, n as i32),
-        None => ctl.focus_and_select_all(),
+    if multiline {
+        let end = current.encode_utf16().count() as i32;
+        ctl.focus_and_select(end, end);
+    } else {
+        match select_end {
+            Some(n) => ctl.focus_and_select(0, n as i32),
+            None => ctl.focus_and_select_all(),
+        }
     }
     ACTIVE.with(|a| {
         *a.borrow_mut() = Some(RenameSession {
@@ -234,6 +261,13 @@ fn begin_rename_at(
             committed: false,
         })
     });
+}
+
+fn on_multiline_key(vk: u32) -> bool {
+    if vk == msg::VK_RETURN && !window::key_down(msg::VK_CONTROL) {
+        return false;
+    }
+    on_key(vk)
 }
 
 fn on_key(vk: u32) -> bool {

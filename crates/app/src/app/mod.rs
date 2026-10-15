@@ -786,6 +786,15 @@ impl App {
                     error.to_string(),
                 )
             })?;
+        panel_manager
+            .borrow_mut()
+            .register_provider(Rc::new(pecofence_plugin_widgets::NotePlugin))
+            .map_err(|error| {
+                windows_core::Error::new(
+                    windows_core::HRESULT(0x80004005u32 as i32),
+                    error.to_string(),
+                )
+            })?;
 
         let ctx = Rc::new(FenceContext {
             stack: stack.clone(),
@@ -1496,6 +1505,7 @@ impl App {
                 key,
                 action,
                 initial,
+                multiline,
             } => {
                 let hwnd = self.state.fences().iter().find_map(|f| match &f.content {
                     pecofence_core::FenceContentSpec::Panel { panel }
@@ -1513,6 +1523,7 @@ impl App {
                         initial,
                         self.queue.clone(),
                         self.theme_mode,
+                        multiline,
                     );
                 }
             }
@@ -1594,6 +1605,9 @@ impl App {
                     ShellAction::NewFence => self.new_fence_near(x, y),
                     ShellAction::NewTodo => {
                         self.new_widget_near(pecofence_plugin_widgets::TODO_PROVIDER, x, y, None)
+                    }
+                    ShellAction::NewNote => {
+                        self.new_widget_near(pecofence_plugin_widgets::NOTE_PROVIDER, x, y, None)
                     }
                     ShellAction::OpenSettings => self.open_settings(),
                 }

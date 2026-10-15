@@ -13,6 +13,7 @@ pub enum ShellAction {
     NewFence = 1,
     NewTodo = 2,
     OpenSettings = 3,
+    NewNote = 4,
 }
 
 impl ShellAction {
@@ -21,6 +22,7 @@ impl ShellAction {
             1 => Some(Self::NewFence),
             2 => Some(Self::NewTodo),
             3 => Some(Self::OpenSettings),
+            4 => Some(Self::NewNote),
             _ => None,
         }
     }
@@ -30,6 +32,7 @@ impl ShellAction {
             Self::NewFence => "new-fence",
             Self::NewTodo => "new-todo",
             Self::OpenSettings => "settings",
+            Self::NewNote => "new-note",
         }
     }
 
@@ -38,6 +41,7 @@ impl ShellAction {
             "new-fence" => Some(Self::NewFence),
             "new-todo" => Some(Self::NewTodo),
             "settings" => Some(Self::OpenSettings),
+            "new-note" => Some(Self::NewNote),
             _ => None,
         }
     }
@@ -82,12 +86,12 @@ mod tests {
 
     #[test]
     fn cli_and_wire_values_round_trip() {
-        for id in 1..=3 {
+        for id in 1..=4 {
             let action = ShellAction::from_id(id).unwrap();
             assert_eq!(ShellAction::from_cli_name(action.cli_name()), Some(action));
         }
         assert_eq!(ShellAction::from_id(0), None);
-        assert_eq!(ShellAction::from_id(4), None);
+        assert_eq!(ShellAction::from_id(5), None);
         assert_eq!(ShellAction::from_cli_name("quit"), None);
     }
 

@@ -627,5 +627,7 @@
   "默认目标": "Cible par défaut",
   "工作区已变化；请重新确认此操作。": "L’espace de travail a changé ; confirmez à nouveau cette action.",
   "删除此规则后无法从设置中恢复。是否继续？": "Cette règle ne pourra pas être restaurée depuis les paramètres après sa suppression. Continuer ?",
-  "恢复快照将替换当前布局，是否继续？": "La restauration de l’instantané remplacera la disposition actuelle. Continuer ?"
+  "恢复快照将替换当前布局，是否继续？": "La restauration de l’instantané remplacera la disposition actuelle. Continuer ?",
+  "便笺": "Note",
+  "新建便笺": "Nouvelle note"
 }

@@ -705,6 +705,11 @@
     CreateSolidBrush
     SetTextColor
     SetBkColor
+    ES_MULTILINE
+    ES_AUTOVSCROLL
+    ES_WANTRETURN
+    WS_VSCROLL
+    EM_LIMITTEXT
     ES_AUTOHSCROLL
     WS_CHILD
     WS_BORDER

@@ -8,7 +8,9 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
 
+mod note;
 mod todo;
+pub use note::{NOTE_PROVIDER, NotePlugin};
 pub use todo::{TODO_PROVIDER, TodoPlugin};
 
 pub const CLOCK_PROVIDER: &str = "pecofence.clock";
@@ -400,6 +402,67 @@ impl PreparedFrame for WidgetFrame {
         })();
         result.and(canvas.pop_clip())
     }
+}
+
+/// Shared header geometry for local notes and TODO lists.
+fn build_panel_header(
+    frame: &mut WidgetFrame,
+    title: impl Into<String>,
+    action_label: &str,
+    action: Option<u64>,
+    hint: &str,
+    colors: Colors,
+) {
+    let v = frame.viewport;
+    let width = (v.w - 28.0).max(0.0);
+    frame.add(
+        RectDip {
+            x: v.x + 14.0,
+            y: v.y + 12.0,
+            w: (width - 74.0).max(0.0),
+            h: 34.0,
+        },
+        title,
+        21.0,
+        600,
+        colors.primary,
+        None,
+        0.0,
+        None,
+        "heading",
+    );
+    frame.add(
+        RectDip {
+            x: v.x + v.w - 75.0,
+            y: v.y + 10.0,
+            w: 60.0,
+            h: 34.0,
+        },
+        action_label,
+        14.0,
+        600,
+        colors.accent,
+        Some(colors.subtle),
+        6.0,
+        action,
+        "button",
+    );
+    frame.add(
+        RectDip {
+            x: v.x + 14.0,
+            y: v.y + 44.0,
+            w: width,
+            h: 20.0,
+        },
+        hint,
+        11.0,
+        400,
+        colors.secondary,
+        None,
+        0.0,
+        None,
+        "text",
+    );
 }
 
 fn build_clock(frame: &mut WidgetFrame, config: WidgetConfig, colors: Colors, chinese: bool) {

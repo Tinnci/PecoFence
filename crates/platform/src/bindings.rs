@@ -2927,12 +2927,16 @@ pub struct DispatcherQueueOptions {
     pub apartmentType: DISPATCHERQUEUE_THREAD_APARTMENTTYPE,
 }
 pub const EDD_GET_DEVICE_INTERFACE_NAME: i32 = 1;
+pub const EM_LIMITTEXT: i32 = 197;
 pub const EM_SETSEL: i32 = 177;
 pub const EN_CHANGE: i32 = 768;
 pub const EN_KILLFOCUS: i32 = 512;
 pub const ERROR_ALREADY_EXISTS: i32 = 183;
 pub const ERROR_NOTIFY_ENUM_DIR: i32 = 1022;
 pub const ES_AUTOHSCROLL: i32 = 128;
+pub const ES_AUTOVSCROLL: i32 = 64;
+pub const ES_MULTILINE: i32 = 4;
+pub const ES_WANTRETURN: i32 = 4096;
 pub const EVENT_OBJECT_DESTROY: i32 = 32769;
 pub const EVENT_SYSTEM_FOREGROUND: i32 = 3;
 pub const EVENT_SYSTEM_MINIMIZEEND: i32 = 23;
@@ -15320,6 +15324,7 @@ pub const WS_POPUP: u32 = 2147483648;
 pub const WS_SYSMENU: i32 = 524288;
 pub const WS_THICKFRAME: i32 = 262144;
 pub const WS_VISIBLE: i32 = 268435456;
+pub const WS_VSCROLL: i32 = 2097152;
 #[cfg(any(target_arch = "arm64ec", target_arch = "x86_64"))]
 pub type XMM_SAVE_AREA32 = XSAVE_FORMAT;
 #[repr(C)]

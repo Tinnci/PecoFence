@@ -1,6 +1,6 @@
 //! Local TODO panel. Tasks live in the provider-owned JSON saved with its fence.
 
-use super::{Colors, WidgetFrame};
+use super::{Colors, WidgetFrame, build_panel_header};
 use pecofence_plugin_api::*;
 use serde::{Deserialize, Serialize};
 use std::rc::Rc;
@@ -147,6 +147,7 @@ impl PanelInstance for TodoWidget {
                     commands: vec![HostCommand::RequestTextInput {
                         action: ADD,
                         initial: String::new(),
+                        multiline: false,
                     }],
                     relayout: false,
                 })
@@ -197,6 +198,7 @@ impl PanelInstance for TodoWidget {
                         commands: vec![HostCommand::RequestTextInput {
                             action,
                             initial: task.title.clone(),
+                            multiline: false,
                         }],
                         relayout: false,
                     })
@@ -309,32 +311,12 @@ fn build_todo(
     let v = frame.viewport;
     let width = (v.w - 28.0).max(0.0);
     let pending = config.tasks.iter().filter(|task| !task.done).count();
-    frame.add(
-        RectDip {
-            x: v.x + 14.0,
-            y: v.y + 12.0,
-            w: (width - 74.0).max(0.0),
-            h: 34.0,
-        },
+    build_panel_header(
+        frame,
         if chinese {
             format!("待办 · {pending} 项")
         } else {
             format!("To do · {pending}")
-        },
-        21.0,
-        600,
-        colors.primary,
-        None,
-        0.0,
-        None,
-        "heading",
-    );
-    frame.add(
-        RectDip {
-            x: v.x + v.w - 75.0,
-            y: v.y + 10.0,
-            w: 60.0,
-            h: 34.0,
         },
         if config.tasks.len() >= MAX_TASKS {
             if chinese { "已满" } else { "Full" }
@@ -343,33 +325,13 @@ fn build_todo(
         } else {
             "+ Add"
         },
-        14.0,
-        600,
-        colors.accent,
-        Some(colors.subtle),
-        6.0,
         (config.tasks.len() < MAX_TASKS).then_some(ADD),
-        "button",
-    );
-    frame.add(
-        RectDip {
-            x: v.x + 14.0,
-            y: v.y + 44.0,
-            w: width,
-            h: 20.0,
-        },
         if chinese {
             "点击标题编辑 · 勾选框完成或恢复"
         } else {
             "Click a title to edit; check to complete or restore"
         },
-        11.0,
-        400,
-        colors.secondary,
-        None,
-        0.0,
-        None,
-        "text",
+        colors,
     );
     if config.tasks.is_empty() {
         frame.add(

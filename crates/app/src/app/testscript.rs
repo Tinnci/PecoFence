@@ -23,6 +23,10 @@
 //! delete <title>
 //! new-fence <x> <y> <w> <h>  physical px
 //! new-todo <x> <y>         create a TODO panel near physical px
+//! new-note <x> <y>         create a local note
+//! note-set <JSON string>    submit multiline text using JSON escapes
+//! note-open                 open the native multiline editor
+//! note-undo                 undo the previous note change
 //! todo-add <text>          submit a task through the panel input path
 //! todo-toggle <index>      toggle a zero-based task checkbox
 //! todo-edit <index> <text> edit a task through the panel input path
@@ -324,6 +328,27 @@ impl App {
                         bottom: y + h,
                     }));
                 }
+                ["new-note", x, y] => {
+                    if let (Ok(x), Ok(y)) = (x.parse(), y.parse()) {
+                        self.new_widget_near(pecofence_plugin_widgets::NOTE_PROVIDER, x, y, None);
+                    }
+                }
+                ["note-set", ..] => {
+                    if let Some(value) = line.strip_prefix("note-set ")
+                        && let Ok(text) = serde_json::from_str::<String>(value)
+                        && let Some(key) =
+                            self.test_panel_key(pecofence_plugin_widgets::NOTE_PROVIDER)
+                    {
+                        crate::rename::end_active(false);
+                        self.queue.push(Command::PanelTextCommit {
+                            key,
+                            action: 1,
+                            text,
+                        });
+                    }
+                }
+                ["note-open"] => self.test_panel_invoke(pecofence_plugin_widgets::NOTE_PROVIDER, 1),
+                ["note-undo"] => self.test_panel_invoke(pecofence_plugin_widgets::NOTE_PROVIDER, 2),
                 ["new-todo", x, y] => {
                     if let (Ok(x), Ok(y)) = (x.parse(), y.parse()) {
                         self.new_widget_near(pecofence_plugin_widgets::TODO_PROVIDER, x, y, None);
@@ -558,10 +583,12 @@ impl App {
     }
 
     fn test_todo_key(&self) -> Option<pecofence_plugin_api::InstanceKey> {
+        self.test_panel_key(pecofence_plugin_widgets::TODO_PROVIDER)
+    }
+
+    fn test_panel_key(&self, provider: &str) -> Option<pecofence_plugin_api::InstanceKey> {
         let spec = self.state.fences().iter().find_map(|f| match &f.content {
-            pecofence_core::FenceContentSpec::Panel { panel }
-                if panel.provider == pecofence_plugin_widgets::TODO_PROVIDER =>
-            {
+            pecofence_core::FenceContentSpec::Panel { panel } if panel.provider == provider => {
                 Some(panel.clone())
             }
             _ => None,
@@ -570,7 +597,38 @@ impl App {
             .borrow_mut()
             .open_panel(&spec)
             .ok()
-            .map(|h| h.key())
+            .map(|handle| handle.key())
+    }
+
+    fn test_panel_invoke(&mut self, provider: &str, action: u64) {
+        let spec = self.state.fences().iter().find_map(|f| match &f.content {
+            pecofence_core::FenceContentSpec::Panel { panel } if panel.provider == provider => {
+                Some(panel.clone())
+            }
+            _ => None,
+        });
+        if let Some(spec) = spec {
+            let result = self
+                .panel_manager
+                .borrow_mut()
+                .open_panel(&spec)
+                .and_then(|handle| {
+                    let key = handle.key();
+                    handle
+                        .event(PanelEvent::Invoke {
+                            action,
+                            layout_revision: 0,
+                        })
+                        .map(|update| (key, update))
+                });
+            if let Ok((key, update)) = result {
+                self.pending_panel_updates
+                    .entry(key)
+                    .or_default()
+                    .merge(update);
+                self.process_panel_events();
+            }
+        }
     }
 
     /// A point in the first work area's lower-right quarter, away from the default fences.

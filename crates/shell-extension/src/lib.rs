@@ -36,9 +36,11 @@ const COMMAND_CLSID: GUID = GUID::from_u128(0xeb39d6c6_6c5e_4e59_a8bb_fd88c429f7
 const FENCE_GUID: GUID = GUID::from_u128(0xeb39d6c6_6c5e_4e59_a8bb_fd88c429f780);
 const TODO_GUID: GUID = GUID::from_u128(0xeb39d6c6_6c5e_4e59_a8bb_fd88c429f781);
 const SETTINGS_GUID: GUID = GUID::from_u128(0xeb39d6c6_6c5e_4e59_a8bb_fd88c429f782);
+const NOTE_GUID: GUID = GUID::from_u128(0xeb39d6c6_6c5e_4e59_a8bb_fd88c429f783);
 const E_OUTOFMEMORY: HRESULT = HRESULT(0x8007000e_u32 as i32);
-const CHILD_ACTIONS: [ShellAction; 3] = [
+const CHILD_ACTIONS: [ShellAction; 4] = [
     ShellAction::NewFence,
+    ShellAction::NewNote,
     ShellAction::NewTodo,
     ShellAction::OpenSettings,
 ];
@@ -84,29 +86,55 @@ impl ExplorerCommand {
 }
 
 // Keep this tiny and allocation-free on Explorer's menu-construction path. Titles mirror
-// the three existing locale keys in locales/*.json; Chinese simplified is the source locale.
+// the application locale keys in locales/*.json; Chinese simplified is the source locale.
 fn localized_title(kind: Kind, language: u16) -> &'static str {
     if matches!(kind, Kind::Root) {
         return "PecoFence";
     }
     let titles = match language {
-        0x0404 | 0x0c04 | 0x1404 => ["新增圍欄", "新增待辦清單", "設定…"],
-        lang if lang & 0x03ff == 0x04 => ["新建栅栏", "新建待办清单", "设置…"],
-        lang if lang & 0x03ff == 0x07 => ["Neuer Bereich", "Neue Aufgabenliste", "Einstellungen…"],
-        lang if lang & 0x03ff == 0x0a => ["Nuevo grupo", "Nueva lista de tareas", "Configuración…"],
-        lang if lang & 0x03ff == 0x0c => {
-            ["Nouveau groupe", "Nouvelle liste de tâches", "Paramètres…"]
+        0x0404 | 0x0c04 | 0x1404 => ["新增圍欄", "新增待辦清單", "設定…", "新增便箋"],
+        lang if lang & 0x03ff == 0x04 => ["新建栅栏", "新建待办清单", "设置…", "新建便笺"],
+        lang if lang & 0x03ff == 0x07 => [
+            "Neuer Bereich",
+            "Neue Aufgabenliste",
+            "Einstellungen…",
+            "Neue Notiz",
+        ],
+        lang if lang & 0x03ff == 0x0a => [
+            "Nuevo grupo",
+            "Nueva lista de tareas",
+            "Configuración…",
+            "Nueva nota",
+        ],
+        lang if lang & 0x03ff == 0x0c => [
+            "Nouveau groupe",
+            "Nouvelle liste de tâches",
+            "Paramètres…",
+            "Nouvelle note",
+        ],
+        lang if lang & 0x03ff == 0x11 => {
+            ["フェンスを作成", "新しいToDoリスト", "設定…", "新しい付箋"]
         }
-        lang if lang & 0x03ff == 0x11 => ["フェンスを作成", "新しいToDoリスト", "設定…"],
-        lang if lang & 0x03ff == 0x12 => ["새 펜스", "새 할 일 목록", "설정…"],
-        lang if lang & 0x03ff == 0x16 => ["Novo grupo", "Nova lista de tarefas", "Configurações…"],
-        lang if lang & 0x03ff == 0x19 => ["Создать область", "Новый список задач", "Настройки…"],
-        _ => ["New fence", "New to-do list", "Settings…"],
+        lang if lang & 0x03ff == 0x12 => ["새 펜스", "새 할 일 목록", "설정…", "새 메모"],
+        lang if lang & 0x03ff == 0x16 => [
+            "Novo grupo",
+            "Nova lista de tarefas",
+            "Configurações…",
+            "Nova nota",
+        ],
+        lang if lang & 0x03ff == 0x19 => [
+            "Создать область",
+            "Новый список задач",
+            "Настройки…",
+            "Новая заметка",
+        ],
+        _ => ["New fence", "New to-do list", "Settings…", "New note"],
     };
     match kind {
         Kind::Action(ShellAction::NewFence) => titles[0],
         Kind::Action(ShellAction::NewTodo) => titles[1],
         Kind::Action(ShellAction::OpenSettings) => titles[2],
+        Kind::Action(ShellAction::NewNote) => titles[3],
         Kind::Root => unreachable!(),
     }
 }
@@ -132,6 +160,7 @@ impl IExplorerCommand_Impl for ExplorerCommand_Impl {
             Kind::Action(ShellAction::NewFence) => FENCE_GUID,
             Kind::Action(ShellAction::NewTodo) => TODO_GUID,
             Kind::Action(ShellAction::OpenSettings) => SETTINGS_GUID,
+            Kind::Action(ShellAction::NewNote) => NOTE_GUID,
         })
     }
 
@@ -454,7 +483,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn com_factory_exposes_three_ordered_commands_and_releases_objects() {
+    fn com_factory_exposes_four_ordered_commands_and_releases_objects() {
         let mut raw = std::ptr::null_mut();
         assert_eq!(
             // SAFETY: all pointers refer to live values and `raw` is writable.
@@ -469,14 +498,18 @@ mod tests {
         assert_eq!(unsafe { root.GetFlags() }.unwrap(), ECF_HASSUBCOMMANDS);
         assert_eq!(unsafe { root.GetCanonicalName() }.unwrap(), COMMAND_CLSID);
         let commands = unsafe { root.EnumSubCommands() }.unwrap();
-        let mut children: [Option<IExplorerCommand>; 3] = std::array::from_fn(|_| None);
+        let mut children: [Option<IExplorerCommand>; 4] = std::array::from_fn(|_| None);
         let mut fetched = 0;
         assert_eq!(
-            unsafe { commands.Next(3, children.as_mut_ptr(), Some(&mut fetched)) },
+            unsafe { commands.Next(4, children.as_mut_ptr(), Some(&mut fetched)) },
             HRESULT(0)
         );
-        assert_eq!(fetched, 3);
-        for (child, expected) in children.iter().zip([FENCE_GUID, TODO_GUID, SETTINGS_GUID]) {
+        assert_eq!(fetched, 4);
+        for (child, expected) in
+            children
+                .iter()
+                .zip([FENCE_GUID, NOTE_GUID, TODO_GUID, SETTINGS_GUID])
+        {
             let child = child.as_ref().unwrap();
             assert_eq!(unsafe { child.GetCanonicalName() }.unwrap(), expected);
             assert_eq!(unsafe { child.GetFlags() }.unwrap(), 0);

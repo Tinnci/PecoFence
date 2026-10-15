@@ -729,6 +729,7 @@ impl App {
             pecofence_plugin_widgets::CLOCK_PROVIDER => ("数字时钟", 340.0, 190.0),
             pecofence_plugin_widgets::CALENDAR_PROVIDER => ("日历", 420.0, 370.0),
             pecofence_plugin_widgets::TODO_PROVIDER => ("待办清单", 420.0, 370.0),
+            pecofence_plugin_widgets::NOTE_PROVIDER => ("便笺", 420.0, 370.0),
             _ => return,
         };
         let rect = self.place_new_fence_dip(width, height, x, y, near);
@@ -743,6 +744,29 @@ impl App {
                 window.show(true);
             }
             self.schedule_save();
+            if matches!(
+                provider,
+                pecofence_plugin_widgets::NOTE_PROVIDER | pecofence_plugin_widgets::TODO_PROVIDER
+            ) && let Some(pecofence_core::FenceSnapshot {
+                content: pecofence_core::FenceContentSpec::Panel { panel },
+                ..
+            }) = self.state.fence(id)
+            {
+                let key = self
+                    .panel_manager
+                    .borrow_mut()
+                    .open_panel(&panel)
+                    .ok()
+                    .map(|handle| handle.key());
+                if let Some(key) = key {
+                    self.queue.push(Command::PanelTextRequested {
+                        key,
+                        action: 1,
+                        initial: String::new(),
+                        multiline: provider == pecofence_plugin_widgets::NOTE_PROVIDER,
+                    });
+                }
+            }
         }
     }
 

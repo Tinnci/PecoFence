@@ -50,7 +50,25 @@ Set-Content -Path $scriptPath -Encoding UTF8 -Value @(
   'todo-undo'
   'sleep 200'
   'todo-undo'
+  'sleep 300'
+  'new-note 800 700'
+  'sleep 300'
+  'dump note-created'
+  'cancel-rename'
+  'sleep 200'
+  'dump note-cancelled'
+  'note-set "First line\nSecond line"'
+  'sleep 200'
+  'note-set "Temporary edit"'
+  'sleep 200'
+  'note-undo'
+  'sleep 200'
+  'note-open'
+  'sleep 300'
+  'dump note-opened'
+  'cancel-rename'
   'sleep 500'
+  'dump note-closed'
   'exit'
 )
 
@@ -60,6 +78,15 @@ try {
   $process = Start-Process -FilePath $stagedBinary -ArgumentList $args1 -PassThru -Wait
   if ($process.ExitCode -ne 0) { throw "First run failed: $($process.ExitCode)" }
 
+  $nativeLog = (Get-ChildItem -LiteralPath $env:LOCALAPPDATA -Recurse -Filter '*.log' | ForEach-Object {
+    Get-Content -LiteralPath $_.FullName -Raw -Encoding UTF8
+  }) -join "`n"
+  foreach ($tag in @('note-created', 'note-opened')) {
+    if ($nativeLog -notmatch ("\[" + $tag + "\].*rename=true")) { throw "Native note editor did not open: $tag" }
+  }
+  foreach ($tag in @('note-cancelled', 'note-closed')) {
+    if ($nativeLog -notmatch ("\[" + $tag + "\].*rename=false")) { throw "Native note editor did not close: $tag" }
+  }
   $configPath = Join-Path $configDir 'workspace.v2.json'
   $saved = Get-Content -Raw -Encoding UTF8 $configPath | ConvertFrom-Json
   $todo = @($saved.layouts.contents | Where-Object { $_.content.panel.provider -eq 'pecofence.todo' })
@@ -67,6 +94,10 @@ try {
   $tasks = @($todo[0].content.panel.config.tasks)
   if ($tasks.Count -ne 2 -or $tasks[0].title -ne 'Buy oat milk' -or !$tasks[0].done -or $tasks[1].title -ne 'Write report' -or $tasks[1].done) {
     throw "TODO contents were not saved: $($tasks | ConvertTo-Json -Compress)"
+  }
+  $notes = @($saved.layouts.contents | Where-Object { $_.content.panel.provider -eq 'pecofence.note' })
+  if ($notes.Count -ne 1 -or $notes[0].content.panel.config.text -cne "First line`nSecond line") {
+    throw 'Multiline note editing/undo/native cancellation was not saved correctly'
   }
   $before = $saved.layouts.containers | ConvertTo-Json -Compress -Depth 20
 
@@ -80,9 +111,13 @@ try {
   if ($restoredTasks.Count -ne 2 -or $restoredTasks[0].title -ne 'Buy oat milk' -or !$restoredTasks[0].done -or $restoredTasks[1].done) {
     throw 'TODO tasks changed after restart'
   }
+  $restoredNotes = @($reloaded.layouts.contents | Where-Object { $_.content.panel.provider -eq 'pecofence.note' })
+  if ($restoredNotes.Count -ne 1 -or $restoredNotes[0].content.panel.config.text -cne "First line`nSecond line") {
+    throw 'Multiline note text changed after restart'
+  }
   $after = $reloaded.layouts.containers | ConvertTo-Json -Compress -Depth 20
   if ($before -ne $after) { throw 'TODO fence position changed after restart' }
-  Write-Output "PASS: TODO add, edit, toggle, clear, undo, config save and geometry restore ($instance)"
+  Write-Output "PASS: TODO operations plus multiline note edit, undo, native editor cancellation and restart restore ($instance)"
   $passed = $true
 } finally {
   $env:PECOFENCE_INSTANCE = $previousInstance

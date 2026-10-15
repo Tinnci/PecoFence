@@ -241,12 +241,17 @@ impl FenceViewState {
                         });
                     }
                 }
-                HostCommand::RequestTextInput { action, initial } => {
+                HostCommand::RequestTextInput {
+                    action,
+                    initial,
+                    multiline,
+                } => {
                     if let Some(panel) = &self.plugin_panel {
                         self.queue.push(Command::PanelTextRequested {
                             key: panel.key(),
                             action,
                             initial,
+                            multiline,
                         });
                     }
                 }

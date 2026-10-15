@@ -17,6 +17,7 @@ Run those examples from the checkout with Python 3.11 or newer. `verify` reads t
 
 - `capture`/`record-build` write provenance; `portable` assembles a package; installation creates a new immutable version directory. Inspect child help before choosing paths and require clean source for release packaging.
 - `--json` emits a versioned success/error envelope; errors are on stderr. Usage errors exit 2 and operational failures exit 1. Fix verification failures before installing, rather than retrying with checks disabled.
+- Native `--shell-command new-note` and `--shell-command new-todo` request creation of a desktop component. Use them only for a requested creation, and verify the resulting component; dispatch is not proof of durable saving. They do not expose note/task querying.
 - Native `--validate-workspace <path>` validates a workspace; `--probe-spm` contacts the daemon. These are diagnostic entrypoints, not general task read/write APIs. Do not invent a TODO command or claim a packaging check tested GUI interactions.
 - For an authorized upgrade, use the recorded current installation, back up configuration after graceful exit, keep the old version for rollback, update owned startup/shortcut entries, then verify running path, hashes and configuration recovery. Preserve user layouts and TODO contents.
 - Workspace data and logs are private. Do not upload them or alter the SPM database merely to inspect desktop packaging.
