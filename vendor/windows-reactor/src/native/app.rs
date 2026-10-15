@@ -7,6 +7,25 @@ windows_core::link!("kernel32.dll" "system" fn LoadResource(module: *mut std::ff
 windows_core::link!("kernel32.dll" "system" fn LockResource(resource: *mut std::ffi::c_void) -> *mut std::ffi::c_void);
 windows_core::link!("kernel32.dll" "system" fn SizeofResource(module: *mut std::ffi::c_void, resource: *mut std::ffi::c_void) -> u32);
 
+/// Presentation and completion for a transient application-owned menu.
+#[derive(Clone, Debug)]
+pub struct AppMenuOptions {
+    pub above_anchor: bool,
+    pub theme: WindowTheme,
+    /// Runs after the flyout is closed and its transient host is hidden.
+    pub on_closed: Option<Callback<()>>,
+}
+
+impl Default for AppMenuOptions {
+    fn default() -> Self {
+        Self {
+            above_anchor: false,
+            theme: WindowTheme::System,
+            on_closed: None,
+        }
+    }
+}
+
 thread_local! {
     static APP_CALLBACKS: RefCell<HashMap<u64, Rc<dyn Fn() -> windows_core::Result<()>>>> =
         RefCell::new(HashMap::new());
@@ -122,6 +141,15 @@ impl AppContext {
     }
 
     pub fn show_menu_at(&self, position: ScreenPoint, menu: Menu) -> windows_core::Result<()> {
+        self.show_menu_at_with_options(position, menu, AppMenuOptions::default())
+    }
+
+    pub fn show_menu_at_with_options(
+        &self,
+        position: ScreenPoint,
+        menu: Menu,
+        options: AppMenuOptions,
+    ) -> windows_core::Result<()> {
         let handle = APP_TRANSIENT_MENU.with(|host| {
             let mut host = host.borrow_mut();
             if host.is_none() {
@@ -129,7 +157,7 @@ impl AppContext {
             }
             Ok::<_, windows_core::Error>(host.as_ref().unwrap().handle())
         })?;
-        handle.show(position, menu)
+        handle.show(position, menu, options)
     }
 
     pub fn open_component_window<C: Component>(&self, input: C::Input) -> windows_core::Result<()> {

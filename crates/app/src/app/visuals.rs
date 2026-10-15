@@ -439,6 +439,7 @@ impl App {
             self.ctx.backdrops.borrow().clone()
         };
         self.theme_mode = mode;
+        tray::set_menu_dark(mode == ThemeMode::Dark);
         self.accent = accent;
         *self.ctx.theme.borrow_mut() = theme;
         *self.ctx.backdrops.borrow_mut() = backdrops.clone();

@@ -747,6 +747,7 @@ pub enum MenuItem {
         key: Key,
         label: Rc<str>,
         enabled: bool,
+        checked: Option<bool>,
     },
     Separator {
         key: Key,
@@ -764,6 +765,7 @@ impl MenuItem {
             key: key.into(),
             label: label.into(),
             enabled: true,
+            checked: None,
         }
     }
 
@@ -772,7 +774,16 @@ impl MenuItem {
             key: key.into(),
             label: label.into(),
             enabled: false,
+            checked: None,
         }
+    }
+
+    /// Use WinUI's native toggle item, including when unchecked.
+    pub fn checked(mut self, value: bool) -> Self {
+        if let Self::Item { checked, .. } = &mut self {
+            *checked = Some(value);
+        }
+        self
     }
 
     pub fn separator(key: impl Into<Key>) -> Self {

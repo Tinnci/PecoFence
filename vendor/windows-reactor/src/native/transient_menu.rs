@@ -21,7 +21,7 @@ struct TransientMenuState {
     host_hwnd: HWND,
     loaded: bool,
     menu: Option<ActiveMenu>,
-    pending: Option<Menu>,
+    pending: Option<(Menu, AppMenuOptions)>,
 }
 
 struct ActiveMenu {
@@ -107,7 +107,12 @@ impl TransientMenuHost {
 }
 
 impl TransientMenuHandle {
-    pub(super) fn show(&self, position: ScreenPoint, menu: Menu) -> windows_core::Result<()> {
+    pub(super) fn show(
+        &self,
+        position: ScreenPoint,
+        menu: Menu,
+        options: AppMenuOptions,
+    ) -> windows_core::Result<()> {
         let mut keys = HashSet::new();
         validate_menu_items(&menu.items, &mut keys)?;
         let state = self.state.upgrade().ok_or_else(|| {
@@ -122,7 +127,7 @@ impl TransientMenuHandle {
                 ));
             }
             position_host_anchor(&state.host_app_window, state.host_hwnd, position)?;
-            state.pending = Some(menu);
+            state.pending = Some((menu, options));
             state.host.clone()
         };
 
@@ -200,6 +205,26 @@ impl Drop for TransientMenuHost {
     }
 }
 
+pub(super) fn new_menu_item(
+    label: &str,
+    checked: Option<bool>,
+) -> windows_core::Result<MenuFlyoutItem> {
+    let item = if let Some(checked) = checked {
+        let toggle = menu_bindings::ToggleMenuFlyoutItem::new()?;
+        toggle.SetIsChecked(checked)?;
+        toggle.cast::<MenuFlyoutItem>()?
+    } else {
+        MenuFlyoutItem::new()?
+    };
+    let (label, accelerator) = label.split_once('\t').unwrap_or((label, ""));
+    item.SetText(label)?;
+    if !accelerator.is_empty() {
+        item.cast::<menu_bindings::MenuFlyoutItem>()?
+            .SetKeyboardAcceleratorTextOverride(accelerator)?;
+    }
+    Ok(item)
+}
+
 fn build_menu_items(
     items: &[MenuItem],
     output: &IVector<MenuFlyoutItemBase>,
@@ -212,9 +237,9 @@ fn build_menu_items(
                 key,
                 label,
                 enabled,
+                checked,
             } => {
-                let item = MenuFlyoutItem::new()?;
-                item.SetText(label)?;
+                let item = new_menu_item(label, *checked)?;
                 item.cast::<IControl>()?.SetIsEnabled(*enabled)?;
                 let callback = callback.clone();
                 let key = key.clone();
@@ -235,12 +260,12 @@ fn build_menu_items(
 }
 
 fn show_pending(state: &Rc<RefCell<TransientMenuState>>) -> windows_core::Result<()> {
-    let (anchor, host_app_window, dispatcher, host_hwnd, menu) = {
+    let (anchor, host_app_window, dispatcher, host_hwnd, menu, options) = {
         let mut state = state.borrow_mut();
         if !state.loaded || state.menu.is_some() {
             return Ok(());
         }
-        let Some(menu) = state.pending.take() else {
+        let Some((menu, options)) = state.pending.take() else {
             return Ok(());
         };
         (
@@ -249,6 +274,7 @@ fn show_pending(state: &Rc<RefCell<TransientMenuState>>) -> windows_core::Result
             state.dispatcher.clone(),
             state.host_hwnd,
             menu,
+            options,
         )
     };
 
@@ -259,7 +285,18 @@ fn show_pending(state: &Rc<RefCell<TransientMenuState>>) -> windows_core::Result
 
         let flyout = MenuFlyout::new()?;
         let flyout_base = flyout.cast::<IFlyoutBase>()?;
-        flyout_base.SetPlacement(FlyoutPlacementMode::BottomEdgeAlignedLeft)?;
+        anchor
+            .cast::<IFrameworkElement>()?
+            .SetRequestedTheme(match options.theme {
+                WindowTheme::System => ElementTheme::Default,
+                WindowTheme::Light => ElementTheme::Light,
+                WindowTheme::Dark => ElementTheme::Dark,
+            })?;
+        flyout_base.SetPlacement(if options.above_anchor {
+            FlyoutPlacementMode::TopEdgeAlignedLeft
+        } else {
+            FlyoutPlacementMode::BottomEdgeAlignedLeft
+        })?;
         flyout_base.SetShouldConstrainToRootBounds(false)?;
         flyout_base.SetXamlRoot(&anchor.cast::<IUIElement>()?.XamlRoot()?)?;
 
@@ -267,11 +304,14 @@ fn show_pending(state: &Rc<RefCell<TransientMenuState>>) -> windows_core::Result
         build_menu_items(&menu.items, &flyout.Items()?, &mut revokers, &menu.on_click)?;
 
         let closed_state = Rc::downgrade(state);
+        let completion = options.on_closed.clone();
+        let closing_host = host_app_window.clone();
         revokers.push(flyout_base.Closed(move |_, _| {
             let Some(state) = closed_state.upgrade() else {
                 return;
             };
             let cleanup_state = Rc::downgrade(&state);
+            let on_closed = completion.clone();
             let cleanup = DispatcherQueueHandler::new(move || {
                 let Some(state) = cleanup_state.upgrade() else {
                     return;
@@ -281,15 +321,37 @@ fn show_pending(state: &Rc<RefCell<TransientMenuState>>) -> windows_core::Result
                 if let Err(error) = state.host_app_window.Hide() {
                     drop(state);
                     report_error(error);
+                    if let Some(callback) = &on_closed {
+                        callback.call(());
+                    }
+                    return;
+                }
+                drop(state);
+                if let Some(callback) = &on_closed {
+                    callback.call(());
                 }
             });
             match dispatcher.TryEnqueueWithPriority(DispatcherQueuePriority::Normal, &cleanup) {
                 Ok(true) => {}
-                Ok(false) => report_error(windows_core::Error::new(
-                    E_FAIL,
-                    "dispatcher rejected application menu cleanup",
-                )),
-                Err(error) => report_error(error),
+                Ok(false) => {
+                    // Shutdown can reject work. Release modal callers without dropping event
+                    // revokers inside their own callback; host teardown owns that cleanup.
+                    _ = closing_host.Hide();
+                    if let Some(callback) = &completion {
+                        callback.call(());
+                    }
+                    report_error(windows_core::Error::new(
+                        E_FAIL,
+                        "dispatcher rejected application menu cleanup",
+                    ));
+                }
+                Err(error) => {
+                    _ = closing_host.Hide();
+                    if let Some(callback) = &completion {
+                        callback.call(());
+                    }
+                    report_error(error);
+                }
             }
         })?);
 
@@ -302,6 +364,9 @@ fn show_pending(state: &Rc<RefCell<TransientMenuState>>) -> windows_core::Result
     if result.is_err() {
         state.borrow_mut().menu = None;
         _ = host_app_window.Hide();
+        if let Some(callback) = &options.on_closed {
+            callback.call(());
+        }
     }
     result
 }

@@ -30,8 +30,8 @@ The Explorer extension never sends file paths or arbitrary command lines. These
 commands act on the PecoFence desktop, independent of the File Explorer folder.
 The current manifest target is a **folder background**; Windows' packaged context
 menu schema documents `Directory\Background` but does not document the desktop
-wallpaper as an equivalent target. The PecoFence desktop and fence right-click
-menus remain the app's native Win32 menus.
+wallpaper as an equivalent target. PecoFence's own tray, fence, item, and header
+menus use WinUI 3 `MenuFlyout`; see [application menus](APPLICATION_MENUS.md).
 
 This follows Microsoft's [packaged Explorer command registration](https://learn.microsoft.com/en-us/windows/apps/desktop/modernize/integrate-packaged-app-with-file-explorer)
 and [bounded window-message delivery](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-sendmessagetimeoutw)

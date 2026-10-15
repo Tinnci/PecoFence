@@ -9,6 +9,7 @@ mod commands;
 mod fence_window;
 mod icons;
 mod layout;
+mod modern_menu;
 mod peek;
 mod persistence;
 mod portal_runtime;

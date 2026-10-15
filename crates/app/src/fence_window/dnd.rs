@@ -139,7 +139,7 @@ pub(super) fn right_drag_menu(
         DropEffect::Link => menu.default_item(CMD_RDRAG_LINK),
         DropEffect::None => &menu,
     };
-    match menu.show_context(owner, pt.x, pt.y) {
+    match menu.show_classic_context(owner, pt.x, pt.y) {
         CMD_RDRAG_MOVE => DropEffect::Move,
         CMD_RDRAG_COPY => DropEffect::Copy,
         CMD_RDRAG_LINK => DropEffect::Link,

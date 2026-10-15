@@ -78,7 +78,9 @@ pub use generated::*;
 use ir::*;
 #[cfg(any(test, feature = "test"))]
 pub use ir::*;
-pub use native::{App, AppCallback, AppContext, AppProxy, ScreenPoint, WindowTitleBarHeight};
+pub use native::{
+    App, AppCallback, AppContext, AppMenuOptions, AppProxy, ScreenPoint, WindowTitleBarHeight,
+};
 #[cfg(feature = "test")]
 pub use native::{
     LiveRenderingSubscription, LiveTickSubscription, bring_live_virtual_index,

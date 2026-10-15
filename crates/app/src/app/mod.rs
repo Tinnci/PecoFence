@@ -190,6 +190,7 @@ pub struct App {
     /// Coalesce projections until a typed command's decision has been delivered.
     settings_dispatching: Rc<Cell<bool>>,
     reactor_context: windows_reactor::AppContext,
+    _menu_renderer: tray::MenuRendererGuard,
     /// Queued invocation checks AppCell again, including inside nested modal pumps.
     exit_ui: windows_reactor::AppCallback,
     theme_mode: ThemeMode,
@@ -290,6 +291,7 @@ impl App {
         }
 
         let theme_mode = pick_theme_mode(state.config.settings.theme, &args);
+        let menu_renderer = crate::modern_menu::install(&reactor_context, theme_mode);
         let accent = systheme::accent_palette();
         let theme = theme_for(
             theme_mode,
@@ -909,6 +911,7 @@ impl App {
             settings_session: Default::default(),
             settings_dispatching: Rc::new(Cell::new(false)),
             reactor_context,
+            _menu_renderer: menu_renderer,
             exit_ui,
             theme_mode,
             accent,

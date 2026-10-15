@@ -791,6 +791,27 @@ pub fn run_message_loop() -> i32 {
     }
 }
 
+/// Runs a native modal pump until a WinUI completion, without consuming WM_QUIT.
+/// Callers must use the application's existing reentrancy barrier, as for TrackPopupMenu.
+pub fn pump_until(done: &std::cell::Cell<bool>) -> bool {
+    while !done.get() {
+        // SAFETY: messages are dispatched on their owning UI thread.
+        unsafe {
+            let mut message = MSG::default();
+            let status = GetMessageW(&mut message, None, 0, 0).0;
+            if status <= 0 {
+                if status == 0 {
+                    PostQuitMessage(message.wParam.0 as i32);
+                }
+                return false;
+            }
+            let _ = TranslateMessage(&message);
+            DispatchMessageW(&message);
+        }
+    }
+    true
+}
+
 /// Dispatches pending messages without blocking. Returns `false` once `WM_QUIT` was seen.
 pub fn pump_messages() -> bool {
     // SAFETY: standard non-blocking pump.

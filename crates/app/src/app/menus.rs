@@ -35,6 +35,7 @@ const CMD_ITEM_TO_INBOX: u32 = 103;
 const CMD_ITEM_PORTAL: u32 = 104;
 const CMD_ITEM_RENAME: u32 = 105;
 const CMD_ITEM_DELETE: u32 = 106;
+const CMD_ITEM_SHELL: u32 = 107;
 const CMD_FENCE_OPEN_FOLDER: u32 = 332;
 const CMD_FENCE_NEW_CLOCK: u32 = 334;
 const CMD_FENCE_NEW_CALENDAR: u32 = 335;
@@ -302,61 +303,70 @@ impl App {
             inbox == Some(fence),
         );
         menu.separator();
-        // Explorer's own menu (send to / copy / delete / pin / extensions …) appended below ours.
         let paths = self.shell_paths_of(&items);
-        let mut shell_menu =
-            ShellContextMenu::for_paths(&paths.iter().map(|p| p.as_path()).collect::<Vec<_>>())
-                .ok();
-        let mut shell_items = 0;
-        if let Some(sm) = shell_menu.as_mut() {
-            let extended = window::key_down(msg::VK_SHIFT);
-            match sm.populate(
-                menu.handle(),
-                menu.len(),
-                CMD_SHELL_FIRST,
-                CMD_SHELL_LAST,
-                extended,
-            ) {
-                Ok(n) => shell_items = n,
-                Err(e) => tracing::warn!(error = %e, "shell context menu unavailable"),
-            }
-        }
-        if shell_items == 0 {
-            shell_menu = None;
-            menu.item(
-                CMD_ITEM_PROPERTIES,
-                pecofence_core::i18n::text("属性\tAlt+Enter"),
-                false,
-                false,
-            );
-        }
+        menu.item(
+            CMD_ITEM_PROPERTIES,
+            pecofence_core::i18n::text("属性\tAlt+Enter"),
+            false,
+            false,
+        );
+        menu.item(
+            CMD_ITEM_SHELL,
+            pecofence_core::i18n::text("Windows 文件操作…"),
+            false,
+            paths.is_empty(),
+        );
         let owner = self
             .window_for(fence)
             .map(|w| w.hwnd())
             .unwrap_or(self.control.hwnd());
         let cmd = menu.show_context(owner, x, y);
-        if let Some(sm) = shell_menu.as_ref()
-            && sm.contains(cmd)
-        {
-            let verb = sm.verb(cmd).unwrap_or_default();
-            tracing::info!(cmd, %verb, count = paths.len(), "shell verb invoked");
-            // Shift at the moment of choosing (Shift+click on 删除 = permanent, as in Explorer).
-            let shift = window::key_down(msg::VK_SHIFT);
-            if let Err(e) = sm.invoke(cmd, owner, POINT { x, y }, shift) {
-                tracing::warn!(error = %e, %verb, "shell verb failed");
+        if cmd == CMD_ITEM_SHELL {
+            let native = PopupMenu::new();
+            let mut sm = match ShellContextMenu::for_paths(
+                &paths.iter().map(|p| p.as_path()).collect::<Vec<_>>(),
+            ) {
+                Ok(menu) => menu,
+                Err(error) => {
+                    tracing::warn!(%error, "Windows file actions unavailable");
+                    return;
+                }
+            };
+            match sm.populate(
+                native.handle(),
+                0,
+                CMD_SHELL_FIRST,
+                CMD_SHELL_LAST,
+                window::key_down(msg::VK_SHIFT),
+            ) {
+                Ok(0) => return,
+                Ok(_) => {}
+                Err(error) => {
+                    tracing::warn!(%error, "Windows file actions could not be populated");
+                    return;
+                }
             }
-            // Deletions / moves are picked up by the desktop watcher. What a namespace item's
-            // verb changes (Empty Recycle Bin, hide This PC) arrives as a shell notification;
-            // a resync is requested here too in case that channel is unavailable.
-            if items
-                .iter()
-                .any(|id| self.state.item(*id).is_some_and(|it| it.is_namespace()))
-            {
-                window::post_message(self.control.hwnd(), WM_APP_FS_CHANGED, 0, 0);
+            let cmd = native.show_classic_context(owner, x, y);
+            if sm.contains(cmd) {
+                let verb = sm.verb(cmd).unwrap_or_default();
+                tracing::info!(cmd, %verb, count = paths.len(), "shell verb invoked");
+                // Shift at the moment of choosing (Shift+click on 删除 = permanent, as in Explorer).
+                let shift = window::key_down(msg::VK_SHIFT);
+                if let Err(e) = sm.invoke(cmd, owner, POINT { x, y }, shift) {
+                    tracing::warn!(error = %e, %verb, "shell verb failed");
+                }
+                // Deletions / moves are picked up by the desktop watcher. What a namespace item's
+                // verb changes (Empty Recycle Bin, hide This PC) arrives as a shell notification;
+                // a resync is requested here too in case that channel is unavailable.
+                if items
+                    .iter()
+                    .any(|id| self.state.item(*id).is_some_and(|it| it.is_namespace()))
+                {
+                    window::post_message(self.control.hwnd(), WM_APP_FS_CHANGED, 0, 0);
+                }
             }
             return;
         }
-        drop(shell_menu);
         match cmd {
             CMD_ITEM_OPEN => {
                 for id in &items {
@@ -461,44 +471,44 @@ impl App {
         if f.content.is_files() {
             let view_menu = PopupMenu::new();
             view_menu
-                .item(
+                .check_item(
                     CMD_FENCE_VIEW_ICONS,
                     pecofence_core::i18n::text("图标"),
                     f.view.layout == ViewLayout::Icons,
                     false,
                 )
-                .item(
+                .check_item(
                     CMD_FENCE_VIEW_LIST,
                     pecofence_core::i18n::text("列表"),
                     f.view.layout == ViewLayout::List,
                     false,
                 )
-                .item(
+                .check_item(
                     CMD_FENCE_VIEW_DETAILS,
                     pecofence_core::i18n::text("详细信息"),
                     f.view.layout == ViewLayout::Details,
                     false,
                 )
                 .separator()
-                .item(
+                .check_item(
                     CMD_FENCE_ICON_32,
                     pecofence_core::i18n::text("小图标"),
                     f.view.icon_size == 32,
                     false,
                 )
-                .item(
+                .check_item(
                     CMD_FENCE_ICON_48,
                     pecofence_core::i18n::text("中图标"),
                     f.view.icon_size == 48,
                     false,
                 )
-                .item(
+                .check_item(
                     CMD_FENCE_ICON_64,
                     pecofence_core::i18n::text("较大图标"),
                     f.view.icon_size == 64,
                     false,
                 )
-                .item(
+                .check_item(
                     CMD_FENCE_ICON_96,
                     pecofence_core::i18n::text("大图标"),
                     f.view.icon_size == 96,
@@ -507,51 +517,51 @@ impl App {
             menu.submenu(pecofence_core::i18n::text("视图"), view_menu);
             let sort_menu = PopupMenu::new();
             sort_menu
-                .item(
+                .check_item(
                     CMD_FENCE_SORT_MANUAL,
                     pecofence_core::i18n::text("手动"),
                     f.view.sort == SortMode::Manual,
                     false,
                 )
-                .item(
+                .check_item(
                     CMD_FENCE_SORT_NAME,
                     pecofence_core::i18n::text("按名称"),
                     f.view.sort == SortMode::Name,
                     false,
                 )
-                .item(
+                .check_item(
                     CMD_FENCE_SORT_TYPE,
                     pecofence_core::i18n::text("按类型"),
                     f.view.sort == SortMode::Type,
                     false,
                 )
-                .item(
+                .check_item(
                     CMD_FENCE_SORT_DATE,
                     pecofence_core::i18n::text("按修改日期"),
                     f.view.sort == SortMode::Date,
                     false,
                 )
-                .item(
+                .check_item(
                     CMD_FENCE_SORT_SIZE,
                     pecofence_core::i18n::text("按大小"),
                     f.view.sort == SortMode::Size,
                     false,
                 )
-                .item(
+                .check_item(
                     CMD_FENCE_SORT_OPENED,
                     pecofence_core::i18n::text("按打开次数"),
                     f.view.sort == SortMode::OpenCount,
                     false,
                 )
                 .separator()
-                .item(
+                .check_item(
                     CMD_FENCE_SORT_REVERSE,
                     pecofence_core::i18n::text("倒序"),
                     f.view.reverse,
                     false,
                 )
                 .separator()
-                .item(
+                .check_item(
                     CMD_FENCE_SORT_GROUP,
                     pecofence_core::i18n::text("按时间分组"),
                     f.view.group_by_date,
@@ -642,7 +652,7 @@ impl App {
             }
             menu.submenu(pecofence_core::i18n::text("标签页"), tab_menu);
         }
-        menu.item(
+        menu.check_item(
             CMD_FENCE_LOCK,
             pecofence_core::i18n::text("锁定位置和大小"),
             locked,
@@ -820,20 +830,20 @@ impl App {
         };
         let mut vis = f.view.columns_visible.unwrap_or([true; 3]);
         let menu = PopupMenu::new();
-        menu.item(CMD_COL_NAME, pecofence_core::i18n::text("名称"), true, true)
-            .item(
+        menu.check_item(CMD_COL_NAME, pecofence_core::i18n::text("名称"), true, true)
+            .check_item(
                 CMD_COL_DATE,
                 pecofence_core::i18n::text("修改日期"),
                 vis[0],
                 false,
             )
-            .item(
+            .check_item(
                 CMD_COL_TYPE,
                 pecofence_core::i18n::text("类型"),
                 vis[1],
                 false,
             )
-            .item(
+            .check_item(
                 CMD_COL_SIZE,
                 pecofence_core::i18n::text("大小"),
                 vis[2],

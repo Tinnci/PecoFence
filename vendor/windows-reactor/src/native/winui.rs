@@ -1618,9 +1618,9 @@ fn build_menu_items(
                 key,
                 label,
                 enabled,
+                checked,
             } => {
-                let item = native::MenuFlyoutItem::new()?;
-                item.SetText(label)?;
+                let item = transient_menu::new_menu_item(label, *checked)?;
                 item.cast::<native::IControl>()?.SetIsEnabled(*enabled)?;
                 let clicked_key = key.clone();
                 let clicked_queue = Rc::clone(event_queue);

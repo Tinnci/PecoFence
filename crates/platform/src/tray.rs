@@ -2,6 +2,8 @@
 
 use crate::bindings::*;
 use crate::wide::to_wide;
+use std::cell::{Cell, RefCell};
+use std::rc::Rc;
 use windows_core::{Error, PCWSTR, Result};
 
 /// Creates a 32-bit icon from premultiplied BGRA pixels.
@@ -169,9 +171,54 @@ pub const TRAY_EVENT_SELECT: u32 = NIN_SELECT as u32;
 pub const TRAY_EVENT_KEYSELECT: u32 = NIN_KEYSELECT as u32;
 pub const TRAY_EVENT_LBUTTONDBLCLK: u32 = WM_LBUTTONDBLCLK as u32;
 
+/// Application-owned menu data, independent of HMENU and the visual backend.
+#[derive(Clone, Debug, PartialEq)]
+pub enum MenuEntry {
+    Item {
+        id: u32,
+        label: String,
+        checked: Option<bool>,
+        disabled: bool,
+    },
+    Separator,
+    Submenu {
+        label: String,
+        entries: Vec<MenuEntry>,
+    },
+}
+
+type MenuRenderer = dyn Fn(&[MenuEntry], i32, i32, bool) -> Result<u32>;
+thread_local! {
+    static MENU_RENDERER: RefCell<Option<Rc<MenuRenderer>>> = const { RefCell::new(None) };
+    static MENU_DARK: Cell<bool> = const { Cell::new(false) };
+}
+
+/// UI-thread registration; restoring the prior renderer also releases its UI context.
+pub struct MenuRendererGuard {
+    previous: Option<Rc<MenuRenderer>>,
+}
+impl Drop for MenuRendererGuard {
+    fn drop(&mut self) {
+        MENU_RENDERER.with(|renderer| *renderer.borrow_mut() = self.previous.take());
+    }
+}
+pub fn install_menu_renderer(
+    renderer: impl Fn(&[MenuEntry], i32, i32, bool) -> Result<u32> + 'static,
+) -> MenuRendererGuard {
+    let previous = MENU_RENDERER.with(|slot| slot.borrow_mut().replace(Rc::new(renderer)));
+    MenuRendererGuard { previous }
+}
+pub fn set_menu_dark(dark: bool) {
+    MENU_DARK.with(|mode| mode.set(dark));
+}
+pub fn menu_dark() -> bool {
+    MENU_DARK.with(Cell::get)
+}
+
 /// A popup menu built from items; destroyed on drop.
 pub struct PopupMenu {
     hmenu: HMENU,
+    entries: RefCell<Vec<MenuEntry>>,
 }
 
 impl Default for PopupMenu {
@@ -185,6 +232,7 @@ impl PopupMenu {
         // SAFETY: plain FFI call.
         Self {
             hmenu: unsafe { CreatePopupMenu() },
+            entries: RefCell::new(Vec::new()),
         }
     }
 
@@ -199,6 +247,12 @@ impl PopupMenu {
     }
 
     pub fn item(&self, id: u32, text: &str, checked: bool, disabled: bool) -> &Self {
+        self.entries.borrow_mut().push(MenuEntry::Item {
+            id,
+            label: text.to_owned(),
+            checked: checked.then_some(true),
+            disabled,
+        });
         let w = to_wide(text);
         let mut flags = MF_STRING as u32;
         if checked {
@@ -210,6 +264,15 @@ impl PopupMenu {
         // SAFETY: string outlives the call.
         unsafe {
             let _ = AppendMenuW(self.hmenu, flags, id as usize, PCWSTR(w.as_ptr()));
+        }
+        self
+    }
+
+    /// A checkable command; unchecked items retain the same native toggle semantics.
+    pub fn check_item(&self, id: u32, text: &str, checked: bool, disabled: bool) -> &Self {
+        self.item(id, text, checked, disabled);
+        if let Some(MenuEntry::Item { checked: state, .. }) = self.entries.borrow_mut().last_mut() {
+            *state = Some(checked);
         }
         self
     }
@@ -226,6 +289,7 @@ impl PopupMenu {
     }
 
     pub fn separator(&self) -> &Self {
+        self.entries.borrow_mut().push(MenuEntry::Separator);
         // SAFETY: plain FFI call.
         unsafe {
             let _ = AppendMenuW(self.hmenu, MF_SEPARATOR as u32, 0, PCWSTR::null());
@@ -237,6 +301,10 @@ impl PopupMenu {
     pub fn submenu(&self, text: &str, sub: PopupMenu) -> &Self {
         let w = to_wide(text);
         let h = sub.hmenu;
+        self.entries.borrow_mut().push(MenuEntry::Submenu {
+            label: text.to_owned(),
+            entries: sub.entries.take(),
+        });
         std::mem::forget(sub);
         // SAFETY: string outlives the call; submenu handle is now owned by the parent.
         unsafe {
@@ -262,6 +330,19 @@ impl PopupMenu {
     }
 
     fn show_aligned(&self, owner: HWND, x: i32, y: i32, bottom_align: bool) -> u32 {
+        let renderer = MENU_RENDERER.with(|slot| slot.borrow().clone());
+        if let Some(renderer) = renderer {
+            return renderer(&self.entries.borrow(), x, y, bottom_align).unwrap_or(0);
+        }
+        self.show_classic_aligned(owner, x, y, bottom_align)
+    }
+
+    /// Explicit Windows Shell/OLE protocol handoff; not an application-style fallback.
+    pub fn show_classic_context(&self, owner: HWND, x: i32, y: i32) -> u32 {
+        self.show_classic_aligned(owner, x, y, false)
+    }
+
+    fn show_classic_aligned(&self, owner: HWND, x: i32, y: i32, bottom_align: bool) -> u32 {
         let mut flags = (TPM_RETURNCMD | TPM_RIGHTBUTTON | TPM_LEFTALIGN) as u32;
         if bottom_align {
             flags |= TPM_BOTTOMALIGN as u32;
