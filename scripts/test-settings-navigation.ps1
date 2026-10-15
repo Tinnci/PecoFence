@@ -12,10 +12,6 @@ $previous = @{}
 foreach ($name in @('PECOFENCE_INSTANCE', 'LOCALAPPDATA', 'APPDATA', 'RUST_LOG')) {
   $previous[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
 }
-$env:PECOFENCE_INSTANCE = Split-Path $stage -Leaf
-$env:LOCALAPPDATA = Join-Path $stage 'local'
-$env:APPDATA = Join-Path $stage 'roaming'
-$env:RUST_LOG = 'debug'
 $process = $null
 $passed = $false
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
@@ -89,6 +85,10 @@ function SelectPage([int]$Index) {
 }
 
 try {
+  $env:PECOFENCE_INSTANCE = Split-Path $stage -Leaf
+  $env:LOCALAPPDATA = Join-Path $stage 'local'
+  $env:APPDATA = Join-Path $stage 'roaming'
+  $env:RUST_LOG = 'debug'
   New-Item -ItemType Directory -Force -Path $stage, $env:LOCALAPPDATA, $env:APPDATA | Out-Null
   $stagedBinary = Join-Path $stage 'pecofence.exe'
   Copy-Item -LiteralPath $source -Destination $stagedBinary
@@ -100,7 +100,10 @@ try {
   }
   $script = Join-Path $stage 'wait.txt'
   [IO.File]::WriteAllText($script, "sleep 600000`nexit`n", [Text.UTF8Encoding]::new($false))
-  $process = Start-Process $stagedBinary -PassThru -ArgumentList @('--portable', '--config-dir', (Join-Path $stage 'config'), '--no-hide-icons', '--open-settings', '--test-script', $script, '--exit-after', '120000')
+  # Windows PowerShell joins ArgumentList into a command line; quote path arguments explicitly.
+  $configArgument = '"' + (Join-Path $stage 'config') + '"'
+  $scriptArgument = '"' + $script + '"'
+  $process = Start-Process $stagedBinary -PassThru -ArgumentList @('--portable', '--config-dir', $configArgument, '--no-hide-icons', '--open-settings', '--test-script', $scriptArgument, '--exit-after', '120000')
   $null = $process.Handle
   $window = [IntPtr]::Zero
   for ($i = 0; $i -lt 100; $i++) {
@@ -155,7 +158,7 @@ try {
   $passed = $true
   Write-Output "PASS: real title-bar toggle bursts, manual close, compact/minimal/expanded resizing and explicit reopen ($Rounds rounds)."
 } finally {
-  if ($process -and -not $process.HasExited) { Stop-Process -Id $process.Id }
+  if ($process -and -not $process.HasExited) { Stop-Process -Id $process.Id -ErrorAction SilentlyContinue }
   foreach ($name in $previous.Keys) { [Environment]::SetEnvironmentVariable($name, $previous[$name], 'Process') }
   if ($passed) { Remove-Item -LiteralPath $stage -Recurse -Force }
   else { Write-Warning "Navigation test artifacts retained: $stage" }
