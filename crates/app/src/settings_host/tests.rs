@@ -532,6 +532,11 @@ fn native_titlebar_hamburger_controls_adaptive_navigation_without_resetting_draf
         EventId::DisplayModeChanged,
         EventPayload::NavigationViewDisplayMode(NavigationViewDisplayMode::Minimal),
     );
+    assert_eq!(
+        property(&host, nav, PropertyId::PaneTitle),
+        PropertyValue::String("".into()),
+        "the title bar already supplies branding; minimal navigation must not overlap the page heading"
+    );
     emit(
         &mut host,
         title,

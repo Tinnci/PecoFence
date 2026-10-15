@@ -903,7 +903,13 @@ impl SettingsComponent {
             .is_settings_visible(false)
             .is_pane_open(self.pane_open)
             .open_pane_length(280.0)
-            .pane_title("PecoFence")
+            .pane_title(
+                if self.navigation_mode == NavigationViewDisplayMode::Expanded {
+                    "PecoFence"
+                } else {
+                    ""
+                },
+            )
             .on_is_pane_open_changed(context.callback(Message::PaneOpenChanged))
             .on_display_mode_changed(context.callback(Message::NavigationModeChanged))
             .on_selected_tag_changed(context.callback(Message::SelectPage))
