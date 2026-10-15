@@ -1,0 +1,26 @@
+name: CLI guidance
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+env:
+  PYTHONUTF8: "1"
+jobs:
+  offline:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
+        with:
+          version: "0.13.0"
+          enable-cache: false
+      - run: uv run --no-project --python 3.11 python scripts/test-cli-guidance.py
+      - run: uv run --no-project --python 3.11 python scripts/test-package-desktop.py
+        if: runner.os == 'Linux'

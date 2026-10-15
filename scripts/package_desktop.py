@@ -1,12 +1,11 @@
 """Verified Windows payloads. Standard library only; never launches packaged binaries."""
+
 from __future__ import annotations
 
 import argparse
 import hashlib
 import json
 import os
-from pathlib import Path
-from pathlib import PurePosixPath
 import re
 import stat
 import struct
@@ -15,6 +14,7 @@ import sys
 import tempfile
 import tomllib
 import zipfile
+from pathlib import Path, PurePosixPath
 
 import winappsdk_runtime as runtime
 
@@ -23,13 +23,25 @@ EXES = ("pecofence.exe", "pecofence-watchdog.exe")
 SHELL_DLL = "pecofence_shell_extension.dll"
 BINARIES = (*EXES, SHELL_DLL)
 BASE_FILES = {
-    *BINARIES, "PORTABLE_UPDATE.md", "update-portable-pair.ps1", "LICENSE", "NOTICE", "README.md", "UPGRADING.md", "THIRD-PARTY-LICENSES.txt",
-    "WINDOWS-APP-SDK-LICENSE.txt", "WINDOWS-APP-SDK-RUNTIME.json",
+    *BINARIES,
+    "PORTABLE_UPDATE.md",
+    "update-portable-pair.ps1",
+    "LICENSE",
+    "NOTICE",
+    "README.md",
+    "UPGRADING.md",
+    "THIRD-PARTY-LICENSES.txt",
+    "WINDOWS-APP-SDK-LICENSE.txt",
+    "WINDOWS-APP-SDK-RUNTIME.json",
 }
 MANIFEST = "package.json"
 PACKAGE_INPUTS = (
-    "LICENSE", "NOTICE", "docs/PORTABLE.md", "docs/UPGRADING.md",
-    "docs/PORTABLE_UPDATE.md", "scripts/update-portable-pair.ps1",
+    "LICENSE",
+    "NOTICE",
+    "docs/PORTABLE.md",
+    "docs/UPGRADING.md",
+    "docs/PORTABLE_UPDATE.md",
+    "scripts/update-portable-pair.ps1",
     "third_party/winappsdk/WINDOWS-APP-SDK-LICENSE.txt",
     "third_party/winappsdk/runtime-manifest.json",
     "third_party/winappsdk/app.manifest",
@@ -56,6 +68,7 @@ def command(*args: str, root: Path = ROOT) -> str:
 
 def pe_image(data: bytes) -> dict:
     """Read PE32+ architecture, subsystem and static/delay imports, without executing it."""
+
     def number(offset, fmt):
         if offset < 0 or offset + struct.calcsize(fmt) > len(data):
             raise ValueError("truncated PE image")
@@ -64,7 +77,7 @@ def pe_image(data: bytes) -> dict:
     if data[:2] != b"MZ":
         raise ValueError("payload is not a Windows PE image")
     pe = number(0x3C, "<I")
-    if data[pe:pe + 4] != b"PE\0\0":
+    if data[pe : pe + 4] != b"PE\0\0":
         raise ValueError("invalid PE signature")
     machine, sections = number(pe + 4, "<H"), number(pe + 6, "<H")
     optional, optional_size = pe + 24, number(pe + 20, "<H")
@@ -118,7 +131,7 @@ def pe_image(data: bytes) -> dict:
             pos = table + index * width
             if pos + width > len(data):
                 raise ValueError("truncated PE import table")
-            if data[pos:pos + width] == bytes(width):
+            if data[pos : pos + width] == bytes(width):
                 break
             if directory == 1:
                 static_imports.add(name(number(pos + 12, "<I")))
@@ -128,9 +141,11 @@ def pe_image(data: bytes) -> dict:
         else:
             raise ValueError("unterminated PE import table")
     return {
-        "architecture": architecture, "subsystem": number(optional + 68, "<H"),
+        "architecture": architecture,
+        "subsystem": number(optional + 68, "<H"),
         "dll": bool(number(pe + 22, "<H") & 0x2000),
-        "staticImports": sorted(static_imports), "delayImports": sorted(delay_imports),
+        "staticImports": sorted(static_imports),
+        "delayImports": sorted(delay_imports),
         "imports": sorted(static_imports | delay_imports),
     }
 
@@ -156,10 +171,14 @@ def _runtime_snapshot(directory: Path) -> tuple[dict, dict[str, bytes], dict]:
 
 
 def build_inputs(root: Path = ROOT) -> dict:
-    version = tomllib.loads((root / "Cargo.toml").read_text(encoding="utf-8"))["workspace"]["package"]["version"]
+    version = tomllib.loads((root / "Cargo.toml").read_text(encoding="utf-8"))["workspace"][
+        "package"
+    ]["version"]
     if not VERSION.fullmatch(version):
         raise ValueError("invalid workspace version")
-    files = command("git", "ls-files", "--cached", "--others", "--exclude-standard", "-z", root=root).split("\0")
+    files = command(
+        "git", "ls-files", "--cached", "--others", "--exclude-standard", "-z", root=root
+    ).split("\0")
     fingerprint = hashlib.sha256()
     for name in sorted(set(filter(None, files))):
         path = root / name
@@ -168,12 +187,16 @@ def build_inputs(root: Path = ROOT) -> dict:
         file_digest = digest(path.read_bytes()) if path.is_file() else "missing"
         fingerprint.update(name.encode("utf-8") + b"\0" + file_digest.encode("ascii") + b"\0")
     return {
-        "version": version, "commit": command("git", "rev-parse", "HEAD", root=root),
+        "version": version,
+        "commit": command("git", "rev-parse", "HEAD", root=root),
         "dirty": bool(command("git", "status", "--porcelain", "--untracked-files=all", root=root)),
-        "sourceSha256": fingerprint.hexdigest(), "cargoLockSha256": digest((root / "Cargo.lock").read_bytes()),
+        "sourceSha256": fingerprint.hexdigest(),
+        "cargoLockSha256": digest((root / "Cargo.lock").read_bytes()),
         "rustc": command("rustc", "--version", root=root),
-        "packageInputs": {name: digest((root / name).read_bytes()) if (root / name).is_file() else "missing"
-                          for name in PACKAGE_INPUTS},
+        "packageInputs": {
+            name: digest((root / name).read_bytes()) if (root / name).is_file() else "missing"
+            for name in PACKAGE_INPUTS
+        },
     }
 
 
@@ -197,7 +220,8 @@ def record_build(release: Path, captured: Path, root: Path = ROOT) -> dict:
             raise ValueError(f"{name} must be an x64 GUI executable or the declared shell DLL")
     _, _, runtime_receipt = _runtime_snapshot(release)
     receipt = {
-        "schema": 2, "inputs": inputs,
+        "schema": 2,
+        "inputs": inputs,
         "binaries": {name: digest(data) for name, data in files.items()},
         "runtime": runtime_receipt,
     }
@@ -205,20 +229,31 @@ def record_build(release: Path, captured: Path, root: Path = ROOT) -> dict:
     return receipt
 
 
-def load_receipt(release: Path, version: str | None = None, clean: bool = False, root: Path = ROOT) -> dict:
+def load_receipt(
+    release: Path, version: str | None = None, clean: bool = False, root: Path = ROOT
+) -> dict:
     path = release / "build-receipt.json"
     if not path.is_file():
         raise ValueError("missing build receipt; run scripts/build-desktop.ps1 before -SkipBuild")
     receipt_bytes = path.read_bytes()
     receipt = json.loads(receipt_bytes.decode("utf-8"))
-    if not isinstance(receipt, dict) or set(receipt) != {"schema", "inputs", "binaries", "runtime"} \
-            or receipt_bytes != json_bytes(receipt) \
-            or receipt.get("schema") != 2 or receipt.get("inputs") != build_inputs(root):
+    if (
+        not isinstance(receipt, dict)
+        or set(receipt) != {"schema", "inputs", "binaries", "runtime"}
+        or receipt_bytes != json_bytes(receipt)
+        or receipt.get("schema") != 2
+        or receipt.get("inputs") != build_inputs(root)
+    ):
         raise ValueError("stale build receipt; source/version/toolchain changed")
     binaries = receipt.get("binaries")
-    if not isinstance(binaries, dict) or set(binaries) != set(BINARIES) \
-            or any(not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value)
-                   for value in binaries.values()):
+    if (
+        not isinstance(binaries, dict)
+        or set(binaries) != set(BINARIES)
+        or any(
+            not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value)
+            for value in binaries.values()
+        )
+    ):
         raise ValueError("invalid executable inventory in build receipt")
     if version and version != receipt["inputs"]["version"]:
         raise ValueError("-Version must equal the compiled workspace version")
@@ -235,7 +270,9 @@ def load_receipt(release: Path, version: str | None = None, clean: bool = False,
 
 def payload(release: Path, stage: Path, receipt: dict, kind: str, root: Path = ROOT) -> dict:
     if stage.exists():
-        raise ValueError("payload staging directory must be new; never overwrite an extracted user's config")
+        raise ValueError(
+            "payload staging directory must be new; never overwrite an extracted user's config"
+        )
     if kind not in ("portable", "msix"):
         raise ValueError(f"unsupported payload kind: {kind}")
     binaries = {name: (release / name).read_bytes() for name in BINARIES}
@@ -266,7 +303,9 @@ def payload(release: Path, stage: Path, receipt: dict, kind: str, root: Path = R
             raise ValueError(f"runtime path collides with a package asset: {name}")
         record = runtime_records[name]
         package_runtime_files[name] = {
-            "bytes": len(data), "sha256": digest(data), "image": record["image"],
+            "bytes": len(data),
+            "sha256": digest(data),
+            "image": record["image"],
         }
     reject_webview_imports(runtime_images)
     imports = {
@@ -275,7 +314,8 @@ def payload(release: Path, stage: Path, receipt: dict, kind: str, root: Path = R
     files = dict(binaries)
     for source, target in [
         ("LICENSE", "LICENSE" if kind == "portable" else "LICENSE.txt"),
-        ("NOTICE", "NOTICE"), ("docs/UPGRADING.md", "UPGRADING.md"),
+        ("NOTICE", "NOTICE"),
+        ("docs/UPGRADING.md", "UPGRADING.md"),
         ("docs/PORTABLE_UPDATE.md", "PORTABLE_UPDATE.md"),
         ("scripts/update-portable-pair.ps1", "update-portable-pair.ps1"),
         ("third_party/winappsdk/WINDOWS-APP-SDK-LICENSE.txt", "WINDOWS-APP-SDK-LICENSE.txt"),
@@ -291,8 +331,15 @@ def payload(release: Path, stage: Path, receipt: dict, kind: str, root: Path = R
         target = stage.joinpath(*PurePosixPath(safe_name).parts)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(data)
-    subprocess.run([sys.executable, str(root / "scripts/write-license-notices.py"),
-                    str(stage / "THIRD-PARTY-LICENSES.txt")], cwd=root, check=True)
+    subprocess.run(
+        [
+            sys.executable,
+            str(root / "scripts/write-license-notices.py"),
+            str(stage / "THIRD-PARTY-LICENSES.txt"),
+        ],
+        cwd=root,
+        check=True,
+    )
     files["THIRD-PARTY-LICENSES.txt"] = (stage / "THIRD-PARTY-LICENSES.txt").read_bytes()
     runtime_info = {
         "package": runtime_manifest["package"],
@@ -304,15 +351,23 @@ def payload(release: Path, stage: Path, receipt: dict, kind: str, root: Path = R
         "files": package_runtime_files,
     }
     manifest = {
-        "schema": 2, "product": "PecoFence", "kind": kind, "architecture": "x64",
-        "version": receipt["inputs"]["version"], "build": receipt["inputs"],
+        "schema": 2,
+        "product": "PecoFence",
+        "kind": kind,
+        "architecture": "x64",
+        "version": receipt["inputs"]["version"],
+        "build": receipt["inputs"],
         "runtimeRequirements": {
-            "webview2Evergreen": False, "windowsAppSdkSelfContained": True,
+            "webview2Evergreen": False,
+            "windowsAppSdkSelfContained": True,
             "vcRuntime": any(dll.startswith(("vcruntime", "msvcp")) for dll in imports),
         },
         "runtime": runtime_info,
         "images": images,
-        "files": {name: {"bytes": len(data), "sha256": digest(data)} for name, data in sorted(files.items())},
+        "files": {
+            name: {"bytes": len(data), "sha256": digest(data)}
+            for name, data in sorted(files.items())
+        },
     }
     (stage / MANIFEST).write_bytes(json_bytes(manifest))
     return manifest
@@ -328,13 +383,21 @@ def write_zip(stage: Path, target: Path) -> None:
             base = Path(current)
             for name in list(directories):
                 path = base / name
-                if path.is_symlink() or getattr(path.lstat(), "st_file_attributes", 0) & runtime.REPARSE_POINT:
+                if (
+                    path.is_symlink()
+                    or getattr(path.lstat(), "st_file_attributes", 0) & runtime.REPARSE_POINT
+                ):
                     raise ValueError(f"portable payload contains a symlink/junction: {path}")
             for name in names:
                 path = base / name
-                if path.is_symlink() or getattr(path.lstat(), "st_file_attributes", 0) & runtime.REPARSE_POINT \
-                        or not path.is_file():
-                    raise ValueError(f"portable payload contains an unsupported filesystem entry: {path}")
+                if (
+                    path.is_symlink()
+                    or getattr(path.lstat(), "st_file_attributes", 0) & runtime.REPARSE_POINT
+                    or not path.is_file()
+                ):
+                    raise ValueError(
+                        f"portable payload contains an unsupported filesystem entry: {path}"
+                    )
                 relative = path.relative_to(stage).as_posix()
                 runtime.safe_relative(relative)
                 paths.append((relative, path))
@@ -357,38 +420,72 @@ def validate_files(files: dict[str, bytes]) -> dict:
     if files[MANIFEST] != json_bytes(manifest):
         raise ValueError("package manifest is not canonical JSON")
     if set(manifest) != {
-        "schema", "product", "kind", "architecture", "version", "build",
-        "runtimeRequirements", "runtime", "images", "files",
+        "schema",
+        "product",
+        "kind",
+        "architecture",
+        "version",
+        "build",
+        "runtimeRequirements",
+        "runtime",
+        "images",
+        "files",
     }:
         raise ValueError("package manifest has unknown or missing fields")
-    if (manifest.get("schema"), manifest.get("product"), manifest.get("kind"), manifest.get("architecture")) != (2, "PecoFence", "portable", "x64"):
+    if (
+        manifest.get("schema"),
+        manifest.get("product"),
+        manifest.get("kind"),
+        manifest.get("architecture"),
+    ) != (2, "PecoFence", "portable", "x64"):
         raise ValueError("unsupported package identity/format")
     version = manifest.get("version")
     if not isinstance(version, str) or len(version) > 128 or not VERSION.fullmatch(version):
         raise ValueError("invalid package version")
     requirements = manifest.get("runtimeRequirements")
-    if not isinstance(requirements, dict) or set(requirements) != {
-        "webview2Evergreen", "windowsAppSdkSelfContained", "vcRuntime",
-    } \
-            or any(type(value) is not bool for value in requirements.values()):
+    if (
+        not isinstance(requirements, dict)
+        or set(requirements)
+        != {
+            "webview2Evergreen",
+            "windowsAppSdkSelfContained",
+            "vcRuntime",
+        }
+        or any(type(value) is not bool for value in requirements.values())
+    ):
         raise ValueError("invalid runtime requirements")
     if requirements["webview2Evergreen"]:
         raise ValueError("WebView runtime is not supported")
     if not requirements["windowsAppSdkSelfContained"]:
         raise ValueError("package does not declare its Windows App SDK runtime as self-contained")
     build = manifest.get("build")
-    if not isinstance(build, dict) or set(build) != {
-        "version", "commit", "dirty", "sourceSha256", "cargoLockSha256", "rustc", "packageInputs",
-    } or build.get("version") != version \
-            or not re.fullmatch(r"[0-9a-f]{40}", str(build.get("commit", ""))) \
-            or type(build.get("dirty")) is not bool \
-            or any(not re.fullmatch(r"[0-9a-f]{64}", str(build.get(key, "")))
-                   for key in ("sourceSha256", "cargoLockSha256")) \
-            or not isinstance(build.get("rustc"), str) \
-            or not isinstance(build.get("packageInputs"), dict) \
-            or set(build["packageInputs"]) != set(PACKAGE_INPUTS) \
-            or any(not re.fullmatch(r"[0-9a-f]{64}", str(value))
-                   for value in build["packageInputs"].values()):
+    if (
+        not isinstance(build, dict)
+        or set(build)
+        != {
+            "version",
+            "commit",
+            "dirty",
+            "sourceSha256",
+            "cargoLockSha256",
+            "rustc",
+            "packageInputs",
+        }
+        or build.get("version") != version
+        or not re.fullmatch(r"[0-9a-f]{40}", str(build.get("commit", "")))
+        or type(build.get("dirty")) is not bool
+        or any(
+            not re.fullmatch(r"[0-9a-f]{64}", str(build.get(key, "")))
+            for key in ("sourceSha256", "cargoLockSha256")
+        )
+        or not isinstance(build.get("rustc"), str)
+        or not isinstance(build.get("packageInputs"), dict)
+        or set(build["packageInputs"]) != set(PACKAGE_INPUTS)
+        or any(
+            not re.fullmatch(r"[0-9a-f]{64}", str(value))
+            for value in build["packageInputs"].values()
+        )
+    ):
         raise ValueError("invalid build provenance")
     if any("webview" in name.casefold() for name in files):
         raise ValueError("WebView payload is not supported")
@@ -398,8 +495,10 @@ def validate_files(files: dict[str, bytes]) -> dict:
     if len(runtime_data) > MAX_MANIFEST_BYTES:
         raise ValueError("Windows App SDK runtime manifest exceeds its 2 MiB safety limit")
     embedded_runtime = json.loads(runtime_data.decode("utf-8"))
-    if runtime_data != runtime.manifest_bytes(embedded_runtime) \
-            or embedded_runtime != runtime.load_runtime_manifest():
+    if (
+        runtime_data != runtime.manifest_bytes(embedded_runtime)
+        or embedded_runtime != runtime.load_runtime_manifest()
+    ):
         raise ValueError("Windows App SDK runtime manifest differs from the pinned inventory")
     runtime_files, runtime_images = runtime.validate_manifest(
         embedded_runtime, check_checked_in_files=False
@@ -408,15 +507,22 @@ def validate_files(files: dict[str, bytes]) -> dict:
     if runtime_names & (BASE_FILES | {MANIFEST}):
         raise ValueError("Windows App SDK runtime path collides with package metadata")
     expected_files = BASE_FILES | runtime_names
-    if set(files) != expected_files | {MANIFEST} \
-            or not isinstance(manifest.get("files"), dict) \
-            or set(manifest["files"]) != expected_files:
-        raise ValueError("unexpected/missing payload; configs, keys and extra executables are not allowed")
+    if (
+        set(files) != expected_files | {MANIFEST}
+        or not isinstance(manifest.get("files"), dict)
+        or set(manifest["files"]) != expected_files
+    ):
+        raise ValueError(
+            "unexpected/missing payload; configs, keys and extra executables are not allowed"
+        )
     for name in expected_files:
         record = manifest["files"].get(name)
-        if not isinstance(record, dict) or set(record) != {"bytes", "sha256"} \
-                or type(record.get("bytes")) is not int \
-                or record != {"bytes": len(files[name]), "sha256": digest(files[name])}:
+        if (
+            not isinstance(record, dict)
+            or set(record) != {"bytes", "sha256"}
+            or type(record.get("bytes")) is not int
+            or record != {"bytes": len(files[name]), "sha256": digest(files[name])}
+        ):
             raise ValueError(f"payload checksum/size mismatch: {name}")
     runtime_info = manifest.get("runtime")
     expected_runtime_info = {
@@ -428,7 +534,8 @@ def validate_files(files: dict[str, bytes]) -> dict:
         "totalBytes": sum(record["bytes"] for record in runtime_files.values()),
         "files": {
             name: {
-                "bytes": record["bytes"], "sha256": record["sha256"],
+                "bytes": record["bytes"],
+                "sha256": record["sha256"],
                 "image": record["image"],
             }
             for name, record in sorted(runtime_files.items())
@@ -468,7 +575,9 @@ def validate_files(files: dict[str, bytes]) -> dict:
 
 
 def read_package(path: Path, expected_sha256: str) -> tuple[dict, dict[str, bytes]]:
-    if not isinstance(expected_sha256, str) or not re.fullmatch(r"[0-9a-fA-F]{64}", expected_sha256):
+    if not isinstance(expected_sha256, str) or not re.fullmatch(
+        r"[0-9a-fA-F]{64}", expected_sha256
+    ):
         raise ValueError("invalid expected archive SHA-256")
     with path.open("rb") as stream:
         data = stream.read(MAX_ARCHIVE_BYTES + 1)
@@ -478,11 +587,17 @@ def read_package(path: Path, expected_sha256: str) -> tuple[dict, dict[str, byte
         raise ValueError("archive SHA-256 mismatch")
     # Use the same bytes that were hashed, not a file reopened after verification.
     import io
+
     files = {}
     with zipfile.ZipFile(io.BytesIO(data)) as archive:
         entries = archive.infolist()
-        if len(entries) > MAX_ARCHIVE_ENTRIES or sum(entry.file_size for entry in entries) > MAX_UNPACKED_BYTES:
-            raise ValueError("portable archive exceeds the 512-entry/160 MiB uncompressed safety limits")
+        if (
+            len(entries) > MAX_ARCHIVE_ENTRIES
+            or sum(entry.file_size for entry in entries) > MAX_UNPACKED_BYTES
+        ):
+            raise ValueError(
+                "portable archive exceeds the 512-entry/160 MiB uncompressed safety limits"
+            )
         folded = set()
         total = 0
         for entry in entries:
@@ -600,7 +715,9 @@ def install_package(path: Path, expected: str, destination: Path, dry_run=False)
         runtime._check_parent_chain(target)
         existing, directories = _existing_install_files(target)
         if existing != files or directories != _expected_directories(files):
-            raise ValueError("existing install was modified; refusing to overwrite files or user config")
+            raise ValueError(
+                "existing install was modified; refusing to overwrite files or user config"
+            )
         return target
     destination.mkdir(parents=True, exist_ok=True)
     runtime._check_parent_chain(destination)
@@ -614,37 +731,146 @@ def install_package(path: Path, expected: str, destination: Path, dry_run=False)
     return target
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
+def sha256_argument(value):
+    if not re.fullmatch(r"[0-9a-fA-F]{64}", value):
+        raise argparse.ArgumentTypeError(
+            "expected the trusted 64-character SHA-256, not a filename"
+        )
+    return value.lower()
+
+
+class PackageParser(argparse.ArgumentParser):
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault("allow_abbrev", False)
+        kwargs.setdefault("formatter_class", argparse.RawDescriptionHelpFormatter)
+        super().__init__(*args, **kwargs)
+
+    def error(self, message):
+        action = f"Run {self.prog} --help for examples and required arguments."
+        if "--json" in sys.argv[1:]:
+            print(
+                json.dumps(
+                    {
+                        "schema_version": "1.0",
+                        "ok": False,
+                        "error": {
+                            "code": "INVALID_ARGUMENT",
+                            "message": message,
+                            "retryable": False,
+                            "suggested_action": action,
+                        },
+                    }
+                ),
+                file=sys.stderr,
+            )
+            raise SystemExit(2)
+        super().error(f"{message}. {action}")
+
+
+def build_parser():
+    parser = PackageParser(
+        description=__doc__,
+        epilog="Examples:\n  package_desktop.py verify --archive release.zip --sha256 <trusted-sha256> --summary --json\n  package_desktop.py install --archive release.zip --sha256 <trusted-sha256> --destination <versions-dir> --dry-run --json\nVerify before installation. Packaged executables are never launched by this tool.",
+    )
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument(
+        "--json",
+        action="store_true",
+        default=argparse.SUPPRESS,
+        help="One success/error JSON envelope; default human output stays compatible",
+    )
+    parser.set_defaults(json=False)
+    parser.add_argument(
+        "--json", action="store_true", help="Structured output (also accepted after subcommand)"
+    )
     commands = parser.add_subparsers(dest="command", required=True)
-    capture = commands.add_parser("capture")
-    capture.add_argument("--out", type=Path, required=True)
-    record = commands.add_parser("record-build")
-    record.add_argument("--release", type=Path, required=True)
-    record.add_argument("--captured", type=Path, required=True)
+    descriptions = {
+        "capture": "Capture Git/toolchain/source inputs and write a build-input JSON file; runs local Git and rustc.",
+        "record-build": "Verify compiled payloads against captured inputs and write a build receipt in the release directory.",
+        "portable": "Verify the build receipt and assemble a ZIP plus checksum; writes --out, never launches the app.",
+        "stage-msix": "Verify the build receipt and write an MSIX payload directory; does not install or sign it.",
+        "verify": "Read and verify a ZIP against a trusted SHA-256; no extraction or process launch.",
+        "install": "Verify then extract into an immutable version directory; never launches binaries or overwrites user config. --dry-run only reads/verifies and returns the planned destination.",
+    }
+    children = {
+        name: commands.add_parser(
+            name,
+            parents=[common],
+            help=text.split(";")[0],
+            description=text,
+            epilog="Use verify --help for checksum verification or install --help for extraction. --json emits machine output.",
+        )
+        for name, text in descriptions.items()
+    }
+    children["capture"].add_argument(
+        "--out", type=Path, required=True, help="Build-input JSON file to write"
+    )
+    children["record-build"].add_argument(
+        "--release", type=Path, required=True, help="Compiled release directory"
+    )
+    children["record-build"].add_argument(
+        "--captured", type=Path, required=True, help="JSON previously created by capture"
+    )
     for name in ("portable", "stage-msix"):
-        sub = commands.add_parser(name)
-        sub.add_argument("--release", type=Path, required=True)
-        sub.add_argument("--version")
-        sub.add_argument("--require-clean", action="store_true")
-        sub.add_argument("--out", type=Path, required=True)
+        sub = children[name]
+        sub.add_argument(
+            "--release",
+            type=Path,
+            required=True,
+            help="Compiled directory with a matching build receipt",
+        )
+        sub.add_argument(
+            "--version", help="Expected semantic version; omitted uses workspace version"
+        )
+        sub.add_argument("--require-clean", action="store_true", help="Reject dirty source inputs")
+        sub.add_argument(
+            "--out", type=Path, required=True, help="Output ZIP directory or MSIX staging directory"
+        )
     for name in ("verify", "install"):
-        sub = commands.add_parser(name)
-        sub.add_argument("--archive", type=Path, required=True)
-        sub.add_argument("--sha256", required=True)
-        if name == "install":
-            sub.add_argument("--destination", type=Path, required=True)
-            sub.add_argument("--dry-run", action="store_true")
-    args = parser.parse_args()
+        sub = children[name]
+        sub.add_argument(
+            "--archive", type=Path, required=True, help="ZIP to verify (never executed)"
+        )
+        sub.add_argument(
+            "--sha256",
+            type=sha256_argument,
+            required=True,
+            help="Trusted archive SHA-256, obtained separately",
+        )
+        if name == "verify":
+            sub.add_argument(
+                "--summary",
+                action="store_true",
+                help="Return version, file count and hash instead of full manifest",
+            )
+        else:
+            sub.add_argument(
+                "--destination",
+                type=Path,
+                required=True,
+                help="Parent of immutable version directories",
+            )
+            sub.add_argument(
+                "--dry-run",
+                action="store_true",
+                help="Read/verify only; do not extract or create destination",
+            )
+    return parser
+
+
+def execute(args):
     if args.command == "capture":
         args.out.parent.mkdir(parents=True, exist_ok=True)
         args.out.write_bytes(json_bytes(build_inputs()))
+        return {"captured": str(args.out)}
     elif args.command == "record-build":
         record_build(args.release, args.captured)
+        return {"release": str(args.release), "recorded": True}
     elif args.command in ("portable", "stage-msix"):
         receipt = load_receipt(args.release, args.version, args.require_clean)
         if args.command == "stage-msix":
             payload(args.release, args.out, receipt, "msix")
+            return {"output": str(args.out), "kind": "msix-stage"}
         else:
             args.out.mkdir(parents=True, exist_ok=True)
             version = receipt["inputs"]["version"]
@@ -656,25 +882,87 @@ def main() -> None:
                 checksum = digest(archive.read_bytes())
                 checked, checked_files = read_package(archive, checksum)
                 if receipt["inputs"] != build_inputs():
-                    raise ValueError("source/toolchain changed during packaging; output was not published")
+                    raise ValueError(
+                        "source/toolchain changed during packaging; output was not published"
+                    )
                 archive_size = archive.stat().st_size
                 uncompressed_size = sum(len(data) for data in checked_files.values())
                 os.replace(archive, target)
-            target.with_suffix(".zip.sha256").write_text(f"{checksum}  {target.name}\n", encoding="ascii")
-            print(
-                f"packed {target} ({archive_size:,} ZIP bytes; {uncompressed_size:,} unpacked bytes)\n"
-                f"Windows App SDK {runtime.PACKAGE_VERSION}: {checked['runtime']['fileCount']} files, "
-                f"{checked['runtime']['totalBytes']:,} bytes\nSHA256 {checksum}"
+            target.with_suffix(".zip.sha256").write_text(
+                f"{checksum}  {target.name}\n", encoding="ascii"
             )
+            if not args.json:
+                print(
+                    f"packed {target} ({archive_size:,} ZIP bytes; {uncompressed_size:,} unpacked bytes)\n"
+                    f"Windows App SDK {runtime.PACKAGE_VERSION}: {checked['runtime']['fileCount']} files, "
+                    f"{checked['runtime']['totalBytes']:,} bytes\nSHA256 {checksum}"
+                )
+            return {"archive": str(target), "sha256": checksum, "bytes": archive_size}
     elif args.command == "verify":
-        manifest, _ = read_package(args.archive, args.sha256)
-        print(json.dumps(manifest, ensure_ascii=False, indent=2))
+        manifest, files = read_package(args.archive, args.sha256)
+        data = (
+            {"version": manifest["version"], "fileCount": len(files), "sha256": args.sha256}
+            if args.summary
+            else manifest
+        )
+        if not args.json:
+            print(json.dumps(data, ensure_ascii=False, indent=2))
+        return data
     else:
-        print(install_package(args.archive, args.sha256, args.destination, args.dry_run))
+        target = install_package(args.archive, args.sha256, args.destination, args.dry_run)
+        if not args.json:
+            print(target)
+        return {"destination": str(target), "dryRun": args.dry_run, "installed": not args.dry_run}
+
+
+def main():
+    parser = build_parser()
+    if not sys.argv[1:]:
+        parser.print_help()
+        return
+    args = parser.parse_args()
+    try:
+        data = execute(args)
+    except (
+        ValueError,
+        OSError,
+        KeyError,
+        zipfile.BadZipFile,
+        subprocess.CalledProcessError,
+    ) as error:
+        action = "Check archive paths and the independently trusted checksum. For build receipts, recapture inputs and rebuild after source/toolchain changes. Inspect existing output before repeating writes."
+        if args.json:
+            print(
+                json.dumps(
+                    {
+                        "schema_version": "1.0",
+                        "ok": False,
+                        "error": {
+                            "code": "PACKAGE_FAILED",
+                            "message": str(error),
+                            "retryable": False,
+                            "suggested_action": action,
+                        },
+                    }
+                ),
+                file=sys.stderr,
+            )
+        else:
+            print(f"package: {error}\nNext: {action}", file=sys.stderr)
+        raise SystemExit(1) from error
+    if args.json:
+        print(
+            json.dumps(
+                {
+                    "schema_version": "1.0",
+                    "ok": True,
+                    "data": data,
+                    "meta": {"packagedExecutablesLaunched": False},
+                },
+                ensure_ascii=False,
+            )
+        )
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except (ValueError, OSError, KeyError, zipfile.BadZipFile, subprocess.CalledProcessError) as error:
-        raise SystemExit(f"package: {error}") from error
+    main()

@@ -175,3 +175,7 @@ The optional video project in `extras/` is independent of the app build.
 
 **Made for a desktop you enjoy coming back to.**  
 [Apache License 2.0](LICENSE) · [Third-party notices](third_party/README.md)
+
+## CLI 与 Agent 引导
+
+命令用途、示例、副作用、错误协议及离线验收见 [CLI 与 Agent 引导](docs/AGENT_CLI_GUIDANCE.md)。
