@@ -387,16 +387,20 @@ impl FenceViewState {
 
     /// Marquee rectangle in content-local DIPs (visual coordinates, already scrolled).
     pub(super) fn marquee_rect_dip(&self) -> Option<Rect> {
+        let (cw, _) = self.content_size_px();
+        let fixed = self.layout(cw as f32 / self.scale()).fixed_top();
+        self.marquee_rect_at(self.scroll_y, fixed)
+    }
+
+    fn marquee_rect_at(&self, scroll: f32, fixed: f32) -> Option<Rect> {
         let m = self.marquee.as_ref()?;
         let scale = self.scale();
         let title_h = self.title_h_px() as f32;
-        let (cw, _) = self.content_size_px();
-        let fixed = self.layout(cw as f32 / scale).fixed_top();
         let to_dip = |(x, y): (i32, i32)| (x as f32 / scale, (y as f32 - title_h) / scale - fixed);
         let (x0, y0) = to_dip(m.start);
         // The start corner is anchored to the content, so scrolling under the band keeps it on
         // the same items.
-        let y0 = y0 + m.start_scroll - self.scroll_y;
+        let y0 = y0 + m.start_scroll - scroll;
         let (x1, y1) = to_dip(m.cur);
         Some(Rect {
             left: x0.min(x1),
@@ -409,23 +413,29 @@ impl FenceViewState {
     /// Selects the items whose cells intersect the marquee: replacing the selection, adding to
     /// it (Shift) or toggling the banded items (Ctrl), like Explorer.
     pub(super) fn update_marquee_selection(&mut self) {
-        let Some(r) = self.marquee_rect_dip() else {
+        let Some(scene) = self.committed_file_scene() else {
             return;
         };
-        let scale = self.scale();
-        let (cw, _) = self.content_size_px();
-        let grid = self.layout(cw as f32 / scale);
-        let scroll = self.scroll_y;
+        let fixed = scene.viewport.y;
+        let Some(r) = self.marquee_rect_at(scene.scroll, fixed) else {
+            return;
+        };
         let (base, mode) = match self.marquee.as_ref() {
             Some(m) => (m.base.clone(), m.mode),
             None => return,
         };
         let mut band = HashSet::new();
-        for i in 0..self.items.len() {
-            let c = grid.cell(i);
-            let (cy0, cy1) = (c.y - scroll, c.y - scroll + c.h);
-            if c.x < r.right && c.x + c.w > r.left && cy0 < r.bottom && cy1 > r.top {
-                band.insert(i);
+        for (index, node) in scene.nodes.iter().enumerate() {
+            let c = node.geometry.bounds;
+            let (cy0, cy1) = (c.y - fixed, c.y - fixed + c.h);
+            if node.alpha > 0.0
+                && c.x < r.right
+                && c.x + c.w > r.left
+                && cy0 < r.bottom
+                && cy1 > r.top
+                && let Some(index) = self.resolve_file_node(index, node.id)
+            {
+                band.insert(index);
             }
         }
         self.selected = match mode {

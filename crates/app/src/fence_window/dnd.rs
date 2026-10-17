@@ -856,23 +856,21 @@ impl FenceViewState {
             .collect();
         idx.sort_unstable();
         // Cells in visual content DIPs, clipped to the viewport like a ListView's client area.
+        let scene = self.committed_file_scene()?;
         let cells: Vec<(usize, CellRect)> = idx
             .iter()
-            .map(|&i| {
-                let c = layout.cell(i);
-                let (x, w) = match layout {
-                    ItemLayout::Grid(_) => (c.x, c.w),
-                    ItemLayout::Rows { .. } => (0.0, width_dip),
-                };
-                (
+            .filter_map(|&i| {
+                let node = scene.node(self.items[i].id)?;
+                let bounds = node.geometry.bounds;
+                (node.alpha > 0.0).then_some((
                     i,
                     CellRect {
-                        x,
-                        y: c.y - self.scroll_y + fixed,
-                        w,
-                        h: c.h,
+                        x: bounds.x,
+                        y: bounds.y,
+                        w: bounds.w,
+                        h: bounds.h,
                     },
-                )
+                ))
             })
             .filter(|(_, r)| r.y + r.h > fixed && r.y < height_dip)
             .collect();

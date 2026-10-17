@@ -49,7 +49,9 @@ pub(super) fn show_with_fade(view: &ViewCell, hwnd: HWND, entrance: bool) {
     if !visible {
         desktop::show_no_activate(hwnd);
         if let Some(v) = view.borrow_mut().as_mut()
-            && v.plugin_panel.as_ref().is_some_and(|panel| panel.dirty)
+            && v.plugin_panel
+                .as_ref()
+                .is_some_and(|panel| panel.invalidation.is_pending())
             && !v.rolled_up
         {
             let _ = v.redraw_content();

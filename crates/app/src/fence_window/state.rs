@@ -156,7 +156,9 @@ pub struct FenceViewState {
     pub(super) backdrop_key: String,
     pub(super) gpu_glass: RefCell<pecofence_render::gpu_glass::GpuGlass>,
     pub(super) chrome_panel: Panel,
+    pub(super) chrome_scene: Option<super::chrome_scene::ChromeScene>,
     pub(super) content_panel: Panel,
+    pub(super) file_scene: Option<super::file_scene::FileScene>,
     pub(super) _target: DesktopWindowTarget,
     /// Root of the window's visual tree: whole-window fades / scales animate this.
     pub(super) root: ContainerVisual,

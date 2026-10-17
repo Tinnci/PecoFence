@@ -715,7 +715,7 @@ impl ThemeHost {
         Self {
             epoch: AtomicU64::new(1),
             current: Mutex::new(Arc::new(theme_snapshot_for(
-                pecofence_render::ThemeMode::Dark,
+                &pecofence_render::Theme::dark(),
                 1,
             ))),
         }
@@ -734,7 +734,7 @@ impl ThemeHost {
     /// tokens actually change, so per-frame syncs stay free. Token comparison
     /// deliberately ignores the revision field: it is bookkeeping, not a token.
     pub(crate) fn sync(&self, theme: &pecofence_render::Theme) {
-        let candidate = theme_snapshot_for(theme.mode, 0);
+        let candidate = theme_snapshot_for(theme, 0);
         let mut guard = self.current.lock().expect("theme mutex");
         if !same_tokens(&guard, &candidate) {
             let revision = self.epoch.fetch_add(1, Ordering::AcqRel) + 1;
@@ -752,44 +752,30 @@ pub(crate) fn theme_host() -> &'static ThemeHost {
     THEME_HOST.get_or_init(ThemeHost::new)
 }
 
-/// Semantic panel palette for a theme mode. The host design system owns these
-/// values; plugins map business state onto the roles, never onto colours. Dark
-/// values mirror the panel's original tuned palette so the re-wiring is a
-/// visual no-op.
-fn theme_snapshot_for(mode: pecofence_render::ThemeMode, revision: u64) -> ThemeSnapshot {
-    use pecofence_render::ThemeMode::{Dark, Light};
-    match mode {
-        Dark => ThemeSnapshot {
-            revision,
-            high_contrast: false,
-            text_primary: [0.949, 0.961, 0.98, 1.0],
-            text_secondary: [0.725, 0.773, 0.839, 1.0],
-            surface_panel: [0.125, 0.149, 0.188, 1.0],
-            surface_subtle: [0.165, 0.2, 0.251, 1.0],
-            stroke: [0.196, 0.267, 0.314, 1.0],
-            accent: [0.545, 0.765, 1.0, 1.0],
-            danger: [0.973, 0.443, 0.443, 1.0],
-            warning: [0.984, 0.573, 0.235, 1.0],
-            success: [0.29, 0.871, 0.533, 1.0],
-            unknown: [0.725, 0.773, 0.839, 1.0],
-            info: [0.545, 0.765, 1.0, 1.0],
-        },
-        Light => ThemeSnapshot {
-            revision,
-            high_contrast: false,
-            text_primary: [0.059, 0.09, 0.133, 1.0],
-            text_secondary: [0.278, 0.333, 0.412, 1.0],
-            surface_panel: [0.957, 0.969, 0.973, 1.0],
-            surface_subtle: [0.882, 0.906, 0.922, 1.0],
-            stroke: [0.78, 0.839, 0.871, 1.0],
-            accent: [0.0, 0.373, 0.722, 1.0],
-            danger: [0.863, 0.148, 0.148, 1.0],
-            warning: [0.918, 0.345, 0.043, 1.0],
-            success: [0.086, 0.639, 0.29, 1.0],
-            unknown: [0.392, 0.455, 0.545, 1.0],
-            info: [0.0, 0.373, 0.722, 1.0],
-        },
+/// Resolve provider roles from the same live material/foreground as file content.
+/// A mode-only palette loses per-fence readability and system accent changes.
+fn theme_snapshot_for(theme: &pecofence_render::Theme, revision: u64) -> ThemeSnapshot {
+    use pecofence_render::ThemeMode;
+    let mut snapshot = ThemeSnapshot::dark();
+    if theme.mode == ThemeMode::Light {
+        snapshot.danger = [0.863, 0.148, 0.148, 1.0];
+        snapshot.warning = [0.918, 0.345, 0.043, 1.0];
+        snapshot.success = [0.086, 0.639, 0.29, 1.0];
     }
+    let rgba = |c: pecofence_render::ColorF| [c.r, c.g, c.b, c.a];
+    snapshot.revision = revision;
+    snapshot.text_primary = rgba(theme.text_primary);
+    snapshot.text_secondary = rgba(theme.text_secondary);
+    snapshot.surface_panel = rgba(theme.solid_fill);
+    snapshot.surface_subtle = rgba(theme.subtle_hover);
+    snapshot.control_hover = rgba(theme.subtle_hover);
+    snapshot.control_pressed = rgba(theme.subtle_pressed);
+    snapshot.focus_stroke = rgba(theme.focus_outer);
+    snapshot.stroke = rgba(theme.stroke);
+    snapshot.accent = rgba(theme.accent);
+    snapshot.info = snapshot.accent;
+    snapshot.unknown = snapshot.text_secondary;
+    snapshot
 }
 
 /// Token equality excluding the revision bookkeeping field.
@@ -799,6 +785,9 @@ fn same_tokens(a: &ThemeSnapshot, b: &ThemeSnapshot) -> bool {
         && a.text_secondary == b.text_secondary
         && a.surface_panel == b.surface_panel
         && a.surface_subtle == b.surface_subtle
+        && a.control_hover == b.control_hover
+        && a.control_pressed == b.control_pressed
+        && a.focus_stroke == b.focus_stroke
         && a.stroke == b.stroke
         && a.accent == b.accent
         && a.danger == b.danger
@@ -1347,6 +1336,47 @@ mod pipe_tests {
 #[cfg(test)]
 mod theme_host_tests {
     use super::*;
+
+    #[test]
+    fn control_state_colors_propagate_without_changing_the_body_palette() {
+        let host = ThemeHost::new();
+        let mut theme = pecofence_render::Theme::dark();
+        host.sync(&theme);
+        let revision = host.epoch();
+        let primary = host.snapshot().text_primary;
+        theme.subtle_pressed = pecofence_render::ColorF::new(0.2, 0.3, 0.4, 0.1);
+        host.sync(&theme);
+        assert!(host.epoch() > revision);
+        assert_eq!(host.snapshot().text_primary, primary);
+        assert_eq!(host.snapshot().control_pressed, [0.2, 0.3, 0.4, 0.1]);
+    }
+
+    #[test]
+    fn accent_and_material_foreground_changes_propagate_without_a_mode_change() {
+        let host = ThemeHost::new();
+        let mut theme = pecofence_render::Theme::dark();
+        host.sync(&theme);
+        let revision = host.epoch();
+        theme = theme.with_accent([240, 80, 40]);
+        // Clear glass may choose dark text even while the user's theme is Dark.
+        theme.text_primary = pecofence_render::Theme::light().text_primary;
+        host.sync(&theme);
+        let actual = host.snapshot();
+        assert!(host.epoch() > revision);
+        assert_eq!(
+            actual.accent,
+            [240.0 / 255.0, 80.0 / 255.0, 40.0 / 255.0, 1.0]
+        );
+        assert_eq!(
+            actual.text_primary,
+            [
+                theme.text_primary.r,
+                theme.text_primary.g,
+                theme.text_primary.b,
+                theme.text_primary.a
+            ]
+        );
+    }
 
     // Tests build their own ThemeHost instead of the process-wide `theme_host()`
     // global: two tests sharing the global race on its epoch under the default

@@ -69,7 +69,9 @@ pub(super) fn on_nchittest(
     };
     let scale = v.scale();
     let border = (RESIZE_BORDER_DIP * scale).round() as i32;
-    let title_h = v.title_h_px();
+    let title_h = v
+        .committed_chrome_scene()
+        .map_or(0, |scene| (scene.height() * scale).round() as i32);
     let rect = window::window_rect(hwnd);
     let left = x - rect.left;
     let top = y - rect.top;

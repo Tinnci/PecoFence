@@ -110,13 +110,43 @@ impl Canvas for HeadlessCanvas {
     }
 }
 
+/// Bounded, per-panel DirectWrite formats shared across full paints and pointer
+/// feedback. TextFormat is device-independent; DPI is not part of the key.
+#[cfg(windows)]
+#[derive(Default)]
+pub struct TextFormatCache {
+    formats: std::collections::HashMap<(FontRole, u32, u16), windows_canvas::TextFormat>,
+}
+
+#[cfg(windows)]
+impl TextFormatCache {
+    fn get(&mut self, text: &TextSpec) -> Result<&windows_canvas::TextFormat> {
+        let key = (text.font, text.size_dip.to_bits(), text.weight);
+        if !self.formats.contains_key(&key) {
+            // Accessibility sliders can produce many distinct sizes over a session.
+            if self.formats.len() >= 128 {
+                self.formats.clear();
+            }
+            let format = windows_canvas::TextFormat::with_weight(
+                text_font_family(text.font),
+                text.size_dip,
+                windows_canvas::FontWeight(i32::from(text.weight)),
+            )
+            .map_err(|error| Error::Backend(error.to_string()))?;
+            self.formats.insert(key, format);
+        }
+        Ok(self.formats.get(&key).expect("format just inserted"))
+    }
+}
+
 #[cfg(windows)]
 pub struct Direct2dCanvas<'a> {
     session: &'a windows_canvas::DrawingSession<'a>,
     clips: Vec<RectDip>,
     clip_guards: Vec<pecofence_platform::d2d::AxisAlignedClip>,
     images: Option<&'a std::collections::HashMap<ImageId, windows_canvas::Bitmap>>,
-    formats: std::collections::HashMap<(FontRole, u32, u16), windows_canvas::TextFormat>,
+    formats: TextFormatCache,
+    shared_formats: Option<&'a mut TextFormatCache>,
 }
 
 #[cfg(windows)]
@@ -127,8 +157,18 @@ impl<'a> Direct2dCanvas<'a> {
             clips: Vec::new(),
             clip_guards: Vec::new(),
             images: None,
-            formats: std::collections::HashMap::new(),
+            formats: TextFormatCache::default(),
+            shared_formats: None,
         }
+    }
+
+    pub fn with_text_cache(
+        session: &'a windows_canvas::DrawingSession<'a>,
+        cache: &'a mut TextFormatCache,
+    ) -> Self {
+        let mut canvas = Self::new(session);
+        canvas.shared_formats = Some(cache);
+        canvas
     }
 
     pub fn with_images(
@@ -140,22 +180,16 @@ impl<'a> Direct2dCanvas<'a> {
             clips: Vec::new(),
             clip_guards: Vec::new(),
             images: Some(images),
-            formats: std::collections::HashMap::new(),
+            formats: TextFormatCache::default(),
+            shared_formats: None,
         }
     }
 
     fn text_format(&mut self, text: &TextSpec) -> Result<&windows_canvas::TextFormat> {
-        let key = (text.font, text.size_dip.to_bits(), text.weight);
-        if let std::collections::hash_map::Entry::Vacant(entry) = self.formats.entry(key) {
-            let format = windows_canvas::TextFormat::with_weight(
-                text_font_family(text.font),
-                text.size_dip,
-                windows_canvas::FontWeight(i32::from(text.weight)),
-            )
-            .map_err(|error| Error::Backend(error.to_string()))?;
-            entry.insert(format);
-        }
-        Ok(self.formats.get(&key).expect("format just inserted"))
+        self.shared_formats
+            .as_deref_mut()
+            .unwrap_or(&mut self.formats)
+            .get(text)
     }
 
     fn brush(&self, rgba: [f32; 4]) -> Result<windows_canvas::Brush> {
@@ -189,9 +223,11 @@ impl<'a> Direct2dCanvas<'a> {
 #[cfg(windows)]
 impl Canvas for Direct2dCanvas<'_> {
     fn draw_rect(&mut self, rect: RectDip, stroke: StrokeStyle) -> Result<()> {
-        let Some(rect) = self.clipped(rect) else {
+        // Clip on the device context, not by changing layout geometry: trimming
+        // a text/image rectangle would reflow text or rescale the bitmap.
+        if self.clipped(rect).is_none() {
             return Ok(());
-        };
+        }
         let brush = self.brush(stroke.rgba)?;
         self.session.draw_rect(
             &windows_canvas::Rect::from_xywh(rect.x, rect.y, rect.w, rect.h),
@@ -202,9 +238,11 @@ impl Canvas for Direct2dCanvas<'_> {
     }
 
     fn fill_rect(&mut self, rect: RectDip, rgba: [f32; 4]) -> Result<()> {
-        let Some(rect) = self.clipped(rect) else {
+        // Clip on the device context, not by changing layout geometry: trimming
+        // a text/image rectangle would reflow text or rescale the bitmap.
+        if self.clipped(rect).is_none() {
             return Ok(());
-        };
+        }
         let brush = self.brush(rgba)?;
         self.session.fill_rect(
             &windows_canvas::Rect::from_xywh(rect.x, rect.y, rect.w, rect.h),
@@ -214,9 +252,11 @@ impl Canvas for Direct2dCanvas<'_> {
     }
 
     fn fill_rounded_rect(&mut self, rect: RectDip, radius: f32, rgba: [f32; 4]) -> Result<()> {
-        let Some(rect) = self.clipped(rect) else {
+        // Clip on the device context, not by changing layout geometry: trimming
+        // a text/image rectangle would reflow text or rescale the bitmap.
+        if self.clipped(rect).is_none() {
             return Ok(());
-        };
+        }
         let brush = self.brush(rgba)?;
         self.session.fill_rounded_rect(
             &windows_canvas::RoundedRect::uniform(
@@ -252,9 +292,11 @@ impl Canvas for Direct2dCanvas<'_> {
     }
 
     fn draw_text(&mut self, rect: RectDip, text: &TextSpec, rgba: [f32; 4]) -> Result<()> {
-        let Some(rect) = self.clipped(rect) else {
+        // Clip on the device context, not by changing layout geometry: trimming
+        // a text/image rectangle would reflow text or rescale the bitmap.
+        if self.clipped(rect).is_none() {
             return Ok(());
-        };
+        }
         let brush = self.brush(rgba)?;
         let session = self.session;
         let format = self.text_format(text)?;
@@ -272,9 +314,9 @@ impl Canvas for Direct2dCanvas<'_> {
             .images
             .and_then(|images| images.get(&image))
             .ok_or_else(|| Error::Invalid(format!("unresolved image resource {}", image.0)))?;
-        let Some(destination) = self.clipped(destination) else {
+        if self.clipped(destination).is_none() {
             return Ok(());
-        };
+        }
         self.session.draw_bitmap(
             bitmap,
             &windows_canvas::Rect::from_xywh(
@@ -327,6 +369,133 @@ impl Canvas for Direct2dCanvas<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(windows)]
+    #[test]
+    fn native_text_format_cache_reuses_styles_and_bounds_accessibility_size_history() {
+        let mut cache = TextFormatCache::default();
+        let mut text = TextSpec {
+            text: "One".into(),
+            size_dip: 14.0,
+            weight: 400,
+            font: FontRole::Text,
+        };
+        cache.get(&text).unwrap();
+        text.text = "不同文本，相同样式".into();
+        cache.get(&text).unwrap();
+        assert_eq!(cache.formats.len(), 1);
+        text.size_dip = 21.0;
+        cache.get(&text).unwrap();
+        assert_eq!(cache.formats.len(), 2);
+        for index in 0..160 {
+            text.size_dip = 8.0 + index as f32 * 0.1;
+            cache.get(&text).unwrap();
+            assert!(cache.formats.len() <= 128);
+        }
+    }
+
+    #[test]
+    fn shared_feedback_distinguishes_hover_press_and_keyboard_focus_without_covering_text() {
+        use pecofence_plugin_api::{
+            HitNode, ThemeSnapshot,
+            design::{ControlInteraction, PixelGrid},
+        };
+        let hits = vec![HitNode {
+            id: 7,
+            action: 1,
+            rect: RectDip {
+                x: 12.0,
+                y: 8.0,
+                w: 80.0,
+                h: 32.0,
+            },
+        }];
+        let mut state = ControlInteraction {
+            hovered: Some(7),
+            ..Default::default()
+        };
+        let mut canvas = HeadlessCanvas::default();
+        state
+            .paint(
+                &mut canvas,
+                &hits,
+                &ThemeSnapshot::dark(),
+                PixelGrid::new(1.5),
+                pecofence_plugin_api::design::CONTROL_RADIUS,
+            )
+            .unwrap();
+        let alpha = match canvas.commands()[0] {
+            DrawCommand::FillRoundedRect(_, _, rgba) => rgba[3],
+            _ => panic!("hover fill"),
+        };
+        state.pressed = Some(7);
+        state.focused = Some(7);
+        let mut pressed = HeadlessCanvas::default();
+        state
+            .paint(
+                &mut pressed,
+                &hits,
+                &ThemeSnapshot::dark(),
+                PixelGrid::new(1.5),
+                pecofence_plugin_api::design::CONTROL_RADIUS,
+            )
+            .unwrap();
+        assert!(
+            matches!(pressed.commands()[0], DrawCommand::FillRoundedRect(_, _, rgba) if rgba[3] != alpha && rgba[3] <= 0.16)
+        );
+        assert!(
+            pressed
+                .commands()
+                .iter()
+                .any(|command| matches!(command, DrawCommand::DrawRect(_, _)))
+        );
+        assert!(
+            !pressed
+                .commands()
+                .iter()
+                .any(|command| matches!(command, DrawCommand::DrawText(_, _, _)))
+        );
+        assert!(pressed.is_balanced());
+    }
+
+    #[test]
+    fn shared_component_keeps_text_inside_its_own_clip_and_preserves_font_role() {
+        use pecofence_plugin_api::design::{BODY, Component};
+        let rect = RectDip {
+            x: 20.0,
+            y: 30.0,
+            w: 120.0,
+            h: 48.0,
+        };
+        let mut canvas = HeadlessCanvas::default();
+        Component {
+            rect,
+            text: "A long filename / 很长的文件名",
+            size: BODY * 2.0,
+            weight: 400,
+            font: FontRole::Text,
+            foreground: [1.0; 4],
+            fill: Some([0.2; 4]),
+            radius: 4.0,
+            text_inset: [6.0, 4.0],
+        }
+        .paint(&mut canvas)
+        .unwrap();
+        assert!(canvas.is_balanced());
+        assert!(matches!(canvas.commands().first(), Some(DrawCommand::PushClip(r)) if *r == rect));
+        let (text_rect, spec) = canvas
+            .commands()
+            .iter()
+            .find_map(|command| match command {
+                DrawCommand::DrawText(r, spec, _) => Some((r, spec)),
+                _ => None,
+            })
+            .unwrap();
+        assert!(text_rect.x >= rect.x && text_rect.x + text_rect.w <= rect.x + rect.w);
+        assert!(text_rect.y >= rect.y && text_rect.y + text_rect.h <= rect.y + rect.h);
+        assert_eq!(spec.size_dip, 28.0);
+        assert_eq!(spec.font, FontRole::Text);
+    }
 
     #[test]
     fn headless_canvas_records_balanced_commands() {

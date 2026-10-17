@@ -798,6 +798,9 @@ impl App {
                 )
             })?;
 
+        let chrome = Rc::new(FenceChrome::new()?);
+        let mut theme = theme;
+        theme.title_height = chrome.title_height();
         let ctx = Rc::new(FenceContext {
             stack: stack.clone(),
             motion,
@@ -809,7 +812,7 @@ impl App {
                     background: None,
                 },
             )?,
-            chrome: Rc::new(FenceChrome::new()?),
+            chrome,
             theme: RefCell::new(theme),
             backdrops: RefCell::new(backdrops),
             anchor: anchor_cell.clone(),
@@ -836,6 +839,7 @@ impl App {
                     state.config.settings.roll_up.hide_inactive_scrollbar,
                 ),
                 wheel_lines: std::cell::Cell::new(sysparams::wheel_scroll_lines()),
+                text_scale: std::cell::Cell::new(sysparams::text_scale_percent() as f32 / 100.0),
             }),
             panel_manager: panel_manager.clone(),
         });

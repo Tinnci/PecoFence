@@ -375,7 +375,7 @@ impl FenceViewState {
                             || {
                                 (pecofence_render::text::measure_width(
                                     &t.title,
-                                    self.chrome.tab_format(t.title_size),
+                                    &self.chrome.tab_format(t.title_size),
                                 ) + pecofence_render::fence_chrome::tab_text_padding(&self.theme))
                                 .clamp(TAB_MIN_W, TAB_MAX_W)
                             },
@@ -429,23 +429,13 @@ impl FenceViewState {
 
     /// Tab header under a client-pixel point.
     pub(super) fn tab_at(&self, x_px: i32, y_px: i32) -> Option<usize> {
-        if y_px < 0 || y_px >= self.title_h_px() {
+        let target = self
+            .committed_chrome_scene()?
+            .hit(x_px as f32 / self.scale(), y_px as f32 / self.scale())?;
+        let super::chrome_scene::ChromeTarget::Tab(id) = target else {
             return None;
-        }
-        let x = x_px as f32 / self.scale();
-        let rects = self.tab_rects();
-        let xs = self.tab_draw_xs(Instant::now());
-        if let Some(drag) = &self.tab_drag
-            && drag.moved
-            && drag.index < rects.len()
-            && x >= xs[drag.index]
-            && x < xs[drag.index] + rects[drag.index].1
-        {
-            return Some(drag.index);
-        }
-        (0..rects.len())
-            .rev()
-            .find(|&i| x >= xs[i] && x < xs[i] + rects[i].1)
+        };
+        self.tabs.iter().position(|tab| tab.id == id)
     }
 
     /// Where each tab pill is painted this frame (DIPs): its slot, or the tween sliding it into

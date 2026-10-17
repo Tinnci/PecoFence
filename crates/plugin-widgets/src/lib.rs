@@ -2,6 +2,8 @@
 //! the host supplies the timer, theme and Direct2D canvas.
 
 use chrono::{Datelike, Local, NaiveDate, Timelike};
+use pecofence_plugin_api::design::{self, ContentScale, LayoutTracker};
+use pecofence_plugin_api::scene::{NodeStyle, Scene, SceneNode};
 use pecofence_plugin_api::*;
 use serde::{Deserialize, Serialize};
 use std::rc::Rc;
@@ -58,6 +60,7 @@ fn create(kind: Kind, ctx: PluginContext, input: CreatePanel) -> Result<Box<dyn 
         theme,
         frame_revision: 0,
         layout_revision: 0,
+        layout_tracker: LayoutTracker::default(),
         stopped: false,
     }))
 }
@@ -111,6 +114,7 @@ struct TimeWidget {
     theme: Option<Arc<ThemeSnapshot>>,
     frame_revision: u64,
     layout_revision: u64,
+    layout_tracker: LayoutTracker,
     stopped: bool,
 }
 
@@ -221,6 +225,7 @@ impl PanelInstance for TimeWidget {
                 Local::now().date_naive(),
             ),
         }
+        let frame = frame.finish(&mut self.layout_tracker)?;
         Ok(Rc::new(frame))
     }
 
@@ -263,25 +268,20 @@ pub(crate) struct Colors {
 
 impl Colors {
     pub(crate) fn from_theme(theme: Option<&ThemeSnapshot>) -> Self {
-        if let Some(theme) = theme {
-            Self {
-                primary: theme.text_primary,
-                secondary: theme.text_secondary,
-                accent: theme.accent,
-                subtle: theme.surface_subtle,
-            }
-        } else {
-            Self {
-                primary: [0.95, 0.96, 0.98, 1.0],
-                secondary: [0.72, 0.77, 0.84, 1.0],
-                accent: [0.55, 0.77, 1.0, 1.0],
-                subtle: [0.17, 0.20, 0.25, 1.0],
-            }
+        let fallback = ThemeSnapshot::dark();
+        let theme = theme.unwrap_or(&fallback);
+        Self {
+            primary: theme.text_primary,
+            secondary: theme.text_secondary,
+            accent: theme.accent,
+            subtle: theme.surface_subtle,
         }
     }
 }
 
-struct Node {
+/// Named component input keeps layout, appearance and action intent explicit.
+/// Only this preparation-time adapter applies content scaling and assigns IDs.
+pub(crate) struct WidgetElement<'a> {
     rect: RectDip,
     text: String,
     size: f32,
@@ -289,15 +289,16 @@ struct Node {
     foreground: [f32; 4],
     fill: Option<[f32; 4]>,
     radius: f32,
-    clip_text: bool,
+    action: Option<u64>,
+    role: &'a str,
 }
 
 pub(crate) struct WidgetFrame {
     identity: FrameIdentity,
     pub(crate) viewport: RectDip,
-    nodes: Vec<Node>,
-    hits: Vec<HitNode>,
-    semantics: Vec<SemanticNode>,
+    clip: RectDip,
+    scale: ContentScale,
+    nodes: Vec<SceneNode>,
 }
 
 impl WidgetFrame {
@@ -315,39 +316,27 @@ impl WidgetFrame {
                 theme_epoch: input.theme_epoch,
                 device_epoch: input.device_epoch,
             },
-            viewport: input.viewport,
+            viewport: ContentScale::new(input.viewport, input.text_scale).logical_viewport(),
+            clip: input.viewport,
+            scale: ContentScale::new(input.viewport, input.text_scale),
             nodes: Vec::new(),
-            hits: Vec::new(),
-            semantics: Vec::new(),
         }
     }
 
-    pub(crate) fn add(
-        &mut self,
-        rect: RectDip,
-        text: impl Into<String>,
-        size: f32,
-        weight: u16,
-        foreground: [f32; 4],
-        fill: Option<[f32; 4]>,
-        radius: f32,
-        action: Option<u64>,
-        role: &str,
-    ) {
-        let text = text.into();
-        let id = self.nodes.len() as u64 + 1;
-        if let Some(action) = action {
-            self.hits.push(HitNode { id, rect, action });
+    fn finish(self, tracker: &mut LayoutTracker) -> Result<Scene> {
+        let scene = Scene::new(self.identity, self.clip, self.nodes)?;
+        let revision = tracker.update(scene.hit_tree(), self.identity.layout_revision)?;
+        Ok(scene.with_layout_revision(revision))
+    }
+
+    fn set_last_accessible_name(&mut self, name: String) {
+        if let Some(node) = self.nodes.last_mut() {
+            node.name = name;
         }
-        self.semantics.push(SemanticNode {
-            id,
-            parent: None,
-            role: role.into(),
-            name: text.clone(),
-            rect,
-            action,
-        });
-        self.nodes.push(Node {
+    }
+
+    pub(crate) fn add(&mut self, element: WidgetElement<'_>) {
+        let WidgetElement {
             rect,
             text,
             size,
@@ -355,52 +344,38 @@ impl WidgetFrame {
             foreground,
             fill,
             radius,
-            clip_text: false,
+            action,
+            role,
+        } = element;
+        let font = if size < design::BODY {
+            FontRole::Small
+        } else if size >= 28.0 {
+            FontRole::Display
+        } else {
+            FontRole::Text
+        };
+        let rect = self.scale.rect(rect);
+        let size = self.scale.value(size);
+        let radius = self.scale.value(radius);
+        let id = self.nodes.len() as u64 + 1;
+        self.nodes.push(SceneNode {
+            id,
+            parent: None,
+            rect,
+            role: role.into(),
+            name: text.clone(),
+            text,
+            action,
+            style: NodeStyle {
+                size,
+                font,
+                weight,
+                foreground,
+                fill,
+                radius,
+                text_inset: [0.0, 0.0],
+            },
         });
-    }
-}
-
-impl PreparedFrame for WidgetFrame {
-    fn identity(&self) -> FrameIdentity {
-        self.identity
-    }
-    fn hit_tree(&self) -> &[HitNode] {
-        &self.hits
-    }
-    fn semantics(&self) -> &[SemanticNode] {
-        &self.semantics
-    }
-    fn paint(&self, canvas: &mut dyn Canvas) -> Result<()> {
-        canvas.push_clip(self.viewport)?;
-        let result = (|| {
-            for node in &self.nodes {
-                if let Some(fill) = node.fill {
-                    canvas.fill_rounded_rect(node.rect, node.radius, fill)?;
-                }
-                if !node.text.is_empty() {
-                    if node.clip_text {
-                        canvas.push_clip(node.rect)?;
-                    }
-                    let result = canvas.draw_text(
-                        node.rect,
-                        &TextSpec {
-                            text: node.text.clone(),
-                            size_dip: node.size,
-                            weight: node.weight,
-                            font: FontRole::Text,
-                        },
-                        node.foreground,
-                    );
-                    if node.clip_text {
-                        result.and(canvas.pop_clip())?;
-                    } else {
-                        result?;
-                    }
-                }
-            }
-            Ok(())
-        })();
-        result.and(canvas.pop_clip())
     }
 }
 
@@ -414,55 +389,55 @@ fn build_panel_header(
     colors: Colors,
 ) {
     let v = frame.viewport;
-    let width = (v.w - 28.0).max(0.0);
-    frame.add(
-        RectDip {
-            x: v.x + 14.0,
+    let width = (v.w - design::CONTENT_INSET * 2.0).max(0.0);
+    frame.add(WidgetElement {
+        rect: RectDip {
+            x: v.x + design::CONTENT_INSET,
             y: v.y + 12.0,
             w: (width - 74.0).max(0.0),
             h: 34.0,
         },
-        title,
-        21.0,
-        600,
-        colors.primary,
-        None,
-        0.0,
-        None,
-        "heading",
-    );
-    frame.add(
-        RectDip {
+        text: (title).into(),
+        size: design::TITLE,
+        weight: 600,
+        foreground: colors.primary,
+        fill: None,
+        radius: 0.0,
+        action: None,
+        role: "heading",
+    });
+    frame.add(WidgetElement {
+        rect: RectDip {
             x: v.x + v.w - 75.0,
             y: v.y + 10.0,
             w: 60.0,
             h: 34.0,
         },
-        action_label,
-        14.0,
-        600,
-        colors.accent,
-        Some(colors.subtle),
-        6.0,
+        text: (action_label).into(),
+        size: design::BODY,
+        weight: 600,
+        foreground: colors.accent,
+        fill: Some(colors.subtle),
+        radius: design::CONTROL_RADIUS,
         action,
-        "button",
-    );
-    frame.add(
-        RectDip {
-            x: v.x + 14.0,
+        role: "button",
+    });
+    frame.add(WidgetElement {
+        rect: RectDip {
+            x: v.x + design::CONTENT_INSET,
             y: v.y + 44.0,
             w: width,
             h: 20.0,
         },
-        hint,
-        11.0,
-        400,
-        colors.secondary,
-        None,
-        0.0,
-        None,
-        "text",
-    );
+        text: (hint).into(),
+        size: design::CAPTION,
+        weight: 400,
+        foreground: colors.secondary,
+        fill: None,
+        radius: 0.0,
+        action: None,
+        role: "text",
+    });
 }
 
 fn build_clock(frame: &mut WidgetFrame, config: WidgetConfig, colors: Colors, chinese: bool) {
@@ -489,40 +464,80 @@ fn build_clock(frame: &mut WidgetFrame, config: WidgetConfig, colors: Colors, ch
     } else {
         now.format("%Y-%m-%d  %a").to_string()
     };
+    // Capsule height is a real layout, not a clipped version of the large clock.
+    // Text scaling reduces this logical viewport before we choose the layout.
+    if v.h < 120.0 {
+        let show_date = v.w >= 400.0;
+        frame.add(WidgetElement {
+            rect: RectDip {
+                x: v.x + design::CONTENT_INSET,
+                y: v.y,
+                w: if show_date { width * 0.5 } else { width },
+                h: v.h,
+            },
+            text: time,
+            size: if v.h >= 44.0 { 28.0 } else { design::BODY },
+            weight: 600,
+            foreground: colors.primary,
+            fill: None,
+            radius: 0.0,
+            action: None,
+            role: "text",
+        });
+        if show_date {
+            frame.add(WidgetElement {
+                rect: RectDip {
+                    x: v.x + v.w * 0.5,
+                    y: v.y,
+                    w: (v.w * 0.5 - design::CONTENT_INSET).max(0.0),
+                    h: v.h,
+                },
+                text: date,
+                size: design::BODY,
+                weight: 400,
+                foreground: colors.secondary,
+                fill: None,
+                radius: 0.0,
+                action: None,
+                role: "text",
+            });
+        }
+        return;
+    }
     let time_size = if v.w < 260.0 { 37.0 } else { 52.0 };
     let top = v.y + ((v.h - 115.0) / 2.0).max(12.0);
-    frame.add(
-        RectDip {
+    frame.add(WidgetElement {
+        rect: RectDip {
             x: v.x + inset,
             y: top,
             w: width,
             h: 72.0,
         },
-        time,
-        time_size,
-        600,
-        colors.primary,
-        None,
-        0.0,
-        None,
-        "text",
-    );
-    frame.add(
-        RectDip {
+        text: time,
+        size: time_size,
+        weight: 600,
+        foreground: colors.primary,
+        fill: None,
+        radius: 0.0,
+        action: None,
+        role: "text",
+    });
+    frame.add(WidgetElement {
+        rect: RectDip {
             x: v.x + inset + 2.0,
             y: top + 76.0,
             w: width,
             h: 30.0,
         },
-        date,
-        17.0,
-        400,
-        colors.secondary,
-        None,
-        0.0,
-        None,
-        "text",
-    );
+        text: date,
+        size: 17.0,
+        weight: 400,
+        foreground: colors.secondary,
+        fill: None,
+        radius: 0.0,
+        action: None,
+        role: "text",
+    });
 }
 
 fn build_calendar(
@@ -553,47 +568,47 @@ fn build_calendar(
     let cell_w = width / 7.0;
     let row_h = ((v.h - 112.0).max(0.0) / 6.0).min(46.0);
     let header_y = v.y + 12.0;
-    frame.add(
-        RectDip {
+    frame.add(WidgetElement {
+        rect: RectDip {
             x: v.x + pad,
             y: header_y,
             w: (width - 130.0).max(0.0),
             h: 36.0,
         },
-        if chinese {
+        text: if chinese {
             format!("{year}年 {month}月")
         } else {
             format!("{year}-{month:02}")
         },
-        22.0,
-        600,
-        colors.primary,
-        None,
-        0.0,
-        None,
-        "heading",
-    );
+        size: design::TITLE,
+        weight: 600,
+        foreground: colors.primary,
+        fill: None,
+        radius: 0.0,
+        action: None,
+        role: "heading",
+    });
     for (action, x, label) in [
         (PREVIOUS, v.x + v.w - 120.0, "‹"),
         (TODAY, v.x + v.w - 85.0, if chinese { "今" } else { "T" }),
         (NEXT, v.x + v.w - 45.0, "›"),
     ] {
-        frame.add(
-            RectDip {
+        frame.add(WidgetElement {
+            rect: RectDip {
                 x,
                 y: header_y,
                 w: 32.0,
                 h: 31.0,
             },
-            label,
-            21.0,
-            600,
-            colors.primary,
-            Some(colors.subtle),
-            6.0,
-            Some(action),
-            "button",
-        );
+            text: (label).into(),
+            size: design::TITLE,
+            weight: 600,
+            foreground: colors.primary,
+            fill: Some(colors.subtle),
+            radius: design::CONTROL_RADIUS,
+            action: Some(action),
+            role: "button",
+        });
     }
     let labels = if chinese && config.week_starts_on_sunday {
         ["日", "一", "二", "三", "四", "五", "六"]
@@ -606,22 +621,22 @@ fn build_calendar(
     };
     let grid_y = header_y + 54.0;
     for (col, label) in labels.iter().enumerate() {
-        frame.add(
-            RectDip {
+        frame.add(WidgetElement {
+            rect: RectDip {
                 x: v.x + pad + col as f32 * cell_w + 5.0,
                 y: grid_y,
                 w: (cell_w - 5.0).max(0.0),
                 h: 25.0,
             },
-            *label,
-            14.0,
-            600,
-            colors.secondary,
-            None,
-            0.0,
-            None,
-            "columnheader",
-        );
+            text: (*label).into(),
+            size: design::BODY,
+            weight: 600,
+            foreground: colors.secondary,
+            fill: None,
+            radius: 0.0,
+            action: None,
+            role: "columnheader",
+        });
     }
     let lead = if config.week_starts_on_sunday {
         first.weekday().num_days_from_sunday() as usize
@@ -640,21 +655,21 @@ fn build_calendar(
         };
         let is_today = offset == 0 && day == today.day();
         let selected = selected_day == Some(day);
-        frame.add(
+        frame.add(WidgetElement {
             rect,
-            day.to_string(),
-            16.0,
-            if is_today || selected { 700 } else { 400 },
-            if is_today {
+            text: day.to_string(),
+            size: design::SUBTITLE,
+            weight: if is_today || selected { 700 } else { 400 },
+            foreground: if is_today {
                 colors.accent
             } else {
                 colors.primary
             },
-            (is_today || selected).then_some(colors.subtle),
-            6.0,
-            Some(DAY_BASE + day as u64),
-            "button",
-        );
+            fill: (is_today || selected).then_some(colors.subtle),
+            radius: design::CONTROL_RADIUS,
+            action: Some(DAY_BASE + day as u64),
+            role: "button",
+        });
     }
 }
 
@@ -667,6 +682,115 @@ fn month_for(today: NaiveDate, offset: i32) -> (i32, u32) {
 mod tests {
     use super::*;
     use pecofence_render::HeadlessCanvas;
+
+    #[test]
+    fn capsule_clock_uses_the_available_height_instead_of_clipping_a_large_layout() {
+        for factor in [1.0, 1.5, 2.0, 2.25] {
+            let input = FrameInput {
+                viewport: RectDip {
+                    x: 0.0,
+                    y: 0.0,
+                    w: 360.0,
+                    h: 48.0,
+                },
+                locale: "en",
+                presentation: Presentation::Capsule,
+                grouping: Grouping::Single,
+                exposure: Exposure::Desktop,
+                active: true,
+                text_scale: factor,
+                theme_epoch: 1,
+                device_epoch: 1,
+            };
+            let mut frame = WidgetFrame::new(
+                MountKey {
+                    instance: InstanceKey {
+                        id: 1,
+                        activation: 1,
+                    },
+                    generation: 1,
+                },
+                1,
+                0,
+                input,
+            );
+            build_clock(
+                &mut frame,
+                WidgetConfig::default(),
+                Colors::from_theme(None),
+                false,
+            );
+            assert_eq!(frame.nodes.len(), 1);
+            assert!(frame.nodes[0].rect.y >= 0.0);
+            assert!(frame.nodes[0].rect.y + frame.nodes[0].rect.h <= 48.0);
+            assert!(frame.nodes[0].style.size <= 32.0);
+        }
+    }
+
+    #[test]
+    fn widget_text_scaling_reflows_and_keeps_paint_hit_and_semantic_rects_together() {
+        let mut tracker = LayoutTracker::default();
+        let mut previous_revision = 0;
+        for factor in [1.0, 1.25, 1.5, 2.0, 2.25] {
+            let input = FrameInput {
+                viewport: RectDip {
+                    x: 9.0,
+                    y: 13.0,
+                    w: 600.0,
+                    h: 500.0,
+                },
+                locale: "zh-CN",
+                presentation: Presentation::Compact,
+                grouping: Grouping::Single,
+                exposure: Exposure::Desktop,
+                active: true,
+                text_scale: factor,
+                theme_epoch: 1,
+                device_epoch: 1,
+            };
+            let mut frame = WidgetFrame::new(
+                MountKey {
+                    instance: InstanceKey {
+                        id: 1,
+                        activation: 1,
+                    },
+                    generation: 1,
+                },
+                1,
+                0,
+                input,
+            );
+            build_panel_header(
+                &mut frame,
+                "便笺",
+                "编辑",
+                Some(1),
+                "正文",
+                Colors::from_theme(None),
+            );
+            let frame = frame.finish(&mut tracker).unwrap();
+            let hit = &frame.hit_tree()[0];
+            let semantic = frame
+                .semantics()
+                .iter()
+                .find(|node| node.action == Some(hit.action))
+                .unwrap();
+            let node = frame
+                .nodes()
+                .iter()
+                .find(|node| node.rect == hit.rect)
+                .unwrap();
+            assert_eq!(hit.rect, semantic.rect);
+            assert_eq!(hit.rect, node.rect);
+            assert!(hit.rect.x + hit.rect.w <= input.viewport.x + input.viewport.w);
+            assert_eq!(node.style.size, design::BODY * factor);
+            assert!(frame.identity().layout_revision > previous_revision);
+            previous_revision = frame.identity().layout_revision;
+            let mut canvas = pecofence_render::HeadlessCanvas::default();
+            frame.paint(&mut canvas).unwrap();
+            assert!(canvas.is_balanced());
+        }
+    }
 
     #[test]
     fn month_offsets_cross_year_boundaries() {
@@ -702,9 +826,22 @@ mod tests {
                 w: 420.0,
                 h: 330.0,
             },
+            clip: RectDip {
+                x: 0.0,
+                y: 0.0,
+                w: 420.0,
+                h: 330.0,
+            },
+            scale: ContentScale::new(
+                RectDip {
+                    x: 0.0,
+                    y: 0.0,
+                    w: 420.0,
+                    h: 330.0,
+                },
+                1.0,
+            ),
             nodes: Vec::new(),
-            hits: Vec::new(),
-            semantics: Vec::new(),
         };
         build_calendar(
             &mut frame,
@@ -715,13 +852,24 @@ mod tests {
             true,
             NaiveDate::from_ymd_opt(2024, 2, 15).unwrap(),
         );
-        assert_eq!(frame.hits.len(), 32); // month controls + 29 dates
-        assert!(frame.hits.iter().any(|hit| hit.action == DAY_BASE + 29));
-        assert!(!frame.hits.iter().any(|hit| hit.action == DAY_BASE + 30));
-        assert_eq!(
-            frame.hits.len(),
+        let frame = frame.finish(&mut LayoutTracker::default()).unwrap();
+        assert_eq!(frame.hit_tree().len(), 32); // month controls + 29 dates
+        assert!(
             frame
-                .semantics
+                .hit_tree()
+                .iter()
+                .any(|hit| hit.action == DAY_BASE + 29)
+        );
+        assert!(
+            !frame
+                .hit_tree()
+                .iter()
+                .any(|hit| hit.action == DAY_BASE + 30)
+        );
+        assert_eq!(
+            frame.hit_tree().len(),
+            frame
+                .semantics()
                 .iter()
                 .filter(|node| node.action.is_some())
                 .count()

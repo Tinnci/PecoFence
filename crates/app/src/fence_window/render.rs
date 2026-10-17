@@ -399,27 +399,50 @@ impl FenceViewState {
                 alpha: 1.0 - self.chrome_fades.value(&ChromeKey::TabNew(t.id), now),
             })
             .collect();
-        let ok = self.chrome_panel.draw(self.dpi, |session, wd, hd| {
-            chrome.draw(
-                session,
-                &mut bitmaps.borrow_mut(),
-                &theme,
-                scale,
-                wd,
-                hd,
-                backdrop,
-                &title,
-                count.as_deref(),
-                rolled,
-                roll_t,
-                opacity,
-                &tabs,
-                pill,
+        let chrome_scene =
+            super::chrome_scene::ChromeScene::new(super::chrome_scene::ChromeInput {
+                active: self.active,
+                dpi: self.dpi,
+                device: self.stack.device_generation(),
+                surface: self.chrome_panel.surface_epoch(),
+                size: self.chrome_panel.size_px(),
+                title_height: theme.title_height,
+                title: &title,
+                tabs: &tabs,
                 deco,
-                state,
-                style,
-            )
-        })?;
+                rolled,
+            })
+            .with_clipped_captions(
+                tabs.iter()
+                    .filter(|tab| !chrome.tab_title_fits(tab.title, tab.w, tab.title_size, &theme))
+                    .map(|tab| ContentId::from_u128(tab.key)),
+            );
+        let ok = self
+            .chrome_panel
+            .draw_candidate(self.dpi, |session, wd, hd| {
+                chrome.draw(
+                    session,
+                    &mut bitmaps.borrow_mut(),
+                    &theme,
+                    scale,
+                    wd,
+                    hd,
+                    backdrop,
+                    &title,
+                    count.as_deref(),
+                    rolled,
+                    roll_t,
+                    opacity,
+                    &tabs,
+                    pill,
+                    deco,
+                    state,
+                    style,
+                )
+            })?;
+        if ok {
+            self.chrome_scene = Some(chrome_scene);
+        }
         self.note_draw_result(ok);
         let ntabs = self.tabs.len();
         self.chrome_fades.prune(now, |k| match k {
@@ -587,7 +610,7 @@ impl FenceViewState {
                     ),
                     _ => pecofence_render::text::fit_width(
                         &item.name,
-                        self.chrome.row_format(),
+                        &self.chrome.row_format(),
                         label_w,
                     ),
                 });
@@ -683,7 +706,20 @@ impl FenceViewState {
     }
 
     pub(super) fn redraw_content(&mut self) -> Result<()> {
-        if let Some(panel) = &mut self.plugin_panel {
+        if self
+            .plugin_panel
+            .as_ref()
+            .is_some_and(|panel| panel.invalidation.needs_layout())
+        {
+            let (width, height) = window::window_rect_size(self.hwnd);
+            self.layout_panels(width, height)?;
+            if let Some(panel) = &mut self.plugin_panel {
+                panel.invalidation.layout_resolved();
+            }
+        }
+        if self.plugin_panel.is_some() {
+            let foreground = self.material_foreground();
+            let panel = self.plugin_panel.as_mut().expect("plugin panel is present");
             let exposure = panel.exposure();
             panel.set_container_state(
                 if self.tabs.len() > 1 {
@@ -694,7 +730,13 @@ impl FenceViewState {
                 exposure,
                 exposure != pecofence_plugin_api::Exposure::Hidden,
             );
-            let ok = panel.draw(&self.content_panel, self.dpi, &self.theme)?;
+            let ok = panel.draw(
+                &self.content_panel,
+                self.dpi,
+                self.behavior.text_scale.get(),
+                (u64::from(self.stack.device_generation()) << 32) | u64::from(self.dpi),
+                &foreground,
+            )?;
             self.note_draw_result(ok);
             return Ok(());
         }
@@ -715,6 +757,7 @@ impl FenceViewState {
 
         let now = Instant::now();
         self.prune_content_motion(now);
+        let mut file_scene = self.prepare_file_scene(&layout, now);
         self.sync_scrollbar_alpha();
         let alphas = self.item_alphas(now);
         let scroll = self.scroll_y;
@@ -747,6 +790,12 @@ impl FenceViewState {
                 .filter(|c| c.id == id)
                 .map(|c| (c.text.as_str(), c.lines))
         });
+        if let Some((index, (_, lines))) = shortened.zip(full) {
+            file_scene.promote(
+                index,
+                (lines as f32 - self.label_lines as f32).max(0.0) * grid.metrics.line_h,
+            );
+        }
         let keys: Vec<String> = {
             let icons = self.icons.borrow();
             let px = (self.icon_size as f32 * scale).round() as u32;
@@ -780,14 +829,11 @@ impl FenceViewState {
             })
             .collect();
         cells.extend(self.items.iter().enumerate().map(|(i, item)| {
-            let c = grid.cell(i);
-            let (x, y, alpha) = match self.item_motion.get(&item.id) {
-                Some(m) => (m.x.value_at(now), m.y.value_at(now), m.alpha.value_at(now)),
-                None => (c.x, c.y, 1.0),
-            };
+            let node = &file_scene.nodes[i];
+            let c = node.geometry.bounds;
             ItemCell {
-                x,
-                y: y - scroll,
+                x: c.x,
+                y: c.y,
                 w: c.w,
                 h: c.h,
                 icon_key: &keys[i],
@@ -800,7 +846,7 @@ impl FenceViewState {
                 dimmed: cut.contains(&item.id),
                 failed: item.icon_failed,
                 drop_target: alphas[i].2,
-                alpha,
+                alpha: node.alpha,
                 icon_alpha: item.icon_fade.map_or(1.0, |t| t.value_at(now)),
                 full_label: if unfold == Some(i) { full } else { None },
             }
@@ -826,17 +872,22 @@ impl FenceViewState {
         let theme = self.material_foreground();
         let chrome = self.chrome.clone();
         let bitmaps = self.bitmaps.clone();
-        let ok = self.content_panel.draw(self.dpi, |session, wd, hd| {
-            chrome.draw_content(
-                session,
-                &theme,
-                scale,
-                &mut bitmaps.borrow_mut(),
-                wd,
-                hd,
-                &content,
-            )
-        })?;
+        let ok = self
+            .content_panel
+            .draw_candidate(self.dpi, |session, wd, hd| {
+                chrome.draw_content(
+                    session,
+                    &theme,
+                    scale,
+                    &mut bitmaps.borrow_mut(),
+                    wd,
+                    hd,
+                    &content,
+                )
+            })?;
+        if ok {
+            self.file_scene = Some(file_scene);
+        }
         self.note_draw_result(ok);
         self.note_content_fades(now);
         Ok(())
@@ -861,6 +912,7 @@ impl FenceViewState {
 
         let now = Instant::now();
         self.prune_content_motion(now);
+        let file_scene = self.prepare_file_scene(&layout, now);
         self.sync_scrollbar_alpha();
         let alphas = self.item_alphas(now);
         let scroll = self.scroll_y;
@@ -933,13 +985,10 @@ impl FenceViewState {
             })
             .collect();
         rows.extend(self.items.iter().enumerate().map(|(i, item)| {
-            let c = layout.cell(i);
-            let (y, alpha) = match self.item_motion.get(&item.id) {
-                Some(m) => (m.y.value_at(now), m.alpha.value_at(now)),
-                None => (c.y, 1.0),
-            };
+            let node = &file_scene.nodes[i];
+            let c = node.geometry.bounds;
             RowCell {
-                y: y - scroll + metrics.header_h,
+                y: c.y,
                 h: c.h,
                 icon_key: &keys[i],
                 icon: item.icon.as_deref(),
@@ -954,7 +1003,7 @@ impl FenceViewState {
                 dimmed: cut.contains(&item.id),
                 failed: item.icon_failed,
                 drop_target: alphas[i].2,
-                alpha,
+                alpha: node.alpha,
                 icon_alpha: item.icon_fade.map_or(1.0, |t| t.value_at(now)),
             }
         }));
@@ -1012,7 +1061,7 @@ impl FenceViewState {
         let opacity = self.material_opacity();
         let ok = self
             .content_panel
-            .draw_ex(self.dpi, |session, clip, wd, hd| {
+            .draw_candidate_ex(self.dpi, |session, clip, wd, hd| {
                 chrome.draw_rows(
                     session,
                     Some(clip),
@@ -1025,6 +1074,9 @@ impl FenceViewState {
                     backdrop.as_ref().map(|b| (b, opacity, self.style.tint)),
                 )
             })?;
+        if ok {
+            self.file_scene = Some(file_scene);
+        }
         self.note_draw_result(ok);
         self.note_content_fades(now);
         Ok(())

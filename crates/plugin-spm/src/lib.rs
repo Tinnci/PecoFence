@@ -3,6 +3,8 @@
 //! Business decisions remain daemon-owned. This crate consumes versioned read-model snapshots and
 //! turns them into layout, hit-test, semantic, and paint data without depending on Win32.
 
+use pecofence_plugin_api::design::{self, ContentScale, LayoutTracker};
+use pecofence_plugin_api::scene::{NodeStyle, Scene, SceneNode};
 use pecofence_plugin_api::*;
 use serde::{Deserialize, Serialize};
 use spm_contracts::{
@@ -149,18 +151,7 @@ impl PanelTokens {
     /// Dark-mode fallback used before the first theme snapshot arrives and by
     /// layout tests; mirrors the host's dark palette.
     pub fn dark() -> Self {
-        Self {
-            panel: [0.125, 0.149, 0.188, 1.0],
-            subtle: [0.165, 0.2, 0.251, 1.0],
-            primary: [0.949, 0.961, 0.98, 1.0],
-            secondary: [0.725, 0.773, 0.839, 1.0],
-            accent: [0.545, 0.765, 1.0, 1.0],
-            stroke: [0.196, 0.267, 0.314, 1.0],
-            danger: [0.973, 0.443, 0.443, 1.0],
-            warning: [0.984, 0.573, 0.235, 1.0],
-            success: [0.29, 0.871, 0.533, 1.0],
-            unknown: [0.725, 0.773, 0.839, 1.0],
-        }
+        Self::from_snapshot(&ThemeSnapshot::dark())
     }
 }
 
@@ -769,67 +760,52 @@ pub fn hit_test(layout: &LayoutSnapshot, x: f32, y: f32) -> Option<u64> {
         .map(|node| node.action)
 }
 
-#[derive(Clone)]
-pub struct SpmPreparedFrame {
-    identity: FrameIdentity,
+/// Presentation adapter: business view nodes become a validated immutable scene.
+/// Role-to-style mapping happens once during preparation, never during paint.
+fn prepare_scene(
     view: PanelView,
-    layout: LayoutSnapshot,
-}
-
-impl PreparedFrame for SpmPreparedFrame {
-    fn identity(&self) -> FrameIdentity {
-        self.identity
-    }
-
-    fn hit_tree(&self) -> &[HitNode] {
-        &self.layout.hits
-    }
-
-    fn semantics(&self) -> &[SemanticNode] {
-        &self.layout.semantics
-    }
-
-    fn paint(&self, canvas: &mut dyn Canvas) -> Result<()> {
-        canvas.push_clip(
-            self.view
-                .nodes
-                .first()
-                .map(|node| node.rect)
-                .unwrap_or_default(),
-        )?;
-        let result = (|| {
-            for node in &self.view.nodes {
-                if let Some(fill) = node.fill {
-                    let radius = match node.role {
-                        "toolbar" => node.rect.h / 2.0,
-                        "button" | "status" => 6.0,
-                        _ => 4.0,
-                    };
-                    canvas.fill_rounded_rect(node.rect, radius, fill)?;
-                }
-                if !node.text.is_empty() {
-                    canvas.draw_text(
-                        RectDip {
-                            x: node.rect.x + 6.0,
-                            y: node.rect.y + 4.0,
-                            w: (node.rect.w - 12.0).max(0.0),
-                            h: (node.rect.h - 8.0).max(0.0),
-                        },
-                        &TextSpec {
-                            text: node.text.clone(),
-                            size_dip: if node.role == "heading" { 20.0 } else { 14.0 },
-                            weight: if node.action.is_some() { 600 } else { 400 },
-                            font: FontRole::Text,
-                        },
-                        node.foreground,
-                    )?;
-                }
+    identity: FrameIdentity,
+    viewport: RectDip,
+    text_scale: f32,
+) -> Result<Scene> {
+    let nodes = view
+        .nodes
+        .into_iter()
+        .map(|node| {
+            let fill = if node.role == "pane" { None } else { node.fill };
+            SceneNode {
+                id: node.id,
+                parent: (node.id != 1).then_some(1),
+                rect: node.rect,
+                name: node.text.clone(),
+                text: node.text,
+                role: node.role.into(),
+                action: node.action,
+                style: NodeStyle {
+                    size: if node.role == "heading" {
+                        design::TITLE
+                    } else {
+                        design::BODY
+                    } * text_scale,
+                    weight: if node.role == "heading" || node.action.is_some() {
+                        600
+                    } else {
+                        400
+                    },
+                    font: FontRole::Text,
+                    foreground: node.foreground,
+                    fill,
+                    radius: if node.role == "toolbar" {
+                        node.rect.h / 2.0
+                    } else {
+                        design::CONTROL_RADIUS * text_scale
+                    },
+                    text_inset: [6.0 * text_scale, 4.0 * text_scale],
+                },
             }
-            Ok(())
-        })();
-        let pop = canvas.pop_clip();
-        result.and(pop)
-    }
+        })
+        .collect();
+    Scene::new(identity, viewport, nodes)
 }
 
 pub struct SpmPlugin;
@@ -891,7 +867,9 @@ impl PanelProvider for SpmPlugin {
             mount: None,
             snapshot: None,
             snapshot_cursor: SnapshotCursor::for_query(project_query),
-            layout: LayoutSnapshot::default(),
+            layout_tracker: LayoutTracker::default(),
+            source_revision: 0,
+            prepared_source_revision: 0,
             layout_revision: 0,
             frame_revision: 0,
             selected_item: None,
@@ -911,7 +889,9 @@ pub struct SpmPanel {
     mount: Option<MountKey>,
     snapshot: Option<ProjectSnapshot>,
     snapshot_cursor: SnapshotCursor,
-    layout: LayoutSnapshot,
+    layout_tracker: LayoutTracker,
+    source_revision: u64,
+    prepared_source_revision: u64,
     layout_revision: u64,
     frame_revision: u64,
     selected_item: Option<usize>,
@@ -960,6 +940,10 @@ impl PanelInstance for SpmPanel {
                 let Body::Event(Event::Snapshot(snapshot)) = envelope.body else {
                     return Ok(PanelUpdate::default());
                 };
+                self.source_revision = self
+                    .source_revision
+                    .checked_add(1)
+                    .ok_or(Error::Exhausted)?;
                 self.snapshot = Some(snapshot);
                 Ok(PanelUpdate {
                     commands: vec![HostCommand::Invalidate],
@@ -980,7 +964,15 @@ impl PanelInstance for SpmPanel {
                     relayout: false,
                 })
             }
-            PanelEvent::Invoke { action, .. } => {
+            PanelEvent::Invoke {
+                action,
+                layout_revision,
+            } => {
+                if layout_revision != self.layout_revision
+                    || self.prepared_source_revision != self.source_revision
+                {
+                    return Ok(PanelUpdate::default());
+                }
                 if action == ACTION_REFRESH {
                     self.queue_action(Request::Refresh(RefreshRequest {
                         project_id: self.config.project_id.clone(),
@@ -1051,11 +1043,13 @@ impl PanelInstance for SpmPanel {
         let mount_key = self.mount.ok_or(Error::Closed)?;
         self.frame_revision = self.frame_revision.checked_add(1).ok_or(Error::Exhausted)?;
         let visible = input.exposure != Exposure::Hidden && input.active;
+        let scale = ContentScale::new(input.viewport, input.text_scale);
+        let viewport = scale.logical_viewport();
         let mut view = if visible {
             build_presentation_view_with_selection(
                 self.snapshot.as_ref(),
                 input.presentation,
-                input.viewport,
+                viewport,
                 self.selected_item,
                 &self.tokens,
             )
@@ -1069,36 +1063,35 @@ impl PanelInstance for SpmPanel {
                 text: status.clone(),
                 action: None,
                 rect: RectDip {
-                    x: input.viewport.x + 12.0,
-                    y: (input.viewport.y + input.viewport.h - 24.0).max(input.viewport.y),
-                    w: (input.viewport.w - 24.0).max(0.0),
+                    x: viewport.x + 12.0,
+                    y: (viewport.y + viewport.h - 24.0).max(viewport.y),
+                    w: (viewport.w - 24.0).max(0.0),
                     h: 22.0,
                 },
                 fill: Some(self.tokens.panel),
                 foreground: self.tokens.secondary,
             });
         }
-        let candidate = layout_snapshot(&view, self.layout_revision);
-        // Text, colors, freshness, and semantic labels may change without invalidating a
-        // gesture. Only geometry/action mapping advances the layout revision.
-        if candidate.hits != self.layout.hits {
-            self.layout_revision = self
-                .layout_revision
-                .checked_add(1)
-                .ok_or(Error::Exhausted)?;
+        for node in &mut view.nodes {
+            node.rect = scale.rect(node.rect);
         }
-        self.layout = layout_snapshot(&view, self.layout_revision);
-        Ok(Rc::new(SpmPreparedFrame {
-            identity: FrameIdentity {
+        let scene = prepare_scene(
+            view,
+            FrameIdentity {
                 mount_key,
                 frame_revision: self.frame_revision,
                 layout_revision: self.layout_revision,
                 theme_epoch: input.theme_epoch,
                 device_epoch: input.device_epoch,
             },
-            view,
-            layout: self.layout.clone(),
-        }))
+            input.viewport,
+            scale.factor(),
+        )?;
+        self.layout_revision = self
+            .layout_tracker
+            .update(scene.hit_tree(), self.source_revision)?;
+        self.prepared_source_revision = self.source_revision;
+        Ok(Rc::new(scene.with_layout_revision(self.layout_revision)))
     }
 
     fn unmount(&mut self, key: MountKey) {
@@ -1326,7 +1319,9 @@ mod tests {
                 mount: None,
                 snapshot: None,
                 snapshot_cursor: SnapshotCursor::default(),
-                layout: LayoutSnapshot::default(),
+                layout_tracker: LayoutTracker::default(),
+                source_revision: 0,
+                prepared_source_revision: 0,
                 layout_revision: 0,
                 frame_revision: 0,
                 selected_item: None,
@@ -1672,6 +1667,107 @@ mod tests {
     }
 
     #[test]
+    fn stale_source_actions_are_rejected_even_when_hit_geometry_is_unchanged() {
+        let (mut panel, calls, _keep) = panel();
+        panel.mount = Some(MountKey {
+            instance: panel.key,
+            generation: 1,
+        });
+        let input = FrameInput {
+            viewport: RectDip {
+                x: 0.0,
+                y: 0.0,
+                w: 600.0,
+                h: 520.0,
+            },
+            locale: "en",
+            presentation: Presentation::Workspace,
+            grouping: Grouping::Single,
+            exposure: Exposure::Desktop,
+            active: true,
+            text_scale: 1.0,
+            theme_epoch: 1,
+            device_epoch: 1,
+        };
+        let first = panel.prepare_frame(input).unwrap();
+        // An accepted source refresh can replace row identities at identical rectangles.
+        panel.source_revision += 1;
+        panel
+            .event(PanelEvent::Invoke {
+                action: ACTION_REFRESH,
+                layout_revision: first.identity().layout_revision,
+            })
+            .unwrap();
+        assert!(calls.requests.borrow().is_empty());
+        let next = panel.prepare_frame(input).unwrap();
+        assert_eq!(first.hit_tree(), next.hit_tree());
+        assert!(next.identity().layout_revision > first.identity().layout_revision);
+        panel
+            .event(PanelEvent::Invoke {
+                action: ACTION_REFRESH,
+                layout_revision: first.identity().layout_revision,
+            })
+            .unwrap();
+        assert!(calls.requests.borrow().is_empty());
+        panel
+            .event(PanelEvent::Invoke {
+                action: ACTION_REFRESH,
+                layout_revision: next.identity().layout_revision,
+            })
+            .unwrap();
+        assert_eq!(calls.requests.borrow().len(), 1);
+    }
+
+    #[test]
+    fn scaled_prepared_frames_reflow_hits_and_keep_the_host_material_visible() {
+        let (mut panel, _calls, _keep) = panel();
+        panel.mount = Some(MountKey {
+            instance: panel.key,
+            generation: 1,
+        });
+        panel.snapshot = Some(snapshot(DaemonSessionId::new(), 1));
+        let mut last_revision = 0;
+        for factor in [1.0, 1.25, 1.5, 2.0, 2.25] {
+            let viewport = RectDip {
+                x: 0.0,
+                y: 0.0,
+                w: 1120.0,
+                h: 760.0,
+            };
+            let frame = panel
+                .prepare_frame(FrameInput {
+                    viewport,
+                    locale: "zh-CN",
+                    presentation: Presentation::Workspace,
+                    grouping: Grouping::Single,
+                    exposure: Exposure::Desktop,
+                    active: true,
+                    text_scale: factor,
+                    theme_epoch: 1,
+                    device_epoch: 1,
+                })
+                .unwrap();
+            assert!(frame.identity().layout_revision > last_revision);
+            last_revision = frame.identity().layout_revision;
+            for hit in frame.hit_tree() {
+                let semantic = frame
+                    .semantics()
+                    .iter()
+                    .find(|node| node.id == hit.id)
+                    .unwrap();
+                assert_eq!(hit.rect, semantic.rect);
+            }
+            let mut canvas = pecofence_render::HeadlessCanvas::default();
+            frame.paint(&mut canvas).unwrap();
+            assert!(canvas.is_balanced());
+            assert!(!canvas.commands().iter().any(|command| matches!(command,
+                pecofence_render::DrawCommand::FillRoundedRect(rect, _, _) if *rect == viewport)));
+            assert!(canvas.commands().iter().any(|command| matches!(command,
+                pecofence_render::DrawCommand::DrawText(_, spec, _) if spec.size_dip == design::TITLE * factor)));
+        }
+    }
+
+    #[test]
     fn prepared_frame_paints_to_headless_canvas() {
         let data = snapshot(DaemonSessionId::new(), 1);
         let view = build_presentation_view(
@@ -1685,8 +1781,9 @@ mod tests {
             },
             &PanelTokens::dark(),
         );
-        let frame = SpmPreparedFrame {
-            identity: FrameIdentity {
+        let frame = prepare_scene(
+            view,
+            FrameIdentity {
                 mount_key: MountKey {
                     instance: InstanceKey {
                         id: 1,
@@ -1699,9 +1796,15 @@ mod tests {
                 theme_epoch: 1,
                 device_epoch: 1,
             },
-            layout: layout_snapshot(&view, 1),
-            view,
-        };
+            RectDip {
+                x: 0.0,
+                y: 0.0,
+                w: 360.0,
+                h: 48.0,
+            },
+            1.0,
+        )
+        .unwrap();
         let mut canvas = pecofence_render::HeadlessCanvas::default();
         frame.paint(&mut canvas).unwrap();
         assert!(canvas.is_balanced());

@@ -28,6 +28,16 @@ impl Drop for FenceWindow {
     }
 }
 
+fn text_change_height(current: i32, expanded: i32, title: i32, rolled: bool, rolling: bool) -> i32 {
+    if rolled {
+        title
+    } else if rolling {
+        expanded.max(title + 1)
+    } else {
+        current.max(title + 1)
+    }
+}
+
 impl FenceWindow {
     #[allow(clippy::too_many_arguments)]
     pub fn create(
@@ -154,6 +164,8 @@ impl FenceWindow {
             merge_hint: false,
             merge_t: Tween::at(0.0, Instant::now()),
             item_motion: HashMap::new(),
+            file_scene: None,
+            chrome_scene: None,
             leaving: Vec::new(),
             content_busy: false,
             chrome_busy: false,
@@ -365,7 +377,7 @@ impl FenceWindow {
             },
         );
         format!(
-            "title={:?} opacity={:.2} scale={:.3} fade={fade} retired={} rolled={} rolling={} peeking={} items={} tabs={} selected={} focused={:?} shadow_visible={} shadow_alpha={} layout={:?} locked={} auto_height={} active={} scroll={:.1} client={:?} client_offset=({},{}) chrome={:?} glass={:?} wallpaper_uploads={} title_size={} tab_fonts={:?} tab_rects={:?} capture={} tab_drag={} window_drag={} detach_pending={}",
+            "title={:?} opacity={:.2} scale={:.3} fade={fade} retired={} rolled={} rolling={} peeking={} items={} tabs={} selected={} focused={:?} shadow_visible={} shadow_alpha={} layout={:?} locked={} auto_height={} active={} scroll={:.1} client={:?} client_offset=({},{}) chrome={:?} glass={:?} wallpaper_uploads={} title_size={} tab_fonts={:?} tab_rects={:?} capture={} tab_drag={} window_drag={} detach_pending={} semantic_nodes={}",
             v.title,
             v.root.opacity(),
             v.root.scale().x,
@@ -402,6 +414,13 @@ impl FenceWindow {
             v.tab_drag.is_some(),
             v.remote_drag.is_some(),
             v.detach_pending,
+            v.plugin_panel.as_ref().map_or_else(
+                || v.committed_file_scene()
+                    .map_or(0, |scene| scene.semantics().len()),
+                |panel| panel.semantic_count(),
+            ) + v
+                .committed_chrome_scene()
+                .map_or(0, |scene| scene.semantics().len()),
         )
     }
 
@@ -696,18 +715,59 @@ impl FenceWindow {
         });
     }
 
-    /// The system icon-title font changed (font or Accessibility text size): fitted labels
-    /// are stale and the cell grid has a new height, so refit and relayout at once (a DPI-like
-    /// snap, no transition). Icons stay cached.
-    pub fn on_icon_font_changed(&self) {
+    /// The icon-title font or content typography changed: refit labels and snap
+    /// file layout to its newly measured metrics. Icons stay cached.
+    pub fn on_typography_changed(&self) {
+        let mut bounds = None;
         self.with_view(|v| {
+            let old_height = v.theme.title_height;
+            v.theme.title_height = v.chrome.title_height();
             for item in &mut v.items {
                 item.label = None;
             }
             v.unfold_cache = None;
+            v.tab_natural_w.borrow_mut().clear();
+            v.tab_slide.clear();
+            v.tab_settle = None;
+            v.hide_tip();
+            v.tip = None;
             v.snap_item_motion();
-            let _ = v.redraw();
+            if old_height != v.theme.title_height {
+                // Settle a roll using its intended state. Resize only after the borrow
+                // ends: WM_SIZE can re-enter this window synchronously.
+                let rolling = v.roll_anim.is_some();
+                let rolled = v.roll_target();
+                v.roll_anim = None;
+                v.height_anim = None;
+                v.rolled_up = rolled;
+                v.roll_t = Tween::at(rolled as u8 as f32, Instant::now());
+                let _ = v.motion.stop(&v.content_panel.visual, Prop::Opacity);
+                v.content_panel.visual.set_opacity(1.0);
+                v.content_panel.visual.set_visible(!rolled);
+                v.expanded_h_px = v.expanded_h_px.max(v.title_h_px() + 1);
+                let mut rect = window::window_rect(v.hwnd);
+                let height = text_change_height(
+                    rect.bottom - rect.top,
+                    v.expanded_h_px,
+                    v.title_h_px(),
+                    rolled,
+                    rolling,
+                );
+                rect.bottom = rect.top + height;
+                bounds = Some(rect);
+            } else {
+                let _ = v.redraw();
+            }
         });
+        if let Some(rect) = bounds {
+            self.set_bounds(rect);
+            self.with_view(|v| {
+                let _ = v
+                    .layout_panels(rect.right - rect.left, rect.bottom - rect.top)
+                    .and_then(|_| v.redraw());
+                v.update_shadow_now();
+            });
+        }
     }
 
     /// Replaces the container's tab strip and selects the mounted content.
@@ -1320,5 +1380,20 @@ impl FenceWindow {
                 let _ = v.redraw();
             }
         });
+    }
+}
+
+#[cfg(test)]
+mod typography_geometry_tests {
+    use super::text_change_height;
+
+    #[test]
+    fn text_changes_settle_roll_targets_and_preserve_expanded_manual_bounds() {
+        assert_eq!(text_change_height(36, 280, 60, true, false), 60);
+        assert_eq!(text_change_height(60, 280, 36, true, false), 36);
+        assert_eq!(text_change_height(180, 280, 60, false, false), 180);
+        assert_eq!(text_change_height(140, 280, 60, false, true), 280);
+        assert_eq!(text_change_height(140, 280, 60, true, true), 60);
+        assert_eq!(text_change_height(40, 50, 60, false, false), 61);
     }
 }

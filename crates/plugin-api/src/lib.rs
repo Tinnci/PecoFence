@@ -10,6 +10,11 @@ use std::rc::{Rc, Weak};
 use std::sync::Arc;
 use std::time::Duration;
 
+/// Shared presentation primitives for every Direct2D fence content provider.
+pub mod design;
+pub mod file_geometry;
+pub mod scene;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct InstanceKey {
     pub id: u128,
@@ -237,6 +242,10 @@ pub struct ThemeSnapshot {
     pub surface_panel: [f32; 4],
     /// Slightly stronger fill for cards/badges inside the panel.
     pub surface_subtle: [f32; 4],
+    /// Host control-state colors, independent of component body/card fills.
+    pub control_hover: [f32; 4],
+    pub control_pressed: [f32; 4],
+    pub focus_stroke: [f32; 4],
     /// 1 px rim colour for cards and separators.
     pub stroke: [f32; 4],
     pub accent: [f32; 4],
@@ -393,9 +402,9 @@ pub struct HitNode {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct SemanticNode {
-    pub id: u64,
-    pub parent: Option<u64>,
+pub struct SemanticNode<Id = u64> {
+    pub id: Id,
+    pub parent: Option<Id>,
     pub role: String,
     pub name: String,
     pub rect: RectDip,

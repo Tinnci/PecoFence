@@ -46,8 +46,10 @@ use std::time::{Duration, Instant};
 use windows_core::Result;
 
 mod api;
+mod chrome_scene;
 mod consts;
 mod dnd;
+mod file_scene;
 mod frame;
 mod handler;
 mod hit;
@@ -121,6 +123,8 @@ pub struct Behavior {
     /// `SPI_GETWHEELSCROLLLINES`: rows per wheel notch; `u32::MAX` (`WHEEL_PAGESCROLL`) = one
     /// viewport, 0 = the wheel does not scroll. Refreshed on WM_SETTINGCHANGE.
     pub wheel_lines: std::cell::Cell<u32>,
+    /// Accessibility text size; independent of per-monitor DPI.
+    pub text_scale: std::cell::Cell<f32>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

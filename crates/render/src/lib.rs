@@ -59,7 +59,7 @@ pub use backdrop::{Image, MicaTint, MonitorBackdrop, WallpaperPosition};
 #[cfg(windows)]
 pub use bitmaps::BitmapCache;
 #[cfg(windows)]
-pub use canvas::Direct2dCanvas;
+pub use canvas::{Direct2dCanvas, TextFormatCache};
 pub use canvas::{DrawCommand, HeadlessCanvas};
 #[cfg(windows)]
 pub use panel::{Clip, Panel};

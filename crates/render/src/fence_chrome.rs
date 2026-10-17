@@ -6,6 +6,7 @@ use crate::backdrop::Image;
 use crate::bitmaps::BitmapCache;
 use crate::panel::Clip;
 use crate::theme::{FONT_SMALL, FONT_TEXT, Theme, lerp, with_alpha};
+use pecofence_plugin_api::design::{self, PixelGrid};
 use std::cell::RefCell;
 use std::rc::Rc;
 use windows_canvas::{
@@ -30,30 +31,104 @@ struct LabelFont {
 pub const DEFAULT_LABEL_LINE_H: f32 = 16.0;
 /// Horizontal breathing room inside each icon cell. A wider gutter keeps neighbouring
 /// multi-line CJK labels from visually running together in narrow panes.
-pub const ICON_LABEL_SIDE_INSET: f32 = 8.0;
+pub use pecofence_plugin_api::file_geometry::ICON_LABEL_SIDE_INSET;
+use pecofence_plugin_api::{
+    RectDip,
+    file_geometry::{FileItemGeometry, IconMetrics},
+};
+
+/// Fence chrome and file-content formats change as one bundle. Geometry reads the measured
+/// line heights from this same bundle rather than guessing from the font size.
+struct FenceTypography {
+    scale: f32,
+    row: TextFormat,
+    titles: [TextFormat; 3],
+    tabs: [TextFormat; 3],
+    count: TextFormat,
+    title_height: f32,
+    row_right: TextFormat,
+    group: TextFormat,
+    empty: TextFormat,
+    row_line_h: f32,
+    group_line_h: f32,
+    empty_line_h: f32,
+}
+
+impl FenceTypography {
+    fn new(scale: f32) -> Result<Self> {
+        let row = TextFormat::new(FONT_SMALL, design::CAPTION * scale)?
+            .with_alignment(TextAlignment::Leading)
+            .with_paragraph_alignment(ParagraphAlignment::Center)
+            .with_word_wrapping(WordWrapping::NoWrap);
+        let row_right = TextFormat::new(FONT_SMALL, design::CAPTION * scale)?
+            .with_alignment(TextAlignment::Trailing)
+            .with_paragraph_alignment(ParagraphAlignment::Center)
+            .with_word_wrapping(WordWrapping::NoWrap);
+        let group = TextFormat::with_weight(FONT_SMALL, design::CAPTION * scale, FontWeight(600))?
+            .with_alignment(TextAlignment::Leading)
+            .with_paragraph_alignment(ParagraphAlignment::Center)
+            .with_word_wrapping(WordWrapping::NoWrap);
+        let empty = TextFormat::new(FONT_TEXT, design::BODY * scale)?
+            .with_alignment(TextAlignment::Center)
+            .with_paragraph_alignment(ParagraphAlignment::Top)
+            .with_word_wrapping(WordWrapping::Wrap);
+        let header_format = |face, size, alignment| -> Result<TextFormat> {
+            Ok(
+                TextFormat::with_weight(face, size * scale, FontWeight(600))?
+                    .with_alignment(alignment)
+                    .with_paragraph_alignment(ParagraphAlignment::Center)
+                    .with_word_wrapping(WordWrapping::NoWrap),
+            )
+        };
+        let header_formats = |alignment| -> Result<[TextFormat; 3]> {
+            Ok([
+                header_format(FONT_SMALL, design::CAPTION, alignment)?,
+                header_format(FONT_TEXT, design::BODY, alignment)?,
+                header_format(FONT_TEXT, design::SUBTITLE, alignment)?,
+            ])
+        };
+        let titles = header_formats(TextAlignment::Leading)?;
+        let tabs = header_formats(TextAlignment::Center)?;
+        let count = TextFormat::new(FONT_SMALL, design::CAPTION * scale)?
+            .with_alignment(TextAlignment::Trailing)
+            .with_paragraph_alignment(ParagraphAlignment::Center)
+            .with_word_wrapping(WordWrapping::NoWrap);
+        let line_h = |format: &TextFormat, fallback: f32| {
+            TextLayout::new("Ag", format, 10_000.0, 10_000.0)
+                .map(|layout| layout.metrics().height.ceil())
+                .unwrap_or(fallback * scale)
+                .max(1.0)
+        };
+        let title_height = titles
+            .iter()
+            .map(|format| line_h(format, 22.0))
+            .fold(0.0, f32::max);
+        let title_height = ((title_height + 12.0).max(36.0) / 4.0).ceil() * 4.0;
+        Ok(Self {
+            scale,
+            titles,
+            tabs,
+            count,
+            title_height,
+            row_line_h: line_h(&row, 16.0),
+            group_line_h: line_h(&group, 16.0),
+            empty_line_h: line_h(&empty, 20.0),
+            row,
+            row_right,
+            group,
+            empty,
+        })
+    }
+}
 
 pub struct FenceChrome {
-    title_format: TextFormat,
-    count_format: TextFormat,
     label_font: RefCell<LabelFont>,
     glyph_format: TextFormat,
-    /// Single-line, vertically centred Caption text for list rows and column headers.
-    row_format: TextFormat,
-    /// Same, right-aligned (size column).
-    row_format_right: TextFormat,
+    typography: RefCell<FenceTypography>,
     /// Header sort indicator (8 px chevron).
     sort_glyph_format: TextFormat,
-    /// Same face, size and weight as standalone titles, centred inside their controls.
-    tab_formats: [TextFormat; 3],
-    /// Empty-state text: Body 14, top-aligned (Explorer "This folder is empty.").
-    empty_format: TextFormat,
     /// 14 px Fluent glyph beside the title (portal folder icon).
     title_glyph_format: TextFormat,
-    /// Title at 12 / 16 px for the per-fence "title size" option (`title_format` is 14).
-    title_format_small: TextFormat,
-    title_format_large: TextFormat,
-    /// "按时间分组" section captions: Caption 12 / 600, leading, vertically centred.
-    group_format: TextFormat,
 }
 
 /// A "按时间分组" section header band in surface DIPs (already scrolled; for rows already
@@ -245,28 +320,21 @@ pub struct RowsDraw<'a> {
 /// exactly one device pixel, layout-rounded to the grid at every DPI.
 #[derive(Clone, Copy, Debug)]
 struct Px {
-    scale: f32,
+    grid: PixelGrid,
 }
 
 impl Px {
     fn new(scale: f32) -> Self {
         Self {
-            scale: if scale.is_finite() && scale > 0.0 {
-                scale
-            } else {
-                1.0
-            },
+            grid: PixelGrid::new(scale),
         }
     }
 
-    /// One hairline in DIPs: 1 device px up to 175 %, 2 px from 200 % (a 1 epx XAML border).
     fn hair(self) -> f32 {
-        self.scale.floor().max(1.0) / self.scale
+        self.grid.hairline()
     }
-
-    /// Snaps a DIP coordinate to the device-pixel grid.
     fn snap(self, v: f32) -> f32 {
-        (v * self.scale).round() / self.scale
+        self.grid.snap(v)
     }
 
     /// Snaps every edge of `r` to the grid, then insets by half a hairline so a `hair()`-wide
@@ -927,16 +995,8 @@ impl FenceChrome {
     pub fn new() -> Result<Self> {
         // WinUI type ramp: Body Strong 14/600 for the title, Caption 12 (Small optical size) for
         // labels and the rolled item count, Body 14 for the empty state. No letter-spacing.
-        let title_format = TextFormat::with_weight(FONT_TEXT, 14.0, FontWeight(600))?
-            .with_alignment(TextAlignment::Leading)
-            .with_paragraph_alignment(ParagraphAlignment::Center)
-            .with_word_wrapping(WordWrapping::NoWrap);
-        let count_format = TextFormat::new(FONT_SMALL, 12.0)?
-            .with_alignment(TextAlignment::Trailing)
-            .with_paragraph_alignment(ParagraphAlignment::Center)
-            .with_word_wrapping(WordWrapping::NoWrap);
         let label_font = RefCell::new(LabelFont {
-            format: Self::build_label_format(FONT_SMALL, 12.0, FontWeight(400))?,
+            format: Self::build_label_format(FONT_SMALL, design::CAPTION, FontWeight(400))?,
             family: "Segoe UI".to_string(),
             size: 12.0,
             weight: 400,
@@ -946,63 +1006,26 @@ impl FenceChrome {
             .with_alignment(TextAlignment::Center)
             .with_paragraph_alignment(ParagraphAlignment::Center)
             .with_word_wrapping(WordWrapping::NoWrap);
-        let row_format = TextFormat::new(FONT_SMALL, 12.0)?
-            .with_alignment(TextAlignment::Leading)
-            .with_paragraph_alignment(ParagraphAlignment::Center)
-            .with_word_wrapping(WordWrapping::NoWrap);
-        let row_format_right = TextFormat::new(FONT_SMALL, 12.0)?
-            .with_alignment(TextAlignment::Trailing)
-            .with_paragraph_alignment(ParagraphAlignment::Center)
-            .with_word_wrapping(WordWrapping::NoWrap);
         let sort_glyph_format = TextFormat::new(crate::theme::FONT_ICONS, 8.0)?
             .with_alignment(TextAlignment::Center)
             .with_paragraph_alignment(ParagraphAlignment::Center)
             .with_word_wrapping(WordWrapping::NoWrap);
-        let tab_format = |face, size| -> Result<TextFormat> {
-            Ok(TextFormat::with_weight(face, size, FontWeight(600))?
-                .with_alignment(TextAlignment::Center)
-                .with_paragraph_alignment(ParagraphAlignment::Center)
-                .with_word_wrapping(WordWrapping::NoWrap))
-        };
-        let tab_formats = [
-            tab_format(FONT_SMALL, 12.0)?,
-            tab_format(FONT_TEXT, 14.0)?,
-            tab_format(FONT_TEXT, 16.0)?,
-        ];
-        let empty_format = TextFormat::new(FONT_TEXT, 14.0)?
-            .with_alignment(TextAlignment::Center)
-            .with_paragraph_alignment(ParagraphAlignment::Top)
-            .with_word_wrapping(WordWrapping::Wrap);
         let title_glyph_format = TextFormat::new(crate::theme::FONT_ICONS, 14.0)?
             .with_alignment(TextAlignment::Center)
             .with_paragraph_alignment(ParagraphAlignment::Center)
             .with_word_wrapping(WordWrapping::NoWrap);
-        let title_format_small = TextFormat::with_weight(FONT_SMALL, 12.0, FontWeight(600))?
-            .with_alignment(TextAlignment::Leading)
-            .with_paragraph_alignment(ParagraphAlignment::Center)
-            .with_word_wrapping(WordWrapping::NoWrap);
-        let title_format_large = TextFormat::with_weight(FONT_TEXT, 16.0, FontWeight(600))?
-            .with_alignment(TextAlignment::Leading)
-            .with_paragraph_alignment(ParagraphAlignment::Center)
-            .with_word_wrapping(WordWrapping::NoWrap);
-        let group_format = TextFormat::with_weight(FONT_SMALL, 12.0, FontWeight(600))?
-            .with_alignment(TextAlignment::Leading)
-            .with_paragraph_alignment(ParagraphAlignment::Center)
-            .with_word_wrapping(WordWrapping::NoWrap);
         let chrome = Self {
-            title_format,
-            count_format,
             label_font,
             glyph_format,
-            row_format,
-            row_format_right,
+            typography: RefCell::new(FenceTypography::new(
+                pecofence_plugin_api::design::ContentScale::new(
+                    RectDip::default(),
+                    pecofence_platform::sysparams::text_scale_percent() as f32 / 100.0,
+                )
+                .factor(),
+            )?),
             sort_glyph_format,
-            tab_formats,
-            empty_format,
             title_glyph_format,
-            title_format_small,
-            title_format_large,
-            group_format,
         };
         // Labels follow the desktop's icon-title font from the start (12 px / 16 stays the
         // fallback when the system call fails).
@@ -1061,32 +1084,50 @@ impl FenceChrome {
         self.label_font.borrow().line_h
     }
 
-    pub fn title_format(&self, size: u8) -> &TextFormat {
-        match size {
-            0 => &self.title_format_small,
-            2 => &self.title_format_large,
-            _ => &self.title_format,
-        }
+    pub fn title_format(&self, size: u8) -> TextFormat {
+        let index = match size {
+            0 => 0,
+            2 => 2,
+            _ => 1,
+        };
+        self.typography.borrow().titles[index].clone()
     }
 
     /// Layout, drawing and tooltip fitting all use the same title size.
-    pub fn tab_format(&self, size: u8) -> &TextFormat {
-        &self.tab_formats[usize::from(size.min(2))]
+    pub fn tab_format(&self, size: u8) -> TextFormat {
+        self.typography.borrow().tabs[usize::from(size.min(2))].clone()
     }
 
-    /// Single-line row text format (for fitting names to the name column).
-    pub fn row_format(&self) -> &TextFormat {
-        &self.row_format
+    pub fn title_height(&self) -> f32 {
+        self.typography.borrow().title_height
     }
 
-    /// "按时间分组" section caption format (12 px semibold, like the small title).
-    pub fn group_format(&self) -> &TextFormat {
-        &self.group_format
+    /// Updates chrome and file-content font roles atomically after successful construction.
+    pub fn set_text_scale(&self, requested: f32) -> Result<bool> {
+        let scale = design::ContentScale::new(RectDip::default(), requested).factor();
+        if self.typography.borrow().scale == scale {
+            return Ok(false);
+        }
+        let typography = FenceTypography::new(scale)?;
+        *self.typography.borrow_mut() = typography;
+        Ok(true)
+    }
+
+    pub fn row_format(&self) -> TextFormat {
+        self.typography.borrow().row.clone()
+    }
+
+    pub fn row_line_h(&self) -> f32 {
+        self.typography.borrow().row_line_h
+    }
+
+    pub fn group_line_h(&self) -> f32 {
+        self.typography.borrow().group_line_h
     }
 
     /// Does a tab caption fit its pill of width `w` without ellipsis (tooltip decision)?
     pub fn tab_title_fits(&self, title: &str, w: f32, size: u8, theme: &Theme) -> bool {
-        crate::text::measure_width(title, self.tab_format(size))
+        crate::text::measure_width(title, &self.tab_format(size))
             <= (w - tab_text_padding(theme)).max(0.0)
     }
 
@@ -1331,7 +1372,7 @@ impl FenceChrome {
             return Ok(());
         }
         // Title text; leave room for the roll-up chevron on the right, ellipsize the rest.
-        let title_width = crate::text::measure_width(title, self.title_format(style.title_size))
+        let title_width = crate::text::measure_width(title, &self.title_format(style.title_size))
             .min((width - deco.title_x() - 40.0).max(1.0));
         let foreground = header_foreground(
             &backdrop,
@@ -1473,7 +1514,7 @@ impl FenceChrome {
                 }
                 let fmt = self.tab_format(tab.title_size);
                 let padding = tab_text_padding(theme);
-                let fitted = crate::text::fit_width(tab.title, fmt, (tab.w - padding).max(0.0));
+                let fitted = crate::text::fit_width(tab.title, &fmt, (tab.w - padding).max(0.0));
                 let foreground =
                     header_foreground(&backdrop, theme, tab.key, rect, scale, opacity, style.tint);
                 let color = if tab.pressed && !tab.dragging {
@@ -1489,7 +1530,7 @@ impl FenceChrome {
                 let brush = session.create_solid_brush(with_alpha(color, ta))?;
                 session.draw_text(
                     &fitted,
-                    fmt,
+                    &fmt,
                     &Rect::from_xywh(
                         tab.x + padding * 0.5,
                         0.0,
@@ -1555,10 +1596,10 @@ impl FenceChrome {
                 x += TitleDeco::ICON_W;
             }
             let title_w = (width - x - 40.0 - title_reserve).max(0.0);
-            let fitted = crate::text::fit_width(title, title_format, title_w);
+            let fitted = crate::text::fit_width(title, &title_format, title_w);
             session.draw_text(
                 &fitted,
-                title_format,
+                &title_format,
                 &Rect::from_xywh(x, 0.0, title_w, title_h),
                 &text,
             );
@@ -1577,7 +1618,9 @@ impl FenceChrome {
                 header_foreground(&backdrop, theme, 6, count_rect, scale, opacity, style.tint);
             let count =
                 session.create_solid_brush(with_alpha(foreground.text_tertiary, count_a))?;
-            session.draw_text(caption, &self.count_format, &count_rect, &count);
+            let count_format = self.typography.borrow().count.clone();
+            let caption = crate::text::fit_width(caption, &count_format, count_rect.width());
+            session.draw_text(&caption, &count_format, &count_rect, &count);
         }
 
         // Chevron (Segoe Fluent Icons ChevronUp E70E, turned 180° by the roll progress so it
@@ -1666,6 +1709,7 @@ impl FenceChrome {
         rows: &RowsDraw<'_>,
         backdrop: Option<(&Backdrop<'_>, f32, Option<ColorF>)>,
     ) -> Result<()> {
+        let typography = self.typography.borrow();
         session.clear(ColorF::TRANSPARENT);
         let px = Px::new(scale);
         let state = StateBrushes::new(session, theme)?;
@@ -1687,10 +1731,20 @@ impl FenceChrome {
                           key: u128,
                           muted: bool,
                           alpha: f32,
-                          right: bool| {
-            let measured = crate::text::measure_width(text, format)
-                .min(rect.width())
-                .max(1.0);
+                          right: bool|
+         -> Result<()> {
+            if rect.width() <= 0.0 || rect.height() <= 0.0 {
+                return Ok(());
+            }
+            let natural_width = crate::text::measure_width(text, format);
+            let fitted;
+            let (text, measured) = if natural_width <= rect.width() {
+                (text, natural_width)
+            } else {
+                fitted = crate::text::fit_width(text, format, rect.width());
+                (fitted.as_str(), crate::text::measure_width(&fitted, format))
+            };
+            let measured = measured.min(rect.width()).max(1.0);
             let area = Rect::from_xywh(
                 if right {
                     rect.right - measured
@@ -1717,7 +1771,14 @@ impl FenceChrome {
                     ColorF::new(1.0, 1.0, 1.0, 0.28 * alpha)
                 });
             }
-            draw_legible_text(session, text, format, &rect, brush, halo.as_ref(), spread);
+            let paint = || {
+                draw_legible_text(session, text, format, &rect, brush, halo.as_ref(), spread);
+                Ok(())
+            };
+            match clip {
+                Some(clip) => clip.scoped(&rect, paint),
+                None => paint(),
+            }
         };
 
         let mut paint_rows = || -> Result<()> {
@@ -1731,18 +1792,18 @@ impl FenceChrome {
                     if h.y + h.h <= header_h || h.y > height {
                         continue;
                     }
-                    let text_w = crate::text::measure_width(h.text, &self.group_format)
+                    let text_w = crate::text::measure_width(h.text, &typography.group)
                         .min((right - text_x).max(1.0))
                         .max(1.0);
                     paint_text(
                         h.text,
-                        &self.group_format,
+                        &typography.group,
                         Rect::from_xywh(text_x, h.y, text_w, h.h),
                         0x30000 + i as u128,
                         true,
                         1.0,
                         false,
-                    );
+                    )?;
                     draw_group_rule(session, px, h, text_x + text_w, right, &line);
                 }
             }
@@ -1771,8 +1832,19 @@ impl FenceChrome {
                         row.drop_target,
                     );
                 }
-                let icon_x = cols.name_x;
-                let icon_y = row.y + (row.h - rows.icon_size) / 2.0;
+                let geometry = FileItemGeometry::row(
+                    RectDip {
+                        x: 0.0,
+                        y: row.y,
+                        w: width,
+                        h: row.h,
+                    },
+                    cols.name_x,
+                    cols.name_w,
+                    rows.icon_size,
+                );
+                let icon_x = geometry.icon.x;
+                let icon_y = geometry.icon.y;
                 draw_item_icon(
                     session,
                     theme,
@@ -1789,52 +1861,52 @@ impl FenceChrome {
                     rows.icon_size,
                     3.0,
                 )?;
-                let text_x = icon_x + rows.icon_size + 8.0;
-                let name_w = (cols.name_x + cols.name_w - text_x).max(0.0);
+                let text_x = geometry.label.x;
+                let name_w = geometry.label.w;
                 // Contrast follows each visible text cell, not the average of the whole
                 // fence. Stable viewport slots bound the hysteresis cache while scrolling.
                 let key = 0x10000 + visible_slot * 8;
                 paint_text(
                     row.name,
-                    &self.row_format,
+                    &typography.row,
                     Rect::from_xywh(text_x, row.y, name_w, row.h),
                     key,
                     row.dimmed,
                     alpha,
                     false,
-                );
+                )?;
                 if let Some((x, w)) = cols.date {
                     paint_text(
                         row.date,
-                        &self.row_format,
+                        &typography.row,
                         Rect::from_xywh(x, row.y, w, row.h),
                         key + 1,
                         true,
                         alpha,
                         false,
-                    );
+                    )?;
                 }
                 if let Some((x, w)) = cols.type_ {
                     paint_text(
                         row.type_name,
-                        &self.row_format,
+                        &typography.row,
                         Rect::from_xywh(x, row.y, w, row.h),
                         key + 2,
                         true,
                         alpha,
                         false,
-                    );
+                    )?;
                 }
                 if let Some((x, w)) = cols.size {
                     paint_text(
                         row.size,
-                        &self.row_format_right,
+                        &typography.row_right,
                         Rect::from_xywh(x, row.y, w, row.h),
                         key + 3,
                         true,
                         alpha,
                         true,
-                    );
+                    )?;
                 }
                 visible_slot += 1;
             }
@@ -1922,9 +1994,9 @@ impl FenceChrome {
                     session.fill_rounded_rect(&cell, &b);
                 }
                 let fmt = if right {
-                    &self.row_format_right
+                    &typography.row_right
                 } else {
-                    &self.row_format
+                    &typography.row
                 };
                 paint_text(
                     text,
@@ -1934,7 +2006,7 @@ impl FenceChrome {
                     true,
                     1.0,
                     right,
-                );
+                )?;
                 if rows.sort_column == Some(col) {
                     // 8 px chevron flush with the header top, horizontally centred in the cell
                     // (the Win32 header control's sort arrow), same grey as the captions.
@@ -1951,7 +2023,7 @@ impl FenceChrome {
                         true,
                         1.0,
                         false,
-                    );
+                    )?;
                 }
             }
         }
@@ -1984,10 +2056,10 @@ impl FenceChrome {
             && rows.rows.is_empty()
         {
             let avail = (height - header_h).max(0.0);
-            let y0 = empty_text_top(avail);
+            let y0 = empty_text_top(avail, typography.empty_line_h);
             session.draw_text(
                 text,
-                &self.empty_format,
+                &typography.empty,
                 &Rect::from_xywh(
                     12.0,
                     header_h + y0,
@@ -2012,6 +2084,7 @@ impl FenceChrome {
         height: f32,
         content: &ContentDraw<'_>,
     ) -> Result<()> {
+        let typography = self.typography.borrow();
         session.clear(ColorF::TRANSPARENT);
         let px = Px::new(scale);
         let state = StateBrushes::new(session, theme)?;
@@ -2051,14 +2124,16 @@ impl FenceChrome {
                 if h.y + h.h <= 0.0 || h.y > height {
                     continue;
                 }
-                let text_w = crate::text::measure_width(h.text, &self.group_format)
+                let caption =
+                    crate::text::fit_width(h.text, &typography.group, (right - text_x).max(0.0));
+                let text_w = crate::text::measure_width(&caption, &typography.group)
                     .min((right - text_x).max(1.0))
                     .max(1.0);
                 let rect = Rect::from_xywh(text_x, h.y, text_w, h.h);
                 draw_legible_text(
                     session,
-                    h.text,
-                    &self.group_format,
+                    &caption,
+                    &typography.group,
                     &rect,
                     &label_dim,
                     halo.as_ref(),
@@ -2127,10 +2202,10 @@ impl FenceChrome {
             && content.items.is_empty()
         {
             let secondary = session.create_solid_brush(theme.text_secondary)?;
-            let y0 = empty_text_top(height);
+            let y0 = empty_text_top(height, typography.empty_line_h);
             session.draw_text(
                 text,
-                &self.empty_format,
+                &typography.empty,
                 &Rect::from_xywh(12.0, y0, (width - 24.0).max(0.0), (height - y0).max(0.0)),
                 &secondary,
             );
@@ -2185,8 +2260,23 @@ impl FenceChrome {
                 cell.drop_target,
             );
         }
-        let icon_x = cell.x + (cell.w - content.icon_size) / 2.0;
-        let icon_y = cell.y + content.icon_top;
+        let geometry = FileItemGeometry::grid(
+            RectDip {
+                x: cell.x,
+                y: cell.y,
+                w: cell.w,
+                h: cell.h,
+            },
+            IconMetrics {
+                size: content.icon_size,
+                top: content.icon_top,
+                label_gap: content.label_gap,
+                line_height: content.line_h,
+                label_lines: lines,
+            },
+        );
+        let icon_x = geometry.icon.x;
+        let icon_y = geometry.icon.y;
         draw_item_icon(
             session,
             theme,
@@ -2204,10 +2294,10 @@ impl FenceChrome {
             4.0,
         )?;
         let label_rect = Rect::from_xywh(
-            cell.x + ICON_LABEL_SIDE_INSET,
-            icon_y + content.icon_size + content.label_gap,
-            (cell.w - ICON_LABEL_SIDE_INSET * 2.0).max(1.0),
-            content.line_h * lines,
+            geometry.label.x,
+            geometry.label.y,
+            geometry.label.w,
+            geometry.label.h,
         );
         let text = unfold.map_or(cell.label, |(t, _)| t);
         let resting = if cell.dimmed { label_dim } else { label };
@@ -2250,9 +2340,9 @@ impl FenceChrome {
 /// Top of the empty-state text inside an area `avail` DIPs tall: Explorer places "This folder
 /// is empty." in the upper part of the view; very short fences keep it vertically centred
 /// (20 DIP = the Body 14 line height).
-fn empty_text_top(avail: f32) -> f32 {
+fn empty_text_top(avail: f32, line_height: f32) -> f32 {
     if avail < 96.0 {
-        ((avail - 20.0) * 0.5).max(0.0)
+        ((avail - line_height) * 0.5).max(0.0)
     } else {
         avail * 0.24
     }
@@ -2263,29 +2353,94 @@ mod tests {
     use super::*;
 
     #[test]
+    fn title_tab_and_count_fonts_share_text_scale_and_height_returns_to_baseline() {
+        let chrome = FenceChrome::new().unwrap();
+        for factor in [1.0, 2.25, 1.5, 1.0] {
+            chrome.set_text_scale(factor).unwrap();
+            let typography = chrome.typography.borrow();
+            for size in 0..3 {
+                let single =
+                    TextLayout::new("文件 Archives", &typography.titles[size], 1000.0, 100.0)
+                        .unwrap()
+                        .metrics();
+                let tab = TextLayout::new("文件 Archives", &typography.tabs[size], 1000.0, 100.0)
+                    .unwrap()
+                    .metrics();
+                assert_eq!(single.height, tab.height);
+                assert!((single.width - tab.width).abs() < 0.001);
+                assert!(typography.title_height >= single.height.ceil() + 12.0);
+            }
+            let count = TextLayout::new("12 items", &typography.count, 1000.0, 100.0)
+                .unwrap()
+                .metrics();
+            assert!(typography.title_height > count.height);
+            if factor == 1.0 {
+                assert_eq!(typography.title_height, 36.0);
+            } else {
+                assert!(typography.title_height > 36.0);
+            }
+        }
+    }
+
+    #[test]
+    fn typography_scales_all_roles_and_reports_their_actual_line_heights() {
+        let chrome = FenceChrome::new().unwrap();
+        chrome.set_text_scale(1.0).unwrap();
+        let base = chrome.row_line_h();
+        for factor in [1.0, 1.5, 2.0, 2.25] {
+            chrome.set_text_scale(factor).unwrap();
+            let typography = chrome.typography.borrow();
+            for (format, line_h) in [
+                (&typography.row, typography.row_line_h),
+                (&typography.row_right, typography.row_line_h),
+                (&typography.group, typography.group_line_h),
+                (&typography.empty, typography.empty_line_h),
+            ] {
+                let measured = TextLayout::new("Ag", format, 10_000.0, 10_000.0)
+                    .unwrap()
+                    .metrics()
+                    .height
+                    .ceil();
+                assert_eq!(line_h, measured);
+                assert!(line_h >= base);
+            }
+            let column = crate::text::fit_width("2026-10-17 15:30", &typography.row_right, 76.0);
+            assert!(crate::text::measure_width(&column, &typography.row_right) <= 76.0);
+            assert_eq!(typography.scale, factor);
+            drop(typography);
+            assert!(!chrome.set_text_scale(factor).unwrap());
+        }
+        chrome.set_text_scale(f32::NAN).unwrap();
+        assert_eq!(chrome.typography.borrow().scale, 1.0);
+        chrome.set_text_scale(10.0).unwrap();
+        assert_eq!(chrome.typography.borrow().scale, 2.25);
+    }
+
+    #[test]
     fn stacked_and_standalone_titles_have_identical_metrics() {
         let chrome = FenceChrome::new().unwrap();
         let mut widths = Vec::new();
         for size in 0..=2 {
             for caption in ["文件与文档", "Folder pictures", "资料 Archives 2026"] {
-                let single = TextLayout::new(caption, chrome.title_format(size), 1000.0, 100.0)
+                let single = TextLayout::new(caption, &chrome.title_format(size), 1000.0, 100.0)
                     .unwrap()
                     .metrics();
-                let tab = TextLayout::new(caption, chrome.tab_format(size), 1000.0, 100.0)
+                let tab = TextLayout::new(caption, &chrome.tab_format(size), 1000.0, 100.0)
                     .unwrap()
                     .metrics();
                 assert!((single.width - tab.width).abs() < 0.001);
                 assert!((single.height - tab.height).abs() < 0.001);
                 for width in [0.0, 2.0, 8.0, 20.0, 80.0] {
-                    let text = crate::text::fit_width(caption, chrome.tab_format(size), width);
+                    let text = crate::text::fit_width(caption, &chrome.tab_format(size), width);
                     assert!(
-                        crate::text::measure_width(&text, chrome.tab_format(size)) <= width + 0.001
+                        crate::text::measure_width(&text, &chrome.tab_format(size))
+                            <= width + 0.001
                     );
                 }
             }
             widths.push(crate::text::measure_width(
                 "文件与文档",
-                chrome.tab_format(size),
+                &chrome.tab_format(size),
             ));
         }
         assert!(widths[0] < widths[1] && widths[1] < widths[2]);
@@ -2366,7 +2521,7 @@ mod tests {
         let r = px.stroke_rect(Rect::from_xywh(0.0, 0.0, 10.0, 10.0));
         assert_eq!((r.left, r.top, r.right, r.bottom), (0.5, 0.5, 9.5, 9.5));
         assert_eq!(Px::new(0.0).hair(), 1.0);
-        assert_eq!(Px::new(f32::NAN).scale, 1.0);
+        assert_eq!(Px::new(f32::NAN).grid.scale(), 1.0);
     }
 
     #[test]
@@ -2382,8 +2537,10 @@ mod tests {
 
     #[test]
     fn empty_text_sits_in_the_upper_part_or_centres_when_short() {
-        assert_eq!(empty_text_top(200.0), 48.0);
-        assert_eq!(empty_text_top(60.0), 20.0);
-        assert_eq!(empty_text_top(10.0), 0.0);
+        assert_eq!(empty_text_top(200.0, 20.0), 48.0);
+        assert_eq!(empty_text_top(60.0, 20.0), 20.0);
+        assert_eq!(empty_text_top(10.0, 20.0), 0.0);
+        assert_eq!(empty_text_top(60.0, 40.0), 10.0);
+        assert_eq!(empty_text_top(30.0, 40.0), 0.0);
     }
 }

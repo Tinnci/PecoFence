@@ -1,6 +1,7 @@
 //! Icon grid layout in DIPs: cell geometry, hit testing, scrolling extents.
 
 use pecofence_core::DateBucket;
+use pecofence_plugin_api::file_geometry::text_band_height;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct GridMetrics {
@@ -15,6 +16,7 @@ pub struct GridMetrics {
     /// and label from these so a spacing change cannot push the label out of the cell.
     pub icon_top: f32,
     pub label_gap: f32,
+    pub group_header_h: f32,
 }
 
 impl GridMetrics {
@@ -35,6 +37,7 @@ impl GridMetrics {
             line_h,
             icon_top: 8.0,
             label_gap: 4.0,
+            group_header_h: GROUP_HEADER_H,
         }
     }
 
@@ -45,6 +48,11 @@ impl GridMetrics {
         let line_h = (line_h.max(1.0) / 4.0).ceil() * 4.0;
         self.line_h = line_h;
         self.cell_h = self.icon + 8.0 + 4.0 + line_h * self.label_lines as f32 + 4.0;
+        self
+    }
+
+    pub fn with_group_line_h(mut self, line_h: f32) -> Self {
+        self.group_header_h = text_band_height(GROUP_HEADER_H, line_h);
         self
     }
 
@@ -84,6 +92,7 @@ pub struct CellRect {
 }
 
 impl CellRect {
+    #[cfg(test)]
     pub fn contains(&self, px: f32, py: f32) -> bool {
         px >= self.x && py >= self.y && px < self.x + self.w && py < self.y + self.h
     }
@@ -143,6 +152,7 @@ pub struct Bands {
     count: usize,
     groups: Vec<Band>,
     content_height: f32,
+    header_h: f32,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -165,7 +175,14 @@ impl Band {
 }
 
 impl Bands {
-    fn new(cols: usize, row_h: f32, pad_y: f32, count: usize, spans: &[GroupSpan]) -> Self {
+    fn new(
+        cols: usize,
+        row_h: f32,
+        pad_y: f32,
+        count: usize,
+        spans: &[GroupSpan],
+        header_h: f32,
+    ) -> Self {
         let cols = cols.max(1);
         let single = [GroupSpan {
             first: 0,
@@ -184,7 +201,7 @@ impl Bands {
         for &span in spans {
             let top = y;
             if span.has_header() {
-                y += GROUP_HEADER_H;
+                y += header_h;
             }
             let rows = span.len.div_ceil(cols);
             groups.push(Band {
@@ -201,6 +218,7 @@ impl Bands {
             count,
             groups,
             content_height: y + pad_y,
+            header_h,
         }
     }
 
@@ -241,6 +259,7 @@ impl Bands {
 
     /// Item at column `col` under `y`: None inside a header band, in the empty tail of a
     /// group's last row, or outside every band (so a point never maps into another group).
+    #[cfg(test)]
     fn hit(&self, col: usize, y: f32) -> Option<usize> {
         let g = self.band_at(y)?;
         if y < g.rows_y || col >= self.cols {
@@ -288,7 +307,7 @@ impl Bands {
                         x: 0.0,
                         y: g.top,
                         w: width,
-                        h: GROUP_HEADER_H,
+                        h: self.header_h,
                     },
                     group: i,
                     bucket: g.span.bucket?,
@@ -304,7 +323,7 @@ impl Bands {
             x: 0.0,
             y: g.top,
             w: width,
-            h: GROUP_HEADER_H,
+            h: self.header_h,
         })
     }
 
@@ -387,7 +406,14 @@ impl Grid {
     pub fn grouped(metrics: GridMetrics, width: f32, count: usize, spans: &[GroupSpan]) -> Self {
         let usable = (width - metrics.pad_x * 2.0).max(metrics.cell_w);
         let columns = ((usable / metrics.cell_w).floor() as usize).max(1);
-        let bands = Bands::new(columns, metrics.cell_h, metrics.pad_y, count, spans);
+        let bands = Bands::new(
+            columns,
+            metrics.cell_h,
+            metrics.pad_y,
+            count,
+            spans,
+            metrics.group_header_h,
+        );
         Self {
             metrics,
             columns,
@@ -409,6 +435,7 @@ impl Grid {
     }
 
     /// Index of the item under a content-local point (already adjusted for scroll).
+    #[cfg(test)]
     pub fn hit_test(&self, x: f32, y: f32, count: usize) -> Option<usize> {
         if x < self.metrics.pad_x || y < self.metrics.pad_y {
             return None;
@@ -441,13 +468,14 @@ impl Grid {
     }
 }
 
-/// Row metrics for the List / Details layouts (DIPs). Rows are 28 tall with a 20 DIP icon;
-/// Details adds a 28 DIP header that stays put while the rows scroll.
+/// Row metrics in DIPs. Baseline rows and the fixed Details header are 28 tall;
+/// measured text can grow each band independently. Icons stay at 20 DIPs.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct RowMetrics {
     pub row_h: f32,
     pub icon: f32,
     pub header_h: f32,
+    pub group_header_h: f32,
     pub pad_y: f32,
 }
 
@@ -457,6 +485,7 @@ impl RowMetrics {
             row_h: 28.0,
             icon: 20.0,
             header_h: 0.0,
+            group_header_h: GROUP_HEADER_H,
             pad_y: 4.0,
         }
     }
@@ -466,8 +495,18 @@ impl RowMetrics {
             row_h: 28.0,
             icon: 20.0,
             header_h: 28.0,
+            group_header_h: GROUP_HEADER_H,
             pad_y: 4.0,
         }
+    }
+
+    pub fn with_text_metrics(mut self, row_line_h: f32, group_line_h: f32) -> Self {
+        self.row_h = text_band_height(self.row_h, row_line_h);
+        if self.header_h > 0.0 {
+            self.header_h = text_band_height(self.header_h, row_line_h);
+        }
+        self.group_header_h = text_band_height(GROUP_HEADER_H, group_line_h);
+        self
     }
 }
 
@@ -622,7 +661,14 @@ impl ItemLayout {
         Self::Rows {
             metrics,
             width,
-            bands: Bands::new(1, metrics.row_h, metrics.pad_y, count, spans),
+            bands: Bands::new(
+                1,
+                metrics.row_h,
+                metrics.pad_y,
+                count,
+                spans,
+                metrics.group_header_h,
+            ),
         }
     }
 
@@ -787,6 +833,7 @@ impl ItemLayout {
     }
 
     /// Index under a scrollable-content point (already adjusted for scroll and header).
+    #[cfg(test)]
     pub fn hit_test(&self, x: f32, y: f32, count: usize) -> Option<usize> {
         match self {
             Self::Grid(g) => g.hit_test(x, y, count),
@@ -815,6 +862,68 @@ mod tests {
 
     /// The default icon-title font (12 px, 16 line) reproduces today's cells exactly; a
     /// scaled font grows the cell on the 4 px grid, before spacing is applied.
+    #[test]
+    fn scaled_text_bands_drive_rows_headers_hits_and_scroll_extents_together() {
+        let spans = [
+            GroupSpan {
+                first: 0,
+                len: 2,
+                bucket: Some(DateBucket::Today),
+            },
+            GroupSpan {
+                first: 2,
+                len: 1,
+                bucket: Some(DateBucket::Yesterday),
+            },
+        ];
+        for line_h in [16.0, 24.0, 36.0] {
+            let metrics = RowMetrics::details().with_text_metrics(line_h, line_h);
+            assert!(metrics.row_h >= line_h + 8.0);
+            assert!(metrics.header_h >= line_h + 8.0);
+            assert!(metrics.group_header_h >= line_h + 8.0);
+            let layout = ItemLayout::rows_grouped(metrics, 400.0, 3, &spans);
+            assert_eq!(layout.fixed_top(), metrics.header_h);
+            assert_eq!(layout.cell(0).y, metrics.pad_y + metrics.group_header_h);
+            assert_eq!(
+                layout.content_height(),
+                metrics.pad_y * 2.0 + metrics.group_header_h * 2.0 + metrics.row_h * 3.0
+            );
+            for header in layout.headers() {
+                assert_eq!(header.rect.h, metrics.group_header_h);
+                assert_eq!(
+                    layout.hit_test(10.0, header.rect.y + header.rect.h / 2.0, 3),
+                    None
+                );
+            }
+            for i in 0..3 {
+                let cell = layout.cell(i);
+                assert_eq!(layout.hit_test(10.0, cell.y + cell.h / 2.0, 3), Some(i));
+            }
+            assert_eq!(layout.max_scroll(50.0), layout.content_height() - 50.0);
+            let list = RowMetrics::list().with_text_metrics(line_h, line_h);
+            assert_eq!(list.header_h, 0.0);
+        }
+    }
+
+    #[test]
+    fn grid_group_bands_grow_without_changing_icon_or_column_geometry() {
+        let base = GridMetrics::for_icon_size(48, 2);
+        let metrics = base.with_group_line_h(36.0);
+        assert_eq!(metrics.icon, base.icon);
+        assert_eq!(metrics.cell_w, base.cell_w);
+        assert_eq!(metrics.cell_h, base.cell_h);
+        let spans = [GroupSpan {
+            first: 0,
+            len: 2,
+            bucket: Some(DateBucket::Today),
+        }];
+        let layout = ItemLayout::Grid(Grid::grouped(metrics, 320.0, 2, &spans));
+        assert_eq!(layout.headers()[0].rect.h, 44.0);
+        assert_eq!(layout.cell(0).y, base.pad_y + 44.0);
+        assert_eq!(layout.hit_test(10.0, base.pad_y + 30.0, 2), None);
+        assert_eq!(layout.hit_test(10.0, base.pad_y + 45.0, 2), Some(0));
+    }
+
     #[test]
     fn line_height_follows_the_icon_title_font_on_the_grid() {
         let base = GridMetrics::for_icon_size(48, 2);

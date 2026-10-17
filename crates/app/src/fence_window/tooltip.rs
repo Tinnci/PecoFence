@@ -15,7 +15,7 @@ pub(super) fn tip_delay_ms(hover_ms: u32, reshow_ms: u32, hidden_ago: Option<Dur
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum TipTarget {
     Item(usize),
-    Tab(usize),
+    Tab(ContentId),
     Up,
 }
 
@@ -40,7 +40,7 @@ impl FenceViewState {
             return Some(TipTarget::Up);
         }
         if let Some(t) = self.tab_at(x_px, y_px) {
-            return Some(TipTarget::Tab(t));
+            return Some(TipTarget::Tab(self.tabs.get(t)?.id));
         }
         hit.map(TipTarget::Item)
     }
@@ -117,13 +117,13 @@ impl FenceViewState {
     pub(super) fn tip_text(&self) -> Option<String> {
         match self.tip_target? {
             TipTarget::Up => Some(pecofence_core::i18n::text("向上").to_string()),
-            TipTarget::Tab(i) => {
-                let t = self.tabs.get(i)?;
-                let (_, w) = *self.tab_rects().get(i)?;
-                (!self
-                    .chrome
-                    .tab_title_fits(&t.title, w, t.title_size, &self.theme))
-                .then(|| t.title.clone())
+            TipTarget::Tab(id) => {
+                if !self.tabs.iter().any(|tab| tab.id == id) {
+                    return None;
+                }
+                self.committed_chrome_scene()?
+                    .tab_tip(id)
+                    .map(str::to_owned)
             }
             TipTarget::Item(i) => {
                 let it = self.items.get(i)?;

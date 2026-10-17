@@ -344,7 +344,15 @@ impl App {
             .behavior
             .wheel_lines
             .set(sysparams::wheel_scroll_lines());
-        self.apply_icon_title_font();
+        let text_scale = sysparams::text_scale_percent() as f32 / 100.0;
+        let text_scale_changed = self.ctx.behavior.text_scale.replace(text_scale) != text_scale;
+        let typography_changed = self.apply_fence_typography();
+        // A clamped/unavailable icon-title font must not suppress plugin reflow.
+        if text_scale_changed && !typography_changed {
+            for window in self.fences.values() {
+                window.redraw();
+            }
+        }
         // Any broadcast that reaches us after the work area moved (taskbar, DPI, resolution
         // races) must re-layout, or every later set_fence_bounds normalizes against a stale
         // work area and the saved geometry drifts by the taskbar height.
@@ -357,33 +365,43 @@ impl App {
         self.refresh_visuals(false);
     }
 
-    /// Icon labels follow the desktop's icon-title font (`SPI_GETICONTITLELOGFONT` times the
-    /// Accessibility text-size factor, both re-read on WM_SETTINGCHANGE): when it changed,
-    /// every fence refits its labels and re-lays out its grid, then settles its auto height.
-    pub(super) fn apply_icon_title_font(&mut self) {
-        let Some(f) = sysparams::icon_title_font() else {
-            return;
-        };
-        let changed = self
+    /// Refresh the system icon-title font and scaled file-content roles together.
+    /// Either change invalidates fitted labels and layout, including auto height.
+    pub(super) fn apply_fence_typography(&mut self) -> bool {
+        let content_changed = match self
             .ctx
             .chrome
-            .set_icon_title_font(
-                &f.family,
-                f.size_dip,
-                pecofence_render::FontWeight(f.weight),
-            )
-            .unwrap_or(false);
-        if !changed {
-            return;
+            .set_text_scale(self.ctx.behavior.text_scale.get())
+        {
+            Ok(changed) => changed,
+            Err(error) => {
+                tracing::warn!(%error, "file content typography update failed");
+                false
+            }
+        };
+        let icon_changed = sysparams::icon_title_font().is_some_and(|font| {
+            self.ctx
+                .chrome
+                .set_icon_title_font(
+                    &font.family,
+                    font.size_dip,
+                    pecofence_render::FontWeight(font.weight),
+                )
+                .unwrap_or(false)
+        });
+        self.ctx.theme.borrow_mut().title_height = self.ctx.chrome.title_height();
+        if !content_changed && !icon_changed {
+            return false;
         }
-        tracing::info!(family = %f.family, size = f.size_dip, "icon-title font changed");
+        tracing::info!(content_changed, icon_changed, "file typography changed");
         let ids: Vec<ContainerId> = self.fences.keys().copied().collect();
         for id in ids {
             if let Some(w) = self.fences.get(&id) {
-                w.on_icon_font_changed();
+                w.on_typography_changed();
             }
             self.apply_auto_height(id);
         }
+        true
     }
 
     pub(super) fn refresh_visuals(&mut self, force: bool) {
@@ -415,7 +433,8 @@ impl App {
             return;
         }
         let theme_changed = mode != self.theme_mode || style_changed;
-        let theme = theme_for(mode, style, accent.as_ref());
+        let mut theme = theme_for(mode, style, accent.as_ref());
+        theme.title_height = self.ctx.chrome.title_height();
         // The wallpaper sets are accent-independent and expensive: rebuild them only for a
         // mode change (or a forced refresh), not for a Settings › Colours retint.
         let backdrops = if theme_changed || force {

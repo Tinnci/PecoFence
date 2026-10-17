@@ -1,6 +1,8 @@
 //! Local TODO panel. Tasks live in the provider-owned JSON saved with its fence.
 
+use super::WidgetElement;
 use super::{Colors, WidgetFrame, build_panel_header};
+use pecofence_plugin_api::design;
 use pecofence_plugin_api::*;
 use serde::{Deserialize, Serialize};
 use std::rc::Rc;
@@ -80,6 +82,7 @@ impl PanelProvider for TodoPlugin {
             undo: None,
             page: 0,
             frame_revision: 0,
+            layout_tracker: design::LayoutTracker::default(),
             layout_revision: 0,
             stopped: false,
         }))
@@ -95,6 +98,7 @@ struct TodoWidget {
     page: usize,
     theme: Option<Arc<ThemeSnapshot>>,
     frame_revision: u64,
+    layout_tracker: design::LayoutTracker,
     layout_revision: u64,
     stopped: bool,
 }
@@ -246,7 +250,11 @@ impl PanelInstance for TodoWidget {
     fn prepare_frame(&mut self, input: FrameInput) -> Result<Rc<dyn PreparedFrame>> {
         let mount = self.mount.ok_or(Error::Closed)?;
         self.frame_revision = self.frame_revision.checked_add(1).ok_or(Error::Exhausted)?;
-        let capacity = page_capacity(input.viewport.h);
+        let capacity = page_capacity(
+            design::ContentScale::new(input.viewport, input.text_scale)
+                .logical_viewport()
+                .h,
+        );
         let pages = self.config.tasks.len().max(1).div_ceil(capacity);
         self.page = self.page.min(pages - 1);
         let mut frame = WidgetFrame::new(mount, self.frame_revision, self.layout_revision, input);
@@ -259,6 +267,7 @@ impl PanelInstance for TodoWidget {
             Colors::from_theme(self.theme.as_deref()),
             input.locale.starts_with("zh"),
         );
+        let frame = frame.finish(&mut self.layout_tracker)?;
         Ok(Rc::new(frame))
     }
 
@@ -309,7 +318,7 @@ fn build_todo(
     chinese: bool,
 ) {
     let v = frame.viewport;
-    let width = (v.w - 28.0).max(0.0);
+    let width = (v.w - design::CONTENT_INSET * 2.0).max(0.0);
     let pending = config.tasks.iter().filter(|task| !task.done).count();
     build_panel_header(
         frame,
@@ -334,26 +343,27 @@ fn build_todo(
         colors,
     );
     if config.tasks.is_empty() {
-        frame.add(
-            RectDip {
+        frame.add(WidgetElement {
+            rect: RectDip {
                 x: v.x + 18.0,
                 y: v.y + 80.0,
                 w: width - 8.0,
                 h: 32.0,
             },
-            if chinese {
+            text: (if chinese {
                 "暂无任务，点击右上角添加"
             } else {
                 "No tasks yet. Add one above."
-            },
-            15.0,
-            400,
-            colors.secondary,
-            None,
-            0.0,
-            None,
-            "text",
-        );
+            })
+            .into(),
+            size: design::BODY,
+            weight: 400,
+            foreground: colors.secondary,
+            fill: None,
+            radius: 0.0,
+            action: None,
+            role: "text",
+        });
     }
     let start = page.saturating_mul(capacity);
     for (slot, (index, task)) in config
@@ -365,190 +375,187 @@ fn build_todo(
         .enumerate()
     {
         let y = v.y + 68.0 + slot as f32 * 42.0;
-        frame.add(
-            RectDip {
-                x: v.x + 14.0,
+        frame.add(WidgetElement {
+            rect: RectDip {
+                x: v.x + design::CONTENT_INSET,
                 y,
                 w: width,
                 h: 37.0,
             },
-            "",
-            15.0,
-            400,
-            if task.done {
+            text: ("").into(),
+            size: design::BODY,
+            weight: 400,
+            foreground: if task.done {
                 colors.secondary
             } else {
                 colors.primary
             },
-            Some(colors.subtle),
-            6.0,
-            None,
-            "group",
-        );
-        frame.add(
-            RectDip {
-                x: v.x + 14.0,
+            fill: Some(colors.subtle),
+            radius: design::CONTROL_RADIUS,
+            action: None,
+            role: "group",
+        });
+        frame.add(WidgetElement {
+            rect: RectDip {
+                x: v.x + design::CONTENT_INSET,
                 y,
                 w: 36.0,
                 h: 37.0,
             },
-            if task.done { "☑" } else { "□" },
-            19.0,
-            400,
-            if task.done {
+            text: (if task.done { "☑" } else { "□" }).into(),
+            size: 19.0,
+            weight: 400,
+            foreground: if task.done {
                 colors.accent
             } else {
                 colors.primary
             },
-            None,
-            0.0,
-            Some(TASK_BASE + index as u64),
-            "checkbox",
-        );
-        if let Some(node) = frame.semantics.last_mut() {
-            node.name = if chinese {
-                format!(
-                    "{}：{}",
-                    if task.done {
-                        "已完成，点击恢复"
-                    } else {
-                        "未完成，点击完成"
-                    },
-                    task.title
-                )
-            } else {
-                format!(
-                    "{}: {}",
-                    if task.done {
-                        "Completed, mark pending"
-                    } else {
-                        "Pending, mark complete"
-                    },
-                    task.title
-                )
-            };
-        }
+            fill: None,
+            radius: 0.0,
+            action: Some(TASK_BASE + index as u64),
+            role: "checkbox",
+        });
+        frame.set_last_accessible_name(if chinese {
+            format!(
+                "{}：{}",
+                if task.done {
+                    "已完成，点击恢复"
+                } else {
+                    "未完成，点击完成"
+                },
+                task.title
+            )
+        } else {
+            format!(
+                "{}: {}",
+                if task.done {
+                    "Completed, mark pending"
+                } else {
+                    "Pending, mark complete"
+                },
+                task.title
+            )
+        });
         // Keep the complete title in the text/semantic node. The renderer clips
         // to this rectangle; opening the editor reveals the complete text.
-        frame.add(
-            RectDip {
-                x: v.x + 50.0,
+        frame.add(WidgetElement {
+            rect: RectDip {
+                x: v.x + design::CONTENT_INSET + 36.0,
                 y,
                 w: (width - 36.0).max(0.0),
                 h: 37.0,
             },
-            &task.title,
-            15.0,
-            400,
-            if task.done {
+            text: (&task.title).into(),
+            size: design::BODY,
+            weight: 400,
+            foreground: if task.done {
                 colors.secondary
             } else {
                 colors.primary
             },
-            None,
-            0.0,
-            Some(EDIT_BASE + index as u64),
-            "button",
-        );
-        if let Some(node) = frame.nodes.last_mut() {
-            node.clip_text = true;
-        }
+            fill: None,
+            radius: 0.0,
+            action: Some(EDIT_BASE + index as u64),
+            role: "button",
+        });
     }
     let footer_y = v.y + v.h - 37.0;
     if config.tasks.iter().any(|task| task.done) {
-        frame.add(
-            RectDip {
-                x: v.x + 14.0,
+        frame.add(WidgetElement {
+            rect: RectDip {
+                x: v.x + design::CONTENT_INSET,
                 y: footer_y,
                 w: 110.0,
                 h: 26.0,
             },
-            if chinese {
+            text: (if chinese {
                 "清除已完成"
             } else {
                 "Clear done"
-            },
-            12.0,
-            400,
-            colors.secondary,
-            None,
-            0.0,
-            Some(CLEAR_DONE),
-            "button",
-        );
+            })
+            .into(),
+            size: 12.0,
+            weight: 400,
+            foreground: colors.secondary,
+            fill: None,
+            radius: 0.0,
+            action: Some(CLEAR_DONE),
+            role: "button",
+        });
     }
     if can_undo {
-        frame.add(
-            RectDip {
+        frame.add(WidgetElement {
+            rect: RectDip {
                 x: v.x + 130.0,
                 y: footer_y,
                 w: 115.0,
                 h: 26.0,
             },
-            if chinese {
+            text: (if chinese {
                 "撤销上一步"
             } else {
                 "Undo last"
-            },
-            12.0,
-            600,
-            colors.accent,
-            None,
-            0.0,
-            Some(UNDO),
-            "button",
-        );
+            })
+            .into(),
+            size: 12.0,
+            weight: 600,
+            foreground: colors.accent,
+            fill: None,
+            radius: 0.0,
+            action: Some(UNDO),
+            role: "button",
+        });
     }
     let pages = config.tasks.len().max(1).div_ceil(capacity);
     if pages > 1 {
-        frame.add(
-            RectDip {
+        frame.add(WidgetElement {
+            rect: RectDip {
                 x: v.x + v.w - 112.0,
                 y: footer_y,
                 w: 30.0,
                 h: 26.0,
             },
-            "‹",
-            20.0,
-            600,
-            colors.primary,
-            None,
-            0.0,
-            (page > 0).then_some(PREVIOUS_PAGE),
-            "button",
-        );
-        frame.add(
-            RectDip {
+            text: ("‹").into(),
+            size: 20.0,
+            weight: 600,
+            foreground: colors.primary,
+            fill: None,
+            radius: 0.0,
+            action: (page > 0).then_some(PREVIOUS_PAGE),
+            role: "button",
+        });
+        frame.add(WidgetElement {
+            rect: RectDip {
                 x: v.x + v.w - 79.0,
                 y: footer_y,
                 w: 42.0,
                 h: 26.0,
             },
-            format!("{}/{}", page + 1, pages),
-            12.0,
-            400,
-            colors.secondary,
-            None,
-            0.0,
-            None,
-            "text",
-        );
-        frame.add(
-            RectDip {
+            text: format!("{}/{}", page + 1, pages),
+            size: 12.0,
+            weight: 400,
+            foreground: colors.secondary,
+            fill: None,
+            radius: 0.0,
+            action: None,
+            role: "text",
+        });
+        frame.add(WidgetElement {
+            rect: RectDip {
                 x: v.x + v.w - 36.0,
                 y: footer_y,
                 w: 30.0,
                 h: 26.0,
             },
-            "›",
-            20.0,
-            600,
-            colors.primary,
-            None,
-            0.0,
-            (page + 1 < pages).then_some(NEXT_PAGE),
-            "button",
-        );
+            text: ("›").into(),
+            size: 20.0,
+            weight: 600,
+            foreground: colors.primary,
+            fill: None,
+            radius: 0.0,
+            action: (page + 1 < pages).then_some(NEXT_PAGE),
+            role: "button",
+        });
     }
 }
 
@@ -691,7 +698,11 @@ mod tests {
                 })
                 .collect(),
         };
-        let capacity = page_capacity(input.viewport.h);
+        let capacity = page_capacity(
+            design::ContentScale::new(input.viewport, input.text_scale)
+                .logical_viewport()
+                .h,
+        );
         build_todo(
             &mut frame,
             &config,
@@ -701,6 +712,7 @@ mod tests {
             Colors::from_theme(None),
             false,
         );
+        let frame = frame.finish(&mut design::LayoutTracker::default()).unwrap();
         assert_eq!(
             frame
                 .hit_tree()
@@ -726,7 +738,7 @@ mod tests {
             assert!(!toggle.rect.contains(edit.rect.x + 1.0, edit.rect.y + 1.0));
             assert_eq!(
                 frame
-                    .semantics
+                    .semantics()
                     .iter()
                     .find(|n| n.action == Some(EDIT_BASE + index as u64))
                     .unwrap()

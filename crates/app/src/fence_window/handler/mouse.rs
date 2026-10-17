@@ -132,10 +132,9 @@ pub(super) fn on_lbuttondown(
             }
             let pointer_x = x as f32 / v.scale();
             let slot_x = v
-                .tab_draw_xs(Instant::now())
-                .get(t)
-                .copied()
-                .unwrap_or(pointer_x);
+                .committed_chrome_scene()
+                .and_then(|scene| scene.tab(v.tabs[t].id))
+                .map_or(pointer_x, |node| node.rect.x);
             v.tab_drag = Some(TabDrag {
                 start: (x, y),
                 moved: false,

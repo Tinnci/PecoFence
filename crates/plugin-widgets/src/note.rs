@@ -1,6 +1,8 @@
 //! Local plain-text notes; the host owns editing, lifecycle and durable saves.
 
+use super::WidgetElement;
 use super::{Colors, WidgetFrame, build_panel_header};
+use pecofence_plugin_api::design;
 use pecofence_plugin_api::*;
 use serde::{Deserialize, Serialize};
 use std::rc::Rc;
@@ -70,6 +72,7 @@ impl PanelProvider for NotePlugin {
             undo: None,
             revision: 0,
             frame_revision: 0,
+            layout_tracker: design::LayoutTracker::default(),
             stopped: false,
         }))
     }
@@ -84,6 +87,7 @@ struct NoteWidget {
     theme: Option<Arc<ThemeSnapshot>>,
     revision: u64,
     frame_revision: u64,
+    layout_tracker: design::LayoutTracker,
     stopped: bool,
 }
 
@@ -171,6 +175,7 @@ impl PanelInstance for NoteWidget {
             Colors::from_theme(self.theme.as_deref()),
             input.locale.starts_with("zh"),
         );
+        let frame = frame.finish(&mut self.layout_tracker)?;
         Ok(Rc::new(frame))
     }
 
@@ -207,30 +212,30 @@ fn build_note(
     );
     let v = frame.viewport;
     let body = RectDip {
-        x: v.x + 14.0,
+        x: v.x + design::CONTENT_INSET,
         y: v.y + 68.0,
-        w: (v.w - 28.0).max(0.0),
+        w: (v.w - design::CONTENT_INSET * 2.0).max(0.0),
         h: (v.h - 116.0).max(0.0),
     };
-    frame.add(
-        body,
-        "",
-        15.0,
-        400,
-        colors.primary,
-        Some(colors.subtle),
-        6.0,
-        Some(EDIT),
-        "button",
-    );
-    frame.add(
-        RectDip {
+    frame.add(WidgetElement {
+        rect: body,
+        text: ("").into(),
+        size: design::BODY,
+        weight: 400,
+        foreground: colors.primary,
+        fill: Some(colors.subtle),
+        radius: design::CONTROL_RADIUS,
+        action: Some(EDIT),
+        role: "button",
+    });
+    frame.add(WidgetElement {
+        rect: RectDip {
             x: body.x + 12.0,
             y: body.y + 10.0,
             w: (body.w - 24.0).max(0.0),
             h: (body.h - 20.0).max(0.0),
         },
-        if config.text.is_empty() {
+        text: (if config.text.is_empty() {
             if chinese {
                 "从这里开始记录…"
             } else {
@@ -238,64 +243,65 @@ fn build_note(
             }
         } else {
             &config.text
-        },
-        15.0,
-        400,
-        if config.text.is_empty() {
+        })
+        .into(),
+        size: design::BODY,
+        weight: 400,
+        foreground: if config.text.is_empty() {
             colors.secondary
         } else {
             colors.primary
         },
-        None,
-        0.0,
-        None,
-        "text",
-    );
-    if let Some(node) = frame.nodes.last_mut() {
-        node.clip_text = true;
-    }
+        fill: None,
+        radius: 0.0,
+        action: None,
+        role: "text",
+    });
+
     if can_undo {
-        frame.add(
-            RectDip {
-                x: v.x + 14.0,
+        frame.add(WidgetElement {
+            rect: RectDip {
+                x: v.x + design::CONTENT_INSET,
                 y: v.y + v.h - 37.0,
                 w: 110.0,
                 h: 26.0,
             },
-            if chinese {
+            text: (if chinese {
                 "撤销上一步"
             } else {
                 "Undo last"
-            },
-            12.0,
-            600,
-            colors.accent,
-            None,
-            0.0,
-            Some(UNDO),
-            "button",
-        );
+            })
+            .into(),
+            size: 12.0,
+            weight: 600,
+            foreground: colors.accent,
+            fill: None,
+            radius: 0.0,
+            action: Some(UNDO),
+            role: "button",
+        });
     }
-    frame.add(
-        RectDip {
+    frame.add(WidgetElement {
+        rect: RectDip {
             x: v.x + 130.0,
             y: v.y + v.h - 37.0,
             w: (v.w - 144.0).max(0.0),
             h: 26.0,
         },
-        if chinese {
+        text: (if chinese {
             "Ctrl+Enter 或失焦保存 · Esc 取消"
         } else {
             "Ctrl+Enter / blur saves; Esc cancels"
-        },
-        11.0,
-        400,
-        colors.secondary,
-        None,
-        0.0,
-        None,
-        "text",
-    );
+        })
+        .into(),
+        size: 11.0,
+        weight: 400,
+        foreground: colors.secondary,
+        fill: None,
+        radius: 0.0,
+        action: None,
+        role: "text",
+    });
 }
 
 #[cfg(test)]
