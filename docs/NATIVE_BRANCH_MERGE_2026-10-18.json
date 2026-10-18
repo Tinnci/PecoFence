@@ -776,5 +776,79 @@
     "upstream/version-0.1.3": "d5247e988a7451e220ed13bf9af069192db1e994",
     "upstream/version-0.1.5": "bbc6f7dc1ed1fb23240946a2df8d6411b6540087",
     "upstream/win10-support": "0c1d662049e485c5c084d621b359d35cf381bc0c"
-  }
+  },
+  "taskSchedulerResolutions": [
+    {
+      "path": "CHANGELOG.md",
+      "resolution": "Keep native fork startup ownership and explicit config-directory propagation; do not create a second startup task or restore upstream Store/WebView/flat-model code."
+    },
+    {
+      "path": "crates/app/src/app/mod.rs",
+      "resolution": "Keep native fork startup ownership and explicit config-directory propagation; do not create a second startup task or restore upstream Store/WebView/flat-model code."
+    },
+    {
+      "path": "crates/app/src/app/settings.rs",
+      "resolution": "Keep native fork startup ownership and explicit config-directory propagation; do not create a second startup task or restore upstream Store/WebView/flat-model code."
+    },
+    {
+      "path": "crates/app/src/main.rs",
+      "resolution": "Keep native fork startup ownership and explicit config-directory propagation; do not create a second startup task or restore upstream Store/WebView/flat-model code."
+    },
+    {
+      "path": "crates/core/src/config_store.rs",
+      "resolution": "Keep native fork startup ownership and explicit config-directory propagation; do not create a second startup task or restore upstream Store/WebView/flat-model code."
+    },
+    {
+      "path": "crates/platform/src/autostart.rs",
+      "resolution": "Keep native fork startup ownership and explicit config-directory propagation; do not create a second startup task or restore upstream Store/WebView/flat-model code."
+    },
+    {
+      "path": "crates/platform/src/pipe.rs",
+      "resolution": "Keep native fork startup ownership and explicit config-directory propagation; do not create a second startup task or restore upstream Store/WebView/flat-model code."
+    },
+    {
+      "path": "crates/platform/src/store.rs",
+      "resolution": "Keep native fork startup ownership and explicit config-directory propagation; do not create a second startup task or restore upstream Store/WebView/flat-model code."
+    },
+    {
+      "path": "crates/platform/src/store_bindings.rs",
+      "resolution": "Keep native fork startup ownership and explicit config-directory propagation; do not create a second startup task or restore upstream Store/WebView/flat-model code."
+    },
+    {
+      "path": "docs/INSTALLER.md",
+      "resolution": "Keep native fork startup ownership and explicit config-directory propagation; do not create a second startup task or restore upstream Store/WebView/flat-model code."
+    },
+    {
+      "path": "docs/PORTABLE.md",
+      "resolution": "Keep native fork startup ownership and explicit config-directory propagation; do not create a second startup task or restore upstream Store/WebView/flat-model code."
+    },
+    {
+      "path": "docs/STORE.md",
+      "resolution": "Keep native fork startup ownership and explicit config-directory propagation; do not create a second startup task or restore upstream Store/WebView/flat-model code."
+    },
+    {
+      "path": "docs/UPGRADING.md",
+      "resolution": "Keep native fork startup ownership and explicit config-directory propagation; do not create a second startup task or restore upstream Store/WebView/flat-model code."
+    },
+    {
+      "path": "packaging/inno/pecofence.iss",
+      "resolution": "Keep native fork startup ownership and explicit config-directory propagation; do not create a second startup task or restore upstream Store/WebView/flat-model code."
+    },
+    {
+      "path": "packaging/msix/AppxManifest.xml",
+      "resolution": "Keep native fork startup ownership and explicit config-directory propagation; do not create a second startup task or restore upstream Store/WebView/flat-model code."
+    },
+    {
+      "path": "scripts/test-language-smoke.py",
+      "resolution": "Keep native fork startup ownership and explicit config-directory propagation; do not create a second startup task or restore upstream Store/WebView/flat-model code."
+    },
+    {
+      "path": "scripts/test-windows-packaging.py",
+      "resolution": "Keep native fork startup ownership and explicit config-directory propagation; do not create a second startup task or restore upstream Store/WebView/flat-model code."
+    },
+    {
+      "path": "tools/bindgen/store.txt",
+      "resolution": "Keep native fork startup ownership and explicit config-directory propagation; do not create a second startup task or restore upstream Store/WebView/flat-model code."
+    }
+  ]
 }
