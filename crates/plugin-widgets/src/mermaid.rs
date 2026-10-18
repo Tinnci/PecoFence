@@ -550,13 +550,13 @@ fn parse_date(text: &str) -> Option<NaiveDate> {
 
 fn parse_duration(text: &str) -> Option<i64> {
     let text = text.trim();
-    let (number, unit) = text.split_at(text.len().checked_sub(1)?);
-    let number: f64 = number.trim().parse().ok()?;
-    let days = match unit {
-        "d" => number,
-        "w" => number * 7.0,
-        _ => return None,
+    let (number, multiplier) = if let Some(number) = text.strip_suffix('d') {
+        (number, 1.0)
+    } else {
+        (text.strip_suffix('w')?, 7.0)
     };
+    let number: f64 = number.trim().parse().ok()?;
+    let days = number * multiplier;
     (days.is_finite() && (0.0..=3650.0).contains(&days)).then(|| days.ceil() as i64)
 }
 
@@ -658,7 +658,9 @@ fn parse_gantt(body: &[(usize, &str)], mut title: Option<String>) -> Result<Gant
             date
         } else {
             let days = parse_duration(end).ok_or_else(|| fail(ErrorKind::BadDuration))?;
-            start + chrono::Duration::days(days)
+            start
+                .checked_add_signed(chrono::Duration::days(days))
+                .ok_or_else(|| fail(ErrorKind::BadDuration))?
         };
         task.start = start;
         task.end = if task.milestone {
@@ -1117,6 +1119,20 @@ mod tests {
         }
         let back = &layout.edges[2];
         assert!(back.points.len() > 2);
+    }
+
+    #[test]
+    fn gantt_rejects_bad_duration_unicode_without_panicking() {
+        for duration in ["三天", "1天", "😀"] {
+            let source = format!("gantt\n A :2026-10-19, {duration}\n");
+            assert_eq!(parse(&source).unwrap_err().kind, ErrorKind::BadDuration);
+        }
+    }
+
+    #[test]
+    fn gantt_rejects_bad_duration_date_overflow_without_panicking() {
+        let source = format!("gantt\n A :{}, 1d\n", NaiveDate::MAX.format("%Y-%m-%d"));
+        assert_eq!(parse(&source).unwrap_err().kind, ErrorKind::BadDuration);
     }
 
     #[test]
