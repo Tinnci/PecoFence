@@ -19,3 +19,6 @@ Downloaded NuGet archives and extracted build files remain local and are ignored
 The patched Rust Composition wrapper and its licenses are under
 `vendor/windows-composition`. The separately patched Reactor teardown/guard source
 and its attribution are under `vendor/windows-reactor`.
+
+`noto-cjk/` contains the subset Noto Serif SC / Noto Sans SC fonts used by the
+warm-paper widgets, with their SIL Open Font License and provenance.

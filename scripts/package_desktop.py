@@ -22,7 +22,15 @@ ROOT = Path(__file__).resolve().parents[1]
 EXES = ("pecofence.exe", "pecofence-watchdog.exe")
 SHELL_DLL = "pecofence_shell_extension.dll"
 BINARIES = (*EXES, SHELL_DLL)
+# Warm-paper widget fonts load from `fonts/` beside pecofence.exe (subset OFL Noto CJK;
+# see third_party/noto-cjk). The app falls back to system fonts when they are absent.
+FONT_ASSETS = {
+    "third_party/noto-cjk/PecoNotoSansSC-Regular.otf": "fonts/PecoNotoSansSC-Regular.otf",
+    "third_party/noto-cjk/PecoNotoSerifSC-SemiBold.otf": "fonts/PecoNotoSerifSC-SemiBold.otf",
+    "third_party/noto-cjk/OFL.txt": "fonts/OFL.txt",
+}
 BASE_FILES = {
+    *FONT_ASSETS.values(),
     *BINARIES,
     "PORTABLE_UPDATE.md",
     "update-portable-pair.ps1",
@@ -46,6 +54,7 @@ PACKAGE_INPUTS = (
     "third_party/winappsdk/runtime-manifest.json",
     "third_party/winappsdk/app.manifest",
     "third_party/winappsdk/runtime.txt",
+    *FONT_ASSETS,
 )
 MAX_ARCHIVE_BYTES = 128 * 1024 * 1024
 MAX_UNPACKED_BYTES = 160 * 1024 * 1024
@@ -319,6 +328,7 @@ def payload(release: Path, stage: Path, receipt: dict, kind: str, root: Path = R
         ("docs/PORTABLE_UPDATE.md", "PORTABLE_UPDATE.md"),
         ("scripts/update-portable-pair.ps1", "update-portable-pair.ps1"),
         ("third_party/winappsdk/WINDOWS-APP-SDK-LICENSE.txt", "WINDOWS-APP-SDK-LICENSE.txt"),
+        *FONT_ASSETS.items(),
     ]:
         files[target] = asset(source)
     if kind == "portable":

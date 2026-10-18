@@ -47,6 +47,15 @@
   clock still follows the fence theme, and high contrast keeps system colors.
   Every text pair is tested at WCAG 4.5:1 or better. Not yet checked on device;
   Chinese titles fall back to the system CJK font.
+- Render the warm paper widgets in the approved faces: Noto Serif SC SemiBold
+  titles and Noto Sans SC body text (new `FontRole::PaperBody`; the rest of the
+  app keeps Segoe UI Variable). Subset OFL fonts (Latin, GB2312 symbols and
+  3,755 level-1 hanzi; 1.1 + 1.6 MiB) ship in `fonts/` beside the EXE and load
+  into a private DirectWrite collection without system installation. A missing
+  folder falls back to Sitka Subheading / Segoe; characters outside the subset
+  use DirectWrite system fallback. Release EXE 6,609,920 bytes (+9,216 over
+  the parent commit; WSL lld-link cross-build), under the 6,815,744-byte gate.
+  Headless tests and Windows Clippy only; not yet checked on device.
 
 The versioned entries below are retained from the upstream baseline. References
 to Store submissions or a published website describe that history, not an active

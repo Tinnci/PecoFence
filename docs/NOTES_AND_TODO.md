@@ -19,7 +19,7 @@ MSIX 的 Windows Explorer 文件夹背景菜单扩展并列提供“新建便笺
 
 ## 配色与字体
 
-便笺、待办和日历采用暖纸色方案：组件自绘纸色底（#F6F1E7），卡片 #ECE4D6，正文墨色 #2B2722，次要文字 #685F55，强调色赤陶 #A9502D（文字用 #944526，赤陶底上用奶白 #FFF8EE）。所有文字组合经测试达到 WCAG 4.5:1。标题使用 Windows 内置衬线字体 Sitka Subheading，中文由 DirectWrite 回退到系统中文字体；正文仍为 Segoe UI Variable。时钟继续跟随栅栏主题；高对比度模式下忽略纸色和便笺颜色，使用系统颜色。
+便笺、待办和日历采用暖纸色方案：组件自绘纸色底（#F6F1E7），卡片 #ECE4D6，正文墨色 #2B2722，次要文字 #685F55，强调色赤陶 #A9502D（文字用 #944526，赤陶底上用奶白 #FFF8EE）。所有文字组合经测试达到 WCAG 4.5:1。标题使用思源宋体 Noto Serif SC SemiBold，正文使用 Noto Sans SC（`FontRole::PaperBody`；应用其他部分仍为 Segoe UI Variable）。两者为 OFL 子集字体（拉丁字符、GB2312 符号与 3,755 个一级汉字），随包放在 EXE 旁的 `fonts/` 目录，由 DirectWrite 私有字体集合加载，不安装到系统。缺少该目录时回退到 Sitka Subheading 与 Segoe UI Variable；子集外的字符由 DirectWrite 回退到系统中文字体。时钟继续跟随栅栏主题；高对比度模式下忽略纸色和便笺颜色，使用系统颜色。
 
 ## 动效
 

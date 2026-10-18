@@ -612,6 +612,9 @@ pub(crate) struct WidgetFrame {
     clip: RectDip,
     scale: ContentScale,
     nodes: Vec<SceneNode>,
+    /// Default role for text without an explicit font: the Segoe ramp, or the
+    /// paper body face once [`WidgetFrame::ground`] paints a paper ground.
+    body_font: Option<FontRole>,
 }
 
 impl WidgetFrame {
@@ -633,6 +636,7 @@ impl WidgetFrame {
             clip: input.viewport,
             scale: ContentScale::new(input.viewport, input.text_scale),
             nodes: Vec::new(),
+            body_font: None,
         }
     }
 
@@ -664,7 +668,7 @@ impl WidgetFrame {
             font,
             align,
         } = element;
-        let font = font.unwrap_or(if size < design::BODY {
+        let font = font.or(self.body_font).unwrap_or(if size < design::BODY {
             FontRole::Small
         } else if size >= 28.0 {
             FontRole::Display
@@ -697,10 +701,12 @@ impl WidgetFrame {
     }
 
     /// Paint the widget's own ground behind everything else, when its palette has one.
+    /// A paper ground also switches the frame's default text to the paper body face.
     pub(crate) fn ground(&mut self, colors: Colors) {
         let Some(ground) = colors.ground else {
             return;
         };
+        self.body_font = Some(FontRole::PaperBody);
         let v = self.viewport;
         self.add(
             WidgetElement::text(BACKGROUND, v, "", design::BODY, 400, colors.primary)
@@ -1528,6 +1534,7 @@ mod tests {
                 1.0,
             ),
             nodes: Vec::new(),
+            body_font: None,
         };
         build_calendar(
             &mut frame,
@@ -1824,7 +1831,7 @@ mod tests {
     }
 
     #[test]
-    fn paper_widgets_draw_their_own_ground_and_serif_titles() {
+    fn paper_widgets_draw_their_own_ground_serif_titles_and_paper_body() {
         let mut frame = identity_frame(420.0, 330.0, 1.0);
         build_calendar(
             &mut frame,
@@ -1843,6 +1850,18 @@ mod tests {
         assert_eq!(ground.action, None);
         let title = scene.nodes().iter().find(|n| n.id == 1).unwrap();
         assert_eq!(title.style.font, FontRole::Serif);
+        // Body text uses the paper face; icon glyphs keep the icon font.
+        let body: Vec<_> = scene
+            .nodes()
+            .iter()
+            .filter(|n| !n.text.is_empty() && n.id != 1)
+            .collect();
+        assert!(!body.is_empty());
+        assert!(
+            body.iter()
+                .all(|n| matches!(n.style.font, FontRole::PaperBody | FontRole::Icons))
+        );
+        assert!(body.iter().any(|n| n.style.font == FontRole::PaperBody));
         let today = scene
             .nodes()
             .iter()
@@ -1857,5 +1876,24 @@ mod tests {
         let system = Colors::paper(Some(&contrast_theme));
         assert_eq!(system.ground, None);
         assert_eq!(system.primary, contrast_theme.text_primary);
+        // High contrast keeps the system text ramp as well as the system colors.
+        let mut frame = identity_frame(420.0, 330.0, 1.0);
+        build_calendar(
+            &mut frame,
+            WidgetConfig::default(),
+            0,
+            None,
+            system,
+            false,
+            NaiveDate::from_ymd_opt(2024, 2, 15).unwrap(),
+            MonthMotion::REST,
+        );
+        let scene = frame.finish(&mut LayoutTracker::default()).unwrap();
+        assert!(
+            scene
+                .nodes()
+                .iter()
+                .all(|n| n.style.font != FontRole::PaperBody)
+        );
     }
 }
