@@ -237,12 +237,8 @@ impl App {
         if self.state.item(item).is_some_and(|it| it.is_namespace()) {
             return;
         }
-        let name = name.trim();
-        if name.is_empty()
-            || name
-                .chars()
-                .any(|c| matches!(c, '\\' | '/' | ':' | '*' | '?' | '"' | '<' | '>' | '|'))
-        {
+        let name = name.trim().trim_end_matches(['.', ' ']);
+        if crate::rename::invalid_file_name(name) {
             if let Some(t) = &self.tray {
                 t.show_info(
                     "PecoFence",
@@ -284,7 +280,7 @@ impl App {
             }
             return;
         }
-        match std::fs::rename(&old, &new) {
+        match shell::rename_no_replace(&old, &new) {
             Ok(()) => {
                 tracing::info!(from = %old.display(), to = %new.display(), "item renamed");
                 if self.state.is_portal_item(item) {

@@ -123,7 +123,6 @@ impl IconCache {
             let done_tx = done_tx.clone();
             let _ = std::thread::Builder::new()
                 .name(format!("pecofence-icons-{i}"))
-                .stack_size(256 * 1024)
                 .spawn(move || {
                     // Single-threaded apartment on purpose: the shell's icon handlers for
                     // Internet shortcuts (.url → IconFile) hand back the generic document icon

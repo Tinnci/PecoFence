@@ -2,6 +2,8 @@
 import importlib.util
 from pathlib import Path
 import unittest
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location("check_locales", Path(__file__).with_name("check-locales.py"))
 locales = importlib.util.module_from_spec(spec)
@@ -9,6 +11,16 @@ spec.loader.exec_module(locales)
 
 
 class NativeLabelTests(unittest.TestCase):
+    def test_language_specific_translation_calls_are_scanned(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "crates").mkdir()
+            (root / "crates/probe.rs").write_text(
+                'i18n::text_in(language, "指定语言消息");\n', encoding="utf-8"
+            )
+            with patch.object(locales, "ROOT", root):
+                self.assertIn("指定语言消息", locales.source_keys())
+
     def test_native_font_icon_is_not_a_translation_key(self):
         glyph = locales.rust_literal(r'"\u{E713}"')
         self.assertEqual(glyph, "\ue713")

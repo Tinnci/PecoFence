@@ -1103,6 +1103,25 @@ pub unsafe fn MonitorFromWindow(hwnd: HWND, dwflags: u32) -> HMONITOR {
     unsafe { MonitorFromWindow(hwnd, dwflags) }
 }
 #[inline]
+pub unsafe fn MoveFileExW<P0, P1>(
+    lpexistingfilename: P0,
+    lpnewfilename: P1,
+    dwflags: u32,
+) -> windows_core::BOOL
+where
+    P0: windows_core::Param<windows_core::PCWSTR>,
+    P1: windows_core::Param<windows_core::PCWSTR>,
+{
+    windows_core::link!("kernel32.dll" "system" fn MoveFileExW(lpexistingfilename : windows_core::PCWSTR, lpnewfilename : windows_core::PCWSTR, dwflags : u32) -> windows_core::BOOL);
+    unsafe {
+        MoveFileExW(
+            lpexistingfilename.param().abi(),
+            lpnewfilename.param().abi(),
+            dwflags,
+        )
+    }
+}
+#[inline]
 pub unsafe fn MoveWindow(
     hwnd: HWND,
     x: i32,
@@ -1113,6 +1132,27 @@ pub unsafe fn MoveWindow(
 ) -> windows_core::BOOL {
     windows_core::link!("user32.dll" "system" fn MoveWindow(hwnd : HWND, x : i32, y : i32, nwidth : i32, nheight : i32, brepaint : windows_core::BOOL) -> windows_core::BOOL);
     unsafe { MoveWindow(hwnd, x, y, nwidth, nheight, brepaint.into()) }
+}
+#[inline]
+pub unsafe fn MultiByteToWideChar(
+    codepage: u32,
+    dwflags: u32,
+    lpmultibytestr: *const i8,
+    cbmultibyte: i32,
+    lpwidecharstr: Option<windows_core::PWSTR>,
+    cchwidechar: i32,
+) -> i32 {
+    windows_core::link!("kernel32.dll" "system" fn MultiByteToWideChar(codepage : u32, dwflags : u32, lpmultibytestr : *const i8, cbmultibyte : i32, lpwidecharstr : windows_core::PWSTR, cchwidechar : i32) -> i32);
+    unsafe {
+        MultiByteToWideChar(
+            codepage,
+            dwflags,
+            lpmultibytestr,
+            cbmultibyte,
+            lpwidecharstr.unwrap_or(core::mem::zeroed()) as _,
+            cchwidechar,
+        )
+    }
 }
 #[inline]
 pub unsafe fn OleGetClipboard() -> windows_core::Result<IDataObject> {
@@ -1203,6 +1243,15 @@ pub unsafe fn PostThreadMessageW(
 ) -> windows_core::BOOL {
     windows_core::link!("user32.dll" "system" fn PostThreadMessageW(idthread : u32, msg : u32, wparam : WPARAM, lparam : LPARAM) -> windows_core::BOOL);
     unsafe { PostThreadMessageW(idthread, msg, wparam, lparam) }
+}
+#[inline]
+pub unsafe fn QueryWorkingSet(
+    hprocess: HANDLE,
+    pv: *mut core::ffi::c_void,
+    cb: u32,
+) -> windows_core::BOOL {
+    windows_core::link!("kernel32.dll" "system" "K32QueryWorkingSet" fn QueryWorkingSet(hprocess : HANDLE, pv : *mut core::ffi::c_void, cb : u32) -> windows_core::BOOL);
+    unsafe { QueryWorkingSet(hprocess, pv as _, cb) }
 }
 #[inline]
 pub unsafe fn ReadDirectoryChangesW(
@@ -2661,6 +2710,7 @@ impl Default for CONTEXT_0_0 {
 }
 #[cfg(target_arch = "aarch64")]
 pub type CONTEXT = ARM64_NT_CONTEXT;
+pub const CP_ACP: i32 = 0;
 pub const CREATE_ALWAYS: i32 = 2;
 pub const CREATE_NO_WINDOW: i32 = 134217728;
 pub const CS_DBLCLKS: i32 = 8;

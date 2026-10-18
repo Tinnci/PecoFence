@@ -387,11 +387,10 @@ pub fn shell_image(path: &Path, size_px: u32, icon_only: bool) -> Result<ShellIm
 /// returns the 256 px jumbo icon / thumbnail for 64 and 96 px requests). Explorer downsamples
 /// the jumbo list the same way; drawing the 256 px bitmap into a 96 px box with a 2x2 linear
 /// tap would alias and shimmer instead. Exact-size returns are left untouched.
-/// `IconFile=` / `IconIndex=` of an Internet shortcut, when the file names an icon.
-fn url_icon_source(path: &Path) -> Option<(PathBuf, i32)> {
+fn url_file_text(path: &Path) -> Option<String> {
     let bytes = std::fs::read(path).ok()?;
     // .url files are ANSI or UTF-8 in practice; a UTF-16 one starts with a BOM.
-    let text = if bytes.starts_with(&[0xFF, 0xFE]) {
+    Some(if bytes.starts_with(&[0xFF, 0xFE]) {
         let units: Vec<u16> = bytes[2..]
             .as_chunks::<2>()
             .0
@@ -400,8 +399,36 @@ fn url_icon_source(path: &Path) -> Option<(PathBuf, i32)> {
             .collect();
         String::from_utf16_lossy(&units)
     } else {
-        String::from_utf8_lossy(&bytes).into_owned()
-    };
+        match String::from_utf8(bytes) {
+            Ok(text) => text,
+            // Not UTF-8: the system ANSI code page (GBK on a Chinese Windows).
+            Err(e) => ansi_to_string(e.as_bytes()),
+        }
+    })
+}
+
+/// Decodes `bytes` in the system ANSI code page.
+fn ansi_to_string(bytes: &[u8]) -> String {
+    if bytes.is_empty() {
+        return String::new();
+    }
+    // SAFETY: the first call only measures; the second writes at most `n` units into `w`.
+    unsafe {
+        let text = bytes.as_ptr().cast();
+        let len = bytes.len() as i32;
+        let n = MultiByteToWideChar(CP_ACP as u32, 0, text, len, None, 0);
+        if n <= 0 {
+            return String::from_utf8_lossy(bytes).into_owned();
+        }
+        let mut w = vec![0u16; n as usize];
+        let n = MultiByteToWideChar(CP_ACP as u32, 0, text, len, Some(PWSTR(w.as_mut_ptr())), n);
+        String::from_utf16_lossy(&w[..n.max(0) as usize])
+    }
+}
+
+/// `IconFile=` / `IconIndex=` of an Internet shortcut, when the file names an icon.
+fn url_icon_source(path: &Path) -> Option<(PathBuf, i32)> {
+    let text = url_file_text(path)?;
     let mut file = None;
     let mut index = 0;
     for line in text.lines() {
@@ -589,6 +616,46 @@ pub fn transfer_to_folder(
     }
 }
 
+fn long_path_wide(path: &Path) -> Vec<u16> {
+    use std::os::windows::ffi::OsStrExt;
+    use std::path::{Component, Prefix};
+    let plain = path_wide(path);
+    if plain.len() < 248 {
+        return plain;
+    }
+    // The prefix turns normalisation off, so the path must be absolute and clean first.
+    let abs = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
+    let abs_w: Vec<u16> = abs.as_os_str().encode_wide().collect();
+    let mut w: Vec<u16> = r"\\?\".encode_utf16().collect();
+    match abs.components().next() {
+        Some(Component::Prefix(p)) => match p.kind() {
+            Prefix::Disk(_) => w.extend(&abs_w),
+            // `\\server\share\…` keeps one of its leading backslashes.
+            Prefix::UNC(..) => {
+                w.extend("UNC".encode_utf16());
+                w.extend(&abs_w[1..]);
+            }
+            _ => return plain,
+        },
+        _ => return plain,
+    }
+    w.push(0);
+    w
+}
+
+/// Renames `from` to `to`. `std::fs::rename` replaces a file already at `to`; this fails with
+/// `ErrorKind::AlreadyExists` instead, so a rename never overwrites another file.
+pub fn rename_no_replace(from: &Path, to: &Path) -> std::io::Result<()> {
+    let (from, to) = (long_path_wide(from), long_path_wide(to));
+    // SAFETY: plain FFI call; both strings are NUL-terminated and outlive it.
+    let ok = unsafe { MoveFileExW(PCWSTR(from.as_ptr()), PCWSTR(to.as_ptr()), 0) };
+    if ok.as_bool() {
+        Ok(())
+    } else {
+        Err(std::io::Error::last_os_error())
+    }
+}
+
 /// Opens an item with the shell (default verb), or runs `verb` (`"runas"`, `"properties"`,
 /// `"openas"`…).
 pub fn shell_execute(path: &Path, verb: Option<&str>, owner: Option<HWND>) -> Result<()> {
@@ -687,7 +754,7 @@ pub fn unique_path(dir: &Path, base: &str, ext: &str) -> PathBuf {
 
 /// Reads a `.url` internet shortcut's URL.
 pub fn url_shortcut_target(path: &Path) -> Option<String> {
-    let text = std::fs::read_to_string(path).ok()?;
+    let text = url_file_text(path)?;
     text.lines()
         .find_map(|l| l.strip_prefix("URL=").map(|u| u.trim().to_string()))
 }
@@ -850,6 +917,69 @@ mod namespace_tests {
             assert_eq!(entry.origin, EntryOrigin::Namespace);
             assert!(!entry.is_folder);
             assert!(!entry.file_name.is_empty());
+        }
+    }
+}
+
+#[cfg(test)]
+mod upstream_regression_tests {
+    use super::*;
+
+    #[test]
+    fn rename_collision_preserves_both_files_and_supports_case_only_changes() {
+        let dir = std::env::temp_dir().join(format!("pecofence-no-replace-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let source = dir.join("source.txt");
+        let target = dir.join("target.txt");
+        std::fs::write(&source, b"original").unwrap();
+        std::fs::write(&target, b"existing").unwrap();
+        assert!(rename_no_replace(&source, &target).is_err());
+        assert_eq!(std::fs::read(&source).unwrap(), b"original");
+        assert_eq!(std::fs::read(&target).unwrap(), b"existing");
+        rename_no_replace(&source, &dir.join("Source.txt")).unwrap();
+        assert!(
+            std::fs::read_dir(&dir)
+                .unwrap()
+                .flatten()
+                .any(|e| e.file_name() == "Source.txt")
+        );
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn url_shortcuts_decode_utf8_and_utf16_names_and_targets() {
+        let dir = std::env::temp_dir().join(format!("pecofence-url-text-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let text =
+            "[InternetShortcut]\r\nURL=https://example.com/中文\r\nIconFile=C:\\图标.ico\r\n";
+        let utf8 = dir.join("utf8.url");
+        std::fs::write(&utf8, text).unwrap();
+        let utf16 = dir.join("utf16.url");
+        let mut bytes = vec![0xff, 0xfe];
+        bytes.extend(text.encode_utf16().flat_map(u16::to_le_bytes));
+        std::fs::write(&utf16, bytes).unwrap();
+        for file in [&utf8, &utf16] {
+            assert_eq!(
+                url_shortcut_target(file).as_deref(),
+                Some("https://example.com/中文")
+            );
+            assert_eq!(
+                url_icon_source(file).unwrap().0,
+                PathBuf::from(r"C:\图标.ico")
+            );
+        }
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn long_path_threshold_matches_windows_directory_limit() {
+        use std::os::windows::ffi::OsStrExt;
+        for (length, verbatim) in [(247, false), (248, true), (260, true)] {
+            let text = format!(r"C:\{}", "a".repeat(length - 4));
+            let path = Path::new(&text);
+            assert_eq!(path.as_os_str().encode_wide().count() + 1, length);
+            let result = String::from_utf16_lossy(&long_path_wide(path));
+            assert_eq!(result.starts_with(r"\\?\"), verbatim);
         }
     }
 }

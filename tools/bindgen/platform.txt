@@ -341,6 +341,10 @@
     PROCESS_MEMORY_COUNTERS_EX2
     PROCESS_MEMORY_COUNTERS_EX
     PROCESS_MEMORY_COUNTERS
+    QueryWorkingSet
+    MultiByteToWideChar
+    CP_ACP
+    MoveFileExW
 
     // ---- misc
     MessageBoxW

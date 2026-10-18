@@ -8,6 +8,7 @@ LANGUAGES = ("en", "ja", "zh-TW", "ko", "de", "fr", "es", "pt-BR", "ru")
 CJK = re.compile(r"[\u3400-\u9fff]")
 LITERAL = r'"(?:\\.|[^"\\])*"'
 I18N_CALL = re.compile(r"\bi18n::(?:text|format)\s*\(\s*(" + LITERAL + ")")
+I18N_CALL_IN = re.compile(r"\bi18n::text_in\s*\([^,()]*,\s*(" + LITERAL + ")")
 # Settings form metadata also stores labels in arrays and enum match arms,
 # then translates them through tr(label). Audit those literals, not just calls.
 SETTINGS_LABEL = re.compile("(" + LITERAL + ")")
@@ -50,7 +51,7 @@ def source_keys():
         if path.name in ("bindings.rs", "gpu_bindings.rs"):
             continue
         source = path.read_text(encoding="utf-8")
-        patterns = [I18N_CALL]
+        patterns = [I18N_CALL, I18N_CALL_IN]
         if "settings_host" in path.parts or path.name == "settings_host.rs":
             if path.name == "tests.rs":
                 continue

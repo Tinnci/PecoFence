@@ -284,6 +284,7 @@ fn category_matches(cat: TypeCategory, facts: &ItemFacts) -> bool {
                         | ".ods"
                         | ".odp"
                         | ".csv"
+                        | ".tsv"
                         | ".one"
                         | ".epub"
                         | ".json"
@@ -388,7 +389,7 @@ pub fn cond_matches(cond: &Cond, facts: &ItemFacts) -> bool {
     match cond {
         Cond::Type(cats) => cats.iter().any(|c| category_matches(*c, facts)),
         Cond::Ext(exts) => {
-            let ext = ext_of(&facts.file_name);
+            let name = facts.file_name.to_lowercase();
             exts.iter().any(|e| {
                 let e = e.to_lowercase();
                 let e = if e.starts_with('.') {
@@ -396,7 +397,7 @@ pub fn cond_matches(cond: &Cond, facts: &ItemFacts) -> bool {
                 } else {
                     format!(".{e}")
                 };
-                e == ext
+                name.ends_with(&e)
             })
         }
         Cond::ExactName(names) => names
@@ -749,5 +750,20 @@ mod tests {
         assert!(cond_matches(&c, &f));
         f.created_minutes_local = Some(12 * 60);
         assert!(!cond_matches(&c, &f));
+    }
+
+    #[test]
+    fn document_and_extension_rules_include_upstream_suffix_fixes() {
+        assert!(category_matches(
+            TypeCategory::Documents,
+            &facts("table.TSV")
+        ));
+        let ext =
+            |suffix: &str, name: &str| cond_matches(&Cond::Ext(vec![suffix.into()]), &facts(name));
+        assert!(ext("tar.gz", "Archive.TAR.GZ"));
+        assert!(ext("gitignore", ".gitignore"));
+        assert!(ext(".pdf", "report.PDF"));
+        assert!(!ext("pdf", "report.pdf.txt"));
+        assert!(!ext("tar.gz", "archive.gz"));
     }
 }

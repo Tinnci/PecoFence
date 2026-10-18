@@ -432,6 +432,11 @@ impl DesktopAnchor {
         }
         let root = desktop::root_ancestor(hwnd);
         let cls = desktop::class_name(root);
+        // Transient Windows 11 snap/task-switcher surfaces are not foreign applications.
+        // They may hand focus back without sending a second foreground event.
+        if cls == "XamlExplorerHostIslandWindow" {
+            return;
+        }
         if self.peeking {
             // Peek is a glance: the first foreign window that comes to the front ends it. Our
             // own windows (fences, dimmer, rename popup, menus) do not.

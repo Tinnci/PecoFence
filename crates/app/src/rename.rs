@@ -15,6 +15,15 @@ use std::cell::RefCell;
 
 const RENAME_CLASS: &str = "PecoFence.Rename";
 
+/// Windows rejects reserved punctuation and code points 0 through 31, but permits DEL/C1.
+pub fn invalid_file_name(name: &str) -> bool {
+    let name = name.trim().trim_end_matches(['.', ' ']);
+    name.is_empty()
+        || name
+            .chars()
+            .any(|c| c < ' ' || matches!(c, '\\' | '/' | ':' | '*' | '?' | '"' | '<' | '>' | '|'))
+}
+
 thread_local! {
     static ACTIVE: RefCell<Option<RenameSession>> = const { RefCell::new(None) };
     static CLASS: RefCell<Option<WindowClass>> = const { RefCell::new(None) };
@@ -317,7 +326,17 @@ pub fn end_active(commit: bool) {
 
 #[cfg(test)]
 mod tests {
-    use super::{rename_hidden_suffix, rename_select_len};
+    use super::{invalid_file_name, rename_hidden_suffix, rename_select_len};
+
+    #[test]
+    fn rename_rejects_windows_control_characters_without_rejecting_c1() {
+        for value in ["", ". ", "bad:name", "note.txt\0suffix", "a\tb"] {
+            assert!(invalid_file_name(value));
+        }
+        for value in ["报告.txt", "report.txt", "a\u{7f}b", "a\u{85}b"] {
+            assert!(!invalid_file_name(value));
+        }
+    }
 
     #[test]
     fn rename_keeps_only_hidden_extensions_despite_case_folded_paths() {

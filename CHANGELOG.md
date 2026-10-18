@@ -2,6 +2,12 @@
 
 ## Unreleased — Tinnci edition
 
+- Backport compatible upstream fixes for document rules, safe file renaming and
+  long paths, Internet-shortcut encoding, memory counters, icon-worker stacks,
+  Composition batch lifetime, Windows 11 shell popups and locale scanning.
+  Preserve the native/plugin/schema-2 architecture; see the
+  [upstream compatibility review](docs/UPSTREAM_REVIEW_2026-10-18.md).
+
 - Unify local, CI and tag-release verification; reduce development build disk usage.
 - Separate repository/download links from upstream publishing accounts. Store
   and winget publishing require independently configured identities.
