@@ -567,6 +567,7 @@ impl FenceViewState {
                     action,
                     initial,
                     multiline,
+                    style,
                 } => {
                     if let Some(panel) = &self.plugin_panel {
                         self.queue.push(Command::PanelTextRequested {
@@ -574,6 +575,7 @@ impl FenceViewState {
                             action,
                             initial,
                             multiline,
+                            style,
                         });
                     }
                 }

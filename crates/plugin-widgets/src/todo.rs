@@ -227,6 +227,7 @@ impl PanelInstance for TodoWidget {
                         action: ADD,
                         initial: String::new(),
                         multiline: false,
+                        style: None,
                     }],
                     relayout: false,
                 })
@@ -280,6 +281,7 @@ impl PanelInstance for TodoWidget {
                             action,
                             initial: task.title.clone(),
                             multiline: false,
+                            style: None,
                         }],
                         relayout: false,
                     })

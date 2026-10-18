@@ -227,6 +227,7 @@ impl PanelInstance for DiagramWidget {
                         self.config.source.clone()
                     },
                     multiline: true,
+                    style: None,
                 }],
                 relayout: false,
             }),

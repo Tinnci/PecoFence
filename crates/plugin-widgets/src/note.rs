@@ -163,6 +163,7 @@ impl PanelProvider for NotePlugin {
             frame_revision: 0,
             layout_tracker: design::LayoutTracker::default(),
             stopped: false,
+            input_style: None,
         }))
     }
 }
@@ -182,6 +183,7 @@ struct NoteWidget {
     frame_revision: u64,
     layout_tracker: design::LayoutTracker,
     stopped: bool,
+    input_style: Option<TextInputStyle>,
 }
 
 impl NoteWidget {
@@ -288,6 +290,7 @@ impl PanelInstance for NoteWidget {
                     action: EDIT,
                     initial: self.config.text.clone(),
                     multiline: true,
+                    style: self.input_style,
                 }],
                 relayout: false,
             }),
@@ -324,6 +327,7 @@ impl PanelInstance for NoteWidget {
         let surface = self.tint_motion.map_or(to, |(tween, from)| {
             lerp_color(from, to, tween.progress(now))
         });
+        self.input_style = Some(note_input_style(&frame, colors, surface));
         build_note(
             &mut frame,
             &self.config,
@@ -400,6 +404,35 @@ fn note_summary(text: &str, chinese: bool) -> String {
         (true, _) => format!("{chars} 字 · {lines} 行"),
         (false, 1) => format!("{chars} characters"),
         (false, _) => format!("{chars} characters · {lines} lines"),
+    }
+}
+
+/// Shared by the rendered body and the native editor. Capsule notes use their
+/// compact surface; full notes retain the rounded card and its paper padding.
+fn note_input_style(frame: &WidgetFrame, colors: Colors, surface: [f32; 4]) -> TextInputStyle {
+    TextInputStyle {
+        bounds: frame.scale.rect(note_text_rect(frame.viewport)),
+        foreground: colors.primary,
+        background: surface,
+        font_size: frame.scale.value(design::BODY),
+    }
+}
+
+fn note_text_rect(v: RectDip) -> RectDip {
+    let (x, y, bottom) = if v.h < CAPSULE_HEIGHT {
+        (design::CONTENT_INSET, 6.0, 6.0)
+    } else {
+        (
+            design::CONTENT_INSET + 14.0,
+            CONTENT_TOP + 12.0,
+            design::CONTENT_INSET + 12.0,
+        )
+    };
+    RectDip {
+        x: v.x + x,
+        y: v.y + y,
+        w: (v.w - 2.0 * x).max(1.0),
+        h: (v.h - y - bottom).max(1.0),
     }
 }
 
@@ -510,12 +543,7 @@ fn build_note(
             .action(Some(EDIT)),
     );
     frame.set_last_accessible_name(if chinese { "编辑便笺" } else { "Edit note" }.into());
-    let inner = RectDip {
-        x: body.x + 14.0,
-        y: body.y + 12.0,
-        w: (body.w - 28.0).max(0.0),
-        h: (body.h - 24.0).max(0.0),
-    };
+    let inner = note_text_rect(v);
     if !config.text.is_empty() {
         frame.add(
             WidgetElement::text(5, inner, &config.text, design::BODY, 400, colors.primary)
@@ -592,6 +620,66 @@ fn build_note(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn native_editor_matches_the_rendered_paper_text_at_every_scale_and_tint() {
+        for scale in [1.0, 1.5, 2.0, 2.25] {
+            for tint in Tint::ORDER {
+                let colors = Colors::paper(None);
+                let surface = tint.surface(colors);
+                let mut frame = WidgetFrame::new(
+                    MountKey {
+                        instance: InstanceKey {
+                            id: 1,
+                            activation: 1,
+                        },
+                        generation: 1,
+                    },
+                    1,
+                    1,
+                    FrameInput {
+                        viewport: RectDip {
+                            x: 0.0,
+                            y: 0.0,
+                            w: 420.0 * scale,
+                            h: 400.0 * scale,
+                        },
+                        locale: "zh-CN",
+                        presentation: Presentation::Compact,
+                        grouping: Grouping::Single,
+                        exposure: Exposure::Desktop,
+                        active: true,
+                        text_scale: scale,
+                        theme_epoch: 1,
+                        device_epoch: 1,
+                    },
+                );
+                let editor = note_input_style(&frame, colors, surface);
+                build_note(
+                    &mut frame,
+                    &NoteConfig {
+                        text: "项目记录\n第二行".into(),
+                        tint,
+                    },
+                    false,
+                    colors,
+                    true,
+                    NoteLook {
+                        surface,
+                        updated: None,
+                    },
+                );
+                let body = frame.nodes.iter().find(|node| node.id == 4).unwrap();
+                let text = frame.nodes.iter().find(|node| node.id == 5).unwrap();
+                assert_eq!(editor.bounds, text.rect);
+                assert_eq!(editor.font_size, text.style.size);
+                assert_eq!(editor.foreground, text.style.foreground);
+                assert_eq!(Some(editor.background), body.style.fill);
+                assert!(editor.bounds.y >= body.rect.y);
+                assert!(editor.bounds.y + editor.bounds.h <= body.rect.y + body.rect.h);
+            }
+        }
+    }
 
     #[test]
     fn native_multiline_input_preserves_whitespace_and_normalizes_line_endings() {

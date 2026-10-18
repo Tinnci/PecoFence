@@ -35,7 +35,8 @@ pub const WM_APP_PEEK_FOCUSED: u32 = msg::WM_APP + 11;
 pub const WM_APP_SHELL_CHANGED: u32 = msg::WM_APP + 12;
 /// Posted by the async plugin transport. Payload stays in the generation-guarded kernel queue.
 pub const WM_APP_PLUGIN_EVENT: u32 = msg::WM_APP + 13;
-/// Sent only to the process's hidden control HWND during a managed upgrade.
+/// Re-enter normal Quit on the hidden control HWND after a managed upgrade or
+/// after committing an open panel editor through its provider commands.
 pub const WM_APP_UPDATE_QUIT: u32 = msg::WM_APP + 14;
 /// Fence-local wake for deferred plugin capture release; carries no input event.
 pub const WM_APP_PLUGIN_CAPTURE_RELEASE: u32 = msg::WM_APP + 15;
@@ -218,6 +219,7 @@ pub enum Command {
         action: u64,
         initial: String,
         multiline: bool,
+        style: Option<pecofence_plugin_api::TextInputStyle>,
     },
     PanelTextCommit {
         key: InstanceKey,

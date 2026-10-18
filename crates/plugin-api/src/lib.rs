@@ -522,6 +522,16 @@ pub enum PanelEvent {
     SuspendInput,
 }
 
+/// Native editor placement and opaque colors, in the panel's content DIPs.
+/// Providers can keep editing aligned with the text they render.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TextInputStyle {
+    pub bounds: RectDip,
+    pub foreground: [f32; 4],
+    pub background: [f32; 4],
+    pub font_size: f32,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum HostCommand {
     Invalidate,
@@ -534,6 +544,7 @@ pub enum HostCommand {
         action: u64,
         initial: String,
         multiline: bool,
+        style: Option<TextInputStyle>,
     },
 }
 

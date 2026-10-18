@@ -866,6 +866,11 @@ pub unsafe fn GetSystemMetricsForDpi(nindex: i32, dpi: u32) -> i32 {
     unsafe { GetSystemMetricsForDpi(nindex, dpi) }
 }
 #[inline]
+pub unsafe fn GetTextMetricsW(hdc: HDC, lptm: *mut TEXTMETRICW) -> windows_core::BOOL {
+    windows_core::link!("gdi32.dll" "system" fn GetTextMetricsW(hdc : HDC, lptm : *mut TEXTMETRICW) -> windows_core::BOOL);
+    unsafe { GetTextMetricsW(hdc, lptm as _) }
+}
+#[inline]
 pub unsafe fn GetTickCount64() -> u64 {
     windows_core::link!("kernel32.dll" "system" fn GetTickCount64() -> u64);
     unsafe { GetTickCount64() }
@@ -2060,6 +2065,11 @@ pub unsafe fn Shell_NotifyIconW(
     unsafe { Shell_NotifyIconW(dwmessage, lpdata) }
 }
 #[inline]
+pub unsafe fn ShowScrollBar(hwnd: HWND, wbar: i32, bshow: bool) -> windows_core::BOOL {
+    windows_core::link!("user32.dll" "system" fn ShowScrollBar(hwnd : HWND, wbar : i32, bshow : windows_core::BOOL) -> windows_core::BOOL);
+    unsafe { ShowScrollBar(hwnd, wbar, bshow.into()) }
+}
+#[inline]
 pub unsafe fn ShowWindow(hwnd: HWND, ncmdshow: i32) -> windows_core::BOOL {
     windows_core::link!("user32.dll" "system" fn ShowWindow(hwnd : HWND, ncmdshow : i32) -> windows_core::BOOL);
     unsafe { ShowWindow(hwnd, ncmdshow) }
@@ -3139,7 +3149,10 @@ pub struct DispatcherQueueOptions {
     pub apartmentType: DISPATCHERQUEUE_THREAD_APARTMENTTYPE,
 }
 pub const EDD_GET_DEVICE_INTERFACE_NAME: i32 = 1;
+pub const EM_GETFIRSTVISIBLELINE: i32 = 206;
+pub const EM_GETLINECOUNT: i32 = 186;
 pub const EM_LIMITTEXT: i32 = 197;
+pub const EM_SCROLLCARET: i32 = 183;
 pub const EM_SETSEL: i32 = 177;
 pub const EN_CHANGE: i32 = 768;
 pub const EN_KILLFOCUS: i32 = 512;
@@ -20689,6 +20702,7 @@ pub const RIM_TYPEMOUSE: i32 = 0;
 pub const RI_MOUSE_LEFT_BUTTON_DOWN: i32 = 1;
 pub const RI_MOUSE_LEFT_BUTTON_UP: i32 = 2;
 pub const RRF_RT_REG_DWORD: i32 = 16;
+pub const SB_VERT: i32 = 1;
 pub const SC_MOVE: i32 = 61456;
 pub const SC_SIZE: i32 = 61440;
 #[repr(C)]
@@ -21066,6 +21080,30 @@ pub const S_FALSE: windows_core::HRESULT = windows_core::HRESULT(0x1_u32 as _);
 pub const S_OK: windows_core::HRESULT = windows_core::HRESULT(0x0_u32 as _);
 pub const ShellLink: windows_core::GUID =
     windows_core::GUID::from_u128(0x00021401_0000_0000_c000_000000000046);
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct TEXTMETRICW {
+    pub tmHeight: i32,
+    pub tmAscent: i32,
+    pub tmDescent: i32,
+    pub tmInternalLeading: i32,
+    pub tmExternalLeading: i32,
+    pub tmAveCharWidth: i32,
+    pub tmMaxCharWidth: i32,
+    pub tmWeight: i32,
+    pub tmOverhang: i32,
+    pub tmDigitizedAspectX: i32,
+    pub tmDigitizedAspectY: i32,
+    pub tmFirstChar: u16,
+    pub tmLastChar: u16,
+    pub tmDefaultChar: u16,
+    pub tmBreakChar: u16,
+    pub tmItalic: u8,
+    pub tmUnderlined: u8,
+    pub tmStruckOut: u8,
+    pub tmPitchAndFamily: u8,
+    pub tmCharSet: u8,
+}
 pub type TIMERPROC =
     Option<unsafe extern "system" fn(param0: HWND, param1: u32, param2: usize, param3: u32)>;
 pub const TIMERV_DEFAULT_COALESCING: i32 = 0;
@@ -21312,6 +21350,7 @@ pub const WM_RBUTTONUP: i32 = 517;
 pub const WM_SETCURSOR: i32 = 32;
 pub const WM_SETFOCUS: i32 = 7;
 pub const WM_SETFONT: i32 = 48;
+pub const WM_SETTEXT: i32 = 12;
 pub const WM_SETTINGCHANGE: i32 = 26;
 pub const WM_SHOWWINDOW: i32 = 24;
 pub const WM_SIZE: i32 = 5;

@@ -918,30 +918,27 @@ impl App {
                 ..
             }) = self.state.fence(id)
             {
-                let key = self
-                    .panel_manager
-                    .borrow_mut()
-                    .open_panel(&panel)
-                    .ok()
-                    .map(|handle| handle.key());
-                if let Some(key) = key {
-                    let diagram = provider == pecofence_plugin_widgets::DIAGRAM_PROVIDER;
-                    let chinese = matches!(
-                        pecofence_core::i18n::language(),
-                        pecofence_core::i18n::Language::SimplifiedChinese
-                            | pecofence_core::i18n::Language::TraditionalChinese
-                    );
-                    self.queue.push(Command::PanelTextRequested {
-                        key,
-                        action: 1,
-                        // A new diagram starts from an editable example rather than a blank page.
-                        initial: if diagram {
-                            pecofence_plugin_widgets::diagram_template(chinese).to_string()
-                        } else {
-                            String::new()
-                        },
-                        multiline: diagram || provider == pecofence_plugin_widgets::NOTE_PROVIDER,
-                    });
+                // Ask the provider for its editor, including its live body bounds,
+                // colors and template, just like the on-panel Edit action.
+                let result =
+                    self.panel_manager
+                        .borrow_mut()
+                        .open_panel(&panel)
+                        .and_then(|handle| {
+                            let key = handle.key();
+                            handle
+                                .event(pecofence_plugin_api::PanelEvent::Invoke {
+                                    action: 1,
+                                    layout_revision: 0,
+                                })
+                                .map(|update| (key, update))
+                        });
+                if let Ok((key, update)) = result {
+                    self.pending_panel_updates
+                        .entry(key)
+                        .or_default()
+                        .merge(update);
+                    self.process_panel_events();
                 }
             }
         }

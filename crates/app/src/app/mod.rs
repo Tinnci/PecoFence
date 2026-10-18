@@ -1588,16 +1588,18 @@ impl App {
                 action,
                 initial,
                 multiline,
+                style,
             } => {
                 let hwnd = self.state.fences().iter().find_map(|f| match &f.content {
                     pecofence_core::FenceContentSpec::Panel { panel }
                         if panel.instance_id.as_u128() == key.id =>
                     {
-                        self.window_for(f.id).map(|w| w.hwnd())
+                        self.window_for(f.id)
+                            .map(|w| (w.hwnd(), w.title_height_dip()))
                     }
                     _ => None,
                 });
-                if let Some(hwnd) = hwnd {
+                if let Some((hwnd, title_height)) = hwnd {
                     crate::rename::begin_panel_input(
                         hwnd,
                         key,
@@ -1606,6 +1608,8 @@ impl App {
                         self.queue.clone(),
                         self.theme_mode,
                         multiline,
+                        title_height,
+                        style,
                     );
                 }
             }
@@ -1704,6 +1708,18 @@ impl App {
             }
             Command::Quit => {
                 if self.persistence.closing() == Closing::Open {
+                    if matches!(
+                        crate::rename::active_target(),
+                        Some(crate::rename::RenameTarget::PanelInput { .. })
+                    ) {
+                        // The native editor still owns unsent text. Deliver its
+                        // commit before closing the document mutation gate.
+                        crate::rename::end_active(true);
+                        // Provider submission can enqueue PersistConfig in a second
+                        // drain pass. Re-enter after those commands, not beside them.
+                        window::post_message(self.control.hwnd(), WM_APP_UPDATE_QUIT, 0, 0);
+                        return;
+                    }
                     window::kill_timer(self.control.hwnd(), TIMER_SAVE);
                     self.persistence.begin_close();
                     self.push_settings_state();

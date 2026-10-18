@@ -9,7 +9,7 @@ use pecofence_platform::window::{
     self, ClassOptions, MessageHandler, Window, WindowBuilder, WindowClass, style,
 };
 use pecofence_platform::{HWND, RECT, edit, monitors, msg};
-use pecofence_plugin_api::InstanceKey;
+use pecofence_plugin_api::{InstanceKey, TextInputStyle};
 use pecofence_render::ThemeMode;
 use std::cell::RefCell;
 
@@ -46,6 +46,8 @@ pub fn begin_panel_input(
     queue: CommandQueue,
     mode: ThemeMode,
     multiline: bool,
+    title_height: f32,
+    input_style: Option<TextInputStyle>,
 ) {
     let r = window::window_rect(fence_hwnd);
     let dpi = monitors::dpi_for_window(fence_hwnd).max(96);
@@ -61,16 +63,19 @@ pub fn begin_panel_input(
         initial
     };
     begin_rename_at(
-        RECT {
-            left: r.left + inset,
-            top,
-            right: (r.right - inset).max(r.left + inset + 120),
-            bottom: if multiline {
-                (r.bottom - inset).max(top + (100.0 * scale) as i32)
-            } else {
-                top + (28.0 * scale).round() as i32
+        input_style.map_or_else(
+            || RECT {
+                left: r.left + inset,
+                top,
+                right: (r.right - inset).max(r.left + inset + 120),
+                bottom: if multiline {
+                    (r.bottom - inset).max(top + (100.0 * scale) as i32)
+                } else {
+                    top + (28.0 * scale).round() as i32
+                },
             },
-        },
+            |style| panel_input_rect(r, scale, title_height, style),
+        ),
         dpi,
         RenameTarget::PanelInput { key, action },
         initial,
@@ -78,6 +83,7 @@ pub fn begin_panel_input(
         queue,
         mode,
         multiline,
+        input_style,
     );
 }
 
@@ -118,6 +124,7 @@ pub fn begin_inline_rename(
         queue,
         mode,
         false,
+        None,
     );
 }
 
@@ -186,6 +193,7 @@ pub fn begin_item_rename(
         queue,
         mode,
         false,
+        None,
     );
 }
 
@@ -198,6 +206,7 @@ fn begin_rename_at(
     queue: CommandQueue,
     mode: ThemeMode,
     multiline: bool,
+    input_style: Option<TextInputStyle>,
 ) {
     end_active(false);
     CLASS.with(|c| {
@@ -212,6 +221,14 @@ fn begin_rename_at(
             match message {
                 msg::WM_COMMAND if msg::hi_u16(wparam) == edit::EN_KILLFOCUS => {
                     end_active(true);
+                    Some(0)
+                }
+                msg::WM_COMMAND if msg::hi_u16(wparam) == edit::EN_CHANGE_MSG => {
+                    ACTIVE.with(|a| {
+                        if let Some(s) = a.borrow().as_ref() {
+                            s.edit.refresh_scrollbar();
+                        }
+                    });
                     Some(0)
                 }
                 edit::WM_CTLCOLOREDIT_MSG => {
@@ -234,33 +251,46 @@ fn begin_rename_at(
             .ok()
     });
     let Some(window) = created else { return };
-    let create = if multiline {
-        edit::EditControl::create_multiline
+    let key_handler = if multiline { on_multiline_key } else { on_key };
+    let ctl = if let Some(skin) = input_style {
+        edit::EditControl::create_styled(
+            window.hwnd(),
+            w,
+            h,
+            dpi,
+            &current,
+            key_handler,
+            multiline,
+            edit::EditAppearance {
+                foreground: colorref(skin.foreground),
+                background: colorref(skin.background),
+                font_size: skin.font_size,
+            },
+        )
     } else {
-        edit::EditControl::create
+        let create = if multiline {
+            edit::EditControl::create_multiline
+        } else {
+            edit::EditControl::create
+        };
+        create(
+            window.hwnd(),
+            w,
+            h,
+            dpi,
+            &current,
+            mode == ThemeMode::Dark,
+            key_handler,
+        )
     };
-    let Ok(ctl) = create(
-        window.hwnd(),
-        w,
-        h,
-        dpi,
-        &current,
-        mode == ThemeMode::Dark,
-        if multiline { on_multiline_key } else { on_key },
-    ) else {
+    let Ok(ctl) = ctl else {
         return;
     };
-    window::show_normal(window.hwnd());
-    window::bring_to_front(window.hwnd());
-    if multiline {
-        let end = current.encode_utf16().count() as i32;
-        ctl.focus_and_select(end, end);
-    } else {
-        match select_end {
-            Some(n) => ctl.focus_and_select(0, n as i32),
-            None => ctl.focus_and_select_all(),
-        }
-    }
+    ctl.refresh_scrollbar();
+    let hwnd = window.hwnd();
+    let edit_hwnd = ctl.hwnd();
+    // Publish before showing/focusing: the first WM_CTLCOLOREDIT must already
+    // find the provider's brush. No RefCell borrow is held across native calls.
     ACTIVE.with(|a| {
         *a.borrow_mut() = Some(RenameSession {
             window,
@@ -268,8 +298,39 @@ fn begin_rename_at(
             target,
             queue,
             committed: false,
-        })
+        });
     });
+    window::show_normal(hwnd);
+    window::bring_to_front(hwnd);
+    let (start, end) = if multiline {
+        let end = current.encode_utf16().count() as i32;
+        (end, end)
+    } else {
+        (0, select_end.map_or(-1, |n| n as i32))
+    };
+    window::set_focus(edit_hwnd);
+    window::send_message(edit_hwnd, edit::EM_SETSEL_MSG, start as usize, end as isize);
+}
+
+/// Style coordinates are relative to the panel body, below any real title bar.
+fn panel_input_rect(r: RECT, scale: f32, title_height: f32, style: TextInputStyle) -> RECT {
+    let w = (r.right - r.left).max(1);
+    let h = (r.bottom - r.top).max(1);
+    let x = (style.bounds.x * scale).round() as i32;
+    let y = ((title_height + style.bounds.y) * scale).round() as i32;
+    let x = x.clamp(0, w - 1);
+    let y = y.clamp(0, h - 1);
+    RECT {
+        left: r.left + x,
+        top: r.top + y,
+        right: r.left + (x + (style.bounds.w * scale).round() as i32).clamp(x + 1, w),
+        bottom: r.top + (y + (style.bounds.h * scale).round() as i32).clamp(y + 1, h),
+    }
+}
+
+fn colorref(rgba: [f32; 4]) -> u32 {
+    let [r, g, b] = [rgba[0], rgba[1], rgba[2]].map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u32);
+    r | (g << 8) | (b << 16)
 }
 
 fn on_multiline_key(vk: u32) -> bool {
@@ -326,7 +387,55 @@ pub fn end_active(commit: bool) {
 
 #[cfg(test)]
 mod tests {
-    use super::{invalid_file_name, rename_hidden_suffix, rename_select_len};
+    use super::*;
+
+    #[test]
+    fn panel_editor_follows_body_origin_and_stays_inside_the_window() {
+        for scale in [1.0, 1.5, 2.0] {
+            for title in [0.0, 36.0] {
+                let r = RECT {
+                    left: -800,
+                    top: 100,
+                    right: -800 + (420.0 * scale) as i32,
+                    bottom: 100 + (500.0 * scale) as i32,
+                };
+                let style = TextInputStyle {
+                    bounds: pecofence_plugin_api::RectDip {
+                        x: 26.0,
+                        y: 78.0,
+                        w: 368.0,
+                        h: 300.0,
+                    },
+                    foreground: [0.0; 4],
+                    background: [1.0; 4],
+                    font_size: 14.0,
+                };
+                let actual = panel_input_rect(r, scale, title, style);
+                assert_eq!(actual.left, r.left + (26.0 * scale).round() as i32);
+                assert_eq!(actual.top, r.top + ((title + 78.0) * scale).round() as i32);
+                assert!(actual.right <= r.right && actual.bottom <= r.bottom);
+                let huge = TextInputStyle {
+                    bounds: pecofence_plugin_api::RectDip {
+                        x: -99.0,
+                        y: -99.0,
+                        w: 9999.0,
+                        h: 9999.0,
+                    },
+                    ..style
+                };
+                assert_eq!(panel_input_rect(r, scale, title, huge), r);
+            }
+        }
+        assert_eq!(
+            colorref([
+                0xEC as f32 / 255.0,
+                0xE4 as f32 / 255.0,
+                0xD6 as f32 / 255.0,
+                1.0
+            ]),
+            0x00D6_E4EC
+        );
+    }
 
     #[test]
     fn rename_rejects_windows_control_characters_without_rejecting_c1() {
