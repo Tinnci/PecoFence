@@ -215,6 +215,15 @@ fn begin_rename_at(
         }
     });
     let (x, y, w, h) = (r.left, r.top, r.right - r.left, r.bottom - r.top);
+    let scale = dpi.max(96) as f32 / 96.0;
+    let px = |dip: f32| (dip * scale).round() as i32;
+    // Field surface: background and an optional 2 DIP accent underline.
+    let field = input_style.map(|skin| {
+        (
+            colorref(skin.background),
+            skin.accent.map(|accent| (colorref(accent), px(2.0).max(1))),
+        )
+    });
 
     let handler: MessageHandler = Box::new(
         move |_hwnd: HWND, message: u32, wparam: usize, _lparam: isize| -> Option<isize> {
@@ -233,6 +242,14 @@ fn begin_rename_at(
                 }
                 edit::WM_CTLCOLOREDIT_MSG => {
                     ACTIVE.with(|a| a.borrow().as_ref().map(|s| s.edit.ctl_color(wparam)))
+                }
+                // Styled panel fields paint their own surface and focus underline
+                // around the padded text control.
+                msg::WM_ERASEBKGND if field.is_some() => {
+                    if let Some((background, accent)) = field {
+                        edit::paint_field(_hwnd, wparam, background, accent);
+                    }
+                    Some(1)
                 }
                 msg::WM_DESTROY => Some(0),
                 _ => None,
@@ -253,10 +270,13 @@ fn begin_rename_at(
     let Some(window) = created else { return };
     let key_handler = if multiline { on_multiline_key } else { on_key };
     let ctl = if let Some(skin) = input_style {
-        edit::EditControl::create_styled(
+        let [left, top, right, bottom] = skin.padding.map(|p| px(p.max(0.0)));
+        let inner_w = (w - left - right).max(1);
+        let inner_h = (h - top - bottom).max(1);
+        let created = edit::EditControl::create_styled(
             window.hwnd(),
-            w,
-            h,
+            inner_w,
+            inner_h,
             dpi,
             &current,
             key_handler,
@@ -265,8 +285,23 @@ fn begin_rename_at(
                 foreground: colorref(skin.foreground),
                 background: colorref(skin.background),
                 font_size: skin.font_size,
+                face: editor_face(skin.font),
             },
-        )
+        );
+        if let Ok(ctl) = &created {
+            edit::round_corners(window.hwnd(), w, h, px(skin.radius));
+            if multiline {
+                ctl.place(left, top, inner_w, inner_h);
+            } else {
+                // One line, centred in the field like the row title it replaces.
+                let line = (ctl.line_height_px() + px(2.0)).min(inner_h);
+                ctl.place(left, top + (inner_h - line) / 2, inner_w, line);
+                if let Some(text) = skin.placeholder {
+                    ctl.set_placeholder(text);
+                }
+            }
+        }
+        created
     } else {
         let create = if multiline {
             edit::EditControl::create_multiline
@@ -310,6 +345,21 @@ fn begin_rename_at(
     };
     window::set_focus(edit_hwnd);
     window::send_message(edit_hwnd, edit::EM_SETSEL_MSG, start as usize, end as isize);
+}
+
+/// GDI face for a styled field: the same bundled Noto face the widget renders with
+/// (registered privately for this process), else the system faces the widgets fall
+/// back to; code uses a monospace face that ships with every Windows.
+fn editor_face(font: pecofence_plugin_api::TextInputFont) -> &'static str {
+    use pecofence_plugin_api::TextInputFont;
+    let bundled = pecofence_platform::fonts::register_bundled_for_gdi();
+    match font {
+        TextInputFont::Body if bundled.sans => pecofence_plugin_api::design::FONT_PAPER_BODY,
+        TextInputFont::Body => "Segoe UI Variable Text",
+        TextInputFont::Serif if bundled.serif => pecofence_plugin_api::design::FONT_PAPER_SERIF,
+        TextInputFont::Serif => "Sitka Text",
+        TextInputFont::Mono => "Consolas",
+    }
 }
 
 /// Style coordinates are relative to the panel body, below any real title bar.
@@ -399,17 +449,17 @@ mod tests {
                     right: -800 + (420.0 * scale) as i32,
                     bottom: 100 + (500.0 * scale) as i32,
                 };
-                let style = TextInputStyle {
-                    bounds: pecofence_plugin_api::RectDip {
+                let style = TextInputStyle::new(
+                    pecofence_plugin_api::RectDip {
                         x: 26.0,
                         y: 78.0,
                         w: 368.0,
                         h: 300.0,
                     },
-                    foreground: [0.0; 4],
-                    background: [1.0; 4],
-                    font_size: 14.0,
-                };
+                    [0.0; 4],
+                    [1.0; 4],
+                    14.0,
+                );
                 let actual = panel_input_rect(r, scale, title, style);
                 assert_eq!(actual.left, r.left + (26.0 * scale).round() as i32);
                 assert_eq!(actual.top, r.top + ((title + 78.0) * scale).round() as i32);

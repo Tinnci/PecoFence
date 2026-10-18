@@ -138,6 +138,7 @@ impl PanelProvider for TodoPlugin {
             layout_tracker: design::LayoutTracker::default(),
             layout_revision: 0,
             stopped: false,
+            fields: None,
         }))
     }
 }
@@ -155,9 +156,126 @@ struct TodoWidget {
     layout_tracker: design::LayoutTracker,
     layout_revision: u64,
     stopped: bool,
+    /// Geometry of the last frame, so text fields open on the row they edit.
+    fields: Option<FieldLayout>,
+}
+
+/// What a todo text field needs from the last laid-out frame.
+#[derive(Clone, Copy)]
+struct FieldLayout {
+    scale: design::ContentScale,
+    viewport: RectDip,
+    colors: Colors,
+    chinese: bool,
+    page: usize,
+    capacity: usize,
+}
+
+/// Field a todo editor opens: one task's row, or a new row for an added task.
+#[derive(Clone, Copy)]
+enum Field {
+    Edit(usize),
+    Add,
+}
+
+/// A task row's card in logical DIPs (`build_todo` lays rows out the same way).
+fn row_rect(v: RectDip, slot: usize) -> RectDip {
+    RectDip {
+        x: v.x + design::CONTENT_INSET,
+        y: v.y + LIST_TOP + slot as f32 * ROW_PITCH,
+        w: (v.w - design::CONTENT_INSET * 2.0).max(1.0),
+        h: ROW_HEIGHT,
+    }
+}
+
+/// Editing happens in place: the field covers the task's row card with the text where
+/// the title is drawn; a new task gets the next empty row on the page (or the first
+/// row when the page is full) with a placeholder.
+fn field_style(config: &TodoConfig, layout: FieldLayout, field: Field) -> Option<TextInputStyle> {
+    let v = layout.viewport;
+    let colors = layout.colors;
+    let hint = if layout.chinese {
+        "新任务…"
+    } else {
+        "New task…"
+    };
+    if v.h < CAPSULE_HEIGHT {
+        let pill = RectDip {
+            x: v.x + 8.0,
+            y: v.y + 6.0,
+            w: (v.w - 16.0).max(1.0),
+            h: (v.h - 12.0).max(1.0),
+        };
+        return Some(super::input_field(
+            layout.scale,
+            pill,
+            [12.0, 0.0, 12.0, 2.0],
+            colors,
+            colors.subtle,
+            TextInputFont::Body,
+            design::CARD_RADIUS,
+            matches!(field, Field::Add).then_some(hint),
+        ));
+    }
+    let start = layout.page.saturating_mul(layout.capacity);
+    let shown = config
+        .tasks
+        .len()
+        .saturating_sub(start)
+        .min(layout.capacity);
+    // A light text box on the page surface reads as "being typed into" on any row.
+    let page = if colors.high_contrast {
+        colors.subtle
+    } else {
+        super::paper::SHAPE
+    };
+    match field {
+        // Editing keeps the row and its checkbox: the box starts just after the
+        // checkbox and its text lands exactly on the title.
+        Field::Edit(index) => {
+            let position = display_order(config)
+                .iter()
+                .position(|(i, _)| *i == index)?;
+            let slot = position
+                .checked_sub(start)
+                .filter(|s| *s < layout.capacity)?;
+            let row = row_rect(v, slot);
+            Some(super::input_field(
+                layout.scale,
+                RectDip {
+                    x: row.x + 36.0,
+                    y: row.y + 4.0,
+                    w: (row.w - 40.0).max(1.0),
+                    h: (row.h - 8.0).max(1.0),
+                },
+                [4.0, 0.0, 6.0, 2.0],
+                colors,
+                page,
+                TextInputFont::Body,
+                design::CONTROL_RADIUS,
+                None,
+            ))
+        }
+        // A new task is a new, blank row: the next empty one on the page, or the
+        // first row when the page is full.
+        Field::Add => Some(super::input_field(
+            layout.scale,
+            row_rect(v, if shown < layout.capacity { shown } else { 0 }),
+            [40.0, 0.0, 8.0, 2.0],
+            colors,
+            page,
+            TextInputFont::Body,
+            design::CARD_RADIUS,
+            Some(hint),
+        )),
+    }
 }
 
 impl TodoWidget {
+    fn field_style(&self, field: Field) -> Option<TextInputStyle> {
+        field_style(&self.config, self.fields?, field)
+    }
+
     fn redraw(&mut self) -> PanelUpdate {
         self.layout_revision = self.layout_revision.saturating_add(1);
         PanelUpdate {
@@ -227,7 +345,7 @@ impl PanelInstance for TodoWidget {
                         action: ADD,
                         initial: String::new(),
                         multiline: false,
-                        style: None,
+                        style: self.field_style(Field::Add),
                     }],
                     relayout: false,
                 })
@@ -281,7 +399,7 @@ impl PanelInstance for TodoWidget {
                             action,
                             initial: task.title.clone(),
                             multiline: false,
-                            style: None,
+                            style: self.field_style(Field::Edit((action - EDIT_BASE) as usize)),
                         }],
                         relayout: false,
                     })
@@ -349,14 +467,24 @@ impl PanelInstance for TodoWidget {
             self.motion = None;
         }
         let mut frame = WidgetFrame::new(mount, self.frame_revision, self.layout_revision, input);
+        let colors = Colors::paper(self.theme.as_deref());
+        let chinese = input.locale.starts_with("zh");
+        self.fields = Some(FieldLayout {
+            scale: frame.scale,
+            viewport: frame.viewport,
+            colors,
+            chinese,
+            page: self.page,
+            capacity,
+        });
         build_todo(
             &mut frame,
             &self.config,
             self.page,
             capacity,
             self.undo.is_some(),
-            Colors::paper(self.theme.as_deref()),
-            input.locale.starts_with("zh"),
+            colors,
+            chinese,
             self.motion.as_ref().map(|m| (m, m.tween.progress(now))),
         );
         let frame = frame.finish(&mut self.layout_tracker)?;
@@ -1374,5 +1502,49 @@ mod tests {
         assert!(mid_size > start_size && (end_size - start_size).abs() < 0.01);
         assert_eq!(start_bar, None);
         assert!(end_bar.unwrap() > 0.0);
+    }
+
+    #[test]
+    fn todo_fields_open_on_the_row_they_edit_or_the_next_empty_row() {
+        let config = read_config(
+            r#"{"tasks":[{"title":"Done","done":true},{"title":"Open","done":false}]}"#,
+        )
+        .unwrap();
+        let viewport = RectDip {
+            x: 0.0,
+            y: 0.0,
+            w: 400.0,
+            h: 348.0,
+        };
+        let widget_fields = FieldLayout {
+            scale: design::ContentScale::new(viewport, 1.0),
+            viewport,
+            colors: Colors::paper(None),
+            chinese: true,
+            page: 0,
+            capacity: page_capacity(viewport.h),
+        };
+        let style = |field| field_style(&config, widget_fields, field).unwrap();
+        // "Open" is pending, so it is drawn first; its field covers row 0 and the
+        // text starts where the title is drawn, after the checkbox.
+        let scene = scene_for(&config, 0, 5, false);
+        let title = scene.nodes().iter().find(|n| n.name == "Open").unwrap();
+        let edit = style(Field::Edit(1));
+        assert_eq!(edit.bounds.y, title.rect.y + 4.0);
+        assert_eq!(edit.bounds.x + edit.padding[0], title.rect.x);
+        // The checkbox stays visible beside the field.
+        let checkbox = scene
+            .nodes()
+            .iter()
+            .find(|n| n.role == "checkbox" && n.name.ends_with("Open"))
+            .unwrap();
+        let glyph_right = checkbox.rect.x + (checkbox.rect.w + checkbox.style.size) / 2.0;
+        assert!(glyph_right <= edit.bounds.x);
+        assert_eq!(edit.background, crate::paper::SHAPE);
+        assert_eq!(edit.accent, Some(crate::paper::TERRACOTTA));
+        // A new task gets the empty third row, with a hint.
+        let add = style(Field::Add);
+        assert_eq!(add.bounds.y, LIST_TOP + 2.0 * ROW_PITCH);
+        assert_eq!(add.placeholder, Some("新任务…"));
     }
 }

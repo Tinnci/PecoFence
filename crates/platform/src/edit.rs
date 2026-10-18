@@ -16,6 +16,8 @@ pub struct EditAppearance {
     pub foreground: u32,
     pub background: u32,
     pub font_size: f32,
+    /// GDI face name; must already be installed or privately registered.
+    pub face: &'static str,
 }
 
 pub struct EditControl {
@@ -129,7 +131,7 @@ impl EditControl {
             if hwnd.0.is_null() {
                 return Err(Error::from_thread());
             }
-            let face = to_wide("Segoe UI Variable Text");
+            let face = to_wide(appearance.map_or("Segoe UI Variable Text", |a| a.face));
             let font = CreateFontW(
                 -(font_size * dpi as f32 / 96.0).round() as i32,
                 0,
@@ -227,6 +229,46 @@ impl EditControl {
         }
     }
 
+    /// Height of one text line in the control's font, in device pixels.
+    pub fn line_height_px(&self) -> i32 {
+        // SAFETY: the control, font and temporary DC belong to this live editor.
+        unsafe {
+            let hdc = GetDC(Some(self.hwnd));
+            if hdc.0.is_null() {
+                return 0;
+            }
+            let old = SelectObject(hdc, HGDIOBJ(self.font.0));
+            let mut metrics = TEXTMETRICW::default();
+            let measured = GetTextMetricsW(hdc, &mut metrics).as_bool();
+            let _ = SelectObject(hdc, old);
+            ReleaseDC(Some(self.hwnd), hdc);
+            if measured { metrics.tmHeight } else { 0 }
+        }
+    }
+
+    /// Moves the control inside its parent (client coordinates, device pixels).
+    pub fn place(&self, x: i32, y: i32, width: i32, height: i32) {
+        // SAFETY: plain FFI call on our own child control.
+        unsafe {
+            let _ = MoveWindow(self.hwnd, x, y, width.max(1), height.max(1), true);
+        }
+        self.refresh_scrollbar();
+    }
+
+    /// Hint text shown while a single-line control is empty, also while focused.
+    pub fn set_placeholder(&self, text: &str) {
+        let wide = to_wide(text);
+        // SAFETY: the control copies the string during the call.
+        unsafe {
+            SendMessageW(
+                self.hwnd,
+                EM_SETCUEBANNER as u32,
+                WPARAM(1),
+                LPARAM(wide.as_ptr() as isize),
+            );
+        }
+    }
+
     /// Handles `WM_CTLCOLOREDIT` for the parent: sets colours and returns the brush.
     pub fn ctl_color(&self, hdc_wparam: usize) -> isize {
         // SAFETY: wParam is the control's HDC for this message.
@@ -303,6 +345,43 @@ unsafe fn subclass_message(
     }
 }
 
+/// Paints a styled editor's field surface for `WM_ERASEBKGND`: the background, plus a
+/// `accent_px`-tall accent band along the bottom edge (the Fluent focus underline).
+pub fn paint_field(hwnd: HWND, hdc_wparam: usize, background: u32, accent: Option<(u32, i32)>) {
+    // SAFETY: wParam is the window's HDC for WM_ERASEBKGND; brushes are freed here.
+    unsafe {
+        let hdc = HDC(hdc_wparam as *mut core::ffi::c_void);
+        let mut rect = RECT::default();
+        let _ = GetClientRect(hwnd, &mut rect);
+        let fill = CreateSolidBrush(COLORREF(background));
+        FillRect(hdc, &rect, fill);
+        let _ = DeleteObject(HGDIOBJ(fill.0));
+        if let Some((color, height)) = accent.filter(|(_, h)| *h > 0) {
+            let band = RECT {
+                top: rect.bottom - height,
+                ..rect
+            };
+            let brush = CreateSolidBrush(COLORREF(color));
+            FillRect(hdc, &band, brush);
+            let _ = DeleteObject(HGDIOBJ(brush.0));
+        }
+    }
+}
+
+/// Clips a window to a rounded rectangle of `radius_px` (no-op for a square field).
+pub fn round_corners(hwnd: HWND, width: i32, height: i32, radius_px: i32) {
+    if radius_px <= 0 {
+        return;
+    }
+    // SAFETY: the system owns the region after a successful SetWindowRgn.
+    unsafe {
+        let region = CreateRoundRectRgn(0, 0, width + 1, height + 1, radius_px * 2, radius_px * 2);
+        if SetWindowRgn(hwnd, Some(region), true) == 0 {
+            let _ = DeleteObject(HGDIOBJ(region.0));
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -334,6 +413,7 @@ mod tests {
                 foreground: 0x0022_272B,
                 background: 0x00D6_E4EC,
                 font_size: 14.0,
+                face: "Segoe UI Variable Text",
             },
         )
         .unwrap();

@@ -479,6 +479,37 @@ pub(crate) mod glyph {
     pub(crate) const QUICK_NOTE: char = '\u{E70B}';
 }
 
+/// One look for every native text field the widgets open: the field is a card-shaped
+/// surface laid over the element being edited, the text sits exactly where the widget
+/// renders it (`padding` inside `field`), and a 2 DIP accent underline marks it as
+/// the active field (Fluent text box focus). `field` and `padding` are logical DIPs.
+pub(crate) fn input_field(
+    scale: ContentScale,
+    field: RectDip,
+    padding: [f32; 4],
+    colors: Colors,
+    background: [f32; 4],
+    font: TextInputFont,
+    radius: f32,
+    placeholder: Option<&'static str>,
+) -> TextInputStyle {
+    TextInputStyle {
+        bounds: scale.rect(field),
+        foreground: colors.primary,
+        background,
+        font_size: scale.value(design::BODY),
+        font,
+        padding: padding.map(|p| scale.value(p)),
+        radius: scale.value(radius),
+        accent: Some(if colors.high_contrast {
+            colors.primary
+        } else {
+            colors.accent
+        }),
+        placeholder,
+    }
+}
+
 /// Node id of the paper ground; clear of control, task (bit 63) and date (bits 32–33) ids.
 const BACKGROUND: u64 = 1 << 62;
 

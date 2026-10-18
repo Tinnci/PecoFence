@@ -407,14 +407,45 @@ fn note_summary(text: &str, chinese: bool) -> String {
     }
 }
 
-/// Shared by the rendered body and the native editor. Capsule notes use their
-/// compact surface; full notes retain the rounded card and its paper padding.
+/// Shared by the rendered body and the native editor: the field is the note's paper
+/// card, and its padding puts the editor's text exactly on the rendered text.
 fn note_input_style(frame: &WidgetFrame, colors: Colors, surface: [f32; 4]) -> TextInputStyle {
-    TextInputStyle {
-        bounds: frame.scale.rect(note_text_rect(frame.viewport)),
-        foreground: colors.primary,
-        background: surface,
-        font_size: frame.scale.value(design::BODY),
+    let v = frame.viewport;
+    let card = note_card_rect(v);
+    let text = note_text_rect(v);
+    super::input_field(
+        frame.scale,
+        card,
+        [
+            text.x - card.x,
+            text.y - card.y,
+            card.x + card.w - (text.x + text.w),
+            card.y + card.h - (text.y + text.h),
+        ],
+        colors,
+        surface,
+        TextInputFont::Body,
+        design::CARD_RADIUS,
+        None,
+    )
+}
+
+/// The paper card the note's text sits on (the capsule's pill when collapsed).
+fn note_card_rect(v: RectDip) -> RectDip {
+    if v.h < CAPSULE_HEIGHT {
+        RectDip {
+            x: v.x + 8.0,
+            y: v.y + 6.0,
+            w: (v.w - 16.0).max(1.0),
+            h: (v.h - 12.0).max(1.0),
+        }
+    } else {
+        RectDip {
+            x: v.x + design::CONTENT_INSET,
+            y: v.y + CONTENT_TOP,
+            w: (v.w - design::CONTENT_INSET * 2.0).max(1.0),
+            h: (v.h - CONTENT_TOP - design::CONTENT_INSET).max(1.0),
+        }
     }
 }
 
@@ -530,12 +561,7 @@ fn build_note(
     }
     let v = frame.viewport;
     // The body card is the main edit target and fills the rest of the panel.
-    let body = RectDip {
-        x: v.x + design::CONTENT_INSET,
-        y: v.y + CONTENT_TOP,
-        w: (v.w - design::CONTENT_INSET * 2.0).max(0.0),
-        h: (v.h - CONTENT_TOP - design::CONTENT_INSET).max(0.0),
-    };
+    let body = note_card_rect(v);
     frame.add(
         WidgetElement::text(4, body, "", design::BODY, 400, colors.primary)
             .role("button")
@@ -671,12 +697,27 @@ mod tests {
                 );
                 let body = frame.nodes.iter().find(|node| node.id == 4).unwrap();
                 let text = frame.nodes.iter().find(|node| node.id == 5).unwrap();
-                assert_eq!(editor.bounds, text.rect);
+                // The field is the paper card; its padding lands the text on the
+                // rendered text, so editing does not move a single glyph.
+                assert_eq!(editor.bounds, body.rect);
+                let [left, top, right, bottom] = editor.padding;
+                let close = |a: f32, b: f32| (a - b).abs() < 0.01;
+                assert!(close(editor.bounds.x + left, text.rect.x));
+                assert!(close(editor.bounds.y + top, text.rect.y));
+                assert!(close(
+                    editor.bounds.x + editor.bounds.w - right,
+                    text.rect.x + text.rect.w
+                ));
+                assert!(close(
+                    editor.bounds.y + editor.bounds.h - bottom,
+                    text.rect.y + text.rect.h
+                ));
                 assert_eq!(editor.font_size, text.style.size);
                 assert_eq!(editor.foreground, text.style.foreground);
+                assert_eq!(editor.font, TextInputFont::Body);
                 assert_eq!(Some(editor.background), body.style.fill);
-                assert!(editor.bounds.y >= body.rect.y);
-                assert!(editor.bounds.y + editor.bounds.h <= body.rect.y + body.rect.h);
+                assert_eq!(editor.accent, Some(colors.accent));
+                assert_eq!(editor.radius, body.style.radius);
             }
         }
     }

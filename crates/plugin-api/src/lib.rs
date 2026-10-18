@@ -522,14 +522,56 @@ pub enum PanelEvent {
     SuspendInput,
 }
 
+/// Typeface of a styled native editor; the host maps it to the same face the
+/// widget renders with (bundled Noto when present) or a monospace face for code.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum TextInputFont {
+    #[default]
+    Body,
+    Serif,
+    Mono,
+}
+
 /// Native editor placement and opaque colors, in the panel's content DIPs.
-/// Providers can keep editing aligned with the text they render.
+/// Providers can keep editing aligned with the text they render. `bounds` is the
+/// whole field: the host paints `background` there (with `radius` corners and an
+/// optional 2-DIP `accent` underline, the Fluent focus cue) and places the text
+/// `padding` (left, top, right, bottom) inside it. Single-line fields centre the
+/// text vertically, like a list row's title.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TextInputStyle {
     pub bounds: RectDip,
     pub foreground: [f32; 4],
     pub background: [f32; 4],
     pub font_size: f32,
+    pub font: TextInputFont,
+    pub padding: [f32; 4],
+    pub radius: f32,
+    pub accent: Option<[f32; 4]>,
+    /// Hint shown while a single-line field is empty.
+    pub placeholder: Option<&'static str>,
+}
+
+impl TextInputStyle {
+    /// A borderless field exactly over `bounds`: body font, no padding, no underline.
+    pub const fn new(
+        bounds: RectDip,
+        foreground: [f32; 4],
+        background: [f32; 4],
+        font_size: f32,
+    ) -> Self {
+        Self {
+            bounds,
+            foreground,
+            background,
+            font_size,
+            font: TextInputFont::Body,
+            padding: [0.0; 4],
+            radius: 0.0,
+            accent: None,
+            placeholder: None,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]

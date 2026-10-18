@@ -707,6 +707,13 @@
     GetWindowTextLengthW
     CreateFontW
     CreateSolidBrush
+    // styled panel editor field: container paint, rounded clip, placeholder, bundled fonts
+    FillRect
+    SetWindowRgn
+    CreateRoundRectRgn
+    EM_SETCUEBANNER
+    AddFontResourceExW
+    FR_PRIVATE
     SetTextColor
     SetBkColor
     ES_MULTILINE

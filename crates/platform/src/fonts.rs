@@ -27,6 +27,52 @@ pub const BUNDLED_FONT_DIR: &str = "fonts";
 pub const BUNDLED_FONT_FILES: [&str; 2] =
     ["PecoNotoSansSC-Regular.otf", "PecoNotoSerifSC-SemiBold.otf"];
 
+/// GDI faces made available to native controls (the panel text editor) by privately
+/// registering the bundled files with GDI for this process only.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct GdiBundled {
+    pub sans: bool,
+    pub serif: bool,
+}
+
+/// Registers the bundled fonts with GDI (`FR_PRIVATE`: this process only, nothing is
+/// installed), once. Native EDIT controls draw through GDI, which cannot see the
+/// private DirectWrite collection above.
+pub fn register_bundled_for_gdi() -> GdiBundled {
+    static REGISTERED: OnceLock<GdiBundled> = OnceLock::new();
+    *REGISTERED.get_or_init(|| {
+        let Some(dir) = std::env::current_exe()
+            .ok()
+            .and_then(|exe| exe.parent().map(|p| p.join(BUNDLED_FONT_DIR)))
+        else {
+            return GdiBundled::default();
+        };
+        let register = |name: &str| {
+            let path = dir.join(name);
+            if !path.is_file() {
+                return false;
+            }
+            let wide: Vec<u16> = path
+                .as_os_str()
+                .encode_wide()
+                .chain(std::iter::once(0))
+                .collect();
+            // SAFETY: NUL-terminated path that outlives the call; private to this process.
+            unsafe {
+                crate::bindings::AddFontResourceExW(
+                    PCWSTR(wide.as_ptr()),
+                    crate::bindings::FR_PRIVATE as u32,
+                    None,
+                ) > 0
+            }
+        };
+        GdiBundled {
+            sans: register(BUNDLED_FONT_FILES[0]),
+            serif: register(BUNDLED_FONT_FILES[1]),
+        }
+    })
+}
+
 /// A font collection built from private font files.
 pub struct PrivateFonts {
     factory: IDWriteFactory5,

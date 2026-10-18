@@ -97,6 +97,12 @@
   right-click or Shift+F10 for the fence menu; roll-up is disabled. A grab handle
   fades in at the top while hovering, and draggable areas show the move cursor. Tabbed groups
   keep their title bar. Not yet checked on device.
+- Style every widget text field the same way: an in-place field over the element
+  being edited (text exactly where the widget draws it), with the field's own
+  surface, rounded corners and a 2 DIP accent underline. Editors now use the
+  bundled Noto faces (registered privately for GDI) instead of Segoe UI. Todo edit
+  keeps the checkbox visible; Todo add opens a new row with a "新任务…" hint; the
+  Mermaid editor is a monospace page over the stage. Not yet checked on device.
 
 The versioned entries below are retained from the upstream baseline. References
 to Store submissions or a published website describe that history, not an active

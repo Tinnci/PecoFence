@@ -1,4 +1,22 @@
 #[inline]
+pub unsafe fn AddFontResourceExW<P0>(
+    name: P0,
+    fl: u32,
+    res: Option<*const core::ffi::c_void>,
+) -> i32
+where
+    P0: windows_core::Param<windows_core::PCWSTR>,
+{
+    windows_core::link!("gdi32.dll" "system" fn AddFontResourceExW(name : windows_core::PCWSTR, fl : u32, res : *const core::ffi::c_void) -> i32);
+    unsafe {
+        AddFontResourceExW(
+            name.param().abi(),
+            fl,
+            res.unwrap_or(core::mem::zeroed()) as _,
+        )
+    }
+}
+#[inline]
 pub unsafe fn AppendMenuW<P3>(
     hmenu: HMENU,
     uflags: u32,
@@ -306,6 +324,11 @@ where
     }
 }
 #[inline]
+pub unsafe fn CreateRoundRectRgn(x1: i32, y1: i32, x2: i32, y2: i32, w: i32, h: i32) -> HRGN {
+    windows_core::link!("gdi32.dll" "system" fn CreateRoundRectRgn(x1 : i32, y1 : i32, x2 : i32, y2 : i32, w : i32, h : i32) -> HRGN);
+    unsafe { CreateRoundRectRgn(x1, y1, x2, y2, w, h) }
+}
+#[inline]
 pub unsafe fn CreateSolidBrush(color: COLORREF) -> HBRUSH {
     windows_core::link!("gdi32.dll" "system" fn CreateSolidBrush(color : COLORREF) -> HBRUSH);
     unsafe { CreateSolidBrush(color) }
@@ -520,6 +543,11 @@ pub unsafe fn FileTimeToSystemTime(
 ) -> windows_core::BOOL {
     windows_core::link!("kernel32.dll" "system" fn FileTimeToSystemTime(lpfiletime : *const FILETIME, lpsystemtime : *mut SYSTEMTIME) -> windows_core::BOOL);
     unsafe { FileTimeToSystemTime(lpfiletime, lpsystemtime as _) }
+}
+#[inline]
+pub unsafe fn FillRect(hdc: HDC, lprc: *const RECT, hbr: HBRUSH) -> i32 {
+    windows_core::link!("user32.dll" "system" fn FillRect(hdc : HDC, lprc : *const RECT, hbr : HBRUSH) -> i32);
+    unsafe { FillRect(hdc, lprc, hbr) }
 }
 #[inline]
 pub unsafe fn FindWindowExW<P2, P3>(
@@ -2015,6 +2043,17 @@ pub unsafe fn SetWindowPos(
     }
 }
 #[inline]
+pub unsafe fn SetWindowRgn(hwnd: HWND, hrgn: Option<HRGN>, bredraw: bool) -> i32 {
+    windows_core::link!("user32.dll" "system" fn SetWindowRgn(hwnd : HWND, hrgn : HRGN, bredraw : windows_core::BOOL) -> i32);
+    unsafe {
+        SetWindowRgn(
+            hwnd,
+            hrgn.unwrap_or(core::mem::zeroed()) as _,
+            bredraw.into(),
+        )
+    }
+}
+#[inline]
 pub unsafe fn SetWindowSubclass(
     hwnd: HWND,
     pfnsubclass: SUBCLASSPROC,
@@ -3153,6 +3192,7 @@ pub const EM_GETFIRSTVISIBLELINE: i32 = 206;
 pub const EM_GETLINECOUNT: i32 = 186;
 pub const EM_LIMITTEXT: i32 = 197;
 pub const EM_SCROLLCARET: i32 = 183;
+pub const EM_SETCUEBANNER: i32 = 5377;
 pub const EM_SETSEL: i32 = 177;
 pub const EN_CHANGE: i32 = 768;
 pub const EN_KILLFOCUS: i32 = 512;
@@ -3302,6 +3342,7 @@ pub const FOS_FILEMUSTEXIST: FILEOPENDIALOGOPTIONS = 4096;
 pub const FOS_FORCEFILESYSTEM: FILEOPENDIALOGOPTIONS = 64;
 pub const FOS_OVERWRITEPROMPT: FILEOPENDIALOGOPTIONS = 2;
 pub const FOS_PATHMUSTEXIST: FILEOPENDIALOGOPTIONS = 2048;
+pub const FR_PRIVATE: i32 = 16;
 pub const FW_NORMAL: i32 = 400;
 pub const FW_SEMIBOLD: i32 = 600;
 pub const FileOpenDialog: windows_core::GUID =
@@ -3399,6 +3440,9 @@ pub struct HPALETTE(pub *mut core::ffi::c_void);
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub struct HRAWINPUT(pub *mut core::ffi::c_void);
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub struct HRGN(pub *mut core::ffi::c_void);
 pub const HTBOTTOM: i32 = 15;
 pub const HTBOTTOMLEFT: i32 = 16;
 pub const HTBOTTOMRIGHT: i32 = 17;

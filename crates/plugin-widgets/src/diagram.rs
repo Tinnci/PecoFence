@@ -122,6 +122,7 @@ impl PanelProvider for DiagramPlugin {
             frame_revision: 0,
             layout_tracker: design::LayoutTracker::default(),
             stopped: false,
+            field: None,
         };
         widget.load(config);
         Ok(Box::new(widget))
@@ -144,6 +145,49 @@ struct DiagramWidget {
     frame_revision: u64,
     layout_tracker: design::LayoutTracker,
     stopped: bool,
+    /// Source editor field from the last frame: the stage, as a code page.
+    field: Option<TextInputStyle>,
+}
+
+/// The stage the diagram is drawn on (also the source editor's field).
+fn stage_rect(v: RectDip) -> RectDip {
+    RectDip {
+        x: v.x + design::CONTENT_INSET,
+        y: v.y + CONTENT_TOP,
+        w: (v.w - design::CONTENT_INSET * 2.0).max(0.0),
+        h: (v.h - CONTENT_TOP - design::CONTENT_INSET).max(0.0),
+    }
+}
+
+/// Mermaid is code: edit it in place over the stage, in a monospace face on the
+/// lighter "page" surface the diagram's shapes use, padded like the diagram area.
+fn source_field(frame: &WidgetFrame, colors: Colors) -> TextInputStyle {
+    let v = frame.viewport;
+    let field = if v.h < CAPSULE_HEIGHT {
+        RectDip {
+            x: v.x + 8.0,
+            y: v.y + 6.0,
+            w: (v.w - 16.0).max(1.0),
+            h: (v.h - 12.0).max(1.0),
+        }
+    } else {
+        stage_rect(v)
+    };
+    let page = if colors.high_contrast {
+        colors.subtle
+    } else {
+        paper::SHAPE
+    };
+    super::input_field(
+        frame.scale,
+        field,
+        [14.0, 12.0, 14.0, 12.0],
+        colors,
+        page,
+        TextInputFont::Mono,
+        design::CARD_RADIUS,
+        None,
+    )
 }
 
 impl DiagramWidget {
@@ -227,7 +271,7 @@ impl PanelInstance for DiagramWidget {
                         self.config.source.clone()
                     },
                     multiline: true,
-                    style: None,
+                    style: self.field,
                 }],
                 relayout: false,
             }),
@@ -255,6 +299,7 @@ impl PanelInstance for DiagramWidget {
             self.appear = None;
         }
         let mut frame = WidgetFrame::new(mount, self.frame_revision, self.revision, input);
+        self.field = Some(source_field(&frame, Colors::paper(self.theme.as_deref())));
         build_diagram(
             &mut frame,
             &View {
@@ -399,12 +444,7 @@ fn build_diagram(frame: &mut WidgetFrame, view: &View, colors: Colors, chinese: 
         node.style.foreground = paper::WARNING_INK;
     }
     let v = frame.viewport;
-    let stage = RectDip {
-        x: v.x + design::CONTENT_INSET,
-        y: v.y + CONTENT_TOP,
-        w: (v.w - design::CONTENT_INSET * 2.0).max(0.0),
-        h: (v.h - CONTENT_TOP - design::CONTENT_INSET).max(0.0),
-    };
+    let stage = stage_rect(v);
     let stage_fill = if colors.high_contrast {
         colors.subtle
     } else {
@@ -1161,5 +1201,42 @@ mod tests {
                 pecofence_render::DrawCommand::StrokePath(p, _) if p == path
             )));
         }
+    }
+
+    #[test]
+    fn source_editor_is_a_monospace_page_over_the_stage() {
+        let frame = WidgetFrame::new(
+            MountKey {
+                instance: InstanceKey {
+                    id: 1,
+                    activation: 1,
+                },
+                generation: 1,
+            },
+            1,
+            1,
+            FrameInput {
+                viewport: RectDip {
+                    x: 0.0,
+                    y: 0.0,
+                    w: 560.0,
+                    h: 384.0,
+                },
+                locale: "en",
+                presentation: Presentation::Compact,
+                grouping: Grouping::Single,
+                exposure: Exposure::Desktop,
+                active: true,
+                text_scale: 1.0,
+                theme_epoch: 1,
+                device_epoch: 1,
+            },
+        );
+        let field = source_field(&frame, Colors::paper(None));
+        assert_eq!(field.bounds, stage_rect(frame.viewport));
+        assert_eq!(field.font, TextInputFont::Mono);
+        assert_eq!(field.background, paper::SHAPE);
+        assert_eq!(field.padding, [14.0, 12.0, 14.0, 12.0]);
+        assert_eq!(field.accent, Some(paper::TERRACOTTA));
     }
 }
