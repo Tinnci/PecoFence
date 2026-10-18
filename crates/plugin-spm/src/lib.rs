@@ -817,11 +817,21 @@ fn prepare_scene(
     viewport: RectDip,
     text_scale: f32,
 ) -> Result<Scene> {
+    let in_toolbar = view
+        .nodes
+        .first()
+        .is_some_and(|node| node.role == "toolbar");
     let nodes = view
         .nodes
         .into_iter()
         .map(|node| {
             let fill = if node.role == "pane" { None } else { node.fill };
+            let align = text_align(node.role, in_toolbar);
+            let text_inset = match align {
+                TextAlign::Center => [0.0, 0.0],
+                TextAlign::MiddleLeading => [6.0 * text_scale, 0.0],
+                TextAlign::TopLeading => [6.0 * text_scale, 4.0 * text_scale],
+            };
             SceneNode {
                 id: node.id,
                 parent: (node.id != 1).then_some(1),
@@ -850,14 +860,25 @@ fn prepare_scene(
                     } else {
                         design::CONTROL_RADIUS * text_scale
                     },
-                    text_inset: [6.0 * text_scale, 4.0 * text_scale],
-                    align: Default::default(),
+                    text_inset,
+                    align,
                     path: None,
                 },
             }
         })
         .collect();
     Scene::new(identity, viewport, nodes)
+}
+
+/// Buttons and capsule pills centre their label; single-line rows and labels
+/// centre vertically; wrapped body text keeps the top-leading origin.
+fn text_align(role: &str, in_toolbar: bool) -> TextAlign {
+    match role {
+        "button" | "grip" => TextAlign::Center,
+        "status" if in_toolbar => TextAlign::Center,
+        "heading" | "status" | "listitem" => TextAlign::MiddleLeading,
+        _ => TextAlign::TopLeading,
+    }
 }
 
 pub struct SpmPlugin;
@@ -1951,6 +1972,69 @@ mod tests {
         frame.paint(&mut canvas).unwrap();
         assert!(canvas.is_balanced());
         assert!(!canvas.commands().is_empty());
+    }
+
+    #[test]
+    fn toolbar_pills_and_buttons_centre_their_labels() {
+        let viewport = RectDip {
+            x: 0.0,
+            y: 0.0,
+            w: 360.0,
+            h: 48.0,
+        };
+        let data = snapshot(DaemonSessionId::new(), 1);
+        let identity = FrameIdentity {
+            mount_key: MountKey {
+                instance: InstanceKey {
+                    id: 1,
+                    activation: 1,
+                },
+                generation: 1,
+            },
+            frame_revision: 1,
+            layout_revision: 1,
+            theme_epoch: 1,
+            device_epoch: 1,
+        };
+        let view = build_presentation_view(
+            Some(&data),
+            Presentation::Capsule,
+            viewport,
+            &PanelTokens::dark(),
+        );
+        let scene = prepare_scene(view, identity, viewport, 1.0).unwrap();
+        let align = |id| {
+            let node = scene.nodes().iter().find(|node| node.id == id).unwrap();
+            (node.style.align, node.style.text_inset)
+        };
+        for id in [10, 12, 13] {
+            assert_eq!(align(id), (TextAlign::Center, [0.0, 0.0]), "node {id}");
+        }
+        assert_eq!(align(11).0, TextAlign::MiddleLeading);
+
+        let workspace = RectDip {
+            w: 1200.0,
+            h: 760.0,
+            ..viewport
+        };
+        let view = build_presentation_view(
+            Some(&data),
+            Presentation::Workspace,
+            workspace,
+            &PanelTokens::dark(),
+        );
+        let scene = prepare_scene(view, identity, workspace, 1.0).unwrap();
+        let style = |id| {
+            &scene
+                .nodes()
+                .iter()
+                .find(|node| node.id == id)
+                .unwrap()
+                .style
+        };
+        assert_eq!(style(31).align, TextAlign::Center);
+        assert_eq!(style(30).align, TextAlign::MiddleLeading);
+        assert_eq!(style(800).align, TextAlign::TopLeading);
     }
     fn identity_input(presentation: Presentation, width: f32) -> FrameInput {
         FrameInput {
