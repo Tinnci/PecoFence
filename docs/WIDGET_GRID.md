@@ -74,7 +74,10 @@ This is the desktop equivalent of the iOS/Android icon slot.
 - The cell's non-square shape is intentional: it is what a fence's icon rhythm
   already looks like.
 
-Outer window size, title bar included: **`width = n × cell_w`, `height = m × cell_h`**.
+Outer window size: **`width = n × cell_w`, `height = m × cell_h`**. A window showing a
+single widget is frameless (see *Frameless widgets* below), so the span is all
+content. A widget merged into a tabbed group gets the title bar back, and its span
+then includes it.
 The 8-DIP gutter sits **between** windows, not inside the span. That matches how
 fences are sized and snapped today, so no fence layout changes. The trade-off is
 that two side-by-side 2-column widgets are 8 DIP wider than one 4-column widget,
@@ -95,8 +98,8 @@ come from the chrome and Fluent controls already in the code:
 
 | Floor | Derivation (DIP) | Result |
 | --- | --- | --- |
-| One row (capsule) | 36 title bar + 48 capsule line (`Presentation::Capsule`) = 84 ≤ 96 | **1 row** is the capsule size |
-| Two rows (full) | 36 title + 66 header (`CONTENT_TOP`) + 40 list row + 16 inset = 158 ≤ 192 | **2 rows** is the smallest full layout |
+| One row (capsule) | 48 capsule line (`Presentation::Capsule`) ≤ 96 (84 with a title bar in a tabbed group) | **1 row** is the capsule size |
+| Two rows (full) | 66 header (`CONTENT_TOP`) + 40 list row + 16 inset = 122 ≤ 192 (158 with a title bar) | **2 rows** is the smallest full layout |
 | Two columns | 16 + 16 inset + 32 icon button + 4 gap + ~3 CJK title glyphs (60) = 128 ≤ 160 | **2 columns** is the narrowest |
 | Controls | 32-DIP control height, 4-DIP grid; touch targets ≥ 40 | unchanged |
 
@@ -145,8 +148,30 @@ from the capsule straight to the minimum full span, as on Android.
 - Widgets snap only to other windows' edges, not to a desktop-wide lattice.
 - Re-derived on load, DPI change, icon-size change, text scaling and icon-title font
   changes, and after every interactive resize (`FenceBoundsChanged`).
-- The title bar's height follows the system font. Spans include it, so at large text
-  the content area is a little smaller than the table above. The text-scaled
-  minimum rounds up to cover that.
+- In a tabbed group the title bar's height follows the system font and is part of
+  the span, so at large text the content is a little smaller. The text-scaled
+  minimum rounds up to cover that. Frameless widgets are not affected.
 - Deferred: a rolled-up widget keeps its stored span but is not resized until it is
   expanded. Tabbed groups use the active tab's grid.
+
+## Frameless widgets
+
+Like iOS, Android, macOS and KDE Plasma widgets, a window that shows a single widget
+has no title bar: the widget's own header (title, summary, actions) is the only
+chrome, and the span is all content.
+
+- **Moving:** drag any part of the widget that is not a control (the header text,
+  the margins, the paper ground). The window treats those areas as its caption, so
+  drag-snapping, the 8 DIP gutter and drop-to-merge work as for fences.
+- **Fence actions** (rename, lock, appearance, delete): right-click anywhere on the
+  widget, or press Shift+F10 / the menu key. *Roll up* is disabled: there is no title
+  bar to roll into, and a saved rolled state is cleared on load.
+- **Tabs:** dropping a fence or widget onto a widget makes a tabbed group, which
+  gets the title bar and tab strip back. Detaching back to a single widget makes it
+  frameless again.
+- **Implementation:** the window keeps a zero title height in its own theme copy
+  (`FenceWindow::set_frameless`), so every title-relative layout, hit test and paint
+  path follows without special cases. `WM_NCHITTEST` returns `HTCAPTION` wherever the
+  widget's hit tree has no control.
+- **Not done:** there is no visible hover affordance for dragging. Dragging, menus,
+  merge-by-drop and screen-reader names have not been checked on a Windows desktop.

@@ -243,6 +243,9 @@ pub struct FenceViewState {
     pub(super) spacing: Spacing,
     /// Widget windows: span rules and the live cell (docs/WIDGET_GRID.md).
     pub(super) widget_grid: Option<WidgetGrid>,
+    /// Single-widget windows draw no title bar: the widget fills the window, empty
+    /// widget areas move it and the fence menu comes from a right-click.
+    pub(super) frameless: bool,
     /// Keyboard/selection anchor: the last item clicked or moved to with the arrow keys.
     pub(super) anchor_index: Option<usize>,
     /// Start of a Shift range selection.

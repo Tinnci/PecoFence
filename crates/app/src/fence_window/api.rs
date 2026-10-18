@@ -251,6 +251,7 @@ impl FenceWindow {
             style: FenceStyle::default(),
             spacing: Spacing::Normal,
             widget_grid: None,
+            frameless: false,
             anchor_index: None,
             range_anchor: None,
             device_lost: false,
@@ -1244,6 +1245,31 @@ impl FenceWindow {
         });
     }
 
+    /// Frameless widget windows have a zero-height title bar in their own theme copy,
+    /// so every title-relative layout, hit test and paint path follows without a
+    /// special case. `title_height` is the shared theme's value to restore.
+    pub fn set_frameless(&self, frameless: bool, title_height: f32) {
+        self.with_view(|v| {
+            let height = if frameless { 0.0 } else { title_height };
+            if v.frameless == frameless && v.theme.title_height == height {
+                return;
+            }
+            v.frameless = frameless;
+            v.theme.title_height = height;
+            let (w, h) = window::window_rect_size(v.hwnd);
+            let _ = v.layout_panels(w, h);
+            let _ = v.redraw();
+        });
+    }
+
+    /// Title bar height in DIPs as this window draws it (0 for frameless widgets).
+    pub fn title_height_dip(&self) -> f32 {
+        self.view
+            .borrow()
+            .as_ref()
+            .map_or(0.0, |v| v.theme.title_height)
+    }
+
     /// Widget windows snap live resizing to whole cells of this grid.
     pub fn set_widget_grid(&self, grid: Option<WidgetGrid>) {
         self.with_view(|v| v.widget_grid = grid);
@@ -1403,6 +1429,9 @@ impl FenceWindow {
                 v.glass_dark_text.set(None);
             }
             v.theme = theme;
+            if v.frameless {
+                v.theme.title_height = 0.0;
+            }
             if !theme.liquid_glass {
                 v.gpu_glass.borrow_mut().reset();
             }

@@ -448,7 +448,8 @@ impl App {
                 pecofence_core::i18n::text("卷起")
             },
             false,
-            false,
+            // Frameless widgets have no title bar to roll up into.
+            self.is_frameless_widget(host),
         )
         .item(
             CMD_FENCE_RENAME,

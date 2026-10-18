@@ -164,8 +164,7 @@ impl App {
                     x: 0.0,
                     y: 0.0,
                     w: (rect.right - rect.left) as f32 / scale,
-                    h: ((rect.bottom - rect.top) as f32 / scale
-                        - self.ctx.theme.borrow().title_height)
+                    h: ((rect.bottom - rect.top) as f32 / scale - window.title_height_dip())
                         .max(0.0),
                 };
                 if let Err(error) = manager.attach_mount(
@@ -262,6 +261,17 @@ impl App {
     pub(super) fn apply_fence_view_with_snap(&mut self, id: ContainerId, snap_geometry: bool) {
         // Geometry-ish flags (rolled, auto height, lock, appearance) belong to the host window;
         // content flags (icon size, layout, sort) to the tab being shown.
+        // A window showing a single widget is frameless and never rolled up.
+        let frameless = self.is_frameless_widget(id);
+        if frameless && self.state.container(id).is_some_and(|c| c.rolled_up) {
+            if let Some(container) = self.state.container_mut(id) {
+                container.rolled_up = false;
+            }
+            self.state.mark_dirty();
+        }
+        if let Some(w) = self.fences.get(&id) {
+            w.set_frameless(frameless, self.ctx.theme.borrow().title_height);
+        }
         let Some(f) = self.state.window_content(id) else {
             return;
         };
@@ -422,6 +432,13 @@ impl App {
         };
         self.state.set_fence_bounds(id, rect, rolled, expanded);
         self.schedule_save();
+    }
+
+    /// A window is frameless when it shows exactly one first-party widget; tabbed
+    /// groups keep their title bar so the tab strip stays reachable.
+    pub(super) fn is_frameless_widget(&self, id: ContainerId) -> bool {
+        self.state.container(id).is_some_and(|c| c.tabs.len() == 1)
+            && self.widget_grid(id).is_some()
     }
 
     /// The grid a widget window snaps to: its provider's span rules and one fence icon
@@ -1014,6 +1031,10 @@ impl App {
     }
 
     pub(super) fn toggle_roll(&mut self, fence: ContainerId) {
+        // Frameless widgets have no title bar to roll up into.
+        if self.is_frameless_widget(fence) {
+            return;
+        }
         if let Some(w) = self.fences.get(&fence) {
             let rolled = !w.is_rolled();
             w.set_rolled(rolled);

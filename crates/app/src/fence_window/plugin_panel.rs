@@ -365,6 +365,21 @@ impl PluginPanelContent {
         Ok(drawn)
     }
 
+    /// Whether a window-client point (pixels) lands on an interactive widget control.
+    pub(super) fn control_at_client(
+        &self,
+        x_px: i32,
+        y_px: i32,
+        title_px: i32,
+        scale: f32,
+    ) -> bool {
+        self.hit_at(
+            x_px as f32 / scale.max(0.01),
+            (y_px - title_px) as f32 / scale.max(0.01),
+        )
+        .is_some()
+    }
+
     fn hit_at(&self, x: f32, y: f32) -> Option<&pecofence_plugin_api::HitNode> {
         if !self.viewport.contains(x, y) {
             return None;

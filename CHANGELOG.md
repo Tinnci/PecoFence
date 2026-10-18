@@ -83,6 +83,11 @@
   window (older files migrate to the nearest span), and new windows are placed
   with the same 8 DIP gutter as drag-snapping. Live resizing not yet checked on
   device.
+- Make single-widget windows frameless, like iOS/Android/macOS/Plasma widgets: no
+  fence title bar above the widget's own header, so a span is all content. Drag
+  empty widget areas to move (with the usual snapping and drop-to-merge),
+  right-click or Shift+F10 for the fence menu; roll-up is disabled. Tabbed groups
+  keep their title bar. Not yet checked on device.
 
 The versioned entries below are retained from the upstream baseline. References
 to Store submissions or a published website describe that history, not an active

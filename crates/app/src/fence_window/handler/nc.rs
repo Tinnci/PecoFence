@@ -50,6 +50,15 @@ pub(super) fn on_windowposchanging(
     None
 }
 
+/// Frameless widgets move by any area that is not one of their controls, like a
+/// title bar; the caption path then also gives drag-snapping, merge and the menu.
+fn frameless_drag(v: &FenceViewState, x: i32, y: i32) -> bool {
+    v.frameless
+        && v.plugin_panel
+            .as_ref()
+            .is_some_and(|panel| !panel.control_at_client(x, y, v.title_h_px(), v.scale()))
+}
+
 pub(super) fn on_nchittest(
     h: &HandlerCtx,
     hwnd: HWND,
@@ -94,7 +103,7 @@ pub(super) fn on_nchittest(
     }
     if v.locked {
         // Locked: no resize edges; the title still takes clicks/menus.
-        return Some(if top < title_h {
+        return Some(if top < title_h || frameless_drag(v, left, top) {
             msg::HTCAPTION
         } else {
             msg::HTCLIENT
@@ -126,6 +135,7 @@ pub(super) fn on_nchittest(
         (_, _, true, _) => msg::HTTOP,
         (_, _, _, true) => msg::HTBOTTOM,
         _ if top < title_h => msg::HTCAPTION,
+        _ if frameless_drag(v, left, top) => msg::HTCAPTION,
         _ => msg::HTCLIENT,
     };
     Some(code)
@@ -350,6 +360,14 @@ pub(super) fn on_nclbuttondblclk(
 ) -> Option<isize> {
     let HandlerCtx { view, queue, .. } = h;
     let fence_id = h.fence_id;
+    // Frameless widgets have no title bar to roll up into.
+    let frameless = view
+        .try_borrow()
+        .ok()
+        .is_some_and(|g| g.as_ref().is_some_and(|v| v.frameless));
+    if wparam as isize == msg::HTCAPTION && frameless {
+        return Some(0);
+    }
     if wparam as isize == msg::HTCAPTION {
         let suppressed = view
             .borrow_mut()
