@@ -232,7 +232,7 @@ impl PanelInstance for TimeWidget {
         let mut frame =
             WidgetFrame::new(mount_key, self.frame_revision, self.layout_revision, input);
         let colors = match self.kind {
-            Kind::Clock => Colors::from_theme(self.theme.as_deref()),
+            Kind::Clock => Colors::paper(self.theme.as_deref()),
             Kind::Calendar => Colors::paper(self.theme.as_deref()),
         };
         let chinese = input.locale.starts_with("zh");
@@ -948,92 +948,149 @@ pub(crate) fn build_panel_header(
     }
 }
 
-fn build_clock(frame: &mut WidgetFrame, config: WidgetConfig, colors: Colors, chinese: bool) {
-    let now = Local::now();
-    let v = frame.viewport;
-    let inset = 20.0;
-    let width = (v.w - inset * 2.0).max(0.0);
-    let format = match (config.use_12_hour, config.show_seconds) {
-        (true, true) => "%I:%M:%S %p",
-        (true, false) => "%I:%M %p",
-        (false, true) => "%H:%M:%S",
-        (false, false) => "%H:%M",
-    };
-    let time = now.format(format).to_string();
-    let date = if chinese {
-        let weekday = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
-            [now.weekday().num_days_from_monday() as usize];
-        format!(
-            "{}年{}月{}日  {weekday}",
-            now.year(),
-            now.month(),
-            now.day()
-        )
+/// Time and date strings for the clock; the 12-hour marker leads the date line so
+/// the numerals stay one clean run.
+fn clock_text(
+    config: WidgetConfig,
+    now: chrono::DateTime<Local>,
+    chinese: bool,
+) -> (String, String) {
+    let time = match (config.use_12_hour, config.show_seconds) {
+        (true, true) => now.format("%-I:%M:%S"),
+        (true, false) => now.format("%-I:%M"),
+        (false, true) => now.format("%H:%M:%S"),
+        (false, false) => now.format("%H:%M"),
+    }
+    .to_string();
+    let today = now.date_naive();
+    let mut date = if chinese {
+        describe_day(today, true)
     } else {
-        now.format("%Y-%m-%d  %a").to_string()
+        today.format("%A, %B %-d").to_string()
     };
-    // Capsule height is a real layout, not a clipped version of the large clock.
-    // Text scaling reduces this logical viewport before we choose the layout.
-    if v.h < 120.0 {
-        let show_date = v.w >= 400.0;
-        frame.add(WidgetElement::text(
-            1,
-            RectDip {
-                x: v.x + design::CONTENT_INSET,
-                y: v.y,
-                w: if show_date { width * 0.5 } else { width },
-                h: v.h,
-            },
-            time,
-            if v.h >= 44.0 { 28.0 } else { design::BODY },
-            600,
-            colors.primary,
-        ));
-        if show_date {
-            frame.add(WidgetElement::text(
-                2,
+    if chinese && let Some(lunar) = lunar::describe(today) {
+        date = format!("{date} · {lunar}");
+    }
+    if config.use_12_hour {
+        let meridiem = match (now.hour() < 12, chinese) {
+            (true, true) => "上午",
+            (false, true) => "下午",
+            (true, false) => "AM",
+            (false, false) => "PM",
+        };
+        date = format!("{meridiem} · {date}");
+    }
+    (time, date)
+}
+
+/// Paper clock: large serif numerals sized from the cells the widget spans, a short
+/// terracotta rule, and the date (with the lunar date in Chinese). One row is a
+/// capsule with the time and, when there is room, the date beside it.
+fn build_clock(frame: &mut WidgetFrame, config: WidgetConfig, colors: Colors, chinese: bool) {
+    frame.ground(colors);
+    let (time, date) = clock_text(config, Local::now(), chinese);
+    let v = frame.viewport;
+    let inset = design::CONTENT_INSET + 4.0;
+    let width = (v.w - inset * 2.0).max(0.0);
+    if v.h < CAPSULE_HEIGHT {
+        let show_date = v.w >= 300.0;
+        let time_size = (v.h * 0.5).clamp(design::BODY, 32.0);
+        let time_w = if show_date { width * 0.4 } else { width };
+        frame.add(
+            WidgetElement::text(
+                1,
                 RectDip {
-                    x: v.x + v.w * 0.5,
+                    x: v.x + inset,
                     y: v.y,
-                    w: (v.w * 0.5 - design::CONTENT_INSET).max(0.0),
+                    w: time_w,
                     h: v.h,
                 },
-                date,
-                design::BODY,
-                400,
-                colors.secondary,
-            ));
+                time,
+                time_size,
+                600,
+                colors.primary,
+            )
+            .serif()
+            .align(TextAlign::MiddleLeading),
+        );
+        if show_date {
+            frame.add(
+                WidgetElement::text(
+                    2,
+                    RectDip {
+                        x: v.x + inset + time_w,
+                        y: v.y,
+                        w: (width - time_w).max(0.0),
+                        h: v.h,
+                    },
+                    date,
+                    design::CAPTION,
+                    400,
+                    colors.secondary,
+                )
+                .align(TextAlign::MiddleLeading),
+            );
         }
         return;
     }
-    let time_size = if v.w < 260.0 { 37.0 } else { 52.0 };
-    let top = v.y + ((v.h - 115.0) / 2.0).max(12.0);
-    frame.add(WidgetElement::text(
-        1,
-        RectDip {
-            x: v.x + inset,
-            y: top,
-            w: width,
-            h: 72.0,
-        },
-        time,
-        time_size,
-        600,
-        colors.primary,
-    ));
-    frame.add(WidgetElement::text(
-        2,
-        RectDip {
-            x: v.x + inset + 2.0,
-            y: top + 76.0,
-            w: width,
-            h: 30.0,
-        },
-        date,
-        17.0,
-        400,
-        colors.secondary,
-    ));
+    // Numerals fill the height they are given without outgrowing narrow widgets.
+    let time_size = (v.h * 0.40).min(width * 0.24).clamp(28.0, 112.0);
+    let time_h = (time_size * 1.2).ceil();
+    let rule_gap = (time_size * 0.08).clamp(4.0, 10.0);
+    let date_h = 20.0;
+    let block = time_h + rule_gap + 3.0 + rule_gap + date_h;
+    let top = v.y + ((v.h - block) / 2.0).max(8.0);
+    frame.add(
+        WidgetElement::text(
+            1,
+            RectDip {
+                x: v.x + inset,
+                y: top,
+                w: width,
+                h: time_h,
+            },
+            time,
+            time_size,
+            600,
+            colors.primary,
+        )
+        .serif()
+        .align(TextAlign::MiddleLeading),
+    );
+    let rule_y = top + time_h + rule_gap;
+    frame.add(
+        WidgetElement::text(
+            3,
+            RectDip {
+                x: v.x + inset + 2.0,
+                y: rule_y,
+                w: 32.0_f32.min(width),
+                h: 3.0,
+            },
+            "",
+            design::CAPTION,
+            400,
+            colors.accent,
+        )
+        .role("presentation")
+        .fill(Some(colors.accent), 1.5),
+    );
+    frame.add(
+        WidgetElement::text(
+            2,
+            RectDip {
+                x: v.x + inset + 2.0,
+                y: rule_y + 3.0 + rule_gap,
+                w: width,
+                h: date_h,
+            },
+            date,
+            design::CAPTION,
+            400,
+            colors.secondary,
+        )
+        .align(TextAlign::MiddleLeading),
+    );
 }
 
 const MONTHS_EN: [&str; 12] = [
@@ -1506,10 +1563,19 @@ mod tests {
                 Colors::from_theme(None),
                 false,
             );
-            assert_eq!(frame.nodes.len(), 1);
-            assert!(frame.nodes[0].rect.y >= 0.0);
-            assert!(frame.nodes[0].rect.y + frame.nodes[0].rect.h <= 48.0);
-            assert!(frame.nodes[0].style.size <= 32.0);
+            // The strip keeps the time (and the date when there is room) inside its
+            // height instead of clipping the full layout.
+            let time = frame.nodes.iter().find(|n| n.id == 1).unwrap();
+            assert!(time.rect.y >= 0.0);
+            assert!(time.rect.y + time.rect.h <= 48.0);
+            assert!(time.style.size <= 32.0);
+            assert_eq!(time.style.font, FontRole::Serif);
+            let logical_w = 360.0 / factor;
+            assert_eq!(
+                frame.nodes.iter().any(|n| n.id == 2),
+                logical_w >= 300.0,
+                "date beside the time only when it fits"
+            );
         }
     }
 
@@ -1828,13 +1894,22 @@ mod tests {
             );
             scenes.push(frame.finish(&mut LayoutTracker::default()).unwrap());
         }
-        assert_eq!(scenes[0].semantics().len(), 1);
-        assert_eq!(scenes[1].semantics().len(), 2);
-        assert_eq!(scenes[2].semantics().len(), 2);
-        for scene in &scenes {
-            assert_eq!(scene.semantics()[0].id, scenes[0].semantics()[0].id);
-        }
-        assert_eq!(scenes[1].semantics()[1].id, scenes[2].semantics()[1].id);
+        let ids = |scene: &Scene| scene.semantics().iter().map(|n| n.id).collect::<Vec<_>>();
+        // Narrow strip: time only; wide strip: time and date; full: time, rule, date.
+        assert_eq!(ids(&scenes[0]), [1]);
+        assert_eq!(ids(&scenes[1]), [1, 2]);
+        assert_eq!(ids(&scenes[2]), [1, 3, 2]);
+        // The time and date keep their identity across every layout.
+        let date = |scene: &Scene| {
+            scene
+                .semantics()
+                .iter()
+                .find(|n| n.id == 2)
+                .unwrap()
+                .name
+                .clone()
+        };
+        assert_eq!(date(&scenes[1]), date(&scenes[2]));
     }
 
     #[test]
@@ -2026,5 +2101,47 @@ mod tests {
                 .iter()
                 .all(|n| n.style.font != FontRole::PaperBody)
         );
+    }
+
+    #[test]
+    fn paper_clock_fills_its_cells_with_serif_numerals_and_lunar_date() {
+        let mut frame = identity_frame(400.0, 192.0, 1.0);
+        build_clock(
+            &mut frame,
+            WidgetConfig::default(),
+            Colors::paper(None),
+            true,
+        );
+        let scene = frame.finish(&mut LayoutTracker::default()).unwrap();
+        assert_eq!(scene.nodes()[0].style.fill, Some(paper::GROUND));
+        let time = scene.nodes().iter().find(|n| n.id == 1).unwrap();
+        assert_eq!(time.style.font, FontRole::Serif);
+        assert_eq!(time.style.foreground, paper::INK);
+        assert!(time.style.size >= 64.0, "numerals use the 5 × 2 cells");
+        let rule = scene.nodes().iter().find(|n| n.id == 3).unwrap();
+        assert_eq!(rule.style.fill, Some(paper::TERRACOTTA));
+        let date = scene.nodes().iter().find(|n| n.id == 2).unwrap();
+        assert!(date.text.contains("农历"));
+        // Everything sits inside the widget.
+        for node in scene.nodes() {
+            assert!(node.rect.y >= 0.0 && node.rect.y + node.rect.h <= 192.0);
+        }
+        assert!(scene.hit_tree().is_empty());
+    }
+
+    #[test]
+    fn twelve_hour_clock_moves_the_meridiem_to_the_date_line() {
+        use chrono::TimeZone;
+        let afternoon = Local.with_ymd_and_hms(2026, 10, 18, 14, 5, 0).unwrap();
+        let config = WidgetConfig {
+            use_12_hour: true,
+            ..Default::default()
+        };
+        let (time, date) = clock_text(config, afternoon, true);
+        assert_eq!(time, "2:05");
+        assert!(date.starts_with("下午 · 10月18日 周日"));
+        let (time, date) = clock_text(WidgetConfig::default(), afternoon, false);
+        assert_eq!(time, "14:05");
+        assert_eq!(date, "Sunday, October 18");
     }
 }

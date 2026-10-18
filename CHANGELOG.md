@@ -103,6 +103,10 @@
   bundled Noto faces (registered privately for GDI) instead of Segoe UI. Todo edit
   keeps the checkbox visible; Todo add opens a new row with a "新任务…" hint; the
   Mermaid editor is a monospace page over the stage. Not yet checked on device.
+- Redesign the clock as a paper widget: large serif numerals sized from its cells,
+  a short terracotta rule and the date (with the lunar date in Chinese); one-row
+  clocks show time and date side by side. Frameless windows no longer draw a
+  half-cut fence title at the top edge.
 
 The versioned entries below are retained from the upstream baseline. References
 to Store submissions or a published website describe that history, not an active

@@ -1433,8 +1433,10 @@ impl FenceChrome {
                 &marker,
             );
         }
-        if title_a <= 0.0 {
+        if title_a <= 0.0 || title_h < 1.0 {
             // "鼠标悬停时才显示标题栏": the glass and rim stay, the title row stays empty.
+            // Frameless widgets have no title row at all: draw nothing there, or the
+            // title would be centred on a zero-height strip and show half-cut.
             return Ok(());
         }
         // Title text; leave room for the roll-up chevron on the right, ellipsize the rest.
