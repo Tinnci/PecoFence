@@ -61,6 +61,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801"
 
 [[package]]
+name = "chinese-lunisolar-calendar"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5890b176f92666a6c4737a7f116ae999b93f4a179dfdc741f9b93cdeb5f6491a"
+dependencies = [
+ "chinese-variant",
+ "chrono",
+ "enum-ordinalize",
+ "year-helper",
+]
+
+[[package]]
+name = "chinese-variant"
+version = "1.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0d1275808335c5583ea45a4141d631dafcb36b79fa8a5e10b00e356b6af3e08a"
+
+[[package]]
 name = "chrono"
 version = "0.4.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -79,6 +97,26 @@ name = "core-foundation-sys"
 version = "0.8.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
+
+[[package]]
+name = "enum-ordinalize"
+version = "4.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "89dd01549b09589510cf0647475075d12071456586d70f5c75c98ae2a5537677"
+dependencies = [
+ "enum-ordinalize-derive",
+]
+
+[[package]]
+name = "enum-ordinalize-derive"
+version = "4.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a65863d15a4ce2888bd2f0f543cc963d3879c3a022c8ee43f6141d479a3ac815"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 3.0.5",
+]
 
 [[package]]
 name = "find-msvc-tools"
@@ -277,6 +315,7 @@ dependencies = [
 name = "pecofence-plugin-api"
 version = "0.0.3"
 dependencies = [
+ "bezier_easing",
  "serde",
 ]
 
@@ -303,6 +342,7 @@ dependencies = [
 name = "pecofence-plugin-widgets"
 version = "0.0.3"
 dependencies = [
+ "chinese-lunisolar-calendar",
  "chrono",
  "pecofence-plugin-api",
  "pecofence-render",
@@ -950,6 +990,12 @@ checksum = "b1d48f56961ae40c65db3a0ea0076a0b100f4c46ba21d78af97bd8b77e924a82"
 dependencies = [
  "windows-core 0.100.0",
 ]
+
+[[package]]
+name = "year-helper"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "93c3051357d53001882926d530211c04839443b467107f0e4c19c3500ff374de"
 
 [[package]]
 name = "zmij"

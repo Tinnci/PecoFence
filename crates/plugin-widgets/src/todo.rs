@@ -1,12 +1,18 @@
 //! Local TODO panel. Tasks live in the provider-owned JSON saved with its fence.
 
-use super::WidgetElement;
-use super::{CONTENT_TOP, Colors, Control, HeaderAction, WidgetFrame, build_panel_header, glyph};
+use super::{
+    CAPSULE_HEIGHT, CONTENT_TOP, Colors, Control, HeaderAction, WidgetFrame, build_capsule,
+    build_panel_header, glyph,
+};
+use super::{FRAME_INTERVAL, Tween, WidgetElement, fade, lerp};
 use pecofence_plugin_api::design;
+use pecofence_plugin_api::design::motion::{self, Curve};
 use pecofence_plugin_api::*;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
+use std::time::Instant;
 
 pub const TODO_PROVIDER: &str = "pecofence.todo";
 const ADD: u64 = 1;
@@ -126,6 +132,7 @@ impl PanelProvider for TodoPlugin {
             mount: None,
             config: parse(&input.config)?,
             undo: None,
+            motion: None,
             page: 0,
             frame_revision: 0,
             layout_tracker: design::LayoutTracker::default(),
@@ -141,6 +148,7 @@ struct TodoWidget {
     mount: Option<MountKey>,
     config: TodoConfig,
     undo: Option<TodoConfig>,
+    motion: Option<ListMotion>,
     page: usize,
     theme: Option<Arc<ThemeSnapshot>>,
     frame_revision: u64,
@@ -159,9 +167,29 @@ impl TodoWidget {
     }
 
     fn change(&mut self, next: TodoConfig) -> Result<PanelUpdate> {
+        self.change_with(next, Emphasis::None)
+    }
+
+    /// Apply a list change and, unless animation effects are off, let the rows glide
+    /// from where they were (FLIP) while the progress bar eases to its new value.
+    fn change_with(&mut self, next: TodoConfig, emphasis: Emphasis) -> Result<PanelUpdate> {
+        let from_slots = display_order(&self.config)
+            .iter()
+            .enumerate()
+            .map(|(slot, (_, task))| (task.id, slot as f32))
+            .collect();
+        let from_ratio = done_ratio(&self.config);
         let Some(bytes) = apply_change(&mut self.config, &mut self.undo, next)? else {
             return Ok(PanelUpdate::default());
         };
+        let animations = self.theme.as_ref().is_none_or(|theme| theme.animations);
+        self.motion =
+            Tween::start(motion::NORMAL, Curve::PointToPoint, animations).map(|tween| ListMotion {
+                tween,
+                from_slots,
+                from_ratio,
+                emphasis,
+            });
         let mut update = self.redraw();
         update.commands.push(HostCommand::PersistConfig(bytes));
         Ok(update)
@@ -192,6 +220,7 @@ impl PanelInstance for TodoWidget {
                 self.theme = self.ctx.theme.with(|service| service.snapshot()).ok();
                 Ok(self.redraw())
             }
+            PanelEvent::Wake => Ok(self.redraw()),
             PanelEvent::Invoke { action: ADD, .. } if self.config.tasks.len() < MAX_TASKS => {
                 Ok(PanelUpdate {
                     commands: vec![HostCommand::RequestTextInput {
@@ -235,10 +264,12 @@ impl PanelInstance for TodoWidget {
                 if (TASK_BASE..TASK_BASE + MAX_TASKS as u64).contains(&action) =>
             {
                 let mut next = self.config.clone();
+                let mut emphasis = Emphasis::None;
                 if let Some(task) = next.tasks.get_mut((action - TASK_BASE) as usize) {
                     task.done = !task.done;
+                    emphasis = Emphasis::Toggled(task.id);
                 }
-                self.change(next)
+                self.change_with(next, emphasis)
             }
             PanelEvent::Invoke { action, .. }
                 if (EDIT_BASE..EDIT_BASE + MAX_TASKS as u64).contains(&action) =>
@@ -269,6 +300,7 @@ impl PanelInstance for TodoWidget {
                     ));
                 }
                 let mut next = self.config.clone();
+                let mut emphasis = Emphasis::None;
                 if action == ADD {
                     if next.tasks.len() >= MAX_TASKS {
                         return Err(Error::Invalid(
@@ -279,6 +311,7 @@ impl PanelInstance for TodoWidget {
                         return Err(Error::Exhausted);
                     }
                     let id = next.next_id;
+                    emphasis = Emphasis::Added(id);
                     next.next_id += 1;
                     next.tasks.push(TodoTask {
                         id,
@@ -289,7 +322,7 @@ impl PanelInstance for TodoWidget {
                     task.title = title.into();
                 }
                 let changed = next != self.config;
-                let update = self.change(next)?;
+                let update = self.change_with(next, emphasis)?;
                 if action == ADD && changed {
                     self.page = usize::MAX; // clamped to the last page by prepare_frame
                 }
@@ -309,6 +342,10 @@ impl PanelInstance for TodoWidget {
         );
         let pages = self.config.tasks.len().max(1).div_ceil(capacity);
         self.page = self.page.min(pages - 1);
+        let now = Instant::now();
+        if self.motion.as_ref().is_some_and(|m| m.tween.done(now)) {
+            self.motion = None;
+        }
         let mut frame = WidgetFrame::new(mount, self.frame_revision, self.layout_revision, input);
         build_todo(
             &mut frame,
@@ -318,6 +355,7 @@ impl PanelInstance for TodoWidget {
             self.undo.is_some(),
             Colors::from_theme(self.theme.as_deref()),
             input.locale.starts_with("zh"),
+            self.motion.as_ref().map(|m| (m, m.tween.progress(now))),
         );
         let frame = frame.finish(&mut self.layout_tracker)?;
         Ok(Rc::new(frame))
@@ -333,6 +371,36 @@ impl PanelInstance for TodoWidget {
         self.stopped = true;
         self.mount = None;
     }
+
+    fn next_wake_after(&self) -> Option<std::time::Duration> {
+        (!self.stopped && self.motion.is_some()).then_some(FRAME_INTERVAL)
+    }
+}
+
+/// Which row a list change is about, for its accent motion.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Emphasis {
+    None,
+    /// Checkbox pops and the row card fades in or out.
+    Toggled(u64),
+    /// New row rises into place while fading in.
+    Added(u64),
+}
+
+struct ListMotion {
+    tween: Tween,
+    /// Display slot of every task before the change, by task id.
+    from_slots: HashMap<u64, f32>,
+    from_ratio: f32,
+    emphasis: Emphasis,
+}
+
+fn done_ratio(config: &TodoConfig) -> f32 {
+    let total = config.tasks.len();
+    if total == 0 {
+        return 0.0;
+    }
+    config.tasks.iter().filter(|task| task.done).count() as f32 / total as f32
 }
 
 // Serialize and validate before changing either the live list or its undo snapshot.
@@ -384,6 +452,7 @@ fn display_order(config: &TodoConfig) -> Vec<(usize, &TodoTask)> {
     order
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_todo(
     frame: &mut WidgetFrame,
     config: &TodoConfig,
@@ -392,11 +461,32 @@ fn build_todo(
     can_undo: bool,
     colors: Colors,
     chinese: bool,
+    motion: Option<(&ListMotion, f32)>,
 ) {
     let total = config.tasks.len();
     let done = config.tasks.iter().filter(|task| task.done).count();
     let pending = total - done;
     let full = total >= MAX_TASKS;
+    if frame.viewport.h < CAPSULE_HEIGHT {
+        // The capsule names the next open task; clicking it adds a new one.
+        let next = config.tasks.iter().find(|task| !task.done);
+        let summary = match (next, chinese) {
+            (Some(task), true) => format!("待办 {pending} · {}", task.title),
+            (Some(task), false) => format!("{pending} to do · {}", task.title),
+            (None, true) if total > 0 => "待办已全部完成".to_string(),
+            (None, false) if total > 0 => "All tasks done".to_string(),
+            (None, true) => "暂无任务".to_string(),
+            (None, false) => "Nothing to do".to_string(),
+        };
+        build_capsule(
+            frame,
+            summary,
+            (!full).then_some(ADD),
+            Some(colors.subtle),
+            colors,
+        );
+        return;
+    }
     // Narrow panels (small fences or large text scales) collapse labels to icons.
     let narrow = frame.viewport.w - design::CONTENT_INSET * 2.0 < 300.0;
     let meta = match (chinese, total, pending) {
@@ -451,12 +541,14 @@ fn build_todo(
         } else {
             format!("{done} of {total} done")
         });
-        if done > 0 {
+        let ratio = done as f32 / total as f32;
+        let ratio = motion.map_or(ratio, |(m, t)| lerp(m.from_ratio, ratio, t));
+        if ratio > 0.0 {
             frame.add(
                 WidgetElement::text(
                     11,
                     RectDip {
-                        w: track.w * done as f32 / total as f32,
+                        w: track.w * ratio,
                         ..track
                     },
                     "",
@@ -539,22 +631,56 @@ fn build_todo(
         .take(capacity)
         .enumerate()
     {
+        // FLIP: rows start from their previous slot and glide to the new one;
+        // a new row rises 8 DIP while fading in.
+        let to = slot as f32;
+        let (from, opacity, rise) = match motion {
+            Some((m, t)) if m.emphasis == Emphasis::Added(task.id) => (to, t, 8.0 * (1.0 - t)),
+            Some((m, t)) => {
+                let from = m
+                    .from_slots
+                    .get(&task.id)
+                    .map(|from| from - start as f32)
+                    .filter(|from| (-1.0..=capacity as f32).contains(from));
+                match from {
+                    Some(from) => (lerp(from, to, t), 1.0, 0.0),
+                    None => (to, t, 0.0),
+                }
+            }
+            None => (to, 1.0, 0.0),
+        };
         let row = RectDip {
             x: left,
-            y: v.y + LIST_TOP + slot as f32 * ROW_PITCH,
+            y: v.y + LIST_TOP + from * ROW_PITCH + rise,
             w: width,
             h: ROW_HEIGHT,
         };
-        let ink = if task.done {
-            colors.secondary
-        } else {
-            colors.primary
-        };
-        // Completed rows drop their card so pending work stays visually dominant.
+        let ink = fade(
+            if task.done {
+                colors.secondary
+            } else {
+                colors.primary
+            },
+            opacity,
+        );
+        // Completed rows drop their card so pending work stays visually dominant;
+        // a toggled row's card fades rather than vanishing.
+        let toggle = motion
+            .filter(|(m, _)| m.emphasis == Emphasis::Toggled(task.id))
+            .map(|(_, t)| t);
+        let card = match (task.done, toggle) {
+            (true, Some(t)) => 1.0 - t,
+            (true, None) => 0.0,
+            (false, Some(t)) => t,
+            (false, None) => 1.0,
+        } * opacity;
         frame.add(
             WidgetElement::text(task_node(task.id, 0), row, "", design::BODY, 400, ink)
                 .role("group")
-                .fill((!task.done).then_some(colors.subtle), design::CARD_RADIUS),
+                .fill(
+                    (card > 0.0).then(|| fade(colors.subtle, card)),
+                    design::CARD_RADIUS,
+                ),
         );
         frame.add(
             WidgetElement::text(
@@ -565,9 +691,14 @@ fn build_todo(
                 } else {
                     glyph::CHECKBOX
                 },
-                18.0,
+                // The checkbox pops a quarter larger at the middle of its toggle.
+                18.0 * (1.0 + 0.25 * (std::f32::consts::PI * toggle.unwrap_or(1.0)).sin()),
                 400,
-                if task.done { colors.accent } else { ink },
+                if task.done {
+                    fade(colors.accent, opacity)
+                } else {
+                    ink
+                },
             )
             .parent(task_node(task.id, 0))
             .role("checkbox")
@@ -889,6 +1020,7 @@ mod tests {
             true,
             Colors::from_theme(None),
             false,
+            None,
         );
         let frame = frame.finish(&mut design::LayoutTracker::default()).unwrap();
         assert_eq!(
@@ -1038,6 +1170,7 @@ mod tests {
             undo,
             Colors::from_theme(None),
             false,
+            None,
         );
         frame.finish(&mut design::LayoutTracker::default()).unwrap()
     }
@@ -1156,10 +1289,87 @@ mod tests {
                     true,
                     Colors::from_theme(None),
                     chinese,
+                    None,
                 );
                 let scene = frame.finish(&mut design::LayoutTracker::default()).unwrap();
                 crate::assert_controls_fit(&scene);
             }
         }
+    }
+
+    #[test]
+    fn toggled_row_glides_to_its_new_slot_and_its_checkbox_pops() {
+        let config =
+            read_config(r#"{"tasks":[{"title":"A","done":true},{"title":"B","done":false}]}"#)
+                .unwrap();
+        // "A" was just completed: it was in slot 0 and now sorts below "B".
+        let motion = ListMotion {
+            tween: Tween::start(motion::NORMAL, Curve::PointToPoint, true).unwrap(),
+            from_slots: HashMap::from([(1, 0.0), (2, 1.0)]),
+            from_ratio: 0.0,
+            emphasis: Emphasis::Toggled(1),
+        };
+        let row_y = |t: f32| {
+            let input = FrameInput {
+                viewport: RectDip {
+                    x: 0.0,
+                    y: 0.0,
+                    w: 420.0,
+                    h: 330.0,
+                },
+                locale: "en",
+                presentation: Presentation::Compact,
+                grouping: Grouping::Single,
+                exposure: Exposure::Desktop,
+                active: true,
+                text_scale: 1.0,
+                theme_epoch: 1,
+                device_epoch: 1,
+            };
+            let mut frame = WidgetFrame::new(
+                MountKey {
+                    instance: InstanceKey {
+                        id: 1,
+                        activation: 1,
+                    },
+                    generation: 1,
+                },
+                1,
+                1,
+                input,
+            );
+            build_todo(
+                &mut frame,
+                &config,
+                0,
+                5,
+                false,
+                Colors::from_theme(None),
+                false,
+                Some((&motion, t)),
+            );
+            let scene = frame.finish(&mut design::LayoutTracker::default()).unwrap();
+            let row = scene
+                .nodes()
+                .iter()
+                .find(|n| n.id == task_node(1, 0))
+                .unwrap();
+            let check = scene
+                .nodes()
+                .iter()
+                .find(|n| n.id == task_node(1, 1))
+                .unwrap();
+            let bar = scene.nodes().iter().find(|n| n.id == 11).map(|n| n.rect.w);
+            (row.rect.y, check.style.size, bar)
+        };
+        let (start_y, start_size, start_bar) = row_y(0.0);
+        let (mid_y, mid_size, _) = row_y(0.5);
+        let (end_y, end_size, end_bar) = row_y(1.0);
+        assert_eq!(start_y, LIST_TOP);
+        assert_eq!(end_y, LIST_TOP + ROW_PITCH);
+        assert!(start_y < mid_y && mid_y < end_y);
+        assert!(mid_size > start_size && (end_size - start_size).abs() < 0.01);
+        assert_eq!(start_bar, None);
+        assert!(end_bar.unwrap() > 0.0);
     }
 }

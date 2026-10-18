@@ -740,6 +740,7 @@ impl App {
 
         let motion = Rc::new(Motion::new(&stack)?);
         motion.set_enabled(sysparams::client_area_animation());
+        panel_manager::set_plugin_animations(motion.enabled());
         let frames = {
             // HWND is not Send; the clock thread only ever posts to it.
             let control_hwnd = control.hwnd().0 as isize;
@@ -1508,6 +1509,9 @@ impl App {
                         Err(error) => tracing::warn!(%error, "panel config update rejected"),
                     }
                 }
+            }
+            Command::PanelWakeChanged { key } => {
+                self.panel_manager.borrow_mut().refresh_wake(key);
             }
             Command::PanelTextRequested {
                 key,

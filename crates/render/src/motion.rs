@@ -32,73 +32,7 @@ use windows_core::{HSTRING, Interface, Result};
 use windows_numerics::{Vector2, Vector3};
 use windows_time::TimeSpan;
 
-/// `ControlFasterAnimationDuration`: fades (hover in/out, tooltip, scrollbar opacity).
-pub const FASTER: Duration = Duration::from_millis(83);
-/// `ControlFastAnimationDuration`: small moves, exits, collapse, scrollbar expand/contract.
-pub const FAST: Duration = Duration::from_millis(167);
-/// `ControlNormalAnimationDuration`: medium moves, entrances.
-pub const NORMAL: Duration = Duration::from_millis(250);
-/// Large entrances / expand (WinUI Expander opens in 333 ms).
-pub const SLOW: Duration = Duration::from_millis(333);
-
-/// Fluent easing curves. Each maps to a CSS-style `cubic-bezier(x1, y1, x2, y2)`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum Curve {
-    Linear,
-    /// Fast-out slow-in `(0,0,0,1)`: entrances, things arriving under the pointer.
-    Decelerate,
-    /// Slow-out fast-in `(1,0,1,1)`: exits, dismissals.
-    Accelerate,
-    /// `(0.55,0.55,0,1)`: a value moving from one resting place to another (scroll, reorder).
-    PointToPoint,
-    /// `(1,1,0,1)`: WinUI Expander collapse.
-    Collapse,
-    /// Zero velocity at both ends, for a liquid plate's continuous silhouette change.
-    Smooth,
-}
-
-impl Curve {
-    /// `None` for [`Curve::Linear`].
-    pub const fn control_points(self) -> Option<[f32; 4]> {
-        match self {
-            Curve::Linear => None,
-            Curve::Decelerate => Some([0.0, 0.0, 0.0, 1.0]),
-            Curve::Accelerate => Some([1.0, 0.0, 1.0, 1.0]),
-            Curve::PointToPoint => Some([0.55, 0.55, 0.0, 1.0]),
-            Curve::Collapse => Some([1.0, 1.0, 0.0, 1.0]),
-            Curve::Smooth => Some([0.42, 0.0, 0.58, 1.0]),
-        }
-    }
-
-    const ALL: [Curve; 6] = [
-        Curve::Linear,
-        Curve::Decelerate,
-        Curve::Accelerate,
-        Curve::PointToPoint,
-        Curve::Collapse,
-        Curve::Smooth,
-    ];
-}
-
-/// Eased progress for `t` in `0..=1` (clamped) — the client-side twin of the compositor's
-/// `CubicBezierEasingFunction`.
-pub fn ease(curve: Curve, t: f32) -> f32 {
-    let t = if t.is_nan() { 1.0 } else { t.clamp(0.0, 1.0) };
-    match curve.control_points() {
-        None => t,
-        Some(_) => EASINGS.with(|e| e[curve as usize].sample(t)),
-    }
-}
-
-thread_local! {
-    static EASINGS: Vec<bezier_easing::BezierEasing<f32>> = Curve::ALL
-        .iter()
-        .map(|c| {
-            let [x1, y1, x2, y2] = c.control_points().unwrap_or([0.0, 0.0, 1.0, 1.0]);
-            bezier_easing::BezierEasing::new(x1, y1, x2, y2).expect("valid Fluent curve")
-        })
-        .collect();
-}
+pub use pecofence_plugin_api::design::motion::{Curve, FAST, FASTER, NORMAL, SLOW, ease};
 
 /// WinUI `ScrollPresenter` rule for a programmatic / wheel scroll: 5 ms per pixel, clamped to
 /// 50..=1000 ms.

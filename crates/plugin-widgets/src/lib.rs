@@ -2,14 +2,16 @@
 //! the host supplies the timer, theme and Direct2D canvas.
 
 use chrono::{Datelike, Local, NaiveDate, Timelike};
+use pecofence_plugin_api::design::motion::{self, Curve};
 use pecofence_plugin_api::design::{self, ContentScale, LayoutTracker};
 use pecofence_plugin_api::scene::{NodeStyle, Scene, SceneNode};
 use pecofence_plugin_api::*;
 use serde::{Deserialize, Serialize};
 use std::rc::Rc;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
+mod lunar;
 mod note;
 mod todo;
 pub use note::{NOTE_PROVIDER, NotePlugin};
@@ -57,6 +59,7 @@ fn create(kind: Kind, ctx: PluginContext, input: CreatePanel) -> Result<Box<dyn 
         config,
         month_offset: 0,
         selected_day: None,
+        month_motion: None,
         theme,
         frame_revision: 0,
         layout_revision: 0,
@@ -111,6 +114,8 @@ struct TimeWidget {
     config: WidgetConfig,
     month_offset: i32,
     selected_day: Option<u32>,
+    /// Month change in flight and its direction (-1 previous, 1 next).
+    month_motion: Option<(Tween, f32)>,
     theme: Option<Arc<ThemeSnapshot>>,
     frame_revision: u64,
     layout_revision: u64,
@@ -119,6 +124,10 @@ struct TimeWidget {
 }
 
 impl TimeWidget {
+    fn animate(&self) -> bool {
+        self.theme.as_ref().is_none_or(|theme| theme.animations)
+    }
+
     fn next_clock_wake(&self) -> Duration {
         let now = Local::now();
         let within_second = now.timestamp_subsec_millis() as u64;
@@ -173,6 +182,7 @@ impl PanelInstance for TimeWidget {
                 Ok(invalidate())
             }
             PanelEvent::Invoke { action, .. } if matches!(self.kind, Kind::Calendar) => {
+                let before = self.month_offset;
                 let changed = match action {
                     PREVIOUS if self.month_offset > -1_200 => {
                         self.month_offset -= 1;
@@ -196,6 +206,12 @@ impl PanelInstance for TimeWidget {
                     _ => false,
                 };
                 if changed {
+                    if self.month_offset != before {
+                        let direction = (self.month_offset - before).signum() as f32;
+                        self.month_motion =
+                            Tween::start(motion::FAST, Curve::Decelerate, self.animate())
+                                .map(|tween| (tween, direction));
+                    }
                     self.layout_revision = self.layout_revision.saturating_add(1);
                     Ok(invalidate())
                 } else {
@@ -215,15 +231,26 @@ impl PanelInstance for TimeWidget {
         let chinese = input.locale.starts_with("zh");
         match self.kind {
             Kind::Clock => build_clock(&mut frame, self.config, colors, chinese),
-            Kind::Calendar => build_calendar(
-                &mut frame,
-                self.config,
-                self.month_offset,
-                self.selected_day,
-                colors,
-                chinese,
-                Local::now().date_naive(),
-            ),
+            Kind::Calendar => {
+                let now = Instant::now();
+                if self.month_motion.is_some_and(|(tween, _)| tween.done(now)) {
+                    self.month_motion = None;
+                }
+                build_calendar(
+                    &mut frame,
+                    self.config,
+                    self.month_offset,
+                    self.selected_day,
+                    colors,
+                    chinese,
+                    Local::now().date_naive(),
+                    self.month_motion
+                        .map_or(MonthMotion::REST, |(tween, direction)| MonthMotion {
+                            progress: tween.progress(now),
+                            direction,
+                        }),
+                )
+            }
         }
         let frame = frame.finish(&mut self.layout_tracker)?;
         Ok(Rc::new(frame))
@@ -244,6 +271,9 @@ impl PanelInstance for TimeWidget {
         if self.stopped {
             return None;
         }
+        if self.month_motion.is_some() {
+            return Some(FRAME_INTERVAL);
+        }
         Some(match self.kind {
             Kind::Clock => self.next_clock_wake(),
             Kind::Calendar => self.next_calendar_wake(),
@@ -256,6 +286,57 @@ fn invalidate() -> PanelUpdate {
         commands: vec![HostCommand::Invalidate],
         relayout: false,
     }
+}
+
+/// Wake interval while a tween runs; the host clamps wakes to at least 10 ms.
+pub(crate) const FRAME_INTERVAL: Duration = Duration::from_millis(16);
+
+/// One-shot Fluent tween driven by provider wakes. Providers start one in response to
+/// input and request [`FRAME_INTERVAL`] wakes until it is done; no tween is created when
+/// the user has turned animation effects off, so the end state is drawn directly.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct Tween {
+    start: Instant,
+    duration: Duration,
+    curve: Curve,
+}
+
+impl Tween {
+    pub(crate) fn start(duration: Duration, curve: Curve, enabled: bool) -> Option<Self> {
+        enabled.then(|| Self {
+            start: Instant::now(),
+            duration,
+            curve,
+        })
+    }
+
+    /// Eased progress in `0..=1`.
+    pub(crate) fn progress(&self, now: Instant) -> f32 {
+        let t = now.saturating_duration_since(self.start).as_secs_f32()
+            / self.duration.as_secs_f32().max(f32::EPSILON);
+        motion::ease(self.curve, t)
+    }
+
+    pub(crate) fn done(&self, now: Instant) -> bool {
+        now.saturating_duration_since(self.start) >= self.duration
+    }
+}
+
+pub(crate) fn lerp(from: f32, to: f32, t: f32) -> f32 {
+    from + (to - from) * t
+}
+
+pub(crate) fn lerp_color(from: [f32; 4], to: [f32; 4], t: f32) -> [f32; 4] {
+    std::array::from_fn(|i| lerp(from[i], to[i], t).clamp(0.0, 1.0))
+}
+
+pub(crate) fn fade(color: [f32; 4], opacity: f32) -> [f32; 4] {
+    [
+        color[0],
+        color[1],
+        color[2],
+        (color[3] * opacity).clamp(0.0, 1.0),
+    ]
 }
 
 #[derive(Clone, Copy)]
@@ -328,6 +409,7 @@ pub(crate) mod glyph {
     pub(crate) const ADD: char = '\u{E710}';
     pub(crate) const BROOM: char = '\u{EA99}';
     pub(crate) const CALENDAR_DAY: char = '\u{E8BF}';
+    pub(crate) const COLOR: char = '\u{E790}';
     pub(crate) const EDIT: char = '\u{E70F}';
     pub(crate) const UNDO: char = '\u{E7A7}';
     pub(crate) const CHEVRON_LEFT: char = '\u{E76B}';
@@ -339,7 +421,53 @@ pub(crate) mod glyph {
 }
 
 /// Node id of the header summary; clear of every widget's control ids.
-const HEADER_META: u64 = 20;
+pub(crate) const HEADER_META: u64 = 20;
+
+/// Below this logical height a widget draws its one-line capsule summary
+/// (DeskBox capsules) instead of a clipped full layout.
+pub(crate) const CAPSULE_HEIGHT: f32 = 120.0;
+
+/// Single-line capsule: an optional leading control and a summary that fills the rest.
+pub(crate) fn build_capsule(
+    frame: &mut WidgetFrame,
+    summary: String,
+    action: Option<u64>,
+    surface: Option<[f32; 4]>,
+    colors: Colors,
+) {
+    let v = frame.viewport;
+    let rect = RectDip {
+        x: v.x + 8.0,
+        y: v.y + 6.0,
+        w: (v.w - 16.0).max(0.0),
+        h: (v.h - 12.0).max(0.0),
+    };
+    let mut element = WidgetElement::text(1, rect, "", design::BODY, 400, colors.primary).fill(
+        surface,
+        design::pill_radius(rect.h).min(design::CARD_RADIUS * 2.0),
+    );
+    if action.is_some() {
+        element = element.role("button").action(action);
+    }
+    frame.add(element);
+    frame.set_last_accessible_name(summary.clone());
+    frame.add(
+        WidgetElement::text(
+            2,
+            RectDip {
+                x: rect.x + 12.0,
+                w: (rect.w - 24.0).max(0.0),
+                ..rect
+            },
+            summary,
+            design::BODY,
+            400,
+            colors.primary,
+        )
+        .parent(1)
+        .align(TextAlign::MiddleLeading),
+    );
+}
 
 /// Top of the content area below the shared title/meta header.
 pub(crate) const CONTENT_TOP: f32 = 66.0;
@@ -758,6 +886,22 @@ fn describe_day(date: NaiveDate, chinese: bool) -> String {
     }
 }
 
+/// Month-change entrance: the grid fades in while the title slides from the
+/// direction of travel (Fluent FAST, decelerate).
+#[derive(Clone, Copy)]
+struct MonthMotion {
+    progress: f32,
+    direction: f32,
+}
+
+impl MonthMotion {
+    const REST: Self = Self {
+        progress: 1.0,
+        direction: 0.0,
+    };
+}
+
+#[allow(clippy::too_many_arguments)]
 fn build_calendar(
     frame: &mut WidgetFrame,
     config: WidgetConfig,
@@ -766,7 +910,17 @@ fn build_calendar(
     colors: Colors,
     chinese: bool,
     today: NaiveDate,
+    motion: MonthMotion,
 ) {
+    if frame.viewport.h < CAPSULE_HEIGHT {
+        let summary = match (chinese, lunar::describe(today)) {
+            (true, Some(lunar)) => format!("{} · {lunar}", describe_day(today, true)),
+            (true, None) => describe_day(today, true),
+            (false, _) => describe_day(today, false),
+        };
+        build_capsule(frame, summary, Some(TODAY), None, colors);
+        return;
+    }
     let (year, month) = month_for(today, offset);
     let Some(first) = NaiveDate::from_ymd_opt(year, month, 1) else {
         return;
@@ -777,12 +931,18 @@ fn build_calendar(
     let meta = match selected {
         Some(date) if date != today => {
             if chinese {
-                format!("已选 {}", describe_day(date, true))
+                match lunar::describe(date) {
+                    Some(lunar) => format!("已选 {} · {lunar}", describe_day(date, true)),
+                    None => format!("已选 {}", describe_day(date, true)),
+                }
             } else {
                 format!("Selected · {}", describe_day(date, false))
             }
         }
-        _ if chinese => format!("今天 {}", describe_day(today, true)),
+        _ if chinese => match lunar::describe(today) {
+            Some(lunar) => format!("今天 {} · {lunar}", describe_day(today, true)),
+            None => format!("今天 {}", describe_day(today, true)),
+        },
         _ => format!("Today · {}", describe_day(today, false)),
     };
     build_panel_header(
@@ -838,6 +998,14 @@ fn build_calendar(
         ],
         colors,
     );
+    let opacity = lerp(0.15, 1.0, motion.progress);
+    let slide = frame
+        .scale
+        .value(motion.direction * 16.0 * (1.0 - motion.progress));
+    if let Some(title) = frame.nodes.iter_mut().find(|node| node.id == 1) {
+        title.rect.x += slide;
+        title.style.foreground = fade(title.style.foreground, opacity);
+    }
     let v = frame.viewport;
     let pad = 12.0;
     let width = (v.w - pad * 2.0).max(0.0);
@@ -884,7 +1052,10 @@ fn build_calendar(
     // A fixed six-week grid keeps every month at the same geometry; days from the
     // adjacent months fill the gaps as quiet, non-interactive context.
     let days_y = grid_y + 26.0;
-    let row_h = ((v.y + v.h - 10.0 - days_y).max(0.0) / 6.0).min(44.0);
+    let row_h = ((v.y + v.h - 10.0 - days_y).max(0.0) / 6.0).min(48.0);
+    // Chinese locales add the lunar day, solar term or festival under each date
+    // (DeskBox "Glance"); the cell becomes a rounded tile to fit two lines.
+    let lunar_cells = chinese && row_h >= 38.0 && cell_w >= 34.0;
     let diameter = (cell_w.min(row_h) - 4.0).clamp(0.0, 40.0);
     for slot in 0..42usize {
         let Some(date) =
@@ -893,52 +1064,55 @@ fn build_calendar(
             continue;
         };
         let (col, row) = (slot % 7, slot / 7);
-        let rect = RectDip {
-            x: v.x + pad + col as f32 * cell_w + (cell_w - diameter) / 2.0,
-            y: days_y + row as f32 * row_h + (row_h - diameter) / 2.0,
-            w: diameter,
-            h: diameter,
+        let rect = if lunar_cells {
+            RectDip {
+                x: v.x + pad + col as f32 * cell_w + 2.0,
+                y: days_y + row as f32 * row_h + 2.0,
+                w: cell_w - 4.0,
+                h: row_h - 4.0,
+            }
+        } else {
+            RectDip {
+                x: v.x + pad + col as f32 * cell_w + (cell_w - diameter) / 2.0,
+                y: days_y + row as f32 * row_h + (row_h - diameter) / 2.0,
+                w: diameter,
+                h: diameter,
+            }
         };
+        let radius = if lunar_cells { 10.0 } else { diameter / 2.0 };
         let name = format!("{:04}-{:02}-{:02}", date.year(), date.month(), date.day());
-        if date.year() != year || date.month() != month {
-            frame.add(
-                WidgetElement::text(
-                    calendar_day_id(date),
-                    rect,
-                    date.day().to_string(),
-                    design::BODY,
-                    400,
-                    colors.faint(),
-                )
-                .align(TextAlign::Center),
-            );
-            frame.set_last_accessible_name(name);
-            continue;
-        }
-        let day = date.day();
-        let is_today = date == today;
-        let is_selected = selected == Some(date);
-        let (foreground, fill) = if is_today && !colors.high_contrast {
+        let in_month = date.year() == year && date.month() == month;
+        let is_today = in_month && date == today;
+        let is_selected = in_month && selected == Some(date);
+        let (foreground, fill) = if !in_month {
+            (colors.faint(), None)
+        } else if is_today && !colors.high_contrast {
             (colors.panel, Some(colors.accent))
         } else if is_today || is_selected {
             (colors.accent, Some(colors.accent_wash()))
         } else {
             (colors.primary, None)
         };
-        frame.add(
-            WidgetElement::text(
-                calendar_day_id(date),
-                rect,
-                day.to_string(),
-                design::BODY,
-                if is_today || is_selected { 600 } else { 400 },
-                foreground,
-            )
-            .role("button")
-            .fill(fill, diameter / 2.0)
-            .action(Some(DAY_BASE + day as u64))
-            .align(TextAlign::Center),
-        );
+        let (foreground, fill) = (fade(foreground, opacity), fill.map(|c| fade(c, opacity)));
+        let weight = if is_today || is_selected { 600 } else { 400 };
+        let id = calendar_day_id(date);
+        let number = date.day().to_string();
+        let element = if lunar_cells {
+            WidgetElement::text(id, rect, "", design::BODY, weight, foreground)
+        } else {
+            WidgetElement::text(id, rect, &number, design::BODY, weight, foreground)
+                .align(TextAlign::Center)
+        };
+        if in_month {
+            frame.add(
+                element
+                    .role("button")
+                    .fill(fill, radius)
+                    .action(Some(DAY_BASE + date.day() as u64)),
+            );
+        } else {
+            frame.add(element);
+        }
         frame.set_last_accessible_name(name);
         if is_selected
             && colors.high_contrast
@@ -948,6 +1122,52 @@ fn build_calendar(
                 rgba: colors.primary,
                 width: 2.0,
             });
+        }
+        if !lunar_cells {
+            continue;
+        }
+        let split = rect.h * 0.56;
+        frame.add(
+            WidgetElement::text(
+                (2 << 32) | (id & 0xFFFF_FFFF),
+                RectDip {
+                    y: rect.y + 2.0,
+                    h: split - 2.0,
+                    ..rect
+                },
+                number,
+                design::BODY,
+                weight,
+                foreground,
+            )
+            .parent(id)
+            .role("presentation")
+            .align(TextAlign::Center),
+        );
+        if let Some(note) = lunar::day_note(date) {
+            let ink = if is_today && !colors.high_contrast {
+                fade(colors.panel, 0.85)
+            } else if note.highlight && in_month {
+                colors.accent
+            } else {
+                colors.faint()
+            };
+            frame.add(
+                WidgetElement::text(
+                    (3 << 32) | (id & 0xFFFF_FFFF),
+                    RectDip {
+                        y: rect.y + split - 2.0,
+                        h: rect.h - split,
+                        ..rect
+                    },
+                    note.text,
+                    10.0,
+                    400,
+                    fade(ink, opacity),
+                )
+                .parent(id)
+                .align(TextAlign::Center),
+            );
         }
     }
 }
@@ -1031,6 +1251,7 @@ mod tests {
             Colors::from_theme(Some(&theme)),
             true,
             NaiveDate::from_ymd_opt(2024, 2, 15).unwrap(),
+            MonthMotion::REST,
         );
         let scene = frame.finish(&mut LayoutTracker::default()).unwrap();
         let selected = scene
@@ -1245,6 +1466,7 @@ mod tests {
             Colors::from_theme(None),
             true,
             NaiveDate::from_ymd_opt(2024, 2, 15).unwrap(),
+            MonthMotion::REST,
         );
         let frame = frame.finish(&mut LayoutTracker::default()).unwrap();
         assert_eq!(frame.hit_tree().len(), 32); // month controls + 29 dates
@@ -1315,6 +1537,7 @@ mod tests {
             Colors::from_theme(None),
             false,
             NaiveDate::from_ymd_opt(2024, 2, 15).unwrap(),
+            MonthMotion::REST,
         );
         frame.finish(&mut LayoutTracker::default()).unwrap()
     }
@@ -1433,5 +1656,71 @@ mod tests {
                 assert_controls_fit(&calendar_scene(0, sunday, scale));
             }
         }
+    }
+
+    #[test]
+    fn short_panels_draw_a_capsule_summary_with_lunar_context() {
+        let mut frame = identity_frame(360.0, 48.0, 1.0);
+        build_calendar(
+            &mut frame,
+            WidgetConfig::default(),
+            0,
+            None,
+            Colors::from_theme(None),
+            true,
+            NaiveDate::from_ymd_opt(2024, 9, 17).unwrap(),
+            MonthMotion::REST,
+        );
+        let scene = frame.finish(&mut LayoutTracker::default()).unwrap();
+        assert_eq!(scene.nodes().len(), 2);
+        assert_eq!(scene.hit_tree()[0].action, TODAY);
+        assert_eq!(
+            scene.nodes()[1].text,
+            "9月17日 周二 · 农历八月十五 · 中秋节"
+        );
+        assert_controls_fit(&scene);
+    }
+
+    #[test]
+    fn month_change_fades_the_grid_and_slides_the_title() {
+        let rest = calendar_scene(0, false, 1.0);
+        let mut frame = identity_frame(420.0, 330.0, 1.0);
+        build_calendar(
+            &mut frame,
+            WidgetConfig::default(),
+            0,
+            None,
+            Colors::from_theme(None),
+            false,
+            NaiveDate::from_ymd_opt(2024, 2, 15).unwrap(),
+            MonthMotion {
+                progress: 0.0,
+                direction: 1.0,
+            },
+        );
+        let start = frame.finish(&mut LayoutTracker::default()).unwrap();
+        let title = |scene: &Scene| scene.nodes().iter().find(|n| n.id == 1).unwrap().clone();
+        assert_eq!(title(&start).rect.x, title(&rest).rect.x + 16.0);
+        let day = |scene: &Scene| {
+            scene
+                .nodes()
+                .iter()
+                .find(|n| n.name == "2024-02-15")
+                .unwrap()
+                .clone()
+        };
+        assert!(day(&start).style.fill.unwrap()[3] < day(&rest).style.fill.unwrap()[3]);
+        // Hit geometry of the dates does not move while they fade.
+        assert_eq!(day(&start).rect, day(&rest).rect);
+    }
+
+    #[test]
+    fn tweens_are_skipped_when_animation_effects_are_off() {
+        assert!(Tween::start(motion::FAST, Curve::Decelerate, false).is_none());
+        let tween = Tween::start(motion::FAST, Curve::Decelerate, true).unwrap();
+        let end = tween.start + motion::FAST;
+        assert_eq!(tween.progress(end), 1.0);
+        assert!(tween.done(end));
+        assert_eq!(tween.progress(tween.start), 0.0);
     }
 }

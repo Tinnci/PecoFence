@@ -597,6 +597,27 @@ impl PanelManager {
         updates
     }
 
+    /// Re-read one instance's wake interval after input changed its state. An earlier
+    /// pending wake is kept so a clock tick is never postponed by a click.
+    pub fn refresh_wake(&mut self, key: InstanceKey) {
+        let Some(record) = self
+            .instances
+            .values_mut()
+            .find(|record| record.instance_key == key && record.drain_started.is_none())
+        else {
+            return;
+        };
+        let requested = record
+            .handle
+            .next_wake_after()
+            .and_then(|delay| Instant::now().checked_add(delay.max(Duration::from_millis(10))));
+        record.wake_at = match (record.wake_at, requested) {
+            (Some(current), Some(requested)) => Some(current.min(requested)),
+            (current, requested) => requested.or(current),
+        };
+        self.arm_next_wake();
+    }
+
     pub fn time_changed(&mut self) {
         let now = Instant::now();
         for record in self.instances.values_mut() {
@@ -745,6 +766,13 @@ impl ThemeHost {
     }
 }
 
+/// Mirror of the host's animation switch (`SPI_GETCLIENTAREAANIMATION`) for plugin themes.
+static PLUGIN_ANIMATIONS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+
+pub(crate) fn set_plugin_animations(enabled: bool) {
+    PLUGIN_ANIMATIONS.store(enabled, Ordering::Relaxed);
+}
+
 /// Process-wide theme host so fence-window paint bridges and the service
 /// published to plugins observe the same state.
 pub(crate) fn theme_host() -> &'static ThemeHost {
@@ -765,6 +793,7 @@ fn theme_snapshot_for(theme: &pecofence_render::Theme, revision: u64) -> ThemeSn
     let rgba = |c: pecofence_render::ColorF| [c.r, c.g, c.b, c.a];
     snapshot.revision = revision;
     snapshot.high_contrast = theme.high_contrast;
+    snapshot.animations = PLUGIN_ANIMATIONS.load(Ordering::Relaxed);
     snapshot.text_primary = rgba(theme.text_primary);
     snapshot.text_secondary = rgba(theme.text_secondary);
     snapshot.surface_panel = rgba(theme.solid_fill);
@@ -789,6 +818,7 @@ fn theme_snapshot_for(theme: &pecofence_render::Theme, revision: u64) -> ThemeSn
 /// Token equality excluding the revision bookkeeping field.
 fn same_tokens(a: &ThemeSnapshot, b: &ThemeSnapshot) -> bool {
     a.high_contrast == b.high_contrast
+        && a.animations == b.animations
         && a.text_primary == b.text_primary
         && a.text_secondary == b.text_secondary
         && a.surface_panel == b.surface_panel

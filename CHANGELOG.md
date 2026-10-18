@@ -31,6 +31,16 @@
   and large text scales collapse text actions to icons. Verified with headless
   layout tests only; on-device visual, high-contrast and screen-reader checks
   remain pending.
+- Borrow widget concepts from DeskBox (concepts only; no code): Chinese-locale
+  calendars show lunar dates, the 24 solar terms (2001–2099) and common
+  festivals; notes get paper tints; short panels draw one-line capsule summaries.
+  Add Fluent micro-animations: TODO rows glide when completed (FLIP) with a
+  checkbox pop and eased progress bar, months fade in with a sliding title, and
+  notes cross-fade tints and briefly confirm edits. Plugins receive the shared
+  Fluent motion tokens and the Windows "Animation effects" switch; the host now
+  re-reads a panel's wake interval after input. New dependency:
+  `chinese-lunisolar-calendar` 0.2.5 (MIT). Headless tests only; EXE size gate
+  and on-device motion not yet measured.
 
 The versioned entries below are retained from the upstream baseline. References
 to Store submissions or a published website describe that history, not an active

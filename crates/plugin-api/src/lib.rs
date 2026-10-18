@@ -236,6 +236,8 @@ impl<S: ?Sized> Capability<S> {
 pub struct ThemeSnapshot {
     pub revision: u64,
     pub high_contrast: bool,
+    /// Windows "Animation effects". When false, providers show end states directly.
+    pub animations: bool,
     pub text_primary: [f32; 4],
     pub text_secondary: [f32; 4],
     /// Opaque panel body fill.

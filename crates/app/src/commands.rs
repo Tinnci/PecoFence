@@ -203,6 +203,11 @@ pub enum Command {
         key: InstanceKey,
         bytes: Arc<[u8]>,
     },
+    /// A panel changed its content in response to input; re-read its wake interval
+    /// so animations started by a click get their next frame.
+    PanelWakeChanged {
+        key: InstanceKey,
+    },
     PanelTextRequested {
         key: InstanceKey,
         action: u64,

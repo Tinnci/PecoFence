@@ -532,6 +532,10 @@ impl FenceViewState {
                 }
             }
         }
+        if redraw_content && let Some(panel) = &self.plugin_panel {
+            self.queue
+                .push(Command::PanelWakeChanged { key: panel.key() });
+        }
         if redraw_content && let Some(panel) = &mut self.plugin_panel {
             panel.invalidation.request(if relayout {
                 FrameInvalidation::Layout
