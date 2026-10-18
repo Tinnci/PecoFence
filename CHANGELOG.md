@@ -107,6 +107,13 @@
   a short terracotta rule and the date (with the lunar date in Chinese); one-row
   clocks show time and date side by side. Frameless windows no longer draw a
   half-cut fence title at the top edge.
+- Clock faces and weights from the right-click menu, like the iPhone lock screen:
+  Classic serif, Modern (Segoe UI Variable Display) and Digital (Bahnschrift at
+  condensed width, taller numerals); Light/Regular/Semibold/Bold; and dynamic
+  weight, which animates the numerals' weight on each time change after Android's
+  lock-screen clock. Show seconds and 12-hour time are now in the menu too, and the
+  calendar menu can start weeks on Sunday. Widgets can add window-menu options
+  through `PanelInstance::menu_items`.
 
 The versioned entries below are retained from the upstream baseline. References
 to Store submissions or a published website describe that history, not an active

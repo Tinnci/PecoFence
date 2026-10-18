@@ -21,6 +21,17 @@ MSIX 的 Windows Explorer 文件夹背景菜单扩展并列提供“新建便笺
 
 便笺、待办和日历采用暖纸色方案：组件自绘纸色底（#F6F1E7），卡片 #ECE4D6，正文墨色 #2B2722，次要文字 #685F55，强调色赤陶 #A9502D（文字用 #944526，赤陶底上用奶白 #FFF8EE）。所有文字组合经测试达到 WCAG 4.5:1。标题使用思源宋体 Noto Serif SC SemiBold，正文使用 Noto Sans SC（`FontRole::PaperBody`；应用其他部分仍为 Segoe UI Variable）。两者为 OFL 子集字体（拉丁字符、GB2312 符号与 3,755 个一级汉字），随包放在 EXE 旁的 `fonts/` 目录，由 DirectWrite 私有字体集合加载，不安装到系统。缺少该目录时回退到 Sitka Subheading 与 Segoe UI Variable；子集外的字符由 DirectWrite 回退到系统中文字体。时钟继续跟随栅栏主题；高对比度模式下忽略纸色和便笺颜色，使用系统颜色。
 
+## 时钟样式
+
+时钟为纸色组件：大号数字按所占格数缩放，下方一段赤陶色短线和日期（中文显示农历与节日）；一行高时为胶囊，时间与日期并排。右键菜单（组件通过 `PanelInstance::menu_items` 提供选项）可选：
+
+- 表盘样式：经典衬线（随包 Noto Serif SC）、现代（Segoe UI Variable Display）、数字窄体（Bahnschrift 窄体宽度，数字更高）。
+- 字重：细 / 常规 / 中粗 / 粗（仅系统可变字体的“现代”和“数字窄体”可选；随包衬线只有一种字重）。
+- 动态字重：参考 Android 锁屏时钟（AOSP SystemUI `AnimatableClockView` 动画化可变字体的 wght 轴）：每次时间变化，数字从相差 300 的字重回到所选字重（约 667 ms，逐级经过字体的命名字重）；“动画效果”关闭时不播放。
+- 显示秒、12 小时制（上午/下午 移到日期行）。日历菜单另有“一周从周日开始”。
+
+DirectWrite 将 Bahnschrift 的宽度作为同一家族的 stretch，而不是 GDI 的“Bahnschrift Condensed”家族名，因此窄体通过平台层的原始 DirectWrite 格式（`system_condensed_format`）绘制；失败时回退为正常宽度。菜单文字目前提供中文和英文。
+
 ## 动效
 
 动效时长与曲线来自宿主共用的 Fluent 令牌（83/167/250/333 ms）。插件仅在补间进行时以 16 ms 唤醒绘制，结束后恢复原有唤醒节奏；Windows“动画效果”关闭时不创建补间，直接绘制结束状态。宿主在面板因输入请求重绘后重新读取其唤醒间隔。

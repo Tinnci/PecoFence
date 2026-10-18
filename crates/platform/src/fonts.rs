@@ -9,11 +9,11 @@
 
 use crate::bindings::{
     D2D_RECT_F, D2D1_DRAW_TEXT_OPTIONS_NONE, DWRITE_FACTORY_TYPE_SHARED,
-    DWRITE_FONT_STRETCH_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_MEASURING_MODE_NATURAL,
-    DWRITE_PARAGRAPH_ALIGNMENT_CENTER, DWRITE_TEXT_ALIGNMENT_CENTER, DWRITE_TEXT_METRICS,
-    DWRITE_TRIMMING, DWRITE_TRIMMING_GRANULARITY_CHARACTER, DWRITE_WORD_WRAPPING_NO_WRAP,
-    DWriteCreateFactory, ID2D1Brush, ID2D1RenderTarget, IDWriteFactory5, IDWriteFontCollection1,
-    IDWriteTextFormat,
+    DWRITE_FONT_STRETCH_CONDENSED, DWRITE_FONT_STRETCH_NORMAL, DWRITE_FONT_STYLE_NORMAL,
+    DWRITE_MEASURING_MODE_NATURAL, DWRITE_PARAGRAPH_ALIGNMENT_CENTER, DWRITE_TEXT_ALIGNMENT_CENTER,
+    DWRITE_TEXT_METRICS, DWRITE_TRIMMING, DWRITE_TRIMMING_GRANULARITY_CHARACTER,
+    DWRITE_WORD_WRAPPING_NO_WRAP, DWriteCreateFactory, ID2D1Brush, ID2D1RenderTarget,
+    IDWriteFactory5, IDWriteFontCollection, IDWriteFontCollection1, IDWriteTextFormat,
 };
 use crate::wide::to_wide;
 use std::os::windows::ffi::OsStrExt;
@@ -165,10 +165,10 @@ impl PrivateFonts {
         locale: &str,
         alignment: PrivateTextAlignment,
     ) -> Result<PrivateTextFormat> {
-        let family = to_wide(family);
-        let locale = to_wide(locale);
         // SAFETY: strings are NUL-terminated and outlive the call; the collection is live.
         let raw = unsafe {
+            let family = to_wide(family);
+            let locale = to_wide(locale);
             self.factory.CreateTextFormat(
                 PCWSTR(family.as_ptr()),
                 &self.collection,
@@ -179,29 +179,65 @@ impl PrivateFonts {
                 PCWSTR(locale.as_ptr()),
             )?
         };
-        // SAFETY: setters on a format this function owns; defaults are leading/top.
-        unsafe {
-            match alignment {
-                PrivateTextAlignment::TopLeading => {}
-                PrivateTextAlignment::MiddleLeading => {
-                    raw.SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER)
-                        .ok()?;
-                }
-                PrivateTextAlignment::Center => {
-                    raw.SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER).ok()?;
-                    raw.SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER)
-                        .ok()?;
-                }
+        finish_format(self.factory.clone(), raw, alignment)
+    }
+}
+
+/// A condensed-width format for a system font family (e.g. Bahnschrift), drawn
+/// through the same raw path as the bundled fonts. DirectWrite names widths as a
+/// stretch of one family ("Bahnschrift"), not as GDI's "Bahnschrift Condensed",
+/// and windows-canvas only creates normal-width formats.
+pub fn system_condensed_format(
+    family: &str,
+    size: f32,
+    weight: i32,
+    locale: &str,
+    alignment: PrivateTextAlignment,
+) -> Result<PrivateTextFormat> {
+    // SAFETY: shared factory; strings are NUL-terminated and outlive the call; a null
+    // collection selects the system font collection.
+    let (factory, raw) = unsafe {
+        let factory: IDWriteFactory5 = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED)?;
+        let family = to_wide(family);
+        let locale = to_wide(locale);
+        let raw = factory.CreateTextFormat(
+            PCWSTR(family.as_ptr()),
+            None::<&IDWriteFontCollection>,
+            weight,
+            DWRITE_FONT_STYLE_NORMAL,
+            DWRITE_FONT_STRETCH_CONDENSED,
+            size,
+            PCWSTR(locale.as_ptr()),
+        )?;
+        (factory, raw)
+    };
+    finish_format(factory, raw, alignment)
+}
+
+fn finish_format(
+    factory: IDWriteFactory5,
+    raw: IDWriteTextFormat,
+    alignment: PrivateTextAlignment,
+) -> Result<PrivateTextFormat> {
+    // SAFETY: setters on a format this function owns; defaults are leading/top.
+    unsafe {
+        match alignment {
+            PrivateTextAlignment::TopLeading => {}
+            PrivateTextAlignment::MiddleLeading => {
+                raw.SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER)
+                    .ok()?;
+            }
+            PrivateTextAlignment::Center => {
+                raw.SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER).ok()?;
+                raw.SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER)
+                    .ok()?;
             }
         }
-        if alignment != PrivateTextAlignment::TopLeading {
-            single_line_ellipsis(&raw)?;
-        }
-        Ok(PrivateTextFormat {
-            factory: self.factory.clone(),
-            raw,
-        })
     }
+    if alignment != PrivateTextAlignment::TopLeading {
+        single_line_ellipsis(&raw)?;
+    }
+    Ok(PrivateTextFormat { factory, raw })
 }
 
 /// Keep control labels on one line and let DirectWrite render a real ellipsis.
@@ -378,5 +414,66 @@ mod tests {
             assert!(width.is_finite() && width > 0.0);
             assert!(height.is_finite() && height > 0.0);
         }
+    }
+
+    /// Whether DirectWrite's system collection resolves `family` by name.
+    fn system_has_family(family: &str) -> bool {
+        // SAFETY: shared factory; out-pointers are valid locals; NUL-terminated name.
+        unsafe {
+            let factory: IDWriteFactory5 = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED).unwrap();
+            let mut collection = None;
+            factory
+                .GetSystemFontCollection(false, &mut collection, false)
+                .ok()
+                .unwrap();
+            let collection = collection.unwrap();
+            let wide = to_wide(family);
+            let (mut index, mut exists) = (0u32, BOOL(0));
+            collection
+                .FindFamilyName(PCWSTR(wide.as_ptr()), &mut index, &mut exists)
+                .is_ok()
+                && exists.as_bool()
+        }
+    }
+
+    #[test]
+    fn clock_faces_resolve_in_the_system_collection() {
+        // DirectWrite names Bahnschrift's widths as stretches of one family: the GDI
+        // name "Bahnschrift Condensed" is not a DirectWrite family.
+        assert!(system_has_family("Bahnschrift"));
+        assert!(!system_has_family("Bahnschrift Condensed"));
+        assert!(system_has_family("Segoe UI Variable Display"));
+        let condensed = system_condensed_format(
+            "Bahnschrift",
+            40.0,
+            300,
+            "en-us",
+            PrivateTextAlignment::MiddleLeading,
+        )
+        .unwrap();
+        // SAFETY: shared factory; NUL-terminated strings outlive the call.
+        let normal = unsafe {
+            let factory: IDWriteFactory5 = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED).unwrap();
+            let family = to_wide("Bahnschrift");
+            let locale = to_wide("en-us");
+            let raw = factory
+                .CreateTextFormat(
+                    PCWSTR(family.as_ptr()),
+                    None::<&IDWriteFontCollection>,
+                    300,
+                    DWRITE_FONT_STYLE_NORMAL,
+                    DWRITE_FONT_STRETCH_NORMAL,
+                    40.0,
+                    PCWSTR(locale.as_ptr()),
+                )
+                .unwrap();
+            finish_format(factory, raw, PrivateTextAlignment::MiddleLeading).unwrap()
+        };
+        let (narrow, _) = condensed.measure("12:34", 1000.0, 100.0).unwrap();
+        let (wide, _) = normal.measure("12:34", 1000.0, 100.0).unwrap();
+        assert!(
+            narrow > 0.0 && narrow < wide * 0.9,
+            "condensed {narrow} vs normal {wide}"
+        );
     }
 }

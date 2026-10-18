@@ -91,6 +91,13 @@ impl PanelHandle {
         self.panel.borrow().next_wake_after()
     }
 
+    pub(crate) fn menu_items(&self) -> Vec<pecofence_plugin_api::PanelMenuItem> {
+        self.panel
+            .try_borrow()
+            .map(|panel| panel.menu_items())
+            .unwrap_or_default()
+    }
+
     pub(crate) fn set_container_state(&self, grouping: Grouping, exposure: Exposure, active: bool) {
         self.grouping.set(grouping);
         self.exposure.set(exposure);

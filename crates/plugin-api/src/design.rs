@@ -9,6 +9,9 @@ pub const FONT_ICONS: &str = "Segoe Fluent Icons";
 /// Built-in Windows serif with optical sizes; Han text falls back through DirectWrite.
 /// Fallback for [`FontRole::Serif`] when the bundled Noto Serif SC is missing.
 pub const FONT_SERIF: &str = "Sitka Subheading";
+/// Built-in DIN face for digital clock numerals (variable: Light…Bold), drawn at
+/// condensed width; a normal-width fallback keeps the family if that fails.
+pub const FONT_CONDENSED: &str = "Bahnschrift";
 /// Bundled warm-paper title face (`fonts/` beside the EXE), semibold.
 pub const FONT_PAPER_SERIF: &str = "Noto Serif SC";
 /// Bundled warm-paper body face (`fonts/` beside the EXE), regular.

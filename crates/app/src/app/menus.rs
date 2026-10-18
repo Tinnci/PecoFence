@@ -88,6 +88,12 @@ const CMD_PORTAL_UP: u32 = 380;
 const CMD_PORTAL_HOME: u32 = 381;
 /// "合并到 ▸ <host>" entries: base + index into `host_fences()`.
 const CMD_TAB_ATTACH_BASE: u32 = 2000;
+/// Options a widget adds to its window menu (`PanelInstance::menu_items`), by index.
+const CMD_PANEL_ITEM_BASE: u32 = 3000;
+const _: () = assert!(
+    CMD_PANEL_ITEM_BASE >= CMD_TAB_ATTACH_BASE + 1000
+        && CMD_PANEL_ITEM_BASE + 1000 <= CMD_SHELL_FIRST
+);
 // The open-ended BASE ranges must not swallow neighbouring fixed ids (a 400 base once
 // captured the title-colour / spacing items and merged the fence into a random host).
 const _: () = assert!(
@@ -425,6 +431,56 @@ impl App {
     /// Fence background / title menu. Frequent actions only; per-fence properties (appearance,
     /// spacing, auto height, quick-hide exclusion, dock, portal flags) live on the settings
     /// page's 「栅栏」 tab, reached through 栅栏选项….
+    /// Right-click options the widget shown in `fence` offers, if it is a panel.
+    fn panel_menu_items(&mut self, fence: FenceId) -> Vec<pecofence_plugin_api::PanelMenuItem> {
+        let Some(pecofence_core::FenceSnapshot {
+            content: pecofence_core::FenceContentSpec::Panel { panel },
+            ..
+        }) = self.state.fence(fence)
+        else {
+            return Vec::new();
+        };
+        self.panel_manager
+            .borrow_mut()
+            .open_panel(&panel)
+            .map(|handle| handle.menu_items())
+            .unwrap_or_default()
+    }
+
+    /// Delivers a chosen widget option like any other panel action.
+    fn invoke_panel_menu_item(&mut self, fence: FenceId, action: u64) {
+        let Some(pecofence_core::FenceSnapshot {
+            content: pecofence_core::FenceContentSpec::Panel { panel },
+            ..
+        }) = self.state.fence(fence)
+        else {
+            return;
+        };
+        let result = self
+            .panel_manager
+            .borrow_mut()
+            .open_panel(&panel)
+            .and_then(|handle| {
+                let key = handle.key();
+                handle
+                    .event(pecofence_plugin_api::PanelEvent::Invoke {
+                        action,
+                        layout_revision: 0,
+                    })
+                    .map(|update| (key, update))
+            });
+        match result {
+            Ok((key, update)) => {
+                self.pending_panel_updates
+                    .entry(key)
+                    .or_default()
+                    .merge(update);
+                self.process_panel_events();
+            }
+            Err(error) => tracing::warn!(%error, "panel menu action failed"),
+        }
+    }
+
     pub(super) fn show_fence_menu(&mut self, fence: FenceId, x: i32, y: i32) {
         // `fence` may be a tab: window-level items (roll, lock) act on its host `h`, content
         // items (view, sort, new, delete) on the fence itself.
@@ -666,6 +722,35 @@ impl App {
             }
             menu.submenu(pecofence_core::i18n::text("标签页"), tab_menu);
         }
+        // Widget options (clock face, weight, …) come first among the window settings.
+        let panel_items = self.panel_menu_items(fence);
+        if !panel_items.is_empty() {
+            let mut groups: Vec<(String, PopupMenu)> = Vec::new();
+            for (index, item) in panel_items.iter().enumerate().take(1000) {
+                let id = CMD_PANEL_ITEM_BASE + index as u32;
+                match &item.submenu {
+                    Some(name) => {
+                        let slot = match groups.iter().position(|(g, _)| g == name) {
+                            Some(slot) => slot,
+                            None => {
+                                groups.push((name.clone(), PopupMenu::new()));
+                                groups.len() - 1
+                            }
+                        };
+                        groups[slot]
+                            .1
+                            .check_item(id, &item.label, item.checked, !item.enabled);
+                    }
+                    None => {
+                        menu.check_item(id, &item.label, item.checked, !item.enabled);
+                    }
+                }
+            }
+            for (name, submenu) in groups {
+                menu.submenu(&name, submenu);
+            }
+            menu.separator();
+        }
         menu.check_item(
             CMD_FENCE_LOCK,
             pecofence_core::i18n::text("锁定位置和大小"),
@@ -698,6 +783,11 @@ impl App {
             .unwrap_or(self.control.hwnd());
         let cmd = menu.show_context(owner, x, y);
         match cmd {
+            id if (CMD_PANEL_ITEM_BASE..CMD_PANEL_ITEM_BASE + 1000).contains(&id) => {
+                if let Some(item) = panel_items.get((id - CMD_PANEL_ITEM_BASE) as usize) {
+                    self.invoke_panel_menu_item(fence, item.action);
+                }
+            }
             CMD_FENCE_ROLL => self.toggle_roll(host),
             CMD_FENCE_RENAME => self.begin_rename(fence),
             CMD_TAB_NEW => {

@@ -28,12 +28,131 @@ const NEXT: u64 = 2;
 const TODAY: u64 = 3;
 const DAY_BASE: u64 = 1_000;
 
-#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize)]
+// Window-menu options (`PanelInstance::menu_items`).
+const CLOCK_FACE_BASE: u64 = 10;
+const CLOCK_WEIGHT_BASE: u64 = 20;
+const CLOCK_DYNAMIC: u64 = 30;
+const CLOCK_SECONDS: u64 = 31;
+const CLOCK_12_HOUR: u64 = 32;
+const CALENDAR_SUNDAY_FIRST: u64 = 33;
+
+/// Clock numerals, like the iPhone lock screen's font choices.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ClockFace {
+    /// Serif numerals in the paper widgets' title face.
+    #[default]
+    Classic,
+    /// Segoe UI Variable Display: clean grotesque, Light…Bold.
+    Modern,
+    /// Bahnschrift Condensed: tall, narrow DIN digits that fill the height.
+    Digital,
+}
+
+impl ClockFace {
+    const ALL: [ClockFace; 3] = [ClockFace::Classic, ClockFace::Modern, ClockFace::Digital];
+
+    fn font(self) -> FontRole {
+        match self {
+            ClockFace::Classic => FontRole::Serif,
+            ClockFace::Modern => FontRole::Display,
+            ClockFace::Digital => FontRole::Condensed,
+        }
+    }
+
+    /// Weights only apply to the variable system faces; the bundled serif ships one.
+    fn has_weights(self) -> bool {
+        self != ClockFace::Classic
+    }
+
+    /// Approximate digit advance in em, so numerals fit the width without measuring.
+    fn digit_em(self) -> f32 {
+        match self {
+            ClockFace::Classic => 0.62,
+            ClockFace::Modern => 0.58,
+            ClockFace::Digital => 0.46,
+        }
+    }
+
+    /// Share of the widget's height the numerals may take; narrow digits go taller.
+    fn height_share(self) -> f32 {
+        match self {
+            ClockFace::Digital => 0.52,
+            _ => 0.40,
+        }
+    }
+
+    fn label(self, chinese: bool) -> &'static str {
+        match (self, chinese) {
+            (ClockFace::Classic, true) => "经典衬线",
+            (ClockFace::Modern, true) => "现代",
+            (ClockFace::Digital, true) => "数字窄体",
+            (ClockFace::Classic, false) => "Classic serif",
+            (ClockFace::Modern, false) => "Modern",
+            (ClockFace::Digital, false) => "Digital",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ClockWeight {
+    Light,
+    Regular,
+    #[default]
+    Semibold,
+    Bold,
+}
+
+impl ClockWeight {
+    const ALL: [ClockWeight; 4] = [
+        ClockWeight::Light,
+        ClockWeight::Regular,
+        ClockWeight::Semibold,
+        ClockWeight::Bold,
+    ];
+
+    fn value(self) -> u16 {
+        match self {
+            ClockWeight::Light => 300,
+            ClockWeight::Regular => 400,
+            ClockWeight::Semibold => 600,
+            ClockWeight::Bold => 700,
+        }
+    }
+
+    fn label(self, chinese: bool) -> &'static str {
+        match (self, chinese) {
+            (ClockWeight::Light, true) => "细",
+            (ClockWeight::Regular, true) => "常规",
+            (ClockWeight::Semibold, true) => "中粗",
+            (ClockWeight::Bold, true) => "粗",
+            (ClockWeight::Light, false) => "Light",
+            (ClockWeight::Regular, false) => "Regular",
+            (ClockWeight::Semibold, false) => "Semibold",
+            (ClockWeight::Bold, false) => "Bold",
+        }
+    }
+}
+
+/// Dynamic weight (after Android's lock-screen clock, which animates its variable
+/// font's weight): when the time changes, the numerals start 300 units away from
+/// their weight and settle back, stepping through the face's named weights.
+fn pulse_weight(base: u16, progress: f32) -> u16 {
+    let from = if base <= 400 { base + 300 } else { base - 300 } as f32;
+    let weight = lerp(from, base as f32, progress.clamp(0.0, 1.0));
+    ((weight / 100.0).round() * 100.0).clamp(100.0, 900.0) as u16
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct WidgetConfig {
     pub show_seconds: bool,
     pub use_12_hour: bool,
     pub week_starts_on_sunday: bool,
+    pub face: ClockFace,
+    pub weight: ClockWeight,
+    pub dynamic_weight: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -64,6 +183,9 @@ fn create(kind: Kind, ctx: PluginContext, input: CreatePanel) -> Result<Box<dyn 
         month_offset: 0,
         selected_day: None,
         month_motion: None,
+        last_time: None,
+        pulse: None,
+        chinese: true,
         theme,
         frame_revision: 0,
         layout_revision: 0,
@@ -120,6 +242,11 @@ struct TimeWidget {
     selected_day: Option<u32>,
     /// Month change in flight and its direction (-1 previous, 1 next).
     month_motion: Option<(Tween, f32)>,
+    /// Clock: the time last drawn, and the dynamic-weight pulse it started.
+    last_time: Option<String>,
+    pulse: Option<Tween>,
+    /// Language of the last frame, for menu labels.
+    chinese: bool,
     theme: Option<Arc<ThemeSnapshot>>,
     frame_revision: u64,
     layout_revision: u64,
@@ -128,6 +255,28 @@ struct TimeWidget {
 }
 
 impl TimeWidget {
+    /// Apply an option from the window menu and save it with the widget.
+    fn set_config(&mut self, config: WidgetConfig) -> Result<PanelUpdate> {
+        let bytes: Arc<[u8]> = serde_json::to_vec(&config)
+            .map_err(|error| Error::Backend(error.to_string()))?
+            .into();
+        validate(&PanelConfig {
+            version: 1,
+            bytes: bytes.clone(),
+        })?;
+        self.config = config;
+        self.pulse = None;
+        self.layout_revision = self.layout_revision.saturating_add(1);
+        Ok(PanelUpdate {
+            commands: vec![HostCommand::Invalidate, HostCommand::PersistConfig(bytes)],
+            relayout: false,
+        })
+    }
+
+    fn menu_config(&self, action: u64) -> Option<WidgetConfig> {
+        apply_menu_action(self.kind, self.config, action)
+    }
+
     fn animate(&self) -> bool {
         self.theme.as_ref().is_none_or(|theme| theme.animations)
     }
@@ -185,6 +334,10 @@ impl PanelInstance for TimeWidget {
                 self.theme = self.ctx.theme.with(|service| service.snapshot()).ok();
                 Ok(invalidate())
             }
+            PanelEvent::Invoke { action, .. } if self.menu_config(action).is_some() => {
+                let config = self.menu_config(action).unwrap_or(self.config);
+                self.set_config(config)
+            }
             PanelEvent::Invoke { action, .. } if matches!(self.kind, Kind::Calendar) => {
                 let before = self.month_offset;
                 let changed = match action {
@@ -236,8 +389,27 @@ impl PanelInstance for TimeWidget {
             Kind::Calendar => Colors::paper(self.theme.as_deref()),
         };
         let chinese = input.locale.starts_with("zh");
+        self.chinese = chinese;
         match self.kind {
-            Kind::Clock => build_clock(&mut frame, self.config, colors, chinese),
+            Kind::Clock => {
+                let now = Instant::now();
+                let (time, _) = clock_text(self.config, Local::now(), chinese);
+                if self.last_time.as_ref().is_some_and(|last| *last != time)
+                    && self.config.dynamic_weight
+                    && self.config.face.has_weights()
+                {
+                    self.pulse = Tween::start(motion::SLOW * 2, Curve::Decelerate, self.animate());
+                }
+                self.last_time = Some(time);
+                if self.pulse.is_some_and(|tween| tween.done(now)) {
+                    self.pulse = None;
+                }
+                let base = self.config.weight.value();
+                let weight = self
+                    .pulse
+                    .map_or(base, |tween| pulse_weight(base, tween.progress(now)));
+                build_clock(&mut frame, self.config, colors, chinese, weight)
+            }
             Kind::Calendar => {
                 let now = Instant::now();
                 if self.month_motion.is_some_and(|(tween, _)| tween.done(now)) {
@@ -278,7 +450,7 @@ impl PanelInstance for TimeWidget {
         if self.stopped {
             return None;
         }
-        if self.month_motion.is_some() {
+        if self.month_motion.is_some() || self.pulse.is_some() {
             return Some(FRAME_INTERVAL);
         }
         Some(match self.kind {
@@ -286,6 +458,103 @@ impl PanelInstance for TimeWidget {
             Kind::Calendar => self.next_calendar_wake(),
         })
     }
+
+    fn menu_items(&self) -> Vec<PanelMenuItem> {
+        menu_items_for(self.kind, self.config, self.chinese)
+    }
+}
+
+/// Window-menu options for a clock or calendar (`PanelInstance::menu_items`).
+fn menu_items_for(kind: Kind, config: WidgetConfig, zh: bool) -> Vec<PanelMenuItem> {
+    let item = |submenu: Option<&str>, label: &str, action, checked, enabled| PanelMenuItem {
+        submenu: submenu.map(str::to_string),
+        label: label.to_string(),
+        action,
+        checked,
+        enabled,
+    };
+    match kind {
+        Kind::Clock => {
+            let c = config;
+            let face_menu = if zh { "表盘样式" } else { "Clock face" };
+            let weight_menu = if zh { "字重" } else { "Weight" };
+            let mut items: Vec<PanelMenuItem> = ClockFace::ALL
+                .iter()
+                .enumerate()
+                .map(|(i, face)| {
+                    item(
+                        Some(face_menu),
+                        face.label(zh),
+                        CLOCK_FACE_BASE + i as u64,
+                        c.face == *face,
+                        true,
+                    )
+                })
+                .collect();
+            items.extend(ClockWeight::ALL.iter().enumerate().map(|(i, weight)| {
+                item(
+                    Some(weight_menu),
+                    weight.label(zh),
+                    CLOCK_WEIGHT_BASE + i as u64,
+                    c.weight == *weight,
+                    c.face.has_weights(),
+                )
+            }));
+            items.push(item(
+                None,
+                if zh { "动态字重" } else { "Dynamic weight" },
+                CLOCK_DYNAMIC,
+                c.dynamic_weight,
+                c.face.has_weights(),
+            ));
+            items.push(item(
+                None,
+                if zh { "显示秒" } else { "Show seconds" },
+                CLOCK_SECONDS,
+                c.show_seconds,
+                true,
+            ));
+            items.push(item(
+                None,
+                if zh { "12 小时制" } else { "12-hour clock" },
+                CLOCK_12_HOUR,
+                c.use_12_hour,
+                true,
+            ));
+            items
+        }
+        Kind::Calendar => vec![item(
+            None,
+            if zh {
+                "一周从周日开始"
+            } else {
+                "Week starts on Sunday"
+            },
+            CALENDAR_SUNDAY_FIRST,
+            config.week_starts_on_sunday,
+            true,
+        )],
+    }
+}
+
+/// The configuration a window-menu option produces; `None` for other actions.
+fn apply_menu_action(kind: Kind, mut config: WidgetConfig, action: u64) -> Option<WidgetConfig> {
+    match (kind, action) {
+        (Kind::Clock, a) if (CLOCK_FACE_BASE..CLOCK_FACE_BASE + 3).contains(&a) => {
+            config.face = ClockFace::ALL[(a - CLOCK_FACE_BASE) as usize];
+        }
+        (Kind::Clock, a) if (CLOCK_WEIGHT_BASE..CLOCK_WEIGHT_BASE + 4).contains(&a) => {
+            config.weight = ClockWeight::ALL[(a - CLOCK_WEIGHT_BASE) as usize];
+        }
+        (Kind::Clock, CLOCK_DYNAMIC) => config.dynamic_weight = !config.dynamic_weight,
+        (Kind::Clock, CLOCK_SECONDS) => config.show_seconds = !config.show_seconds,
+        (Kind::Clock, CLOCK_12_HOUR) => config.use_12_hour = !config.use_12_hour,
+        (Kind::Calendar, CALENDAR_SUNDAY_FIRST) => {
+            config.week_starts_on_sunday = !config.week_starts_on_sunday
+        }
+        _ => return None,
+    }
+    Some(config)
 }
 
 fn invalidate() -> PanelUpdate {
@@ -677,6 +946,12 @@ impl<'a> WidgetElement<'a> {
         self.font = Some(FontRole::Serif);
         self
     }
+
+    /// Render the text with an explicit font role.
+    pub(crate) fn font(mut self, role: FontRole) -> Self {
+        self.font = Some(role);
+        self
+    }
 }
 
 pub(crate) struct WidgetFrame {
@@ -986,7 +1261,13 @@ fn clock_text(
 /// Paper clock: large serif numerals sized from the cells the widget spans, a short
 /// terracotta rule, and the date (with the lunar date in Chinese). One row is a
 /// capsule with the time and, when there is room, the date beside it.
-fn build_clock(frame: &mut WidgetFrame, config: WidgetConfig, colors: Colors, chinese: bool) {
+fn build_clock(
+    frame: &mut WidgetFrame,
+    config: WidgetConfig,
+    colors: Colors,
+    chinese: bool,
+    weight: u16,
+) {
     frame.ground(colors);
     let (time, date) = clock_text(config, Local::now(), chinese);
     let v = frame.viewport;
@@ -995,6 +1276,7 @@ fn build_clock(frame: &mut WidgetFrame, config: WidgetConfig, colors: Colors, ch
     if v.h < CAPSULE_HEIGHT {
         let show_date = v.w >= 300.0;
         let time_size = (v.h * 0.5).clamp(design::BODY, 32.0);
+        let face = config.face;
         let time_w = if show_date { width * 0.4 } else { width };
         frame.add(
             WidgetElement::text(
@@ -1007,10 +1289,10 @@ fn build_clock(frame: &mut WidgetFrame, config: WidgetConfig, colors: Colors, ch
                 },
                 time,
                 time_size,
-                600,
+                weight,
                 colors.primary,
             )
-            .serif()
+            .font(face.font())
             .align(TextAlign::MiddleLeading),
         );
         if show_date {
@@ -1033,8 +1315,13 @@ fn build_clock(frame: &mut WidgetFrame, config: WidgetConfig, colors: Colors, ch
         }
         return;
     }
-    // Numerals fill the height they are given without outgrowing narrow widgets.
-    let time_size = (v.h * 0.40).min(width * 0.24).clamp(28.0, 112.0);
+    // Numerals fill the height they are given without outgrowing the width; narrow
+    // faces get taller numerals in the same cells.
+    let face = config.face;
+    let digits = time.chars().count().max(4) as f32;
+    let time_size = (v.h * face.height_share())
+        .min(width / (digits * face.digit_em()))
+        .clamp(28.0, 140.0);
     let time_h = (time_size * 1.2).ceil();
     let rule_gap = (time_size * 0.08).clamp(4.0, 10.0);
     let date_h = 20.0;
@@ -1051,10 +1338,10 @@ fn build_clock(frame: &mut WidgetFrame, config: WidgetConfig, colors: Colors, ch
             },
             time,
             time_size,
-            600,
+            weight,
             colors.primary,
         )
-        .serif()
+        .font(face.font())
         .align(TextAlign::MiddleLeading),
     );
     let rule_y = top + time_h + rule_gap;
@@ -1562,6 +1849,7 @@ mod tests {
                 WidgetConfig::default(),
                 Colors::from_theme(None),
                 false,
+                600,
             );
             // The strip keeps the time (and the date when there is room) inside its
             // height instead of clipping the full layout.
@@ -1891,6 +2179,7 @@ mod tests {
                 WidgetConfig::default(),
                 Colors::from_theme(None),
                 false,
+                600,
             );
             scenes.push(frame.finish(&mut LayoutTracker::default()).unwrap());
         }
@@ -2111,6 +2400,7 @@ mod tests {
             WidgetConfig::default(),
             Colors::paper(None),
             true,
+            600,
         );
         let scene = frame.finish(&mut LayoutTracker::default()).unwrap();
         assert_eq!(scene.nodes()[0].style.fill, Some(paper::GROUND));
@@ -2143,5 +2433,96 @@ mod tests {
         let (time, date) = clock_text(WidgetConfig::default(), afternoon, false);
         assert_eq!(time, "14:05");
         assert_eq!(date, "Sunday, October 18");
+    }
+
+    #[test]
+    fn clock_faces_pick_their_font_and_digital_numerals_grow_taller() {
+        let size_and_font = |face| {
+            let mut frame = identity_frame(400.0, 192.0, 1.0);
+            let config = WidgetConfig {
+                face,
+                ..Default::default()
+            };
+            build_clock(&mut frame, config, Colors::paper(None), false, 300);
+            let time = frame.nodes.iter().find(|n| n.id == 1).unwrap().clone();
+            (time.style.size, time.style.font, time.style.weight)
+        };
+        let (classic, classic_font, weight) = size_and_font(ClockFace::Classic);
+        let (modern, modern_font, _) = size_and_font(ClockFace::Modern);
+        let (digital, digital_font, _) = size_and_font(ClockFace::Digital);
+        assert_eq!(
+            (classic_font, modern_font, digital_font),
+            (FontRole::Serif, FontRole::Display, FontRole::Condensed)
+        );
+        assert_eq!(weight, 300);
+        assert!(
+            digital > modern && digital > classic,
+            "{digital} vs {modern}/{classic}"
+        );
+        assert!(digital <= 192.0 * 0.52 + 0.01);
+    }
+
+    #[test]
+    fn dynamic_weight_settles_back_on_the_chosen_weight() {
+        assert_eq!(pulse_weight(300, 0.0), 600);
+        assert_eq!(pulse_weight(300, 1.0), 300);
+        assert_eq!(pulse_weight(700, 0.0), 400);
+        assert_eq!(pulse_weight(700, 1.0), 700);
+        let mid = pulse_weight(400, 0.5);
+        assert!((400..=700).contains(&mid) && mid.is_multiple_of(100));
+    }
+
+    #[test]
+    fn clock_menu_offers_faces_weights_and_toggles_and_applies_them() {
+        let config = WidgetConfig::default();
+        let items = menu_items_for(Kind::Clock, config, true);
+        let faces: Vec<_> = items
+            .iter()
+            .filter(|i| i.submenu.as_deref() == Some("表盘样式"))
+            .collect();
+        assert_eq!(faces.len(), 3);
+        assert!(faces[0].checked && faces[0].label == "经典衬线");
+        // The bundled serif has one weight, so weight and dynamic weight are off for it.
+        let weights: Vec<_> = items
+            .iter()
+            .filter(|i| i.submenu.as_deref() == Some("字重"))
+            .collect();
+        assert_eq!(weights.len(), 4);
+        assert!(weights.iter().all(|i| !i.enabled));
+        let digital = apply_menu_action(Kind::Clock, config, CLOCK_FACE_BASE + 2).unwrap();
+        assert_eq!(digital.face, ClockFace::Digital);
+        let items = menu_items_for(Kind::Clock, digital, false);
+        assert!(
+            items
+                .iter()
+                .filter(|i| i.submenu.as_deref() == Some("Weight"))
+                .all(|i| i.enabled)
+        );
+        let light = apply_menu_action(Kind::Clock, digital, CLOCK_WEIGHT_BASE).unwrap();
+        assert_eq!(light.weight, ClockWeight::Light);
+        let dynamic = apply_menu_action(Kind::Clock, light, CLOCK_DYNAMIC).unwrap();
+        assert!(dynamic.dynamic_weight);
+        // Options are saved as part of the version-1 configuration.
+        let json = serde_json::to_string(&dynamic).unwrap();
+        let back: WidgetConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(
+            (back.face, back.weight, back.dynamic_weight),
+            (ClockFace::Digital, ClockWeight::Light, true)
+        );
+        let old: WidgetConfig = serde_json::from_str(r#"{"showSeconds":true}"#).unwrap();
+        assert_eq!(
+            (old.face, old.weight),
+            (ClockFace::Classic, ClockWeight::Semibold)
+        );
+        // Clock options do nothing on a calendar, and vice versa.
+        assert_eq!(
+            apply_menu_action(Kind::Calendar, config, CLOCK_DYNAMIC),
+            None
+        );
+        assert!(
+            apply_menu_action(Kind::Calendar, config, CALENDAR_SUNDAY_FIRST)
+                .unwrap()
+                .week_starts_on_sunday
+        );
     }
 }

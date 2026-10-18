@@ -14,6 +14,7 @@ fn text_font_family(role: FontRole) -> &'static str {
         FontRole::Display => crate::theme::FONT_DISPLAY,
         FontRole::Icons => crate::theme::FONT_ICONS,
         FontRole::Serif => crate::theme::FONT_SERIF,
+        FontRole::Condensed => crate::theme::FONT_CONDENSED,
     }
 }
 
@@ -24,7 +25,11 @@ fn bundled_font_family(role: FontRole) -> Option<&'static str> {
     match role {
         FontRole::Serif => Some(crate::theme::FONT_PAPER_SERIF),
         FontRole::PaperBody => Some(crate::theme::FONT_PAPER_BODY),
-        FontRole::Text | FontRole::Small | FontRole::Display | FontRole::Icons => None,
+        FontRole::Text
+        | FontRole::Small
+        | FontRole::Display
+        | FontRole::Icons
+        | FontRole::Condensed => None,
     }
 }
 
@@ -151,7 +156,7 @@ impl TextFormatCache {
             if self.formats.len() >= 128 {
                 self.formats.clear();
             }
-            let format = match Self::bundled(text) {
+            let format = match Self::bundled(text).or_else(|| Self::condensed(text)) {
                 Some(format) => CachedFormat::Bundled(format),
                 None => CachedFormat::System(Self::system(text)?),
             };
@@ -186,6 +191,30 @@ impl TextFormatCache {
             )
             .inspect_err(|error| tracing::warn!(%error, family, "bundled text format failed"))
             .ok()
+    }
+
+    /// Condensed-width system face for [`FontRole::Condensed`]; `None` falls back to
+    /// the family at normal width.
+    fn condensed(text: &TextSpec) -> Option<pecofence_platform::fonts::PrivateTextFormat> {
+        use pecofence_platform::fonts::PrivateTextAlignment;
+        use pecofence_plugin_api::TextAlign;
+        if text.font != FontRole::Condensed {
+            return None;
+        }
+        let alignment = match text.align {
+            TextAlign::TopLeading => PrivateTextAlignment::TopLeading,
+            TextAlign::MiddleLeading => PrivateTextAlignment::MiddleLeading,
+            TextAlign::Center => PrivateTextAlignment::Center,
+        };
+        pecofence_platform::fonts::system_condensed_format(
+            crate::theme::FONT_CONDENSED,
+            text.size_dip,
+            i32::from(text.weight),
+            "en-us",
+            alignment,
+        )
+        .inspect_err(|error| tracing::warn!(%error, "condensed text format failed"))
+        .ok()
     }
 
     fn system(text: &TextSpec) -> Result<windows_canvas::TextFormat> {

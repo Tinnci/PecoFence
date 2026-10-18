@@ -275,6 +275,9 @@ pub enum FontRole {
     /// Body face for the warm paper widgets: bundled Noto Sans SC when present,
     /// else the Segoe UI Variable text ramp. The rest of the app keeps `Text`.
     PaperBody,
+    /// Built-in tall, narrow DIN face (Bahnschrift at condensed width, Light…Bold)
+    /// for digital clock numerals.
+    Condensed,
 }
 
 /// Placement of text inside its layout rectangle. The default keeps the
@@ -640,6 +643,18 @@ pub trait PanelProvider {
     fn create(&self, ctx: PluginContext, input: CreatePanel) -> Result<Box<dyn PanelInstance>>;
 }
 
+/// An option a panel adds to its window's right-click menu. Items that share a
+/// `submenu` label are grouped under it; choosing one sends `PanelEvent::Invoke`
+/// with `action`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PanelMenuItem {
+    pub submenu: Option<String>,
+    pub label: String,
+    pub action: u64,
+    pub checked: bool,
+    pub enabled: bool,
+}
+
 pub trait PanelInstance {
     /// Initial host sizing policy for a newly activated panel.
     fn initial_presentation(&self) -> Presentation {
@@ -654,6 +669,10 @@ pub trait PanelInstance {
     /// Providers that only react to snapshots and input can use the default.
     fn next_wake_after(&self) -> Option<Duration> {
         None
+    }
+    /// Options for the window's right-click menu (styles, toggles). Most panels have none.
+    fn menu_items(&self) -> Vec<PanelMenuItem> {
+        Vec::new()
     }
 }
 
