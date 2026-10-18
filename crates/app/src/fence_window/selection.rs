@@ -382,6 +382,34 @@ impl FenceViewState {
         changed && !self.selected.is_empty() && !self.rolled_up
     }
 
+    /// Fade the frameless widget's grab handle towards shown (pointer over the window)
+    /// or hidden; FASTER in, FAST out, as WinUI hover fades.
+    pub(super) fn update_grab_handle(&mut self) {
+        let target = if self.frameless && self.mouse_inside {
+            1.0
+        } else {
+            0.0
+        };
+        if (self.grab_alpha.target() - target).abs() < f32::EPSILON {
+            return;
+        }
+        let now = Instant::now();
+        let duration = if target > 0.0 {
+            pecofence_render::motion::FASTER
+        } else {
+            pecofence_render::motion::FAST
+        };
+        self.grab_alpha = self.motion.tween(
+            self.grab_alpha.value_at(now),
+            target,
+            duration,
+            pecofence_render::motion::Curve::Decelerate,
+            now,
+        );
+        self.grab_busy = true;
+        self.frames.request();
+    }
+
     /// Tracks the mouse entering / leaving the window as a whole; redraws the chrome when the
     /// title-on-hover rule changes what is shown.
     pub(super) fn set_mouse_inside(&mut self, inside: bool) {
@@ -389,6 +417,7 @@ impl FenceViewState {
             return;
         }
         self.mouse_inside = inside;
+        self.update_grab_handle();
         if self.behavior.title_on_hover.get() {
             let _ = self.redraw_chrome_only();
         }

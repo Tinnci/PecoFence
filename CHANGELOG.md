@@ -86,7 +86,8 @@
 - Make single-widget windows frameless, like iOS/Android/macOS/Plasma widgets: no
   fence title bar above the widget's own header, so a span is all content. Drag
   empty widget areas to move (with the usual snapping and drop-to-merge),
-  right-click or Shift+F10 for the fence menu; roll-up is disabled. Tabbed groups
+  right-click or Shift+F10 for the fence menu; roll-up is disabled. A grab handle
+  fades in at the top while hovering, and draggable areas show the move cursor. Tabbed groups
   keep their title bar. Not yet checked on device.
 
 The versioned entries below are retained from the upstream baseline. References

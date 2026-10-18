@@ -173,5 +173,10 @@ chrome, and the span is all content.
   (`FenceWindow::set_frameless`), so every title-relative layout, hit test and paint
   path follows without special cases. `WM_NCHITTEST` returns `HTCAPTION` wherever the
   widget's hit tree has no control.
-- **Not done:** there is no visible hover affordance for dragging. Dragging, menus,
-  merge-by-drop and screen-reader names have not been checked on a Windows desktop.
+- **Hover affordance:** while the pointer is over a frameless widget, a 32 × 4 DIP
+  grab handle fades in at the top centre (83 ms in, 167 ms out; it appears without
+  fading when animation effects are off). Areas that move the window show the move
+  cursor, except when the widget is locked. The handle is painted in the host's
+  feedback pass, over the widget, so no widget draws it itself.
+- **Not checked:** dragging, menus, merge-by-drop, the handle and screen-reader
+  names have not been tried on a Windows desktop.

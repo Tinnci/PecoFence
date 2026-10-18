@@ -163,6 +163,8 @@ impl FenceWindow {
             drop_fades: Fades::new(motion::FASTER, motion::FASTER, Curve::Linear),
             drop_wash: Tween::at(0.0, Instant::now()),
             caret_alpha: Tween::at(0.0, Instant::now()),
+            grab_alpha: Tween::at(0.0, Instant::now()),
+            grab_busy: false,
             caret_shown: None,
             merge_hint: false,
             merge_t: Tween::at(0.0, Instant::now()),
@@ -1256,6 +1258,7 @@ impl FenceWindow {
             }
             v.frameless = frameless;
             v.theme.title_height = height;
+            v.update_grab_handle();
             let (w, h) = window::window_rect_size(v.hwnd);
             let _ = v.layout_panels(w, h);
             let _ = v.redraw();

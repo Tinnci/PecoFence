@@ -45,6 +45,20 @@ impl FenceViewState {
         if self.content_busy {
             content = true;
         }
+        if self.grab_busy {
+            let done = self.grab_alpha.is_done(now);
+            let grab = if done {
+                self.grab_alpha.target()
+            } else {
+                self.grab_alpha.value_at(now)
+            };
+            if let Some(panel) = self.plugin_panel.as_mut() {
+                panel.grab = grab.clamp(0.0, 1.0);
+            }
+            self.redraw_plugin_feedback();
+            self.grab_busy = !done;
+            more |= !done;
+        }
         if self.rolled_up && self.roll_anim.is_none() {
             // Rolled: nothing is visible, and a glide must not keep moving the hidden offset.
             self.content_busy = false;

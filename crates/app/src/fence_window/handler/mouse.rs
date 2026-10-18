@@ -13,6 +13,16 @@ pub(super) fn on_setcursor(
     lparam: isize,
 ) -> Option<isize> {
     let HandlerCtx { view, .. } = h;
+    // Frameless widgets: the areas that move the window show the move cursor.
+    if msg::lo_i16(lparam) as isize == msg::HTCAPTION
+        && view
+            .try_borrow()
+            .ok()
+            .is_some_and(|g| g.as_ref().is_some_and(|v| v.frameless && !v.locked))
+    {
+        window::set_standard_cursor(StandardCursor::SizeAll);
+        return Some(1);
+    }
     if msg::lo_i16(lparam) as isize != msg::HTCLIENT {
         return None;
     }

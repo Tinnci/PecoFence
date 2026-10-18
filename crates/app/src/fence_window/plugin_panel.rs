@@ -110,6 +110,8 @@ pub(super) struct PluginPanelContent {
     feedback_theme: ThemeSnapshot,
     fallback_feedback_radius: f32,
     text_formats: RefCell<pecofence_render::TextFormatCache>,
+    /// Opacity of the frameless widget's grab handle (0 hidden … 1 shown).
+    pub(super) grab: f32,
 }
 
 impl PluginPanelContent {
@@ -126,6 +128,7 @@ impl PluginPanelContent {
             feedback_theme: ThemeSnapshot::dark(),
             fallback_feedback_radius: pecofence_plugin_api::design::CONTROL_RADIUS,
             text_formats: RefCell::default(),
+            grab: 0.0,
         }
     }
 
@@ -317,6 +320,7 @@ impl PluginPanelContent {
         let feedback_theme = theme_host.snapshot();
         let mut interaction = self.interaction.clone();
         interaction.reconcile_viewport(candidate.hit_tree(), viewport);
+        let grab = self.grab;
         let mut paint_error = None;
         let paint_frame = candidate.clone();
         let mut formats = self.text_formats.borrow_mut();
@@ -339,6 +343,7 @@ impl PluginPanelContent {
                     scale,
                     pecofence_plugin_api::design::ContentScale::new(viewport, text_scale)
                         .value(pecofence_plugin_api::design::CONTROL_RADIUS),
+                    grab,
                 )
             });
             if let Err(error) = paint {
@@ -433,6 +438,7 @@ impl PluginPanelContent {
                     &self.feedback_theme,
                     dpi as f32 / 96.0,
                     self.fallback_feedback_radius,
+                    self.grab,
                 )
             }) {
                 error = Some(issue);
@@ -478,16 +484,42 @@ fn canvas_feedback(
     theme: &ThemeSnapshot,
     scale: f32,
     radius: f32,
+    grab: f32,
 ) -> pecofence_plugin_api::Result<()> {
     canvas.push_clip(viewport)?;
-    let painted = state.paint_with_radii(
-        canvas,
-        frame.hit_tree(),
-        theme,
-        PixelGrid::new(scale),
-        |id| frame.control_corner_radius(id).unwrap_or(radius),
-    );
+    let painted = state
+        .paint_with_radii(
+            canvas,
+            frame.hit_tree(),
+            theme,
+            PixelGrid::new(scale),
+            |id| frame.control_corner_radius(id).unwrap_or(radius),
+        )
+        .and_then(|_| paint_grab_handle(canvas, viewport, grab, PixelGrid::new(scale)));
     painted.and(canvas.pop_clip())
+}
+
+/// Frameless widgets show a small grab handle at the top centre while the pointer is
+/// over them, so it is clear the window can be dragged (bottom-sheet style). A warm
+/// mid grey reads on both the paper widgets and the clock's glass.
+fn paint_grab_handle(
+    canvas: &mut dyn pecofence_plugin_api::Canvas,
+    viewport: RectDip,
+    grab: f32,
+    grid: PixelGrid,
+) -> pecofence_plugin_api::Result<()> {
+    if grab <= 0.0 || viewport.w < 48.0 {
+        return Ok(());
+    }
+    const WIDTH: f32 = 32.0;
+    const HEIGHT: f32 = 4.0;
+    let rect = RectDip {
+        x: grid.snap(viewport.x + (viewport.w - WIDTH) / 2.0),
+        y: grid.snap(viewport.y + 5.0),
+        w: WIDTH,
+        h: HEIGHT,
+    };
+    canvas.fill_rounded_rect(rect, HEIGHT / 2.0, [0.47, 0.43, 0.38, 0.6 * grab.min(1.0)])
 }
 
 impl FenceViewState {
@@ -942,6 +974,7 @@ mod candidate_error_tests {
             &ThemeSnapshot::dark(),
             2.0,
             99.0,
+            0.0,
         )
         .unwrap();
         assert!(canvas.is_balanced());

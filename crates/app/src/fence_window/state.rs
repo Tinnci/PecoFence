@@ -94,6 +94,9 @@ pub struct FenceViewState {
     pub(super) drop_wash: Tween,
     /// Insertion caret alpha (83 ms) and the slot it is (still) drawn at while fading out.
     pub(super) caret_alpha: Tween,
+    /// Frameless widget grab handle: fades in while the pointer is over the window.
+    pub(super) grab_alpha: Tween,
+    pub(super) grab_busy: bool,
     pub(super) caret_shown: Option<usize>,
     /// Drag-to-merge title highlight: logical state and its alpha (83 ms in, 167 ms out).
     pub(super) merge_hint: bool,
