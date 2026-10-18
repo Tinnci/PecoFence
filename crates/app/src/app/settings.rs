@@ -632,6 +632,19 @@ impl App {
         let visual_changed = new.theme != old.theme
             || new.theme_style != old.theme_style
             || new.backdrop != old.backdrop;
+        let paper_changed = new.widget_paper_style != old.widget_paper_style
+            || new.widget_paper_brightness != old.widget_paper_brightness;
+        if paper_changed {
+            crate::rename::end_active(true);
+            self.ctx
+                .behavior
+                .widget_paper_style
+                .set(new.widget_paper_style);
+            self.ctx
+                .behavior
+                .widget_paper_brightness
+                .set(new.widget_paper_brightness);
+        }
         let icons_changed = new.icons != old.icons;
         self.state.config.settings = new;
         self.refresh_language();
@@ -646,6 +659,11 @@ impl App {
         }
         if visual_changed {
             self.refresh_visuals(true);
+        }
+        if paper_changed && !visual_changed {
+            for window in self.fences.values() {
+                window.redraw();
+            }
         }
         self.push_settings_state();
     }

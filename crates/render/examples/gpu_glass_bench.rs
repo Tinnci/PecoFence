@@ -13,6 +13,7 @@ fn source(image: Image) -> Rc<Vec<MonitorBackdrop>> {
         width: image.width as i32,
         height: image.height as i32,
         downscale: 1,
+                wallpaper_luminance: 0.5,
         image,
     }])
 }
@@ -157,6 +158,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 width: 400,
                 height: 400,
                 downscale: 2,
+                wallpaper_luminance: 0.5,
                 image: Image::solid(200, 200, [60; 3]),
             },
             MonitorBackdrop {
@@ -165,6 +167,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 width: 400,
                 height: 400,
                 downscale: 1,
+                wallpaper_luminance: 0.5,
                 image: Image::solid(400, 400, [180; 3]),
             },
         ]);

@@ -13,9 +13,11 @@ use std::time::{Duration, Instant};
 
 mod diagram;
 pub mod grid;
+pub mod holidays;
 mod lunar;
 mod mermaid;
 mod note;
+mod paper_theme;
 mod todo;
 pub use diagram::{DIAGRAM_PROVIDER, DiagramPlugin, diagram_template};
 pub use note::{NOTE_PROVIDER, NotePlugin};
@@ -35,6 +37,7 @@ const CLOCK_DYNAMIC: u64 = 30;
 const CLOCK_SECONDS: u64 = 31;
 const CLOCK_12_HOUR: u64 = 32;
 const CALENDAR_SUNDAY_FIRST: u64 = 33;
+const CALENDAR_ANNOUNCEMENT: u64 = 34;
 
 /// Clock numerals, like the iPhone lock screen's font choices.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
@@ -338,6 +341,27 @@ impl PanelInstance for TimeWidget {
                 let config = self.menu_config(action).unwrap_or(self.config);
                 self.set_config(config)
             }
+            PanelEvent::Invoke {
+                action: CALENDAR_ANNOUNCEMENT,
+                ..
+            } if matches!(self.kind, Kind::Calendar) => {
+                let (year, _) = month_for(Local::now().date_naive(), self.month_offset);
+                let snapshot = holidays::snapshot();
+                if let Some(url) = snapshot.year(year).and_then(|y| y.papers.first())
+                    && let Some(navigation) = &self.ctx.navigation
+                {
+                    navigation.with(|service| {
+                        service.open(
+                            &self.ctx.scope,
+                            ExternalTarget {
+                                system: "China holiday announcement".into(),
+                                https_uri: url.clone(),
+                            },
+                        )
+                    })?;
+                }
+                Ok(PanelUpdate::default())
+            }
             PanelEvent::Invoke { action, .. } if matches!(self.kind, Kind::Calendar) => {
                 let before = self.month_offset;
                 let changed = match action {
@@ -460,7 +484,73 @@ impl PanelInstance for TimeWidget {
     }
 
     fn menu_items(&self) -> Vec<PanelMenuItem> {
-        menu_items_for(self.kind, self.config, self.chinese)
+        let mut items = menu_items_for(self.kind, self.config, self.chinese);
+        if matches!(self.kind, Kind::Calendar) {
+            let zh = self.chinese;
+            let (year, _) = month_for(Local::now().date_naive(), self.month_offset);
+            let snapshot = holidays::snapshot();
+            let schedule = snapshot.year(year);
+            let status = match schedule {
+                Some(y) => match y.checked_on {
+                    Some(date) => {
+                        if zh {
+                            format!("放假数据更新于 {date}")
+                        } else {
+                            format!("Holiday data checked {date}")
+                        }
+                    }
+                    None => {
+                        if zh {
+                            format!("{year}年放假安排 · 内置数据")
+                        } else {
+                            format!("{year} holidays · Built in")
+                        }
+                    }
+                },
+                None => {
+                    if zh {
+                        format!("暂无{year}年放假安排")
+                    } else {
+                        format!("No {year} holiday data")
+                    }
+                }
+            };
+            let group = Some(
+                if zh {
+                    "中国节假日"
+                } else {
+                    "China holidays"
+                }
+                .into(),
+            );
+            items.push(PanelMenuItem {
+                submenu: group.clone(),
+                label: status,
+                action: 0,
+                checked: false,
+                enabled: false,
+            });
+            items.push(PanelMenuItem {
+                submenu: group.clone(),
+                label: "NateScarlet/holiday-cn".into(),
+                action: 0,
+                checked: false,
+                enabled: false,
+            });
+            items.push(PanelMenuItem {
+                submenu: group,
+                label: if zh {
+                    "查看国务院放假通知"
+                } else {
+                    "Open official announcement"
+                }
+                .into(),
+                action: CALENDAR_ANNOUNCEMENT,
+                checked: false,
+                enabled: schedule.is_some() && self.ctx.navigation.is_some(),
+            });
+        }
+        items
     }
 }
 
@@ -718,17 +808,7 @@ impl Colors {
         if theme.is_some_and(|theme| theme.high_contrast) {
             return Self::from_theme(theme);
         }
-        Self {
-            high_contrast: false,
-            primary: paper::INK,
-            secondary: paper::INK_SECONDARY,
-            accent: paper::TERRACOTTA,
-            accent_ink: paper::TERRACOTTA_INK,
-            subtle: paper::CARD,
-            panel: paper::CREAM,
-            faint_ink: paper::INK_FAINT,
-            ground: Some(paper::GROUND),
-        }
+        paper_theme::resolve(theme)
     }
 }
 
@@ -1431,6 +1511,31 @@ fn build_calendar(
     today: NaiveDate,
     motion: MonthMotion,
 ) {
+    build_calendar_with_data(
+        frame,
+        config,
+        offset,
+        selected_day,
+        colors,
+        chinese,
+        today,
+        motion,
+        &holidays::snapshot(),
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+fn build_calendar_with_data(
+    frame: &mut WidgetFrame,
+    config: WidgetConfig,
+    offset: i32,
+    selected_day: Option<u32>,
+    colors: Colors,
+    chinese: bool,
+    today: NaiveDate,
+    motion: MonthMotion,
+    holiday_data: &holidays::CalendarData,
+) {
     frame.ground(colors);
     if frame.viewport.h < CAPSULE_HEIGHT {
         let summary = match (chinese, lunar::describe(today)) {
@@ -1438,6 +1543,8 @@ fn build_calendar(
             (true, None) => describe_day(today, true),
             (false, _) => describe_day(today, false),
         };
+        let status = holiday_data.description(today, chinese);
+        let summary = format!("{status} · {summary}");
         build_capsule(frame, summary, Some(TODAY), None, colors);
         return;
     }
@@ -1465,6 +1572,20 @@ fn build_calendar(
         },
         _ => format!("Today · {}", describe_day(today, false)),
     };
+    // Prioritise work/rest information so it survives caption ellipsis at narrow widths.
+    let focus = selected.unwrap_or(today);
+    let status = if selected.is_some() || (year == today.year() && month == today.month()) {
+        Some(holiday_data.description(focus, chinese))
+    } else if holiday_data.year(year).is_none() {
+        Some(if chinese {
+            format!("暂无{year}年放假安排")
+        } else {
+            format!("No {year} holiday data")
+        })
+    } else {
+        None
+    };
+    let meta = status.map_or_else(|| meta.clone(), |status| format!("{status} · {meta}"));
     build_panel_header(
         frame,
         if chinese {
@@ -1633,7 +1754,11 @@ fn build_calendar(
         } else {
             frame.add(element);
         }
-        frame.set_last_accessible_name(name);
+        let holiday = holiday_data.day(date);
+        let accessible = holiday.map_or(name.clone(), |_| {
+            format!("{name} · {}", holiday_data.description(date, chinese))
+        });
+        frame.set_last_accessible_name(accessible);
         if is_selected
             && colors.high_contrast
             && let Some(node) = frame.nodes.last_mut()
@@ -1642,6 +1767,60 @@ fn build_calendar(
                 rgba: colors.primary,
                 width: 2.0,
             });
+        }
+        if let Some(holiday) = holiday {
+            let (ink, fill) = if is_today && !colors.high_contrast {
+                (colors.panel, None)
+            } else if !in_month {
+                (colors.faint(), None)
+            } else if holiday.is_off_day {
+                (colors.accent_ink, Some(colors.accent_wash()))
+            } else {
+                (colors.secondary, None)
+            };
+            let labeled = rect.w >= 40.0 && rect.h >= 28.0;
+            let side = if labeled { 12.0 } else { 3.0 };
+            let badge = RectDip {
+                x: rect.x + rect.w - side - 1.0,
+                y: rect.y + 1.0,
+                w: side,
+                h: side,
+            };
+            frame.add(
+                WidgetElement::text(
+                    (4 << 32) | (id & 0xFFFF_FFFF),
+                    badge,
+                    if labeled {
+                        if holiday.is_off_day { "休" } else { "班" }
+                    } else {
+                        ""
+                    },
+                    9.0,
+                    600,
+                    fade(ink, opacity),
+                )
+                .parent(id)
+                .role("presentation")
+                .align(TextAlign::Center)
+                .fill(
+                    if labeled {
+                        fill.map(|c| fade(c, opacity))
+                    } else {
+                        Some(fade(ink, opacity))
+                    },
+                    if labeled { 3.0 } else { 1.5 },
+                ),
+            );
+            frame.set_last_accessible_name(String::new());
+            if labeled
+                && (!holiday.is_off_day || colors.high_contrast)
+                && let Some(node) = frame.nodes.last_mut()
+            {
+                node.style.stroke = Some(StrokeStyle {
+                    rgba: fade(ink, opacity),
+                    width: 0.7,
+                });
+            }
         }
         if !lunar_cells {
             continue;
@@ -2249,9 +2428,83 @@ mod tests {
         assert_eq!(scene.hit_tree()[0].action, TODAY);
         assert_eq!(
             scene.nodes()[1].text,
-            "9月17日 周二 · 农历八月十五 · 中秋节"
+            "暂无2024年放假安排 · 9月17日 周二 · 农历八月十五 · 中秋节"
         );
         assert_controls_fit(&scene);
+    }
+
+    #[test]
+    fn holiday_badges_keep_the_paper_calendar_dates_and_interaction_intact() {
+        let data = holidays::CalendarData::bundled();
+        let today = NaiveDate::from_ymd_opt(2026, 10, 19).unwrap();
+        for (width, height, scale) in [
+            (400.0, 400.0, 1.0),
+            (280.0, 320.0, 1.0),
+            (400.0, 600.0, 1.5),
+            (400.0, 600.0, 2.0),
+            (480.0, 900.0, 2.25),
+        ] {
+            for contrast in [false, true] {
+                let mut theme = ThemeSnapshot::dark();
+                theme.high_contrast = contrast;
+                let mut frame = identity_frame(width, height, scale);
+                build_calendar_with_data(
+                    &mut frame,
+                    WidgetConfig::default(),
+                    0,
+                    Some(10),
+                    Colors::paper(Some(&theme)),
+                    true,
+                    today,
+                    MonthMotion::REST,
+                    &data,
+                );
+                let scene = frame.finish(&mut LayoutTracker::default()).unwrap();
+                assert_controls_fit(&scene);
+                assert!(
+                    scene
+                        .nodes()
+                        .iter()
+                        .any(|n| n.text.contains("国庆节调休 · 补班"))
+                );
+                let work = scene
+                    .semantics()
+                    .iter()
+                    .find(|n| n.id == calendar_day_id(today.with_day(10).unwrap()))
+                    .unwrap();
+                assert!(work.name.contains("补班"));
+                let holiday = scene
+                    .semantics()
+                    .iter()
+                    .find(|n| n.id == calendar_day_id(today.with_day(1).unwrap()))
+                    .unwrap();
+                assert!(holiday.name.contains("国庆节假期"));
+                for badge in scene.nodes().iter().filter(|n| n.id >> 32 == 4) {
+                    assert!(design::control_visible(badge.rect, scene.viewport()));
+                    let parent = scene
+                        .nodes()
+                        .iter()
+                        .find(|n| Some(n.id) == badge.parent)
+                        .unwrap();
+                    assert!(badge.rect.x >= parent.rect.x && badge.rect.y >= parent.rect.y);
+                    assert!(badge.rect.x + badge.rect.w <= parent.rect.x + parent.rect.w + 0.01);
+                    assert!(badge.rect.y + badge.rect.h <= parent.rect.y + parent.rect.h + 0.01);
+                    if contrast && !badge.text.is_empty() {
+                        assert!(badge.style.stroke.is_some());
+                    }
+                }
+                // Lunar labels and the selected-date action remain available.
+                if scene.nodes().iter().any(|n| n.id >> 32 == 3) {
+                    assert!(scene.nodes().iter().any(|n| n.text == "重阳节"));
+                }
+                assert!(
+                    scene
+                        .hit_tree()
+                        .iter()
+                        .any(|hit| hit.action == DAY_BASE + 10)
+                );
+            }
+        }
     }
 
     #[test]

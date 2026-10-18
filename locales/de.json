@@ -634,5 +634,12 @@
   "所有更改已保存。": "Alle Änderungen gespeichert.",
   "正在应用更改…": "Änderungen werden angewendet…",
   "更改已应用，正在等待保存。": "Änderungen angewendet; Speichern steht noch aus.",
-  "图表": "Diagramm"
+  "图表": "Diagramm",
+  "小组件纸张": "Widget-Papier",
+  "小组件纸张（全局）": "Widget-Papier (alle Widgets)",
+  "跟随壁纸": "Hintergrundbild folgen",
+  "浅色纸张": "Helles Papier",
+  "柔和纸张": "Gedämpftes Papier",
+  "深色纸张": "Dunkles Papier",
+  "纸张亮度": "Papierhelligkeit"
 }

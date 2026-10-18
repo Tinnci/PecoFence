@@ -186,6 +186,41 @@ fn general(view: &SettingsView, context: &mut ViewContext<SettingsComponent>) ->
             }),
         ),
         field_combo(
+            "小组件纸张",
+            &["跟随壁纸", "浅色纸张", "柔和纸张", "深色纸张"],
+            match s.widget_paper_style {
+                pecofence_core::WidgetPaperStyle::Adaptive => 0,
+                pecofence_core::WidgetPaperStyle::Light => 1,
+                pecofence_core::WidgetPaperStyle::Soft => 2,
+                pecofence_core::WidgetPaperStyle::Dark => 3,
+            },
+            enabled,
+            context.callback(|index: Option<usize>| {
+                Message::Setting(SettingChange::WidgetPaperStyle(match index.unwrap_or(0) {
+                    1 => pecofence_core::WidgetPaperStyle::Light,
+                    2 => pecofence_core::WidgetPaperStyle::Soft,
+                    3 => pecofence_core::WidgetPaperStyle::Dark,
+                    _ => pecofence_core::WidgetPaperStyle::Adaptive,
+                }))
+            }),
+        ),
+        TextBlock::new()
+            .text(format!(
+                "{} · {:.0}%",
+                tr("纸张亮度"),
+                s.widget_paper_brightness * 100.0
+            ))
+            .into(),
+        Slider::new()
+            .minimum(0.6)
+            .maximum(1.0)
+            .value(f64::from(s.widget_paper_brightness))
+            .is_enabled(enabled)
+            .on_value_changed(context.callback(|value| {
+                Message::Setting(SettingChange::WidgetPaperBrightness(value as f32))
+            }))
+            .into(),
+        field_combo(
             "显示语言",
             &[
                 "跟随系统",

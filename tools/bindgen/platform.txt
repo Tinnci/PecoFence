@@ -2,6 +2,20 @@
 --flat --dead-code
 
 --filter
+    // ---- bounded HTTPS reads for public calendar data
+    WinHttpOpen
+    WinHttpConnect
+    WinHttpOpenRequest
+    WinHttpSetTimeouts
+    WinHttpSendRequest
+    WinHttpReceiveResponse
+    WinHttpQueryHeaders
+    WinHttpReadData
+    WinHttpCloseHandle
+    WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY
+    WINHTTP_FLAG_SECURE
+    WINHTTP_QUERY_STATUS_CODE
+    WINHTTP_QUERY_FLAG_NUMBER
     // ---- foundation
     RECT
     POINT

@@ -176,7 +176,7 @@ fn source_field(frame: &WidgetFrame, colors: Colors) -> TextInputStyle {
     let page = if colors.high_contrast {
         colors.subtle
     } else {
-        paper::SHAPE
+        colors.tone_surface(paper::SHAPE)
     };
     super::input_field(
         frame.scale,
@@ -441,14 +441,14 @@ fn build_diagram(frame: &mut WidgetFrame, view: &View, colors: Colors, chinese: 
         && !colors.high_contrast
         && let Some(node) = frame.nodes.iter_mut().find(|n| n.id == HEADER_META)
     {
-        node.style.foreground = paper::WARNING_INK;
+        node.style.foreground = colors.paper_ink(paper::WARNING_INK);
     }
     let v = frame.viewport;
     let stage = stage_rect(v);
     let stage_fill = if colors.high_contrast {
         colors.subtle
     } else {
-        paper::STAGE
+        colors.tone_surface(paper::STAGE)
     };
     frame.add(
         WidgetElement::text(STAGE, stage, "", design::BODY, 400, colors.primary)
@@ -551,12 +551,22 @@ impl Ink {
             opacity: opacity.clamp(0.0, 1.0),
         }
     }
-    fn pick(&self, paper: [f32; 4], system: [f32; 4]) -> [f32; 4] {
+    fn surface(&self, paper: [f32; 4]) -> [f32; 4] {
+        let fill = if self.colors.high_contrast {
+            self.colors.subtle
+        } else if paper == paper::TERRACOTTA {
+            self.colors.accent
+        } else {
+            self.colors.tone_surface(paper)
+        };
+        fade(fill, self.opacity)
+    }
+    fn line(&self, paper: [f32; 4], system: [f32; 4]) -> [f32; 4] {
         fade(
             if self.colors.high_contrast {
                 system
             } else {
-                paper
+                self.colors.paper_ink(paper)
             },
             self.opacity,
         )
@@ -635,7 +645,7 @@ fn draw_flowchart(
     let oy = area.y + ((area.h - layout.height * scale) / 2.0).max(0.0);
     let map = |(x, y): (f32, f32)| (ox + x * scale, oy + y * scale);
     let colors = ink.colors;
-    let link = ink.pick(paper::LINK, colors.secondary);
+    let link = ink.line(paper::LINK, colors.secondary);
     for (i, edge) in layout.edges.iter().enumerate() {
         let points: Vec<(f32, f32)> = edge.points.iter().copied().map(map).collect();
         let (rgba, width) = match edge.stroke {
@@ -676,7 +686,7 @@ fn draw_flowchart(
                     ink.secondary(),
                 )
                 .parent(STAGE)
-                .fill(Some(ink.pick(paper::STAGE, colors.subtle)), h / 2.0)
+                .fill(Some(ink.surface(paper::STAGE)), h / 2.0)
                 .align(TextAlign::Center),
             );
         }
@@ -710,7 +720,7 @@ fn draw_flowchart(
         } else {
             rounded_outline(rect, radius)
         };
-        let fill = (node.shape != Shape::Diamond).then(|| ink.pick(paper::SHAPE, colors.subtle));
+        let fill = (node.shape != Shape::Diamond).then(|| ink.surface(paper::SHAPE));
         frame.add(
             WidgetElement::text(
                 NODE | i as u64,
@@ -730,7 +740,7 @@ fn draw_flowchart(
                 rect,
                 outline,
                 true,
-                ink.pick(paper::SHAPE_LINE, colors.primary),
+                ink.line(paper::SHAPE_LINE, colors.primary),
                 1.0,
             )
             .parent(STAGE),
@@ -867,7 +877,7 @@ fn draw_gantt(
                     bounds(&diamond),
                     diamond,
                     true,
-                    ink.pick(paper::TERRACOTTA, colors.primary),
+                    ink.line(paper::TERRACOTTA, colors.primary),
                     2.0,
                 )
                 .parent(STAGE),
@@ -878,18 +888,18 @@ fn draw_gantt(
         let w = (x_of(task.end) - x0).max(4.0);
         let (fill, text_ink) = if task.critical {
             (
-                ink.pick(paper::TERRACOTTA, colors.subtle),
+                ink.surface(paper::TERRACOTTA),
                 fade(colors.panel, ink.opacity),
             )
         } else if task.active {
             (
-                ink.pick(colors.accent_wash(), colors.subtle),
+                ink.surface(colors.accent_wash()),
                 fade(colors.accent_ink, ink.opacity),
             )
         } else if task.done {
-            (ink.pick(paper::CARD, colors.subtle), ink.secondary())
+            (ink.surface(paper::CARD), ink.secondary())
         } else {
-            (ink.pick(paper::BAR, colors.subtle), ink.text())
+            (ink.surface(paper::BAR), ink.text())
         };
         let show_range = mermaid::text_width(&range, 11.0) + 14.0 <= w && bar_h >= 14.0;
         frame.add(
@@ -925,7 +935,7 @@ fn draw_gantt(
                 bounds(&points),
                 points,
                 false,
-                ink.pick(paper::TERRACOTTA, colors.primary),
+                ink.line(paper::TERRACOTTA, colors.primary),
                 1.5,
             )
             .parent(STAGE),
@@ -956,7 +966,10 @@ fn draw_error(
     let (wash, warning) = if colors.high_contrast {
         (colors.subtle, colors.primary)
     } else {
-        (paper::WARNING_WASH, paper::WARNING_INK)
+        (
+            colors.tone_surface(paper::WARNING_WASH),
+            colors.paper_ink(paper::WARNING_INK),
+        )
     };
     frame.add(
         WidgetElement::text(BANNER, banner, "", design::BODY, 400, warning)

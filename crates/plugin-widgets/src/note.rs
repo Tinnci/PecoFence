@@ -92,7 +92,7 @@ impl Tint {
     /// Body fill: the paper color, or the card surface by default and in high contrast.
     fn surface(self, colors: Colors) -> [f32; 4] {
         match self.paper() {
-            Some((paper, _)) if !colors.high_contrast => paper,
+            Some((paper, _)) if !colors.high_contrast => colors.tone_surface(paper),
             _ => colors.subtle,
         }
     }
@@ -556,7 +556,7 @@ fn build_note(
             format!("Note color: {}", config.tint.name(false))
         };
         if let Some((_, ink)) = config.tint.paper().filter(|_| !colors.high_contrast) {
-            node.style.foreground = ink;
+            node.style.foreground = colors.paper_ink(ink);
         }
     }
     let v = frame.viewport;

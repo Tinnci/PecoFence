@@ -79,6 +79,8 @@ pub enum SettingChange {
     Language(Language),
     Theme(ThemeSetting),
     ThemeStyle(ThemeStyle),
+    WidgetPaperStyle(crate::WidgetPaperStyle),
+    WidgetPaperBrightness(f32),
     IconSize(u32),
     Autostart(bool),
     HideRealIcons(bool),
@@ -103,6 +105,11 @@ impl SettingChange {
             Self::Language(v) => settings.language = *v,
             Self::Theme(v) => settings.theme = *v,
             Self::ThemeStyle(v) => settings.theme_style = *v,
+            Self::WidgetPaperStyle(v) => settings.widget_paper_style = *v,
+            Self::WidgetPaperBrightness(v) if v.is_finite() && (0.6..=1.0).contains(v) => {
+                settings.widget_paper_brightness = *v
+            }
+            Self::WidgetPaperBrightness(_) => return Err("invalid widget paper brightness".into()),
             Self::IconSize(v) if matches!(v, 32 | 48 | 64 | 96) => settings.icon_size = *v,
             Self::IconSize(_) => return Err("invalid icon size".into()),
             Self::Autostart(v) => settings.autostart = *v,

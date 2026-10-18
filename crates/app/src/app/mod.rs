@@ -162,6 +162,7 @@ pub struct Args {
 pub struct App {
     state: AppState,
     writer: Writer,
+    _holiday_updates: crate::holiday_updates::Updater,
     persistence: SaveCoordinator,
     save_notice: Option<(pecofence_core::settings_protocol::DocumentStamp, String)>,
     portal_reader: pecofence_platform::portal_reader::PortalReader,
@@ -877,6 +878,10 @@ impl App {
                 ),
                 wheel_lines: std::cell::Cell::new(sysparams::wheel_scroll_lines()),
                 text_scale: std::cell::Cell::new(sysparams::text_scale_percent() as f32 / 100.0),
+                widget_paper_style: std::cell::Cell::new(state.config.settings.widget_paper_style),
+                widget_paper_brightness: std::cell::Cell::new(
+                    state.config.settings.widget_paper_brightness,
+                ),
             }),
             panel_manager: panel_manager.clone(),
         });
@@ -930,7 +935,18 @@ impl App {
                 .to_path_buf(),
         );
 
+        let holiday_updates = crate::holiday_updates::Updater::start(
+            state
+                .config_path()
+                .parent()
+                .unwrap_or_else(|| Path::new("."))
+                .join("holiday-cache"),
+            control.hwnd(),
+            args.test_script.is_none()
+                && pecofence_core::brand::var_os("PECOFENCE_HOLIDAY_OFFLINE").is_none(),
+        );
         let mut app = App {
+            _holiday_updates: holiday_updates,
             state,
             writer,
             persistence: Default::default(),

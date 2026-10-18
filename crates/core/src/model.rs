@@ -101,6 +101,10 @@ pub struct Settings {
     pub backdrop: Backdrop,
     pub theme: ThemeSetting,
     pub theme_style: ThemeStyle,
+    #[serde(default)]
+    pub widget_paper_style: WidgetPaperStyle,
+    #[serde(default = "paper_brightness_default")]
+    pub widget_paper_brightness: f32,
     pub icon_size: u32,
     pub quick_hide: QuickHideSettings,
     pub roll_up: RollUpSettings,
@@ -122,6 +126,8 @@ impl Default for Settings {
             backdrop: Backdrop::Acrylic,
             theme: ThemeSetting::FollowWindowsMode,
             theme_style: ThemeStyle::Fluent,
+            widget_paper_style: WidgetPaperStyle::Adaptive,
+            widget_paper_brightness: 1.0,
             icon_size: 48,
             quick_hide: QuickHideSettings::default(),
             roll_up: RollUpSettings::default(),
@@ -166,6 +172,19 @@ pub enum PeekHotkey {
 #[serde(rename_all = "camelCase")]
 pub enum Backdrop {
     Acrylic,
+}
+/// Paper widgets can follow the wallpaper independently of Windows chrome.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum WidgetPaperStyle {
+    #[default]
+    Adaptive,
+    Light,
+    Soft,
+    Dark,
+}
+fn paper_brightness_default() -> f32 {
+    1.0
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -909,6 +928,11 @@ impl Config {
         {
             return Err("invalid icon tint strength".into());
         }
+        if !self.settings.widget_paper_brightness.is_finite()
+            || !(0.6..=1.0).contains(&self.settings.widget_paper_brightness)
+        {
+            return Err("invalid widget paper brightness".into());
+        }
         for (id, item) in &self.items {
             if id.is_nil() || *id != item.id {
                 return Err("invalid item table identity".into());
@@ -1095,5 +1119,48 @@ mod widget_span_tests {
         assert_eq!(json["span"], serde_json::json!({"columns": 5, "rows": 4}));
         let loaded: Container = serde_json::from_value(json).unwrap();
         assert_eq!(loaded, container);
+    }
+}
+
+#[cfg(test)]
+mod paper_settings_tests {
+    use super::*;
+    #[test]
+    fn legacy_settings_default_to_adaptive_and_preferences_round_trip() {
+        let mut json = serde_json::to_value(Settings::default()).unwrap();
+        json.as_object_mut().unwrap().remove("widgetPaperStyle");
+        json.as_object_mut()
+            .unwrap()
+            .remove("widgetPaperBrightness");
+        let loaded: Settings = serde_json::from_value(json).unwrap();
+        assert_eq!(loaded.widget_paper_style, WidgetPaperStyle::Adaptive);
+        assert_eq!(loaded.widget_paper_brightness, 1.0);
+        for style in [
+            WidgetPaperStyle::Adaptive,
+            WidgetPaperStyle::Light,
+            WidgetPaperStyle::Soft,
+            WidgetPaperStyle::Dark,
+        ] {
+            let mut config = Config::default();
+            config.settings.widget_paper_style = style;
+            config.settings.widget_paper_brightness = 0.75;
+            let loaded: Config =
+                serde_json::from_slice(&serde_json::to_vec(&config).unwrap()).unwrap();
+            assert_eq!(loaded.settings, config.settings);
+            assert!(loaded.validate().is_ok());
+        }
+    }
+    #[test]
+    fn invalid_brightness_is_rejected_at_both_boundaries() {
+        for value in [f32::NAN, f32::INFINITY, 0.0, 0.59, 1.01] {
+            let mut config = Config::default();
+            assert!(
+                crate::settings_protocol::SettingChange::WidgetPaperBrightness(value)
+                    .apply(&mut config.settings)
+                    .is_err()
+            );
+            config.settings.widget_paper_brightness = value;
+            assert!(config.validate().is_err());
+        }
     }
 }

@@ -384,6 +384,7 @@ impl ThemeSnapshot {
     pub fn dark() -> Self {
         Self {
             revision: 0,
+            paper: crate::PaperEnvironment::default(),
             high_contrast: false,
             animations: true,
             text_primary: [0.949, 0.961, 0.98, 1.0],

@@ -634,5 +634,12 @@
   "所有更改已保存。": "All changes saved.",
   "正在应用更改…": "Applying changes…",
   "更改已应用，正在等待保存。": "Changes applied; waiting to save.",
-  "图表": "Diagram"
+  "图表": "Diagram",
+  "小组件纸张": "Widget paper",
+  "小组件纸张（全局）": "Widget paper (all widgets)",
+  "跟随壁纸": "Follow wallpaper",
+  "浅色纸张": "Light paper",
+  "柔和纸张": "Soft paper",
+  "深色纸张": "Dark paper",
+  "纸张亮度": "Paper brightness"
 }

@@ -107,6 +107,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         width: width as i32,
         height: height as i32,
         downscale: 1,
+                wallpaper_luminance: 0.5,
         image: Image {
             width,
             height,

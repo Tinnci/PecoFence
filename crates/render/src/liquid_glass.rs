@@ -672,6 +672,7 @@ mod tests {
                 width: 100,
                 height: 100,
                 downscale: 1,
+                wallpaper_luminance: 0.5,
                 image: Image::solid(100, 100, [255, 0, 0]),
             },
             MonitorBackdrop {
@@ -680,6 +681,7 @@ mod tests {
                 width: 100,
                 height: 100,
                 downscale: 1,
+                wallpaper_luminance: 0.5,
                 image: Image::solid(100, 100, [0, 0, 255]),
             },
         ];
@@ -782,6 +784,7 @@ mod tests {
             width: 800,
             height: 600,
             downscale: 1,
+            wallpaper_luminance: 0.5,
             image,
         };
         for scale in [1.0, 1.25, 1.5, 2.0] {
@@ -824,6 +827,7 @@ mod tests {
             width: 400,
             height: 320,
             downscale: 4,
+            wallpaper_luminance: 0.5,
             image,
         }
     }

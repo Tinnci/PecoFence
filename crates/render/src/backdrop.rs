@@ -534,6 +534,8 @@ pub struct MonitorBackdrop {
     pub height: i32,
     /// Downscale factor between screen pixels and `image` pixels.
     pub downscale: u32,
+    /// Mean brightness of the mapped wallpaper before blur or material tint.
+    pub wallpaper_luminance: f32,
     /// Blurred + tinted image at monitor_size / downscale.
     pub image: Image,
 }
@@ -561,6 +563,7 @@ impl MonitorBackdrop {
             downscale,
             background,
         );
+        let wallpaper_luminance = image.mean_luminance();
         image.blur(blur_sigma_screen_px / downscale as f32);
         image.tint(tint.color, tint.luminosity_opacity, tint.noise, tint.chroma);
         Self {
@@ -569,6 +572,7 @@ impl MonitorBackdrop {
             width,
             height,
             downscale,
+            wallpaper_luminance,
             image,
         }
     }
@@ -650,5 +654,34 @@ mod pixel_regressions {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod paper_wallpaper_tests {
+    use super::*;
+    #[test]
+    fn paper_brightness_reads_wallpaper_before_material_tint() {
+        let tint = MicaTint {
+            color: ColorF::new(1.0, 1.0, 1.0, 1.0),
+            luminosity_opacity: 1.0,
+            blur_sigma_dip: 0.0,
+            noise: 0.0,
+            chroma: 0.0,
+        };
+        let wallpaper = Image::solid(16, 16, [0; 3]);
+        let backdrop = MonitorBackdrop::build(
+            &wallpaper,
+            WallpaperPosition::Fill,
+            0,
+            0,
+            16,
+            16,
+            [0; 3],
+            tint,
+            1,
+        );
+        assert_eq!(backdrop.wallpaper_luminance, 0.0);
+        assert!(backdrop.image.mean_luminance() > 0.9);
     }
 }

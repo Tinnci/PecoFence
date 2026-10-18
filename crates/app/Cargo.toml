@@ -9,6 +9,7 @@ name = "pecofence"
 path = "src/main.rs"
 
 [dependencies]
+chrono.workspace = true
 spm-contracts.workspace = true
 windows-core = { workspace = true }
 windows-reactor = { workspace = true }

@@ -232,9 +232,34 @@ impl<S: ?Sized> Capability<S> {
     }
 }
 
+/// Host-selected paper presentation, independent of chrome colors.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PaperEnvironment {
+    pub style: PaperStyle,
+    pub brightness: f32,
+    /// Mean luminance of the untinted wallpaper on the widget's monitor (0..1).
+    pub wallpaper_luminance: Option<f32>,
+}
+impl Default for PaperEnvironment {
+    fn default() -> Self {
+        Self {
+            style: PaperStyle::Light,
+            brightness: 1.0,
+            wallpaper_luminance: None,
+        }
+    }
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PaperStyle {
+    Adaptive,
+    Light,
+    Soft,
+    Dark,
+}
 #[derive(Clone, Debug, PartialEq)]
 pub struct ThemeSnapshot {
     pub revision: u64,
+    pub paper: PaperEnvironment,
     pub high_contrast: bool,
     /// Windows "Animation effects". When false, providers show end states directly.
     pub animations: bool,

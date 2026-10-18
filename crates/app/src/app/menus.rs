@@ -90,6 +90,9 @@ const CMD_PORTAL_HOME: u32 = 381;
 const CMD_TAB_ATTACH_BASE: u32 = 2000;
 /// Options a widget adds to its window menu (`PanelInstance::menu_items`), by index.
 const CMD_PANEL_ITEM_BASE: u32 = 3000;
+const CMD_PAPER_BASE: u32 = 4000;
+const _: () =
+    assert!(CMD_PAPER_BASE >= CMD_PANEL_ITEM_BASE + 1000 && CMD_PAPER_BASE + 4 <= CMD_SHELL_FIRST);
 const _: () = assert!(
     CMD_PANEL_ITEM_BASE >= CMD_TAB_ATTACH_BASE + 1000
         && CMD_PANEL_ITEM_BASE + 1000 <= CMD_SHELL_FIRST
@@ -722,6 +725,26 @@ impl App {
             }
             menu.submenu(pecofence_core::i18n::text("标签页"), tab_menu);
         }
+        if !f.content.is_files() {
+            let paper_menu = PopupMenu::new();
+            for (index, (style, label)) in [
+                (pecofence_core::WidgetPaperStyle::Adaptive, "跟随壁纸"),
+                (pecofence_core::WidgetPaperStyle::Light, "浅色纸张"),
+                (pecofence_core::WidgetPaperStyle::Soft, "柔和纸张"),
+                (pecofence_core::WidgetPaperStyle::Dark, "深色纸张"),
+            ]
+            .iter()
+            .enumerate()
+            {
+                paper_menu.check_item(
+                    CMD_PAPER_BASE + index as u32,
+                    pecofence_core::i18n::text(label),
+                    self.state.config.settings.widget_paper_style == *style,
+                    false,
+                );
+            }
+            menu.submenu(pecofence_core::i18n::text("小组件纸张（全局）"), paper_menu);
+        }
         // Widget options (clock face, weight, …) come first among the window settings.
         let panel_items = self.panel_menu_items(fence);
         if !panel_items.is_empty() {
@@ -783,6 +806,16 @@ impl App {
             .unwrap_or(self.control.hwnd());
         let cmd = menu.show_context(owner, x, y);
         match cmd {
+            id if (CMD_PAPER_BASE..CMD_PAPER_BASE + 4).contains(&id) => {
+                let mut settings = self.state.config.settings.clone();
+                settings.widget_paper_style = [
+                    pecofence_core::WidgetPaperStyle::Adaptive,
+                    pecofence_core::WidgetPaperStyle::Light,
+                    pecofence_core::WidgetPaperStyle::Soft,
+                    pecofence_core::WidgetPaperStyle::Dark,
+                ][(id - CMD_PAPER_BASE) as usize];
+                self.apply_settings(settings);
+            }
             id if (CMD_PANEL_ITEM_BASE..CMD_PANEL_ITEM_BASE + 1000).contains(&id) => {
                 if let Some(item) = panel_items.get((id - CMD_PANEL_ITEM_BASE) as usize) {
                     self.invoke_panel_menu_item(fence, item.action);

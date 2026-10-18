@@ -7,6 +7,7 @@ mod anchor;
 mod app;
 mod commands;
 mod fence_window;
+mod holiday_updates;
 mod icons;
 mod layout;
 mod modern_menu;

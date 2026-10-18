@@ -64,5 +64,11 @@ lines.extend((
     "",
     (ROOT / "third_party/noto-cjk/OFL.txt").read_text(encoding="utf-8").strip(),
 ))
+lines.extend((
+    "", "=" * 72, "China holiday data (holiday-cn)", "=" * 72,
+    "Public source: https://github.com/NateScarlet/holiday-cn",
+    "Provenance: third_party/holiday-cn/README.md", "",
+    (ROOT / "third_party/holiday-cn/LICENSE").read_text(encoding="utf-8").strip(),
+))
 Path(sys.argv[1]).write_text("\n".join(lines) + "\n", encoding="utf-8")
 print(f'Bundled {len(sections)} license texts for {len(packages)} dependencies')

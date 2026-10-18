@@ -634,5 +634,12 @@
   "所有更改已保存。": "Todas as alterações foram salvas.",
   "正在应用更改…": "Aplicando alterações…",
   "更改已应用，正在等待保存。": "Alterações aplicadas; aguardando salvamento.",
-  "图表": "Diagrama"
+  "图表": "Diagrama",
+  "小组件纸张": "Papel dos widgets",
+  "小组件纸张（全局）": "Papel dos widgets (todos)",
+  "跟随壁纸": "Seguir papel de parede",
+  "浅色纸张": "Papel claro",
+  "柔和纸张": "Papel suave",
+  "深色纸张": "Papel escuro",
+  "纸张亮度": "Brilho do papel"
 }

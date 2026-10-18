@@ -274,6 +274,7 @@ impl PluginPanelContent {
         text_scale: f32,
         device_epoch: u64,
         theme: &Theme,
+        paper: pecofence_plugin_api::PaperEnvironment,
     ) -> Result<bool> {
         self.invalidation.request(FrameInvalidation::Content);
         self.bind_storage(surface.surface_epoch(), dpi, device_epoch);
@@ -296,7 +297,7 @@ impl PluginPanelContent {
         // let the panel know when the derived tokens changed. The epoch only
         // advances on actual token changes, so this is free in steady state.
         let theme_host = crate::app::panel_manager::theme_host();
-        theme_host.sync(theme);
+        theme_host.sync_with_paper(theme, paper);
         let theme_revision = theme_host.snapshot().revision;
         if self.handle.theme_revision.get() != theme_revision {
             self.handle.theme_revision.set(theme_revision);
@@ -1051,7 +1052,18 @@ mod candidate_error_tests {
             capture_release.clone(),
         );
         let theme = Theme::dark();
-        assert!(content.draw(&surface, 96, 1.0, 1, &theme).unwrap());
+        assert!(
+            content
+                .draw(
+                    &surface,
+                    96,
+                    1.0,
+                    1,
+                    &theme,
+                    pecofence_plugin_api::PaperEnvironment::default()
+                )
+                .unwrap()
+        );
         let committed = content.committed.as_ref().unwrap().clone();
         let press = |content: &mut PluginPanelContent| {
             content.pressed = Some((1, 7, committed.clone()));
@@ -1101,7 +1113,18 @@ mod candidate_error_tests {
         );
         content.invalidation.request(FrameInvalidation::Layout);
         fail.set(true);
-        assert!(content.draw(&surface, 96, 1.0, 1, &theme).unwrap());
+        assert!(
+            content
+                .draw(
+                    &surface,
+                    96,
+                    1.0,
+                    1,
+                    &theme,
+                    pecofence_plugin_api::PaperEnvironment::default()
+                )
+                .unwrap()
+        );
         assert!(Rc::ptr_eq(content.committed.as_ref().unwrap(), &committed));
         assert_eq!(content.hit_at(10.0, 10.0).unwrap().action, 7);
         assert!(content.invalidation.needs_layout());
@@ -1126,12 +1149,32 @@ mod candidate_error_tests {
         assert!(content.hit_at(10.0, 10.0).is_none());
         content.set_container_state(Grouping::Single, Exposure::Hidden, false);
         assert!(
-            content.draw(&surface, 96, 1.0, 1, &theme).unwrap(),
+            content
+                .draw(
+                    &surface,
+                    96,
+                    1.0,
+                    1,
+                    &theme,
+                    pecofence_plugin_api::PaperEnvironment::default()
+                )
+                .unwrap(),
             "hidden content is not device loss"
         );
         assert_eq!(prepares.get(), 2);
         content.set_container_state(Grouping::Single, Exposure::Desktop, true);
-        assert!(content.draw(&surface, 96, 1.0, 1, &theme).unwrap());
+        assert!(
+            content
+                .draw(
+                    &surface,
+                    96,
+                    1.0,
+                    1,
+                    &theme,
+                    pecofence_plugin_api::PaperEnvironment::default()
+                )
+                .unwrap()
+        );
         assert_eq!(prepares.get(), 3);
         assert_eq!(content.invalidation, FrameInvalidation::Clean);
         let frame = content.committed.as_ref().unwrap().clone();

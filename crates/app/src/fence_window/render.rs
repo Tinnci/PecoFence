@@ -720,6 +720,35 @@ impl FenceViewState {
         }
         if self.plugin_panel.is_some() {
             let foreground = self.material_foreground();
+            let rect = window::window_rect(self.hwnd);
+            let cx = (rect.left + rect.right) / 2;
+            let cy = (rect.top + rect.bottom) / 2;
+            let set = self.backdrops.for_mode(self.backdrop_mode());
+            let wallpaper_luminance = set
+                .iter()
+                .find(|b| {
+                    cx >= b.left && cx < b.left + b.width && cy >= b.top && cy < b.top + b.height
+                })
+                .or(set.first())
+                .map(|b| b.wallpaper_luminance);
+            let paper = pecofence_plugin_api::PaperEnvironment {
+                style: match self.behavior.widget_paper_style.get() {
+                    pecofence_core::WidgetPaperStyle::Adaptive => {
+                        pecofence_plugin_api::PaperStyle::Adaptive
+                    }
+                    pecofence_core::WidgetPaperStyle::Light => {
+                        pecofence_plugin_api::PaperStyle::Light
+                    }
+                    pecofence_core::WidgetPaperStyle::Soft => {
+                        pecofence_plugin_api::PaperStyle::Soft
+                    }
+                    pecofence_core::WidgetPaperStyle::Dark => {
+                        pecofence_plugin_api::PaperStyle::Dark
+                    }
+                },
+                brightness: self.behavior.widget_paper_brightness.get(),
+                wallpaper_luminance,
+            };
             let panel = self.plugin_panel.as_mut().expect("plugin panel is present");
             let exposure = panel.exposure();
             panel.set_container_state(
@@ -737,6 +766,7 @@ impl FenceViewState {
                 self.behavior.text_scale.get(),
                 (u64::from(self.stack.device_generation()) << 32) | u64::from(self.dpi),
                 &foreground,
+                paper,
             );
             panel.wake_capture_release(self.hwnd);
             self.note_draw_result(drawn?);

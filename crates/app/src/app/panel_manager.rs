@@ -78,6 +78,7 @@ pub(crate) struct PanelManager {
     ipc_transport: crate::spm_transport::TransportHandle,
     render_invalidations: Arc<Mutex<HashSet<MountKey>>>,
     notify_hwnd: pecofence_platform::HWND,
+    holiday_revision: u64,
 }
 
 impl PanelManager {
@@ -173,6 +174,7 @@ impl PanelManager {
             ipc_transport: transport,
             render_invalidations,
             notify_hwnd,
+            holiday_revision: pecofence_plugin_widgets::holidays::revision(),
         }
     }
 
@@ -648,6 +650,22 @@ impl PanelManager {
             .map(|mut events| events.drain(..).collect())
             .unwrap_or_default();
         let mut updates: HashMap<InstanceKey, PanelUpdate> = HashMap::new();
+        let holiday_revision = pecofence_plugin_widgets::holidays::revision();
+        if self.holiday_revision != holiday_revision {
+            self.holiday_revision = holiday_revision;
+            for record in self.instances.values().filter(|r| {
+                r.provider == pecofence_plugin_widgets::CALENDAR_PROVIDER
+                    && r.drain_started.is_none()
+            }) {
+                updates
+                    .entry(record.handle.key())
+                    .or_default()
+                    .merge(PanelUpdate {
+                        commands: vec![HostCommand::Invalidate],
+                        relayout: false,
+                    });
+            }
+        }
         for event in events {
             if !self.ipc_state.claim(&event) {
                 continue;
@@ -754,8 +772,18 @@ impl ThemeHost {
     /// (and therefore the published revision) advances only when the derived
     /// tokens actually change, so per-frame syncs stay free. Token comparison
     /// deliberately ignores the revision field: it is bookkeeping, not a token.
+    #[cfg(test)]
     pub(crate) fn sync(&self, theme: &pecofence_render::Theme) {
-        let candidate = theme_snapshot_for(theme, 0);
+        self.sync_with_paper(theme, pecofence_plugin_api::PaperEnvironment::default());
+    }
+
+    pub(crate) fn sync_with_paper(
+        &self,
+        theme: &pecofence_render::Theme,
+        paper: pecofence_plugin_api::PaperEnvironment,
+    ) {
+        let mut candidate = theme_snapshot_for(theme, 0);
+        candidate.paper = paper;
         let mut guard = self.current.lock().expect("theme mutex");
         if !same_tokens(&guard, &candidate) {
             let revision = self.epoch.fetch_add(1, Ordering::AcqRel) + 1;
@@ -817,7 +845,8 @@ fn theme_snapshot_for(theme: &pecofence_render::Theme, revision: u64) -> ThemeSn
 
 /// Token equality excluding the revision bookkeeping field.
 fn same_tokens(a: &ThemeSnapshot, b: &ThemeSnapshot) -> bool {
-    a.high_contrast == b.high_contrast
+    a.paper == b.paper
+        && a.high_contrast == b.high_contrast
         && a.animations == b.animations
         && a.text_primary == b.text_primary
         && a.text_secondary == b.text_secondary
@@ -1374,6 +1403,26 @@ mod pipe_tests {
 #[cfg(test)]
 mod theme_host_tests {
     use super::*;
+
+    #[test]
+    fn paper_preferences_and_monitor_changes_invalidate_the_theme_snapshot() {
+        let host = ThemeHost::new();
+        let theme = pecofence_render::Theme::dark();
+        let mut paper = pecofence_plugin_api::PaperEnvironment::default();
+        host.sync_with_paper(&theme, paper);
+        let first = host.snapshot().revision;
+        paper.style = pecofence_plugin_api::PaperStyle::Adaptive;
+        paper.wallpaper_luminance = Some(0.0);
+        host.sync_with_paper(&theme, paper);
+        let dark = host.snapshot().revision;
+        assert!(dark > first);
+        host.sync_with_paper(&theme, paper);
+        assert_eq!(host.snapshot().revision, dark);
+        paper.wallpaper_luminance = Some(1.0);
+        host.sync_with_paper(&theme, paper);
+        assert!(host.snapshot().revision > dark);
+        assert_eq!(host.snapshot().paper, paper);
+    }
 
     #[test]
     fn contrast_mode_and_system_pair_changes_invalidate_all_provider_tokens() {

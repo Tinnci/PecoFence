@@ -129,6 +129,8 @@ pub struct Behavior {
     pub wheel_lines: std::cell::Cell<u32>,
     /// Accessibility text size; independent of per-monitor DPI.
     pub text_scale: std::cell::Cell<f32>,
+    pub widget_paper_style: std::cell::Cell<pecofence_core::WidgetPaperStyle>,
+    pub widget_paper_brightness: std::cell::Cell<f32>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

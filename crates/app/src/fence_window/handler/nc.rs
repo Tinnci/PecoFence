@@ -508,6 +508,7 @@ pub(super) fn on_move(
         let old_ink = v.material_foreground().text_primary;
         if v.update_backdrop() {
             if old_ink != v.material_foreground().text_primary
+                || v.plugin_panel.is_some()
                 || (v.theme.liquid_glass && v.row_metrics().is_some())
             {
                 // Moving clear glass across a light/dark boundary also changes the icon labels.

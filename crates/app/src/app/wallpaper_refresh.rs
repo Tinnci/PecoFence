@@ -162,6 +162,7 @@ mod tests {
                 width: pixels as i32,
                 height: 1,
                 downscale: 1,
+                wallpaper_luminance: 0.5,
                 image: Image::solid(pixels, 1, [1, 2, 3]),
             }]),
         })

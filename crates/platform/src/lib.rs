@@ -47,6 +47,7 @@ pub mod fileinfo;
 pub mod fonts;
 pub mod frameclock;
 pub mod hotkey;
+pub mod http;
 pub mod layered;
 pub mod locale;
 pub mod memstats;
