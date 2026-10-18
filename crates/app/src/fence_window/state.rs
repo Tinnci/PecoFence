@@ -2,6 +2,13 @@
 
 use super::*;
 
+/// Grid a widget window snaps to: its provider's span rules and the fence icon cell in DIPs.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct WidgetGrid {
+    pub rules: pecofence_plugin_widgets::grid::SpanRules,
+    pub cell: pecofence_plugin_widgets::grid::Cell,
+}
+
 pub struct FenceViewState {
     #[allow(dead_code)]
     pub fence_id: ContainerId,
@@ -234,6 +241,8 @@ pub struct FenceViewState {
     pub(super) style: FenceStyle,
     /// Icon grid spacing (FenceView.spacing).
     pub(super) spacing: Spacing,
+    /// Widget windows: span rules and the live cell (docs/WIDGET_GRID.md).
+    pub(super) widget_grid: Option<WidgetGrid>,
     /// Keyboard/selection anchor: the last item clicked or moved to with the arrow keys.
     pub(super) anchor_index: Option<usize>,
     /// Start of a Shift range selection.

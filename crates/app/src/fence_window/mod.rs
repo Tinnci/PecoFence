@@ -73,6 +73,7 @@ mod window_drag;
 pub use api::FenceWindow;
 pub use dnd::filter_folder_paths;
 pub(crate) use plugin_panel::PanelHandle;
+pub use state::WidgetGrid;
 
 use self::consts::*;
 use self::dnd::*;

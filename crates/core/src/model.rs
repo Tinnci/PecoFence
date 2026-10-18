@@ -299,7 +299,20 @@ pub struct Container {
     pub locked: bool,
     pub tabs: Vec<ContentId>,
     pub active_tab: ContentId,
+    /// Widget windows only: size in fence icon cells (docs/WIDGET_GRID.md). The pixel
+    /// geometry is re-derived from it whenever the cell changes. Absent in older files.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub span: Option<WidgetSpan>,
 }
+
+/// A widget's size in whole fence icon cells, title bar included.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WidgetSpan {
+    pub columns: u16,
+    pub rows: u16,
+}
+
 impl Container {
     pub fn new(content: ContentId, geometry: NormGeometry) -> Self {
         Self {
@@ -313,6 +326,7 @@ impl Container {
             locked: false,
             tabs: vec![content],
             active_tab: content,
+            span: None,
         }
     }
 }
@@ -1041,4 +1055,45 @@ pub fn now_unix() -> i64 {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0)
+}
+
+#[cfg(test)]
+mod widget_span_tests {
+    use super::*;
+
+    fn geometry() -> NormGeometry {
+        NormGeometry {
+            monitor: "m".into(),
+            x: 0.1,
+            y: 0.1,
+            w: 400.0,
+            h: 384.0,
+            work_w: 1920.0,
+            work_h: 1040.0,
+            anchor: Anchor::LeftTop,
+        }
+    }
+
+    #[test]
+    fn containers_without_a_span_keep_their_existing_json_shape() {
+        let container = Container::new(ContentId::new(), geometry());
+        let json = serde_json::to_value(&container).unwrap();
+        assert!(json.get("span").is_none());
+        // Files written before spans existed still load.
+        let loaded: Container = serde_json::from_value(json).unwrap();
+        assert_eq!(loaded.span, None);
+    }
+
+    #[test]
+    fn widget_spans_round_trip() {
+        let mut container = Container::new(ContentId::new(), geometry());
+        container.span = Some(WidgetSpan {
+            columns: 5,
+            rows: 4,
+        });
+        let json = serde_json::to_value(&container).unwrap();
+        assert_eq!(json["span"], serde_json::json!({"columns": 5, "rows": 4}));
+        let loaded: Container = serde_json::from_value(json).unwrap();
+        assert_eq!(loaded, container);
+    }
 }

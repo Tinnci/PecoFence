@@ -357,6 +357,19 @@ impl App {
                 window.redraw();
             }
         }
+        // Widget spans are measured in icon cells, which grow with the label font; a
+        // larger text size can also raise a widget's minimum span.
+        if text_scale_changed || typography_changed {
+            let widgets: Vec<ContainerId> = self
+                .fences
+                .keys()
+                .copied()
+                .filter(|&id| self.widget_grid(id).is_some())
+                .collect();
+            for id in widgets {
+                self.apply_widget_grid(id);
+            }
+        }
         // Any broadcast that reaches us after the work area moved (taskbar, DPI, resolution
         // races) must re-layout, or every later set_fence_bounds normalizes against a stale
         // work area and the saved geometry drifts by the taskbar height.

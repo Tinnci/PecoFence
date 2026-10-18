@@ -337,6 +337,8 @@ impl App {
             .fence(active)
             .is_some_and(|f| !f.content.is_files())
         {
+            // Widgets have their own grid: whole fence icon cells (docs/WIDGET_GRID.md).
+            self.apply_widget_grid(id);
             return;
         }
 
@@ -419,6 +421,102 @@ impl App {
             h
         };
         self.state.set_fence_bounds(id, rect, rolled, expanded);
+        self.schedule_save();
+    }
+
+    /// The grid a widget window snaps to: its provider's span rules and one fence icon
+    /// cell at the widget's icon size and the live label line height (text scaling).
+    pub(super) fn widget_grid(&self, id: ContainerId) -> Option<crate::fence_window::WidgetGrid> {
+        let shown = self.state.window_content(id)?;
+        let pecofence_core::FenceContentSpec::Panel { panel } = &shown.content else {
+            return None;
+        };
+        let rules = pecofence_plugin_widgets::grid::span_rules(&panel.provider)?;
+        let metrics =
+            crate::layout::GridMetrics::for_icon_size(shown.view.icon_size, shown.view.label_lines)
+                .with_line_h(self.ctx.chrome.label_line_h());
+        Some(crate::fence_window::WidgetGrid {
+            rules,
+            cell: pecofence_plugin_widgets::grid::Cell {
+                w: metrics.cell_w,
+                h: metrics.cell_h,
+            },
+        })
+    }
+
+    /// Size a widget window from its stored span (or, for windows saved before spans
+    /// existed, the nearest span to its current size), and keep the span, the live
+    /// resize grid and the capsule/full presentation in step. Runs on load, DPI and
+    /// icon-size changes, text scaling and after every interactive resize.
+    pub(super) fn apply_widget_grid(&mut self, id: ContainerId) {
+        let grid = self.widget_grid(id);
+        let Some(w) = self.fences.get(&id) else {
+            return;
+        };
+        w.set_widget_grid(grid);
+        let Some(grid) = grid else {
+            return;
+        };
+        let text_scale = self.ctx.behavior.text_scale.get();
+        let scale = monitors::dpi_for_window(w.hwnd()).max(96) as f32 / 96.0;
+        let r = w.rect();
+        let rolled = w.is_rolled();
+        let current_h = if rolled {
+            w.expanded_height_px()
+        } else {
+            r.bottom - r.top
+        };
+        let stored = self.state.container(id).and_then(|c| c.span);
+        let span = match stored {
+            Some(span) => grid.rules.clamp(
+                pecofence_plugin_widgets::grid::Span::new(span.columns, span.rows),
+                grid.cell,
+                text_scale,
+            ),
+            None => grid.rules.span_for_size(
+                (r.right - r.left) as f32 / scale,
+                current_h as f32 / scale,
+                grid.cell,
+                text_scale,
+            ),
+        };
+        w.set_widget_presentation(span.presentation());
+        let saved = pecofence_core::WidgetSpan {
+            columns: span.columns,
+            rows: span.rows,
+        };
+        if stored != Some(saved)
+            && let Some(container) = self.state.container_mut(id)
+        {
+            container.span = Some(saved);
+            self.state.mark_dirty();
+            self.schedule_save();
+        }
+        let (wd, hd) = span.size(grid.cell);
+        let (width, height) = ((wd * scale).round() as i32, (hd * scale).round() as i32);
+        // Keep the widget on its work area: grow toward the top-left when it would cross
+        // the right or bottom edge.
+        let mut left = r.left;
+        let mut top = r.top;
+        if let Some(wa) = self.work_area_at((r.left + r.right) / 2, (r.top + r.bottom) / 2) {
+            left = left.min(wa.right - width).max(wa.left);
+            top = top.min(wa.bottom - height).max(wa.top);
+        }
+        let shown_h = if rolled { r.bottom - r.top } else { height };
+        if left == r.left && top == r.top && r.right - r.left == width && current_h == height {
+            return;
+        }
+        let rect = RECT {
+            left,
+            top,
+            right: left + width,
+            bottom: top + shown_h,
+        };
+        w.set_bounds(rect);
+        if !rolled {
+            w.apply_height(height, false);
+        }
+        self.state.set_fence_bounds(id, rect, rolled, height);
         self.schedule_save();
     }
 
@@ -725,19 +823,40 @@ impl App {
         y: i32,
         near: Option<ContainerId>,
     ) {
-        let (title, width, height) = match provider {
-            pecofence_plugin_widgets::CLOCK_PROVIDER => ("数字时钟", 340.0, 190.0),
-            pecofence_plugin_widgets::CALENDAR_PROVIDER => ("日历", 420.0, 370.0),
-            pecofence_plugin_widgets::TODO_PROVIDER => ("待办清单", 420.0, 370.0),
-            pecofence_plugin_widgets::NOTE_PROVIDER => ("便笺", 420.0, 370.0),
-            pecofence_plugin_widgets::DIAGRAM_PROVIDER => ("图表", 560.0, 400.0),
+        let title = match provider {
+            pecofence_plugin_widgets::CLOCK_PROVIDER => "数字时钟",
+            pecofence_plugin_widgets::CALENDAR_PROVIDER => "日历",
+            pecofence_plugin_widgets::TODO_PROVIDER => "待办清单",
+            pecofence_plugin_widgets::NOTE_PROVIDER => "便笺",
+            pecofence_plugin_widgets::DIAGRAM_PROVIDER => "图表",
             _ => return,
         };
+        let Some(rules) = pecofence_plugin_widgets::grid::span_rules(provider) else {
+            return;
+        };
+        // Default span on the grid new fences use (settings icon size, two label lines).
+        let metrics =
+            crate::layout::GridMetrics::for_icon_size(self.state.config.settings.icon_size, 2)
+                .with_line_h(self.ctx.chrome.label_line_h());
+        let cell = pecofence_plugin_widgets::grid::Cell {
+            w: metrics.cell_w,
+            h: metrics.cell_h,
+        };
+        let span = rules.clamp(rules.default, cell, self.ctx.behavior.text_scale.get());
+        let (width, height) = span.size(cell);
         let rect = self.place_new_fence_dip(width, height, x, y, near);
         if let Some(id) =
             self.state
                 .new_widget_fence(pecofence_core::i18n::text(title), rect, provider)
         {
+            if let Some(host) = self.state.host_of(id)
+                && let Some(container) = self.state.container_mut(host)
+            {
+                container.span = Some(pecofence_core::WidgetSpan {
+                    columns: span.columns,
+                    rows: span.rows,
+                });
+            }
             self.resync_windows();
             if let Some(host) = self.state.host_of(id)
                 && let Some(window) = self.fences.get(&host)
@@ -855,7 +974,8 @@ impl App {
         };
         let scale = work.scale();
         let (w, h) = ((w_dip * scale) as i32, (h_dip * scale) as i32);
-        let gap = (12.0 * scale) as i32;
+        // Same 8 DIP gutter that drag-snapping leaves between windows.
+        let gap = (8.0 * scale) as i32;
         let at = |left: i32, top: i32| RECT {
             left,
             top,

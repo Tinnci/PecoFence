@@ -644,7 +644,34 @@ pub(super) fn on_sizing(
     let guard = view.try_borrow().ok()?;
     let v = guard.as_ref()?;
     if v.plugin_panel.is_some() {
-        return None;
+        // Widgets snap to whole fence icon cells (docs/WIDGET_GRID.md).
+        let grid = v.widget_grid.filter(|_| !v.rolled_up)?;
+        let scale = v.scale();
+        let text_scale = v.behavior.text_scale.get();
+        drop(guard);
+        // SAFETY: lParam is the RECT* being sized for this message.
+        let rect = unsafe { &mut *(lparam as *mut RECT) };
+        let span = grid.rules.span_for_size(
+            (rect.right - rect.left) as f32 / scale,
+            (rect.bottom - rect.top) as f32 / scale,
+            grid.cell,
+            text_scale,
+        );
+        let (w, h) = span.size(grid.cell);
+        let (w, h) = ((w * scale).round() as i32, (h * scale).round() as i32);
+        const LEFT_EDGES: [usize; 3] = [1, 4, 7]; // WMSZ_LEFT, TOPLEFT, BOTTOMLEFT
+        const TOP_EDGES: [usize; 3] = [3, 4, 5]; // WMSZ_TOP, TOPLEFT, TOPRIGHT
+        if LEFT_EDGES.contains(&wparam) {
+            rect.left = rect.right - w;
+        } else {
+            rect.right = rect.left + w;
+        }
+        if TOP_EDGES.contains(&wparam) {
+            rect.top = rect.bottom - h;
+        } else {
+            rect.bottom = rect.top + h;
+        }
+        return Some(1);
     }
     let scale = v.scale();
     let metrics = v.grid_metrics();

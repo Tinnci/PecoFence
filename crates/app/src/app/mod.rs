@@ -1253,6 +1253,25 @@ impl App {
                     .map(|w| (w.is_rolled(), w.expanded_height_px()))
                     .unwrap_or((false, rect.bottom - rect.top));
                 self.state.set_fence_bounds(fence, rect, rolled, expanded);
+                // A resized widget keeps the span it was snapped to.
+                if !rolled && let Some(grid) = self.widget_grid(fence) {
+                    let scale = self.fences.get(&fence).map_or(1.0, |w| {
+                        monitors::dpi_for_window(w.hwnd()).max(96) as f32 / 96.0
+                    });
+                    let span = grid.rules.span_for_size(
+                        (rect.right - rect.left) as f32 / scale,
+                        (rect.bottom - rect.top) as f32 / scale,
+                        grid.cell,
+                        self.ctx.behavior.text_scale.get(),
+                    );
+                    if let Some(container) = self.state.container_mut(fence) {
+                        container.span = Some(pecofence_core::WidgetSpan {
+                            columns: span.columns,
+                            rows: span.rows,
+                        });
+                    }
+                    self.apply_widget_grid(fence);
+                }
                 self.schedule_save();
                 self.apply_auto_height(fence);
             }

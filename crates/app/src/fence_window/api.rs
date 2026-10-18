@@ -250,6 +250,7 @@ impl FenceWindow {
             opacity: 1.0,
             style: FenceStyle::default(),
             spacing: Spacing::Normal,
+            widget_grid: None,
             anchor_index: None,
             range_anchor: None,
             device_lost: false,
@@ -1240,6 +1241,28 @@ impl FenceWindow {
                     let _ = v.redraw_chrome_only();
                 }
             }
+        });
+    }
+
+    /// Widget windows snap live resizing to whole cells of this grid.
+    pub fn set_widget_grid(&self, grid: Option<WidgetGrid>) {
+        self.with_view(|v| v.widget_grid = grid);
+    }
+
+    /// One-row widgets show their capsule layout; taller ones the full layout.
+    pub fn set_widget_presentation(&self, presentation: pecofence_plugin_api::Presentation) {
+        self.with_view(|v| {
+            let Some(panel) = v.plugin_panel.as_mut() else {
+                return;
+            };
+            if panel.presentation() == presentation {
+                return;
+            }
+            panel.set_presentation(presentation);
+            panel
+                .invalidation
+                .request(pecofence_plugin_api::design::FrameInvalidation::Layout);
+            let _ = v.redraw_content();
         });
     }
 

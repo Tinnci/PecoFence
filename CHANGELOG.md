@@ -76,6 +76,13 @@
   its parent; WSL lld-link cross-build). The combined build with the diagram
   widget must be measured against the 6,815,744-byte gate separately.
   Headless tests and Windows Clippy only; not yet checked on device.
+- Size widgets on a grid of fence icon cells, as Android and iOS size widgets in
+  home-screen icon slots ([widget grid](docs/WIDGET_GRID.md)). Each widget has a
+  default span and a content minimum that rounds up with text scaling; one row is
+  the capsule layout. Resizing snaps to whole cells, spans are saved with the
+  window (older files migrate to the nearest span), and new windows are placed
+  with the same 8 DIP gutter as drag-snapping. Live resizing not yet checked on
+  device.
 
 The versioned entries below are retained from the upstream baseline. References
 to Store submissions or a published website describe that history, not an active

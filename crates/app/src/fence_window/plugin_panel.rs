@@ -587,15 +587,24 @@ pub(super) fn handle_message(
             .as_ref()
             .map(PluginPanelContent::presentation)
             .unwrap_or_default();
-        let (minimum_width, minimum_height) =
-            presentation.minimum_size(view.behavior.text_scale.get());
+        let text_scale = view.behavior.text_scale.get();
+        // Widget spans include the title bar; other panels add it to their content minimum.
+        let (minimum_width, minimum_height) = match view.widget_grid {
+            Some(grid) => {
+                let (w, h) = grid.rules.minimum_size(grid.cell, text_scale);
+                ((w * scale).round() as i32, (h * scale).round() as i32)
+            }
+            None => {
+                let (w, h) = presentation.minimum_size(text_scale);
+                (
+                    (w * scale).round() as i32,
+                    view.title_h_px() + (h * scale).round() as i32,
+                )
+            }
+        };
         // SAFETY: this branch is only reached for WM_GETMINMAXINFO.
         unsafe {
-            window::minmaxinfo_set_min_track(
-                lparam,
-                (minimum_width * scale).round() as i32,
-                view.title_h_px() + (minimum_height * scale).round() as i32,
-            );
+            window::minmaxinfo_set_min_track(lparam, minimum_width, minimum_height);
         }
         return Some(0);
     }

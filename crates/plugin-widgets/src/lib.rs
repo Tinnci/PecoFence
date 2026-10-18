@@ -12,6 +12,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 mod diagram;
+pub mod grid;
 mod lunar;
 mod mermaid;
 mod note;
