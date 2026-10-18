@@ -869,9 +869,9 @@ pub(crate) fn build_panel_header(
             1,
             RectDip {
                 x: v.x + design::CONTENT_INSET,
-                y: v.y + 10.0,
+                y: v.y + 8.0,
                 w: text_width,
-                h: 28.0,
+                h: 34.0,
             },
             title,
             design::TITLE,
@@ -887,8 +887,8 @@ pub(crate) fn build_panel_header(
             HEADER_META,
             RectDip {
                 x: v.x + design::CONTENT_INSET,
-                y: v.y + 38.0,
-                w: text_width,
+                y: v.y + 42.0,
+                w: (v.w - design::CONTENT_INSET * 2.0).max(0.0),
                 h: 20.0,
             },
             meta,
@@ -904,7 +904,7 @@ pub(crate) fn build_panel_header(
             action.id,
             RectDip {
                 x,
-                y: v.y + 14.0,
+                y: v.y + 10.0,
                 w: action.width,
                 h: design::CONTROL_HEIGHT,
             },
@@ -1686,6 +1686,38 @@ mod tests {
             MonthMotion::REST,
         );
         frame.finish(&mut LayoutTracker::default()).unwrap()
+    }
+
+    #[test]
+    fn header_summary_uses_the_full_row_below_buttons_at_large_text_sizes() {
+        for width in [240.0, 320.0, 400.0, 560.0] {
+            for scale in [1.0, 1.5, 2.0] {
+                let mut frame = identity_frame(width, 500.0, scale);
+                build_panel_header(
+                    &mut frame,
+                    "2026年10月",
+                    "今天 10月18日 周日 · 农历九月初九 · 重阳节",
+                    &[HeaderAction {
+                        id: 99,
+                        content: Control::Text("今天"),
+                        kind: design::ButtonKind::Accent,
+                        action: Some(TODAY),
+                        width: 56.0,
+                    }],
+                    Colors::from_theme(None),
+                );
+                let scene = frame.finish(&mut LayoutTracker::default()).unwrap();
+                let title = scene.nodes().iter().find(|n| n.id == 1).unwrap();
+                let meta = scene.nodes().iter().find(|n| n.id == HEADER_META).unwrap();
+                let button = scene.nodes().iter().find(|n| n.id == 99).unwrap();
+                assert!((meta.rect.w - (width - 2.0 * design::CONTENT_INSET * scale)).abs() < 0.01);
+                assert!(meta.rect.y >= title.rect.y + title.rect.h);
+                assert!(meta.rect.y >= button.rect.y + button.rect.h);
+                assert!(meta.rect.y + meta.rect.h <= CONTENT_TOP * scale);
+                assert!(title.rect.h >= title.style.size * 1.5);
+                assert!(meta.name.contains("重阳节"));
+            }
+        }
     }
 
     #[test]

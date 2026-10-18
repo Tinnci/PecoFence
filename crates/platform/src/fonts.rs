@@ -11,6 +11,7 @@ use crate::bindings::{
     D2D_RECT_F, D2D1_DRAW_TEXT_OPTIONS_NONE, DWRITE_FACTORY_TYPE_SHARED,
     DWRITE_FONT_STRETCH_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_MEASURING_MODE_NATURAL,
     DWRITE_PARAGRAPH_ALIGNMENT_CENTER, DWRITE_TEXT_ALIGNMENT_CENTER, DWRITE_TEXT_METRICS,
+    DWRITE_TRIMMING, DWRITE_TRIMMING_GRANULARITY_CHARACTER, DWRITE_WORD_WRAPPING_NO_WRAP,
     DWriteCreateFactory, ID2D1Brush, ID2D1RenderTarget, IDWriteFactory5, IDWriteFontCollection1,
     IDWriteTextFormat,
 };
@@ -147,11 +148,36 @@ impl PrivateFonts {
                 }
             }
         }
+        if alignment != PrivateTextAlignment::TopLeading {
+            single_line_ellipsis(&raw)?;
+        }
         Ok(PrivateTextFormat {
             factory: self.factory.clone(),
             raw,
         })
     }
+}
+
+/// Keep control labels on one line and let DirectWrite render a real ellipsis.
+/// Full text remains in the immutable scene for accessibility and model state.
+pub fn single_line_ellipsis(format: &impl Interface) -> Result<()> {
+    let raw: IDWriteTextFormat = format.cast()?;
+    // SAFETY: the shared factory and format are live COM interfaces; the format
+    // retains the inline omission sign after SetTrimming returns.
+    unsafe {
+        let factory: IDWriteFactory5 = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED)?;
+        raw.SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP).ok()?;
+        let ellipsis = factory.CreateEllipsisTrimmingSign(&raw)?;
+        raw.SetTrimming(
+            &DWRITE_TRIMMING {
+                granularity: DWRITE_TRIMMING_GRANULARITY_CHARACTER,
+                ..Default::default()
+            },
+            &ellipsis,
+        )
+        .ok()?;
+    }
+    Ok(())
 }
 
 /// Placement of text in its layout box; mirrors the plugin API's `TextAlign`.
@@ -244,6 +270,49 @@ mod tests {
             assert!(fonts.has_family(family), "missing bundled family {family}");
         }
         assert!(!fonts.has_family("PecoFence nonexistent font"));
+    }
+
+    #[test]
+    fn centered_cjk_headers_stay_single_line_while_note_bodies_wrap() {
+        let fonts = PrivateFonts::from_files(&font_files()).unwrap();
+        let text = "今天 10月18日 周日 · 农历九月初九 · 重阳节";
+        let label = fonts
+            .text_format(
+                "Noto Sans SC",
+                12.0,
+                400,
+                "zh-cn",
+                PrivateTextAlignment::MiddleLeading,
+            )
+            .unwrap();
+        assert_eq!(
+            unsafe { label.raw.GetWordWrapping() },
+            DWRITE_WORD_WRAPPING_NO_WRAP
+        );
+        for width in [80.0, 208.0, 368.0] {
+            let (_, height) = label.measure(text, width, 20.0).unwrap();
+            assert!(height <= 20.0, "single-line caption needs {height} DIPs");
+        }
+        let title = fonts
+            .text_format(
+                "Noto Serif SC",
+                22.0,
+                600,
+                "zh-cn",
+                PrivateTextAlignment::MiddleLeading,
+            )
+            .unwrap();
+        assert!(title.measure("2026年10月", 200.0, 34.0).unwrap().1 <= 34.0);
+        let body = fonts
+            .text_format(
+                "Noto Sans SC",
+                12.0,
+                400,
+                "zh-cn",
+                PrivateTextAlignment::TopLeading,
+            )
+            .unwrap();
+        assert!(body.measure(text, 80.0, 200.0).unwrap().1 > 20.0);
     }
 
     #[test]

@@ -3125,7 +3125,9 @@ pub struct DWRITE_TRIMMING {
     pub delimiterCount: u32,
 }
 pub type DWRITE_TRIMMING_GRANULARITY = i32;
+pub const DWRITE_TRIMMING_GRANULARITY_CHARACTER: DWRITE_TRIMMING_GRANULARITY = 1;
 pub type DWRITE_WORD_WRAPPING = i32;
+pub const DWRITE_WORD_WRAPPING_NO_WRAP: DWRITE_WORD_WRAPPING = 1;
 pub type DXGI_FORMAT = i32;
 pub const DesktopWallpaper: windows_core::GUID =
     windows_core::GUID::from_u128(0xc2cf3110_460e_4fc1_b9d0_8a1c0c9cc4bd);

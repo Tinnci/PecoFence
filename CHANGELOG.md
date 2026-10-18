@@ -1,7 +1,8 @@
 # Changelog
 
-## 0.0.5 — Native widget grid and bounded exit
+## 0.0.5 — Native widgets and bounded exit
 
+- Give header summaries the full row width and taller title line boxes; use native single-line ellipsis for centered labels while preserving multiline note bodies.
 - Size widgets in whole icon cells and show single widgets without a title bar, with a fading grab handle and move cursor.
 - Initialize live resize rules and presentation on load and tab switches; preserve saved geometry and clear widget rules on file tabs.
 - Verify frameless widget grids after restart alongside TODO and note persistence.

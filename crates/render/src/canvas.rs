@@ -197,13 +197,18 @@ impl TextFormatCache {
         .map_err(|error| Error::Backend(error.to_string()))?;
         use pecofence_plugin_api::TextAlign;
         use windows_canvas::{ParagraphAlignment, TextAlignment};
-        Ok(match text.align {
+        let format = match text.align {
             TextAlign::TopLeading => format,
             TextAlign::MiddleLeading => format.with_paragraph_alignment(ParagraphAlignment::Center),
             TextAlign::Center => format
                 .with_alignment(TextAlignment::Center)
                 .with_paragraph_alignment(ParagraphAlignment::Center),
-        })
+        };
+        if text.align != TextAlign::TopLeading {
+            pecofence_platform::fonts::single_line_ellipsis(format.raw())
+                .map_err(|error| Error::Backend(error.to_string()))?;
+        }
+        Ok(format)
     }
 }
 
@@ -763,6 +768,32 @@ mod tests {
         assert!(text_rect.y >= rect.y && text_rect.y + text_rect.h <= rect.y + rect.h);
         assert_eq!(spec.size_dip, 28.0);
         assert_eq!(spec.font, FontRole::Text);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn centered_system_labels_do_not_wrap_but_body_text_does() {
+        let mut text = TextSpec {
+            text: "A deliberately long label that cannot fit into a narrow control".into(),
+            size_dip: 12.0,
+            weight: 400,
+            font: FontRole::Text,
+            align: pecofence_plugin_api::TextAlign::MiddleLeading,
+        };
+        let format = TextFormatCache::system(&text).unwrap();
+        let metrics = windows_canvas::TextLayout::new(&text.text, &format, 80.0, 200.0)
+            .unwrap()
+            .metrics();
+        assert_eq!(metrics.line_count, 1);
+        text.align = pecofence_plugin_api::TextAlign::TopLeading;
+        let format = TextFormatCache::system(&text).unwrap();
+        assert!(
+            windows_canvas::TextLayout::new(&text.text, &format, 80.0, 200.0)
+                .unwrap()
+                .metrics()
+                .line_count
+                > 1
+        );
     }
 
     #[test]
