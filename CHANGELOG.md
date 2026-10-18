@@ -41,6 +41,12 @@
   re-reads a panel's wake interval after input. New dependency:
   `chinese-lunisolar-calendar` 0.2.5 (MIT). Headless tests only; EXE size gate
   and on-device motion not yet measured.
+- Restyle the note, TODO and calendar widgets in a warm paper palette: cream
+  ground (#F6F1E7), warm ink, terracotta accent, solid paper tints for notes,
+  and serif titles (built-in Sitka). The widgets paint their own ground; the
+  clock still follows the fence theme, and high contrast keeps system colors.
+  Every text pair is tested at WCAG 4.5:1 or better. Not yet checked on device;
+  Chinese titles fall back to the system CJK font.
 
 The versioned entries below are retained from the upstream baseline. References
 to Store submissions or a published website describe that history, not an active

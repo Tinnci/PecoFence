@@ -227,7 +227,10 @@ impl PanelInstance for TimeWidget {
         self.frame_revision = self.frame_revision.checked_add(1).ok_or(Error::Exhausted)?;
         let mut frame =
             WidgetFrame::new(mount_key, self.frame_revision, self.layout_revision, input);
-        let colors = Colors::from_theme(self.theme.as_deref());
+        let colors = match self.kind {
+            Kind::Clock => Colors::from_theme(self.theme.as_deref()),
+            Kind::Calendar => Colors::paper(self.theme.as_deref()),
+        };
         let chinese = input.locale.starts_with("zh");
         match self.kind {
             Kind::Clock => build_clock(&mut frame, self.config, colors, chinese),
@@ -339,15 +342,39 @@ pub(crate) fn fade(color: [f32; 4], opacity: f32) -> [f32; 4] {
     ]
 }
 
+const fn srgb(r: u8, g: u8, b: u8) -> [f32; 4] {
+    [r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0, 1.0]
+}
+
+/// Warm paper palette for the note, TODO and calendar widgets. Every text pair
+/// meets 4.5:1 on both the ground and the card; terracotta fills carry cream ink.
+pub(crate) mod paper {
+    use super::srgb;
+    pub(crate) const GROUND: [f32; 4] = srgb(0xF6, 0xF1, 0xE7);
+    pub(crate) const CARD: [f32; 4] = srgb(0xEC, 0xE4, 0xD6);
+    pub(crate) const INK: [f32; 4] = srgb(0x2B, 0x27, 0x22);
+    pub(crate) const INK_SECONDARY: [f32; 4] = srgb(0x68, 0x5F, 0x55);
+    pub(crate) const INK_FAINT: [f32; 4] = srgb(0x9A, 0x8F, 0x80);
+    pub(crate) const TERRACOTTA: [f32; 4] = srgb(0xA9, 0x50, 0x2D);
+    pub(crate) const TERRACOTTA_INK: [f32; 4] = srgb(0x94, 0x45, 0x26);
+    pub(crate) const CREAM: [f32; 4] = srgb(0xFF, 0xF8, 0xEE);
+}
+
 #[derive(Clone, Copy)]
 pub(crate) struct Colors {
     pub(crate) high_contrast: bool,
     pub(crate) primary: [f32; 4],
     pub(crate) secondary: [f32; 4],
+    /// Solid emphasis fills (today, progress, checked boxes).
     pub(crate) accent: [f32; 4],
+    /// Accent used as text, darker where the fill would not reach 4.5:1.
+    pub(crate) accent_ink: [f32; 4],
     pub(crate) subtle: [f32; 4],
-    /// Panel surface; doubles as the ink on solid accent fills.
+    /// Ink on solid accent fills.
     pub(crate) panel: [f32; 4],
+    faint_ink: [f32; 4],
+    /// Widget-owned background; `None` draws on the fence's own material.
+    pub(crate) ground: Option<[f32; 4]>,
 }
 
 impl Colors {
@@ -356,23 +383,15 @@ impl Colors {
         if self.high_contrast {
             self.subtle
         } else {
-            [self.accent[0], self.accent[1], self.accent[2], 0.22]
+            let alpha = if self.ground.is_some() { 0.14 } else { 0.22 };
+            [self.accent[0], self.accent[1], self.accent[2], alpha]
         }
     }
 
-    /// Secondary ink for content that is present but out of focus, such as
-    /// adjacent-month dates. High contrast keeps the opaque system color.
+    /// Ink for content that is present but out of focus, such as adjacent-month
+    /// dates. High contrast keeps the opaque system color.
     pub(crate) fn faint(&self) -> [f32; 4] {
-        if self.high_contrast {
-            self.secondary
-        } else {
-            [
-                self.secondary[0],
-                self.secondary[1],
-                self.secondary[2],
-                self.secondary[3] * 0.5,
-            ]
-        }
+        self.faint_ink
     }
 
     /// Foreground, fill and pill radius for a button of height `h` (logical DIPs).
@@ -383,23 +402,51 @@ impl Colors {
     ) -> ([f32; 4], Option<[f32; 4]>, f32) {
         use design::ButtonKind::*;
         let (foreground, fill) = match kind {
-            Accent => (self.accent, Some(self.accent_wash())),
+            Accent => (self.accent_ink, Some(self.accent_wash())),
             Subtle => (self.primary, Some(self.subtle)),
             Flat => (self.primary, None),
         };
         (foreground, fill, design::pill_radius(h))
     }
 
+    /// Host theme colors: the clock draws directly on the fence material.
     pub(crate) fn from_theme(theme: Option<&ThemeSnapshot>) -> Self {
         let fallback = ThemeSnapshot::dark();
         let theme = theme.unwrap_or(&fallback);
+        let secondary = theme.text_secondary;
         Self {
             high_contrast: theme.high_contrast,
             primary: theme.text_primary,
-            secondary: theme.text_secondary,
+            secondary,
             accent: theme.accent,
+            accent_ink: theme.accent,
             subtle: theme.surface_subtle,
             panel: theme.surface_panel,
+            faint_ink: if theme.high_contrast {
+                secondary
+            } else {
+                fade(secondary, 0.5)
+            },
+            ground: None,
+        }
+    }
+
+    /// Warm paper colors for the note, TODO and calendar widgets. High contrast
+    /// keeps the system palette so user-chosen contrast colors always win.
+    pub(crate) fn paper(theme: Option<&ThemeSnapshot>) -> Self {
+        if theme.is_some_and(|theme| theme.high_contrast) {
+            return Self::from_theme(theme);
+        }
+        Self {
+            high_contrast: false,
+            primary: paper::INK,
+            secondary: paper::INK_SECONDARY,
+            accent: paper::TERRACOTTA,
+            accent_ink: paper::TERRACOTTA_INK,
+            subtle: paper::CARD,
+            panel: paper::CREAM,
+            faint_ink: paper::INK_FAINT,
+            ground: Some(paper::GROUND),
         }
     }
 }
@@ -419,6 +466,9 @@ pub(crate) mod glyph {
     pub(crate) const CHECKLIST: char = '\u{E9D5}';
     pub(crate) const QUICK_NOTE: char = '\u{E70B}';
 }
+
+/// Node id of the paper ground; clear of control, task (bit 63) and date (bits 32–33) ids.
+const BACKGROUND: u64 = 1 << 62;
 
 /// Node id of the header summary; clear of every widget's control ids.
 pub(crate) const HEADER_META: u64 = 20;
@@ -548,6 +598,12 @@ impl<'a> WidgetElement<'a> {
         self.font = Some(FontRole::Icons);
         self
     }
+
+    /// Render the text with the serif title face.
+    pub(crate) fn serif(mut self) -> Self {
+        self.font = Some(FontRole::Serif);
+        self
+    }
 }
 
 pub(crate) struct WidgetFrame {
@@ -638,6 +694,19 @@ impl WidgetFrame {
                 align,
             },
         });
+    }
+
+    /// Paint the widget's own ground behind everything else, when its palette has one.
+    pub(crate) fn ground(&mut self, colors: Colors) {
+        let Some(ground) = colors.ground else {
+            return;
+        };
+        let v = self.viewport;
+        self.add(
+            WidgetElement::text(BACKGROUND, v, "", design::BODY, 400, colors.primary)
+                .role("presentation")
+                .fill(Some(ground), design::CARD_RADIUS),
+        );
     }
 
     /// Pill button with centered content. A `None` action renders it disabled.
@@ -735,6 +804,7 @@ pub(crate) fn build_panel_header(
             600,
             colors.primary,
         )
+        .serif()
         .role("heading")
         .align(TextAlign::MiddleLeading),
     );
@@ -912,6 +982,7 @@ fn build_calendar(
     today: NaiveDate,
     motion: MonthMotion,
 ) {
+    frame.ground(colors);
     if frame.viewport.h < CAPSULE_HEIGHT {
         let summary = match (chinese, lunar::describe(today)) {
             (true, Some(lunar)) => format!("{} · {lunar}", describe_day(today, true)),
@@ -1089,7 +1160,7 @@ fn build_calendar(
         } else if is_today && !colors.high_contrast {
             (colors.panel, Some(colors.accent))
         } else if is_today || is_selected {
-            (colors.accent, Some(colors.accent_wash()))
+            (colors.accent_ink, Some(colors.accent_wash()))
         } else {
             (colors.primary, None)
         };
@@ -1148,7 +1219,7 @@ fn build_calendar(
             let ink = if is_today && !colors.high_contrast {
                 fade(colors.panel, 0.85)
             } else if note.highlight && in_month {
-                colors.accent
+                colors.accent_ink
             } else {
                 colors.faint()
             };
@@ -1722,5 +1793,69 @@ mod tests {
         assert_eq!(tween.progress(end), 1.0);
         assert!(tween.done(end));
         assert_eq!(tween.progress(tween.start), 0.0);
+    }
+
+    fn contrast(a: [f32; 4], b: [f32; 4]) -> f32 {
+        let luminance = |c: [f32; 4]| {
+            let channel = |v: f32| {
+                if v <= 0.03928 {
+                    v / 12.92
+                } else {
+                    ((v + 0.055) / 1.055).powf(2.4)
+                }
+            };
+            0.2126 * channel(c[0]) + 0.7152 * channel(c[1]) + 0.0722 * channel(c[2])
+        };
+        let (x, y) = (luminance(a), luminance(b));
+        (x.max(y) + 0.05) / (x.min(y) + 0.05)
+    }
+
+    #[test]
+    fn paper_palette_text_meets_wcag_aa_on_every_surface() {
+        for surface in [paper::GROUND, paper::CARD] {
+            for ink in [paper::INK, paper::INK_SECONDARY, paper::TERRACOTTA_INK] {
+                assert!(contrast(ink, surface) >= 4.5, "{ink:?} on {surface:?}");
+            }
+        }
+        assert!(contrast(paper::CREAM, paper::TERRACOTTA) >= 4.5);
+        // Accent button text sits on a 14% terracotta wash over the ground.
+        let wash = lerp_color(paper::GROUND, paper::TERRACOTTA, 0.14);
+        assert!(contrast(paper::TERRACOTTA_INK, wash) >= 4.5);
+    }
+
+    #[test]
+    fn paper_widgets_draw_their_own_ground_and_serif_titles() {
+        let mut frame = identity_frame(420.0, 330.0, 1.0);
+        build_calendar(
+            &mut frame,
+            WidgetConfig::default(),
+            0,
+            None,
+            Colors::paper(None),
+            false,
+            NaiveDate::from_ymd_opt(2024, 2, 15).unwrap(),
+            MonthMotion::REST,
+        );
+        let scene = frame.finish(&mut LayoutTracker::default()).unwrap();
+        let ground = &scene.nodes()[0];
+        assert_eq!(ground.id, BACKGROUND);
+        assert_eq!(ground.style.fill, Some(paper::GROUND));
+        assert_eq!(ground.action, None);
+        let title = scene.nodes().iter().find(|n| n.id == 1).unwrap();
+        assert_eq!(title.style.font, FontRole::Serif);
+        let today = scene
+            .nodes()
+            .iter()
+            .find(|n| n.name == "2024-02-15")
+            .unwrap();
+        assert_eq!(today.style.fill, Some(paper::TERRACOTTA));
+        assert_eq!(today.style.foreground, paper::CREAM);
+        assert_controls_fit(&scene);
+
+        let mut contrast_theme = ThemeSnapshot::dark();
+        contrast_theme.high_contrast = true;
+        let system = Colors::paper(Some(&contrast_theme));
+        assert_eq!(system.ground, None);
+        assert_eq!(system.primary, contrast_theme.text_primary);
     }
 }

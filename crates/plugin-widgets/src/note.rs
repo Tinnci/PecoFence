@@ -56,15 +56,17 @@ impl Tint {
         Self::ORDER[(index + 1) % Self::ORDER.len()]
     }
 
-    fn rgb(self) -> Option<[f32; 3]> {
+    /// Paper card color and a darker ink of the same hue for the color button.
+    fn paper(self) -> Option<([f32; 4], [f32; 4])> {
+        use super::srgb;
         Some(match self {
             Tint::Default => return None,
-            Tint::Yellow => [1.0, 0.84, 0.32],
-            Tint::Green => [0.52, 0.85, 0.48],
-            Tint::Pink => [1.0, 0.58, 0.74],
-            Tint::Purple => [0.74, 0.6, 1.0],
-            Tint::Blue => [0.48, 0.74, 1.0],
-            Tint::Gray => [0.62, 0.64, 0.68],
+            Tint::Yellow => (srgb(0xF3, 0xE3, 0xB0), srgb(0x8C, 0x6A, 0x1C)),
+            Tint::Green => (srgb(0xDC, 0xE8, 0xC8), srgb(0x4F, 0x6B, 0x2E)),
+            Tint::Pink => (srgb(0xF2, 0xD6, 0xD3), srgb(0x8E, 0x4A, 0x47)),
+            Tint::Purple => (srgb(0xE2, 0xDA, 0xEE), srgb(0x5E, 0x4C, 0x85)),
+            Tint::Blue => (srgb(0xD8, 0xE4, 0xEE), srgb(0x3F, 0x5F, 0x7C)),
+            Tint::Gray => (srgb(0xE3, 0xDE, 0xD6), srgb(0x5F, 0x57, 0x4D)),
         })
     }
 
@@ -87,10 +89,10 @@ impl Tint {
         }
     }
 
-    /// Body fill: a translucent wash of the paper color over the panel surface.
+    /// Body fill: the paper color, or the card surface by default and in high contrast.
     fn surface(self, colors: Colors) -> [f32; 4] {
-        match self.rgb() {
-            Some([r, g, b]) if !colors.high_contrast => [r, g, b, 0.24],
+        match self.paper() {
+            Some((paper, _)) if !colors.high_contrast => paper,
             _ => colors.subtle,
         }
     }
@@ -225,7 +227,7 @@ impl NoteWidget {
     }
 
     fn cycle_tint(&mut self) -> Result<PanelUpdate> {
-        let colors = Colors::from_theme(self.theme.as_deref());
+        let colors = Colors::paper(self.theme.as_deref());
         let from = self.config.tint.surface(colors);
         let update = self.persist(NoteConfig {
             text: self.config.text.clone(),
@@ -317,7 +319,7 @@ impl PanelInstance for NoteWidget {
         if updated.is_none() {
             self.updated_at = None;
         }
-        let colors = Colors::from_theme(self.theme.as_deref());
+        let colors = Colors::paper(self.theme.as_deref());
         let to = self.config.tint.surface(colors);
         let surface = self.tint_motion.map_or(to, |(tween, from)| {
             lerp_color(from, to, tween.progress(now))
@@ -409,6 +411,7 @@ fn build_note(
     chinese: bool,
     look: NoteLook,
 ) {
+    frame.ground(colors);
     if frame.viewport.h < CAPSULE_HEIGHT {
         let first = config
             .text
@@ -479,7 +482,7 @@ fn build_note(
             .iter_mut()
             .find(|node| node.id == super::HEADER_META)
     {
-        meta.style.foreground = fade(colors.accent, opacity);
+        meta.style.foreground = fade(colors.accent_ink, opacity);
     }
     // The paper-color button names the current color for screen readers.
     if let Some(node) = frame.nodes.iter_mut().find(|node| node.id == 9) {
@@ -488,8 +491,8 @@ fn build_note(
         } else {
             format!("Note color: {}", config.tint.name(false))
         };
-        if let Some([r, g, b]) = config.tint.rgb().filter(|_| !colors.high_contrast) {
-            node.style.foreground = [r, g, b, 1.0];
+        if let Some((_, ink)) = config.tint.paper().filter(|_| !colors.high_contrast) {
+            node.style.foreground = ink;
         }
     }
     let v = frame.viewport;

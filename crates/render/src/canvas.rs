@@ -12,6 +12,7 @@ fn text_font_family(role: FontRole) -> &'static str {
         FontRole::Small => crate::theme::FONT_SMALL,
         FontRole::Display => crate::theme::FONT_DISPLAY,
         FontRole::Icons => crate::theme::FONT_ICONS,
+        FontRole::Serif => crate::theme::FONT_SERIF,
     }
 }
 

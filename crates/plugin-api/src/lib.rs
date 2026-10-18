@@ -269,6 +269,8 @@ pub enum FontRole {
     Small,
     Display,
     Icons,
+    /// Serif display face for widget titles (warm paper style).
+    Serif,
 }
 
 /// Placement of text inside its layout rectangle. The default keeps the

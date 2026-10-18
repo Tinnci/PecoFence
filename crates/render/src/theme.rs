@@ -379,7 +379,9 @@ pub fn lerp(a: ColorF, b: ColorF, t: f32) -> ColorF {
 
 /// Segoe UI Variable is the Windows 11 system font; DirectWrite exposes the optical sizes as
 /// separate legacy family names.
-pub use pecofence_plugin_api::design::{FONT_DISPLAY, FONT_ICONS, FONT_SMALL, FONT_TEXT};
+pub use pecofence_plugin_api::design::{
+    FONT_DISPLAY, FONT_ICONS, FONT_SERIF, FONT_SMALL, FONT_TEXT,
+};
 
 #[cfg(test)]
 mod tests {

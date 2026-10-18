@@ -353,7 +353,7 @@ impl PanelInstance for TodoWidget {
             self.page,
             capacity,
             self.undo.is_some(),
-            Colors::from_theme(self.theme.as_deref()),
+            Colors::paper(self.theme.as_deref()),
             input.locale.starts_with("zh"),
             self.motion.as_ref().map(|m| (m, m.tween.progress(now))),
         );
@@ -463,6 +463,7 @@ fn build_todo(
     chinese: bool,
     motion: Option<(&ListMotion, f32)>,
 ) {
+    frame.ground(colors);
     let total = config.tasks.len();
     let done = config.tasks.iter().filter(|task| task.done).count();
     let pending = total - done;
