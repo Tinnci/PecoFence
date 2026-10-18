@@ -24,6 +24,7 @@ impl App {
         ) {
             return;
         }
+        window::kill_timer(self.control.hwnd(), TIMER_EXIT_WATCHDOG);
         self.persistence.keep_running();
         self.sync_fence_windows();
         window::post_message(self.control.hwnd(), WM_APP_FS_CHANGED, 0, 0);
@@ -129,6 +130,10 @@ impl App {
         if let Some(anchor) = self.anchor.borrow_mut().as_mut() {
             anchor.restore_desktop_icons();
         }
+        tracing::info!("exit.persistence_committed");
+        // Arm only after the final receipt (or explicit discard), never while
+        // writes or a save-error decision are pending. Normal WinUI exit remains first.
+        window::set_timer(self.control.hwnd(), TIMER_EXIT_WATCHDOG, EXIT_WATCHDOG_MS);
         self.exit_reactor();
     }
 }

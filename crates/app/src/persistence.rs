@@ -62,6 +62,11 @@ impl SaveCoordinator {
     pub fn closing(&self) -> Closing {
         self.closing
     }
+    /// A native message-pump fallback is safe only after the close transaction
+    /// settled, or the user explicitly discarded a failed save.
+    pub fn exit_is_committed(&self) -> bool {
+        !self.busy() && matches!(self.closing, Closing::Finished | Closing::Discarded)
+    }
     pub fn begin_close(&mut self) {
         if matches!(self.closing, Closing::Finished | Closing::Discarded) {
             return;
@@ -393,6 +398,36 @@ mod tests {
         assert!(scheduler.discard_failed());
         assert_eq!(scheduler.closing(), Closing::Discarded);
         assert!(!scheduler.ready());
+    }
+
+    #[test]
+    fn exit_fallback_waits_for_the_save_and_respects_cancellation() {
+        let mut scheduler = SaveCoordinator::default();
+        assert!(!scheduler.exit_is_committed());
+        scheduler.begin_close();
+        let write = scheduler
+            .start(plan(DocumentClock::new(true).stamp(), false))
+            .unwrap();
+        assert!(scheduler.busy());
+        assert!(!scheduler.exit_is_committed());
+        assert!(!scheduler.finish_close());
+        scheduler.accept(&success(write.ticket));
+        scheduler.keep_running();
+        assert!(!scheduler.exit_is_committed());
+        scheduler.begin_close();
+        assert!(scheduler.finish_close());
+        assert!(scheduler.exit_is_committed());
+
+        let mut failed = SaveCoordinator {
+            closing: Closing::Failed,
+            ..Default::default()
+        };
+        assert!(!failed.exit_is_committed());
+        failed.keep_running();
+        assert!(!failed.exit_is_committed());
+        failed.closing = Closing::Failed;
+        assert!(failed.discard_failed());
+        assert!(failed.exit_is_committed());
     }
 
     #[test]

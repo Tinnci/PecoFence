@@ -111,6 +111,9 @@ const TIMER_PERSISTENCE: usize = 53;
 const TIMER_EXIT: usize = 54;
 /// A modal/native handler still owns AppCell; defer WinUI exit until it unwinds.
 const TIMER_REACTOR_EXIT: usize = 55;
+/// WinUI enqueue/Exit success does not prove its message pump ended.
+const TIMER_EXIT_WATCHDOG: usize = 58;
+const EXIT_WATCHDOG_MS: u32 = 3000;
 const SPI_SETDESKWALLPAPER: usize = 0x0014;
 const SPI_SETWORKAREA: usize = 0x002F;
 const TRAY_ID: u32 = 1;
@@ -267,7 +270,9 @@ impl App {
                 let running = guard.is_some();
                 drop(guard);
                 if running {
+                    tracing::info!("exit.dispatch_callback");
                     context.exit()?;
+                    tracing::info!("exit.dispatch_accepted");
                 }
                 Ok(())
             }
@@ -463,6 +468,27 @@ impl App {
                                     if let Err(error) = exit_ui.invoke() {
                                         tracing::error!(%error, "deferred dispatcher exit failed");
                                         window::post_quit(0);
+                                    }
+                                }
+                                TIMER_EXIT_WATCHDOG => {
+                                    let committed = cell.try_borrow().ok().map(|guard| {
+                                        guard
+                                            .as_ref()
+                                            .is_some_and(|app| app.persistence.exit_is_committed())
+                                    });
+                                    match committed {
+                                        Some(true) => {
+                                            window::kill_timer(hwnd, TIMER_EXIT_WATCHDOG);
+                                            tracing::warn!(
+                                                "exit.native_pump_fallback_after_committed_close"
+                                            );
+                                            window::post_quit(0);
+                                        }
+                                        Some(false) => {
+                                            window::kill_timer(hwnd, TIMER_EXIT_WATCHDOG)
+                                        }
+                                        // A nested native dialog still owns AppCell. Let it unwind.
+                                        None => window::set_timer(hwnd, TIMER_EXIT_WATCHDOG, 50),
                                     }
                                 }
                                 TIMER_PORTALS => {
@@ -1110,6 +1136,17 @@ impl App {
     }
 
     fn exit_reactor(&self) {
+        // Fault injection is available only to isolated debug UI tests.
+        #[cfg(debug_assertions)]
+        if pecofence_core::brand::var_os("PECOFENCE_UI_TEST_WINDOWS").is_some()
+            && pecofence_core::brand::var_os("PECOFENCE_TEST_STALL_REACTOR_EXIT").is_some()
+            && pecofence_core::brand::var("PECOFENCE_INSTANCE")
+                .is_ok_and(|name| !name.trim().is_empty())
+        {
+            tracing::warn!("exit.test_stalled_dispatch");
+            return;
+        }
+        tracing::info!("exit.dispatch_queued");
         if let Err(error) = self.exit_ui.invoke() {
             tracing::error!(%error, "WinUI dispatcher exit could not be queued");
             // Fault fallback only. Normal exit runs through the queued WinUI
@@ -1708,6 +1745,7 @@ impl App {
         window::kill_timer(self.control.hwnd(), TIMER_PERSISTENCE);
         window::kill_timer(self.control.hwnd(), TIMER_EXIT);
         window::kill_timer(self.control.hwnd(), TIMER_REACTOR_EXIT);
+        window::kill_timer(self.control.hwnd(), TIMER_EXIT_WATCHDOG);
         window::kill_timer(self.control.hwnd(), TIMER_PLUGIN_RETRY);
         window::kill_timer(self.control.hwnd(), TIMER_PANEL_WAKE);
         self.fences.clear();
@@ -1761,6 +1799,7 @@ mod timer_tests {
             TIMER_PERSISTENCE,
             TIMER_EXIT,
             TIMER_REACTOR_EXIT,
+            TIMER_EXIT_WATCHDOG,
         ];
         let distinct: std::collections::HashSet<_> = timers.into_iter().collect();
         assert_eq!(distinct.len(), timers.len());

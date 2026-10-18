@@ -1,10 +1,11 @@
 # Changelog
 
-## 0.0.5 — Native widget grid
+## 0.0.5 — Native widget grid and bounded exit
 
 - Size widgets in whole icon cells and show single widgets without a title bar, with a fading grab handle and move cursor.
 - Initialize live resize rules and presentation on load and tab switches; preserve saved geometry and clear widget rules on file tabs.
 - Verify frameless widget grids after restart alongside TODO and note persistence.
+- Bound normal exit after the save transaction completes: fall back to the native message pump when WinUI exit does not finish. Log each exit stage; keep save failures and cancellation outside the fallback.
 
 ## 0.0.4 — Native branch integration
 
