@@ -269,12 +269,25 @@ pub enum FontRole {
     Icons,
 }
 
+/// Placement of text inside its layout rectangle. The default keeps the
+/// DirectWrite origin (leading, top) so wrapped body text starts at the inset.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum TextAlign {
+    #[default]
+    TopLeading,
+    /// Vertically centered, leading edge: list rows and single-line labels.
+    MiddleLeading,
+    /// Centered on both axes: buttons, glyphs and calendar dates.
+    Center,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct TextSpec {
     pub text: String,
     pub size_dip: f32,
     pub weight: u16,
     pub font: FontRole,
+    pub align: TextAlign,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]

@@ -260,11 +260,13 @@ fn invalidate() -> PanelUpdate {
 
 #[derive(Clone, Copy)]
 pub(crate) struct Colors {
-    high_contrast: bool,
+    pub(crate) high_contrast: bool,
     pub(crate) primary: [f32; 4],
     pub(crate) secondary: [f32; 4],
     pub(crate) accent: [f32; 4],
     pub(crate) subtle: [f32; 4],
+    /// Panel surface; doubles as the ink on solid accent fills.
+    pub(crate) panel: [f32; 4],
 }
 
 impl Colors {
@@ -274,6 +276,21 @@ impl Colors {
             self.subtle
         } else {
             [self.accent[0], self.accent[1], self.accent[2], 0.22]
+        }
+    }
+
+    /// Secondary ink for content that is present but out of focus, such as
+    /// adjacent-month dates. High contrast keeps the opaque system color.
+    pub(crate) fn faint(&self) -> [f32; 4] {
+        if self.high_contrast {
+            self.secondary
+        } else {
+            [
+                self.secondary[0],
+                self.secondary[1],
+                self.secondary[2],
+                self.secondary[3] * 0.5,
+            ]
         }
     }
 
@@ -301,9 +318,31 @@ impl Colors {
             secondary: theme.text_secondary,
             accent: theme.accent,
             subtle: theme.surface_subtle,
+            panel: theme.surface_panel,
         }
     }
 }
+
+/// Segoe Fluent Icons code points used by the local widgets.
+pub(crate) mod glyph {
+    pub(crate) const ADD: char = '\u{E710}';
+    pub(crate) const BROOM: char = '\u{EA99}';
+    pub(crate) const CALENDAR_DAY: char = '\u{E8BF}';
+    pub(crate) const EDIT: char = '\u{E70F}';
+    pub(crate) const UNDO: char = '\u{E7A7}';
+    pub(crate) const CHEVRON_LEFT: char = '\u{E76B}';
+    pub(crate) const CHEVRON_RIGHT: char = '\u{E76C}';
+    pub(crate) const CHECKBOX: char = '\u{E739}';
+    pub(crate) const CHECKBOX_CHECKED: char = '\u{E73D}';
+    pub(crate) const CHECKLIST: char = '\u{E9D5}';
+    pub(crate) const QUICK_NOTE: char = '\u{E70B}';
+}
+
+/// Node id of the header summary; clear of every widget's control ids.
+const HEADER_META: u64 = 20;
+
+/// Top of the content area below the shared title/meta header.
+pub(crate) const CONTENT_TOP: f32 = 66.0;
 
 /// Named component input keeps layout, appearance and action intent explicit.
 /// The caller declares stable identity; this preparation-time adapter applies content scaling.
@@ -319,6 +358,68 @@ pub(crate) struct WidgetElement<'a> {
     radius: f32,
     action: Option<u64>,
     role: &'a str,
+    font: Option<FontRole>,
+    align: TextAlign,
+}
+
+impl<'a> WidgetElement<'a> {
+    /// Plain, non-interactive text; the builder methods add surface and intent.
+    pub(crate) fn text(
+        id: u64,
+        rect: RectDip,
+        text: impl Into<String>,
+        size: f32,
+        weight: u16,
+        foreground: [f32; 4],
+    ) -> Self {
+        Self {
+            id,
+            parent: None,
+            rect,
+            text: text.into(),
+            size,
+            weight,
+            foreground,
+            fill: None,
+            radius: 0.0,
+            action: None,
+            role: "text",
+            font: None,
+            align: TextAlign::TopLeading,
+        }
+    }
+
+    pub(crate) fn role(mut self, role: &'a str) -> Self {
+        self.role = role;
+        self
+    }
+
+    pub(crate) fn parent(mut self, parent: u64) -> Self {
+        self.parent = Some(parent);
+        self
+    }
+
+    pub(crate) fn fill(mut self, fill: Option<[f32; 4]>, radius: f32) -> Self {
+        self.fill = fill;
+        self.radius = radius;
+        self
+    }
+
+    pub(crate) fn action(mut self, action: Option<u64>) -> Self {
+        self.action = action;
+        self
+    }
+
+    pub(crate) fn align(mut self, align: TextAlign) -> Self {
+        self.align = align;
+        self
+    }
+
+    /// Render the text with the system icon font instead of the text ramp.
+    pub(crate) fn icon(mut self) -> Self {
+        self.font = Some(FontRole::Icons);
+        self
+    }
 }
 
 pub(crate) struct WidgetFrame {
@@ -357,7 +458,7 @@ impl WidgetFrame {
         Ok(scene.with_layout_revision(revision))
     }
 
-    fn set_last_accessible_name(&mut self, name: String) {
+    pub(crate) fn set_last_accessible_name(&mut self, name: String) {
         if let Some(node) = self.nodes.last_mut() {
             node.name = name;
         }
@@ -376,14 +477,16 @@ impl WidgetFrame {
             radius,
             action,
             role,
+            font,
+            align,
         } = element;
-        let font = if size < design::BODY {
+        let font = font.unwrap_or(if size < design::BODY {
             FontRole::Small
         } else if size >= 28.0 {
             FontRole::Display
         } else {
             FontRole::Text
-        };
+        });
         let rect = self.scale.rect(rect);
         let size = self.scale.value(size);
         let radius = self.scale.value(radius);
@@ -404,77 +507,142 @@ impl WidgetFrame {
                 fill,
                 radius,
                 text_inset: [0.0, 0.0],
+                align,
             },
         });
     }
+
+    /// Pill button with centered content. A `None` action renders it disabled.
+    pub(crate) fn button(
+        &mut self,
+        id: u64,
+        rect: RectDip,
+        content: Control<'_>,
+        kind: design::ButtonKind,
+        action: Option<u64>,
+        colors: Colors,
+    ) {
+        let (mut foreground, mut fill, radius) = colors.button(kind, rect.h);
+        if action.is_none() {
+            foreground = colors.faint();
+            fill = fill.map(|_| colors.subtle);
+        }
+        let element = match content {
+            Control::Text(label) => WidgetElement::text(
+                id,
+                rect,
+                label,
+                design::BODY,
+                if kind == design::ButtonKind::Accent {
+                    600
+                } else {
+                    400
+                },
+                foreground,
+            ),
+            Control::Icon(glyph, _) => WidgetElement::text(
+                id,
+                rect,
+                glyph,
+                (rect.h * 0.5).clamp(12.0, 16.0),
+                400,
+                foreground,
+            )
+            .icon(),
+        };
+        self.add(
+            element
+                .role("button")
+                .fill(fill, radius)
+                .action(action)
+                .align(TextAlign::Center),
+        );
+        if let Control::Icon(_, name) = content {
+            self.set_last_accessible_name(name.into());
+        }
+    }
 }
 
-/// Shared header geometry for local notes and TODO lists.
-fn build_panel_header(
+/// Visible content of a button: a text label, or an icon glyph with its accessible name.
+#[derive(Clone, Copy)]
+pub(crate) enum Control<'a> {
+    Text(&'a str),
+    Icon(char, &'a str),
+}
+
+pub(crate) struct HeaderAction<'a> {
+    pub(crate) id: u64,
+    pub(crate) content: Control<'a>,
+    pub(crate) kind: design::ButtonKind,
+    pub(crate) action: Option<u64>,
+    pub(crate) width: f32,
+}
+
+/// Shared header for local widgets: title with a one-line summary below it, and
+/// right-aligned actions laid out left to right in the given order.
+pub(crate) fn build_panel_header(
     frame: &mut WidgetFrame,
     title: impl Into<String>,
-    action_label: &str,
-    action: Option<u64>,
-    hint: &str,
+    meta: impl Into<String>,
+    actions: &[HeaderAction<'_>],
     colors: Colors,
 ) {
+    const GAP: f32 = 4.0;
     let v = frame.viewport;
-    let width = (v.w - design::CONTENT_INSET * 2.0).max(0.0);
-    frame.add(WidgetElement {
-        id: 1,
-        parent: None,
-        rect: RectDip {
-            x: v.x + design::CONTENT_INSET,
-            y: v.y + 12.0,
-            w: (width - 74.0).max(0.0),
-            h: 34.0,
-        },
-        text: (title).into(),
-        size: design::TITLE,
-        weight: 600,
-        foreground: colors.primary,
-        fill: None,
-        radius: 0.0,
-        action: None,
-        role: "heading",
-    });
-    let btn = colors.button(design::ButtonKind::Accent, design::CONTROL_HEIGHT);
-    frame.add(WidgetElement {
-        id: 2,
-        parent: None,
-        rect: RectDip {
-            x: v.x + v.w - 75.0,
-            y: v.y + 13.0,
-            w: 60.0,
-            h: design::CONTROL_HEIGHT,
-        },
-        text: (action_label).into(),
-        size: design::BODY,
-        weight: 600,
-        foreground: btn.0,
-        fill: btn.1,
-        radius: btn.2,
-        action,
-        role: "button",
-    });
-    frame.add(WidgetElement {
-        id: 3,
-        parent: None,
-        rect: RectDip {
-            x: v.x + design::CONTENT_INSET,
-            y: v.y + 44.0,
-            w: width,
-            h: 20.0,
-        },
-        text: (hint).into(),
-        size: design::CAPTION,
-        weight: 400,
-        foreground: colors.secondary,
-        fill: None,
-        radius: 0.0,
-        action: None,
-        role: "text",
-    });
+    let right = v.x + v.w - design::CONTENT_INSET;
+    let actions_width =
+        actions.iter().map(|a| a.width).sum::<f32>() + GAP * actions.len().saturating_sub(1) as f32;
+    let text_width = (right - actions_width - 8.0 - (v.x + design::CONTENT_INSET)).max(0.0);
+    frame.add(
+        WidgetElement::text(
+            1,
+            RectDip {
+                x: v.x + design::CONTENT_INSET,
+                y: v.y + 10.0,
+                w: text_width,
+                h: 28.0,
+            },
+            title,
+            design::TITLE,
+            600,
+            colors.primary,
+        )
+        .role("heading")
+        .align(TextAlign::MiddleLeading),
+    );
+    frame.add(
+        WidgetElement::text(
+            HEADER_META,
+            RectDip {
+                x: v.x + design::CONTENT_INSET,
+                y: v.y + 38.0,
+                w: text_width,
+                h: 20.0,
+            },
+            meta,
+            design::CAPTION,
+            400,
+            colors.secondary,
+        )
+        .align(TextAlign::MiddleLeading),
+    );
+    let mut x = (right - actions_width).max(v.x + design::CONTENT_INSET);
+    for action in actions {
+        frame.button(
+            action.id,
+            RectDip {
+                x,
+                y: v.y + 14.0,
+                w: action.width,
+                h: design::CONTROL_HEIGHT,
+            },
+            action.content,
+            action.kind,
+            action.action,
+            colors,
+        );
+        x += action.width + GAP;
+    }
 }
 
 fn build_clock(frame: &mut WidgetFrame, config: WidgetConfig, colors: Colors, chinese: bool) {
@@ -505,84 +673,89 @@ fn build_clock(frame: &mut WidgetFrame, config: WidgetConfig, colors: Colors, ch
     // Text scaling reduces this logical viewport before we choose the layout.
     if v.h < 120.0 {
         let show_date = v.w >= 400.0;
-        frame.add(WidgetElement {
-            id: 1,
-            parent: None,
-            rect: RectDip {
+        frame.add(WidgetElement::text(
+            1,
+            RectDip {
                 x: v.x + design::CONTENT_INSET,
                 y: v.y,
                 w: if show_date { width * 0.5 } else { width },
                 h: v.h,
             },
-            text: time,
-            size: if v.h >= 44.0 { 28.0 } else { design::BODY },
-            weight: 600,
-            foreground: colors.primary,
-            fill: None,
-            radius: 0.0,
-            action: None,
-            role: "text",
-        });
+            time,
+            if v.h >= 44.0 { 28.0 } else { design::BODY },
+            600,
+            colors.primary,
+        ));
         if show_date {
-            frame.add(WidgetElement {
-                id: 2,
-                parent: None,
-                rect: RectDip {
+            frame.add(WidgetElement::text(
+                2,
+                RectDip {
                     x: v.x + v.w * 0.5,
                     y: v.y,
                     w: (v.w * 0.5 - design::CONTENT_INSET).max(0.0),
                     h: v.h,
                 },
-                text: date,
-                size: design::BODY,
-                weight: 400,
-                foreground: colors.secondary,
-                fill: None,
-                radius: 0.0,
-                action: None,
-                role: "text",
-            });
+                date,
+                design::BODY,
+                400,
+                colors.secondary,
+            ));
         }
         return;
     }
     let time_size = if v.w < 260.0 { 37.0 } else { 52.0 };
     let top = v.y + ((v.h - 115.0) / 2.0).max(12.0);
-    frame.add(WidgetElement {
-        id: 1,
-        parent: None,
-        rect: RectDip {
+    frame.add(WidgetElement::text(
+        1,
+        RectDip {
             x: v.x + inset,
             y: top,
             w: width,
             h: 72.0,
         },
-        text: time,
-        size: time_size,
-        weight: 600,
-        foreground: colors.primary,
-        fill: None,
-        radius: 0.0,
-        action: None,
-        role: "text",
-    });
-    frame.add(WidgetElement {
-        id: 2,
-        parent: None,
-        rect: RectDip {
+        time,
+        time_size,
+        600,
+        colors.primary,
+    ));
+    frame.add(WidgetElement::text(
+        2,
+        RectDip {
             x: v.x + inset + 2.0,
             y: top + 76.0,
             w: width,
             h: 30.0,
         },
-        text: date,
-        size: 17.0,
-        weight: 400,
-        foreground: colors.secondary,
-        fill: None,
-        radius: 0.0,
-        action: None,
-        role: "text",
-    });
+        date,
+        17.0,
+        400,
+        colors.secondary,
+    ));
+}
+
+const MONTHS_EN: [&str; 12] = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+];
+
+fn describe_day(date: NaiveDate, chinese: bool) -> String {
+    if chinese {
+        let weekday = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
+            [date.weekday().num_days_from_monday() as usize];
+        format!("{}月{}日 {weekday}", date.month(), date.day())
+    } else {
+        date.format("%a, %b %-d").to_string()
+    }
 }
 
 fn build_calendar(
@@ -598,78 +771,77 @@ fn build_calendar(
     let Some(first) = NaiveDate::from_ymd_opt(year, month, 1) else {
         return;
     };
-    let (next_year, next_month) = if month == 12 {
-        (year + 1, 1)
-    } else {
-        (year, month + 1)
+    let selected = selected_day.and_then(|day| first.with_day(day));
+    // Below this width the month title would be squeezed by text buttons.
+    let narrow = frame.viewport.w < 300.0;
+    let meta = match selected {
+        Some(date) if date != today => {
+            if chinese {
+                format!("已选 {}", describe_day(date, true))
+            } else {
+                format!("Selected · {}", describe_day(date, false))
+            }
+        }
+        _ if chinese => format!("今天 {}", describe_day(today, true)),
+        _ => format!("Today · {}", describe_day(today, false)),
     };
-    let Some(next_first) = NaiveDate::from_ymd_opt(next_year, next_month, 1) else {
-        return;
-    };
-    let days = (next_first - first).num_days() as u32;
+    build_panel_header(
+        frame,
+        if chinese {
+            format!("{year}年{month}月")
+        } else {
+            format!("{} {year}", MONTHS_EN[month as usize - 1])
+        },
+        meta,
+        &[
+            HeaderAction {
+                id: 2 + PREVIOUS,
+                content: Control::Icon(
+                    glyph::CHEVRON_LEFT,
+                    if chinese {
+                        "上个月"
+                    } else {
+                        "Previous month"
+                    },
+                ),
+                kind: design::ButtonKind::Flat,
+                action: Some(PREVIOUS),
+                width: design::CONTROL_HEIGHT,
+            },
+            HeaderAction {
+                id: 2 + TODAY,
+                content: if narrow {
+                    Control::Icon(glyph::CALENDAR_DAY, if chinese { "今天" } else { "Today" })
+                } else {
+                    Control::Text(if chinese { "今天" } else { "Today" })
+                },
+                kind: design::ButtonKind::Accent,
+                action: Some(TODAY),
+                width: if narrow {
+                    design::CONTROL_HEIGHT
+                } else if chinese {
+                    56.0
+                } else {
+                    64.0
+                },
+            },
+            HeaderAction {
+                id: 2 + NEXT,
+                content: Control::Icon(
+                    glyph::CHEVRON_RIGHT,
+                    if chinese { "下个月" } else { "Next month" },
+                ),
+                kind: design::ButtonKind::Flat,
+                action: Some(NEXT),
+                width: design::CONTROL_HEIGHT,
+            },
+        ],
+        colors,
+    );
     let v = frame.viewport;
-    let pad = 14.0;
+    let pad = 12.0;
     let width = (v.w - pad * 2.0).max(0.0);
     let cell_w = width / 7.0;
-    let row_h = ((v.h - 112.0).max(0.0) / 6.0).min(46.0);
-    let header_y = v.y + 12.0;
-    frame.add(WidgetElement {
-        id: 1,
-        parent: None,
-        rect: RectDip {
-            x: v.x + pad,
-            y: header_y,
-            w: (width - 130.0).max(0.0),
-            h: 36.0,
-        },
-        text: if chinese {
-            format!("{year}年 {month}月")
-        } else {
-            format!("{year}-{month:02}")
-        },
-        size: design::TITLE,
-        weight: 600,
-        foreground: colors.primary,
-        fill: None,
-        radius: 0.0,
-        action: None,
-        role: "heading",
-    });
-    for (action, x, label) in [
-        (PREVIOUS, v.x + v.w - pad - 108.0, "‹"),
-        (
-            TODAY,
-            v.x + v.w - pad - 72.0,
-            if chinese { "今" } else { "T" },
-        ),
-        (NEXT, v.x + v.w - pad - 36.0, "›"),
-    ] {
-        let kind = if action == TODAY {
-            design::ButtonKind::Accent
-        } else {
-            design::ButtonKind::Flat
-        };
-        let btn = colors.button(kind, design::CONTROL_HEIGHT);
-        frame.add(WidgetElement {
-            id: 2 + action,
-            parent: None,
-            rect: RectDip {
-                x,
-                y: header_y + 2.0,
-                w: 32.0,
-                h: design::CONTROL_HEIGHT,
-            },
-            text: (label).into(),
-            size: design::TITLE,
-            weight: if action == TODAY { 600 } else { 400 },
-            foreground: btn.0,
-            // Chevrons stay flat so host hover/press feedback is visible on them.
-            fill: btn.1,
-            radius: btn.2,
-            action: Some(action),
-            role: "button",
-        });
-    }
     let labels = if chinese && config.week_starts_on_sunday {
         ["日", "一", "二", "三", "四", "五", "六"]
     } else if chinese {
@@ -679,77 +851,96 @@ fn build_calendar(
     } else {
         ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]
     };
-    let grid_y = header_y + 54.0;
+    let grid_y = v.y + CONTENT_TOP;
     for (col, label) in labels.iter().enumerate() {
         let weekday = if config.week_starts_on_sunday {
             (col + 6) % 7
         } else {
             col
         };
-        frame.add(WidgetElement {
-            id: 10 + weekday as u64,
-            parent: None,
-            rect: RectDip {
-                x: v.x + pad + col as f32 * cell_w + 5.0,
-                y: grid_y,
-                w: (cell_w - 5.0).max(0.0),
-                h: 25.0,
-            },
-            text: (*label).into(),
-            size: design::BODY,
-            weight: 600,
-            foreground: colors.secondary,
-            fill: None,
-            radius: 0.0,
-            action: None,
-            role: "columnheader",
-        });
+        frame.add(
+            WidgetElement::text(
+                10 + weekday as u64,
+                RectDip {
+                    x: v.x + pad + col as f32 * cell_w,
+                    y: grid_y,
+                    w: cell_w,
+                    h: 24.0,
+                },
+                *label,
+                design::CAPTION,
+                600,
+                colors.secondary,
+            )
+            .role("columnheader")
+            .align(TextAlign::Center),
+        );
     }
     let lead = if config.week_starts_on_sunday {
         first.weekday().num_days_from_sunday() as usize
     } else {
         first.weekday().num_days_from_monday() as usize
     };
-    for day in 1..=days {
-        let Some(date) = first.with_day(day) else {
+    // A fixed six-week grid keeps every month at the same geometry; days from the
+    // adjacent months fill the gaps as quiet, non-interactive context.
+    let days_y = grid_y + 26.0;
+    let row_h = ((v.y + v.h - 10.0 - days_y).max(0.0) / 6.0).min(44.0);
+    let diameter = (cell_w.min(row_h) - 4.0).clamp(0.0, 40.0);
+    for slot in 0..42usize {
+        let Some(date) =
+            first.checked_add_signed(chrono::Duration::days(slot as i64 - lead as i64))
+        else {
             continue;
         };
-        let slot = lead + day as usize - 1;
-        let col = slot % 7;
-        let row = slot / 7;
+        let (col, row) = (slot % 7, slot / 7);
         let rect = RectDip {
-            x: v.x + pad + col as f32 * cell_w,
-            y: grid_y + 28.0 + row as f32 * row_h,
-            w: (cell_w - 4.0).max(0.0),
-            h: (row_h - 3.0).max(0.0),
+            x: v.x + pad + col as f32 * cell_w + (cell_w - diameter) / 2.0,
+            y: days_y + row as f32 * row_h + (row_h - diameter) / 2.0,
+            w: diameter,
+            h: diameter,
         };
-        let is_today = offset == 0 && day == today.day();
-        let selected = selected_day == Some(day);
-        frame.add(WidgetElement {
-            id: calendar_day_id(date),
-            parent: None,
-            rect,
-            text: day.to_string(),
-            size: design::SUBTITLE,
-            weight: if is_today || selected { 700 } else { 400 },
-            foreground: if is_today {
-                colors.accent
-            } else {
-                colors.primary
-            },
-            fill: if is_today {
-                Some(colors.accent_wash())
-            } else if selected {
-                Some(colors.subtle)
-            } else {
-                None
-            },
-            radius: (cell_w - 4.0).min(row_h - 3.0).max(0.0) / 2.0,
-            action: Some(DAY_BASE + day as u64),
-            role: "button",
-        });
-        frame.set_last_accessible_name(format!("{year:04}-{month:02}-{day:02}"));
-        if selected
+        let name = format!("{:04}-{:02}-{:02}", date.year(), date.month(), date.day());
+        if date.year() != year || date.month() != month {
+            frame.add(
+                WidgetElement::text(
+                    calendar_day_id(date),
+                    rect,
+                    date.day().to_string(),
+                    design::BODY,
+                    400,
+                    colors.faint(),
+                )
+                .align(TextAlign::Center),
+            );
+            frame.set_last_accessible_name(name);
+            continue;
+        }
+        let day = date.day();
+        let is_today = date == today;
+        let is_selected = selected == Some(date);
+        let (foreground, fill) = if is_today && !colors.high_contrast {
+            (colors.panel, Some(colors.accent))
+        } else if is_today || is_selected {
+            (colors.accent, Some(colors.accent_wash()))
+        } else {
+            (colors.primary, None)
+        };
+        frame.add(
+            WidgetElement::text(
+                calendar_day_id(date),
+                rect,
+                day.to_string(),
+                design::BODY,
+                if is_today || is_selected { 600 } else { 400 },
+                foreground,
+            )
+            .role("button")
+            .fill(fill, diameter / 2.0)
+            .action(Some(DAY_BASE + day as u64))
+            .align(TextAlign::Center),
+        );
+        frame.set_last_accessible_name(name);
+        if is_selected
             && colors.high_contrast
             && let Some(node) = frame.nodes.last_mut()
         {
@@ -757,6 +948,29 @@ fn build_calendar(
                 rgba: colors.primary,
                 width: 2.0,
             });
+        }
+    }
+}
+
+/// Every interactive control stays inside the panel and no two controls share pixels.
+#[cfg(test)]
+pub(crate) fn assert_controls_fit(scene: &Scene) {
+    let viewport = scene.viewport();
+    let hits = scene.hit_tree();
+    for (i, a) in hits.iter().enumerate() {
+        assert!(
+            design::control_visible(a.rect, viewport),
+            "control {} at {:?} leaves {:?}",
+            a.id,
+            a.rect,
+            viewport
+        );
+        for b in &hits[i + 1..] {
+            let overlap = a.rect.x < b.rect.x + b.rect.w - 0.01
+                && b.rect.x < a.rect.x + a.rect.w - 0.01
+                && a.rect.y < b.rect.y + b.rect.h - 0.01
+                && b.rect.y < a.rect.y + a.rect.h - 0.01;
+            assert!(!overlap, "controls {} and {} overlap", a.id, b.id);
         }
     }
 }
@@ -938,9 +1152,14 @@ mod tests {
             build_panel_header(
                 &mut frame,
                 "便笺",
-                "编辑",
-                Some(1),
                 "正文",
+                &[HeaderAction {
+                    id: 2,
+                    content: Control::Text("编辑"),
+                    kind: design::ButtonKind::Accent,
+                    action: Some(1),
+                    width: 64.0,
+                }],
                 Colors::from_theme(None),
             );
             let frame = frame.finish(&mut tracker).unwrap();
@@ -1184,5 +1403,35 @@ mod tests {
             assert_eq!(scene.semantics()[0].id, scenes[0].semantics()[0].id);
         }
         assert_eq!(scenes[1].semantics()[1].id, scenes[2].semantics()[1].id);
+    }
+
+    #[test]
+    fn calendar_fills_six_weeks_and_marks_today_with_a_solid_accent() {
+        let scene = calendar_scene(0, false, 1.0);
+        let days: Vec<_> = scene
+            .nodes()
+            .iter()
+            .filter(|node| node.id >> 32 == 1)
+            .collect();
+        assert_eq!(days.len(), 42);
+        assert_eq!(days.iter().filter(|node| node.action.is_some()).count(), 29);
+        let theme = ThemeSnapshot::dark();
+        let today = days.iter().find(|node| node.name == "2024-02-15").unwrap();
+        assert_eq!(today.style.fill, Some(theme.accent));
+        assert_eq!(today.style.foreground, theme.surface_panel);
+        assert_eq!(today.rect.w, today.rect.h);
+        assert_eq!(today.style.align, TextAlign::Center);
+        let adjacent = days.iter().find(|node| node.name == "2024-01-29").unwrap();
+        assert_eq!(adjacent.action, None);
+        assert!(adjacent.style.foreground[3] < theme.text_secondary[3]);
+    }
+
+    #[test]
+    fn calendar_controls_fit_at_every_text_scale() {
+        for scale in [1.0, 1.25, 1.5, 2.0, 2.25] {
+            for sunday in [false, true] {
+                assert_controls_fit(&calendar_scene(0, sunday, scale));
+            }
+        }
     }
 }

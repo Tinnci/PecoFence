@@ -851,6 +851,7 @@ fn prepare_scene(
                         design::CONTROL_RADIUS * text_scale
                     },
                     text_inset: [6.0 * text_scale, 4.0 * text_scale],
+                    align: Default::default(),
                 },
             }
         })

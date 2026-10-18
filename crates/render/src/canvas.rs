@@ -115,13 +115,16 @@ impl Canvas for HeadlessCanvas {
 #[cfg(windows)]
 #[derive(Default)]
 pub struct TextFormatCache {
-    formats: std::collections::HashMap<(FontRole, u32, u16), windows_canvas::TextFormat>,
+    formats: std::collections::HashMap<
+        (FontRole, u32, u16, pecofence_plugin_api::TextAlign),
+        windows_canvas::TextFormat,
+    >,
 }
 
 #[cfg(windows)]
 impl TextFormatCache {
     fn get(&mut self, text: &TextSpec) -> Result<&windows_canvas::TextFormat> {
-        let key = (text.font, text.size_dip.to_bits(), text.weight);
+        let key = (text.font, text.size_dip.to_bits(), text.weight, text.align);
         if !self.formats.contains_key(&key) {
             // Accessibility sliders can produce many distinct sizes over a session.
             if self.formats.len() >= 128 {
@@ -133,6 +136,17 @@ impl TextFormatCache {
                 windows_canvas::FontWeight(i32::from(text.weight)),
             )
             .map_err(|error| Error::Backend(error.to_string()))?;
+            use pecofence_plugin_api::TextAlign;
+            use windows_canvas::{ParagraphAlignment, TextAlignment};
+            let format = match text.align {
+                TextAlign::TopLeading => format,
+                TextAlign::MiddleLeading => {
+                    format.with_paragraph_alignment(ParagraphAlignment::Center)
+                }
+                TextAlign::Center => format
+                    .with_alignment(TextAlignment::Center)
+                    .with_paragraph_alignment(ParagraphAlignment::Center),
+            };
             self.formats.insert(key, format);
         }
         Ok(self.formats.get(&key).expect("format just inserted"))
@@ -369,6 +383,7 @@ impl Canvas for Direct2dCanvas<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pecofence_plugin_api::TextAlign;
 
     #[test]
     fn component_border_is_inside_the_original_hit_and_text_clip() {
@@ -390,6 +405,7 @@ mod tests {
             fill: None,
             radius: 4.0,
             text_inset: [0.0; 2],
+            align: TextAlign::TopLeading,
             stroke: Some(StrokeStyle {
                 rgba: [1.0; 4],
                 width: 2.0,
@@ -437,6 +453,7 @@ mod tests {
                         stroke: None,
                         radius: radius * text_scale,
                         text_inset: [0.0; 2],
+                        align: Default::default(),
                     },
                 })
                 .collect();
@@ -550,6 +567,7 @@ mod tests {
             size_dip: 14.0,
             weight: 400,
             font: FontRole::Text,
+            align: TextAlign::TopLeading,
         };
         cache.get(&text).unwrap();
         text.text = "不同文本，相同样式".into();
@@ -558,6 +576,9 @@ mod tests {
         text.size_dip = 21.0;
         cache.get(&text).unwrap();
         assert_eq!(cache.formats.len(), 2);
+        text.align = TextAlign::Center;
+        cache.get(&text).unwrap();
+        assert_eq!(cache.formats.len(), 3);
         for index in 0..160 {
             text.size_dip = 8.0 + index as f32 * 0.1;
             cache.get(&text).unwrap();
@@ -650,6 +671,7 @@ mod tests {
             fill: Some([0.2; 4]),
             radius: 4.0,
             text_inset: [6.0, 4.0],
+            align: TextAlign::TopLeading,
         }
         .paint(&mut canvas)
         .unwrap();

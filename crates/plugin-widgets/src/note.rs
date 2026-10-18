@@ -1,7 +1,7 @@
 //! Local plain-text notes; the host owns editing, lifecycle and durable saves.
 
 use super::WidgetElement;
-use super::{Colors, WidgetFrame, build_panel_header};
+use super::{CONTENT_TOP, Colors, Control, HeaderAction, WidgetFrame, build_panel_header, glyph};
 use pecofence_plugin_api::design;
 use pecofence_plugin_api::*;
 use serde::{Deserialize, Serialize};
@@ -191,6 +191,25 @@ impl PanelInstance for NoteWidget {
     }
 }
 
+fn note_summary(text: &str, chinese: bool) -> String {
+    if text.trim().is_empty() {
+        return if chinese {
+            "空白便笺"
+        } else {
+            "Empty note"
+        }
+        .into();
+    }
+    let chars = text.chars().filter(|c| !c.is_whitespace()).count();
+    let lines = text.lines().count().max(1);
+    match (chinese, lines) {
+        (true, 1) => format!("{chars} 字"),
+        (true, _) => format!("{chars} 字 · {lines} 行"),
+        (false, 1) => format!("{chars} characters"),
+        (false, _) => format!("{chars} characters · {lines} lines"),
+    }
+}
+
 fn build_note(
     frame: &mut WidgetFrame,
     config: &NoteConfig,
@@ -198,120 +217,136 @@ fn build_note(
     colors: Colors,
     chinese: bool,
 ) {
+    let narrow = frame.viewport.w < 300.0;
+    let edit = HeaderAction {
+        id: 2,
+        content: if narrow {
+            Control::Icon(glyph::EDIT, if chinese { "编辑" } else { "Edit" })
+        } else {
+            Control::Text(if chinese { "编辑" } else { "Edit" })
+        },
+        kind: design::ButtonKind::Accent,
+        action: Some(EDIT),
+        width: if narrow { design::CONTROL_HEIGHT } else { 64.0 },
+    };
+    let undo = HeaderAction {
+        id: 6,
+        content: Control::Icon(
+            glyph::UNDO,
+            if chinese {
+                "撤销上一步"
+            } else {
+                "Undo last"
+            },
+        ),
+        kind: design::ButtonKind::Flat,
+        action: Some(UNDO),
+        width: design::CONTROL_HEIGHT,
+    };
+    let actions = if can_undo {
+        vec![undo, edit]
+    } else {
+        vec![edit]
+    };
     build_panel_header(
         frame,
         if chinese { "便笺" } else { "Note" },
-        if chinese { "编辑" } else { "Edit" },
-        Some(EDIT),
-        if chinese {
-            "记录想法与临时信息 · 点击正文编辑"
-        } else {
-            "Capture a thought; click the text to edit"
-        },
+        note_summary(&config.text, chinese),
+        &actions,
         colors,
     );
     let v = frame.viewport;
+    // The body card is the main edit target and fills the rest of the panel.
     let body = RectDip {
         x: v.x + design::CONTENT_INSET,
-        y: v.y + 68.0,
+        y: v.y + CONTENT_TOP,
         w: (v.w - design::CONTENT_INSET * 2.0).max(0.0),
-        h: (v.h - 116.0).max(0.0),
+        h: (v.h - CONTENT_TOP - design::CONTENT_INSET).max(0.0),
     };
-    frame.add(WidgetElement {
-        id: 4,
-        parent: None,
-        rect: body,
-        text: ("").into(),
-        size: design::BODY,
-        weight: 400,
-        foreground: colors.primary,
-        fill: Some(colors.subtle),
-        radius: design::CARD_RADIUS,
-        action: Some(EDIT),
-        role: "button",
-    });
+    frame.add(
+        WidgetElement::text(4, body, "", design::BODY, 400, colors.primary)
+            .role("button")
+            .fill(Some(colors.subtle), design::CARD_RADIUS)
+            .action(Some(EDIT)),
+    );
     frame.set_last_accessible_name(if chinese { "编辑便笺" } else { "Edit note" }.into());
-    frame.add(WidgetElement {
-        id: 5,
-        parent: Some(4),
-        rect: RectDip {
-            x: body.x + 12.0,
-            y: body.y + 10.0,
-            w: (body.w - 24.0).max(0.0),
-            h: (body.h - 20.0).max(0.0),
-        },
-        text: (if config.text.is_empty() {
+    let inner = RectDip {
+        x: body.x + 14.0,
+        y: body.y + 12.0,
+        w: (body.w - 28.0).max(0.0),
+        h: (body.h - 24.0).max(0.0),
+    };
+    if !config.text.is_empty() {
+        frame.add(
+            WidgetElement::text(5, inner, &config.text, design::BODY, 400, colors.primary)
+                .parent(4),
+        );
+        return;
+    }
+    // Empty state: a centered invitation that also teaches the editor keys.
+    let middle = inner.y + inner.h / 2.0;
+    frame.add(
+        WidgetElement::text(
+            8,
+            RectDip {
+                x: inner.x,
+                y: middle - 52.0,
+                w: inner.w,
+                h: 36.0,
+            },
+            glyph::QUICK_NOTE,
+            28.0,
+            400,
+            colors.faint(),
+        )
+        .parent(4)
+        .role("presentation")
+        .icon()
+        .align(TextAlign::Center),
+    );
+    frame.set_last_accessible_name(String::new());
+    frame.add(
+        WidgetElement::text(
+            5,
+            RectDip {
+                x: inner.x,
+                y: middle - 12.0,
+                w: inner.w,
+                h: 24.0,
+            },
             if chinese {
                 "从这里开始记录…"
             } else {
                 "Start a note here…"
-            }
-        } else {
-            &config.text
-        })
-        .into(),
-        size: design::BODY,
-        weight: 400,
-        foreground: if config.text.is_empty() {
-            colors.secondary
-        } else {
-            colors.primary
-        },
-        fill: None,
-        radius: 0.0,
-        action: None,
-        role: "text",
-    });
-
-    if can_undo {
-        let btn = colors.button(design::ButtonKind::Accent, 26.0);
-        frame.add(WidgetElement {
-            id: 6,
-            parent: None,
-            rect: RectDip {
-                x: v.x + design::CONTENT_INSET,
-                y: v.y + v.h - 37.0,
-                w: 110.0,
-                h: 26.0,
             },
-            text: (if chinese {
-                "撤销上一步"
+            design::SUBTITLE,
+            600,
+            colors.secondary,
+        )
+        .parent(4)
+        .align(TextAlign::Center),
+    );
+    frame.add(
+        WidgetElement::text(
+            7,
+            RectDip {
+                x: inner.x,
+                y: middle + 14.0,
+                w: inner.w,
+                h: 20.0,
+            },
+            if chinese {
+                "Ctrl+Enter 或失焦保存 · Esc 取消"
             } else {
-                "Undo last"
-            })
-            .into(),
-            size: 12.0,
-            weight: 600,
-            foreground: btn.0,
-            fill: btn.1,
-            radius: btn.2,
-            action: Some(UNDO),
-            role: "button",
-        });
-    }
-    frame.add(WidgetElement {
-        id: 7,
-        parent: None,
-        rect: RectDip {
-            x: v.x + 130.0,
-            y: v.y + v.h - 37.0,
-            w: (v.w - 144.0).max(0.0),
-            h: 26.0,
-        },
-        text: (if chinese {
-            "Ctrl+Enter 或失焦保存 · Esc 取消"
-        } else {
-            "Ctrl+Enter / blur saves; Esc cancels"
-        })
-        .into(),
-        size: 11.0,
-        weight: 400,
-        foreground: colors.secondary,
-        fill: None,
-        radius: 0.0,
-        action: None,
-        role: "text",
-    });
+                "Ctrl+Enter / blur saves; Esc cancels"
+            },
+            design::CAPTION,
+            400,
+            colors.secondary,
+        )
+        .parent(4)
+        .align(TextAlign::Center),
+    );
 }
 
 #[cfg(test)]
@@ -348,7 +383,14 @@ mod tests {
         assert_eq!(parse(&PanelConfig { version: 1, bytes }).unwrap(), config);
     }
     #[test]
-    fn note_footer_and_body_identity_do_not_depend_on_undo_visibility() {
+    fn summary_counts_visible_characters_and_lines() {
+        assert_eq!(note_summary("  \n", false), "Empty note");
+        assert_eq!(note_summary("项目 记录", true), "4 字");
+        assert_eq!(note_summary("a\nbc\n", false), "3 characters · 2 lines");
+    }
+
+    #[test]
+    fn note_header_and_body_identity_do_not_depend_on_undo_visibility() {
         let mut scenes = Vec::new();
         for undo in [false, true] {
             let mut frame = WidgetFrame::new(
@@ -391,11 +433,7 @@ mod tests {
         }
         let before = &scenes[0];
         let after = &scenes[1];
-        for name in [
-            "Keep this text",
-            "Edit note",
-            "Ctrl+Enter / blur saves; Esc cancels",
-        ] {
+        for name in ["Keep this text", "Edit note", "Note", "12 characters"] {
             let a = before.semantics().iter().find(|n| n.name == name).unwrap();
             let b = after.semantics().iter().find(|n| n.name == name).unwrap();
             assert_eq!(a.id, b.id);
@@ -417,5 +455,64 @@ mod tests {
             .find(|n| n.action == Some(UNDO))
             .unwrap();
         assert!(!before.semantics().iter().any(|n| n.id == undo.id));
+    }
+
+    #[test]
+    fn note_controls_fit_and_empty_state_teaches_editor_keys() {
+        for scale in [1.0, 1.5, 2.25] {
+            for (text, undo) in [("", false), ("Body", true)] {
+                let mut frame = WidgetFrame::new(
+                    MountKey {
+                        instance: InstanceKey {
+                            id: 1,
+                            activation: 1,
+                        },
+                        generation: 1,
+                    },
+                    1,
+                    1,
+                    FrameInput {
+                        viewport: RectDip {
+                            x: 0.0,
+                            y: 0.0,
+                            w: 420.0,
+                            h: 370.0,
+                        },
+                        locale: "en",
+                        presentation: Presentation::Compact,
+                        grouping: Grouping::Single,
+                        exposure: Exposure::Desktop,
+                        active: true,
+                        text_scale: scale,
+                        theme_epoch: 1,
+                        device_epoch: 1,
+                    },
+                );
+                build_note(
+                    &mut frame,
+                    &NoteConfig { text: text.into() },
+                    undo,
+                    Colors::from_theme(None),
+                    false,
+                );
+                let scene = frame.finish(&mut design::LayoutTracker::default()).unwrap();
+                // The body card intentionally contains its text; only check the header controls.
+                let body = scene
+                    .hit_tree()
+                    .iter()
+                    .find(|hit| hit.id == 4)
+                    .unwrap()
+                    .rect;
+                for hit in scene.hit_tree().iter().filter(|hit| hit.id != 4) {
+                    assert!(hit.rect.y + hit.rect.h <= body.y);
+                }
+                crate::assert_controls_fit(&scene);
+                let hint = scene
+                    .semantics()
+                    .iter()
+                    .any(|n| n.name == "Ctrl+Enter / blur saves; Esc cancels");
+                assert_eq!(hint, text.is_empty());
+            }
+        }
     }
 }

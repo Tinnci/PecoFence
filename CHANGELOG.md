@@ -22,6 +22,15 @@
   or startup improvement is claimed. Full Windows CI uses the agreed 6.5 MiB
   (6,815,744-byte) EXE cap. Final release measurements and acceptance evidence
   remain pending. See [verification gates](docs/VERIFICATION_GATES.md).
+- Redesign the note, TODO and calendar widgets. Shared header with a one-line
+  summary and right-aligned pill/icon actions; labels, checkboxes and dates are
+  centered through a new `TextAlign` on plugin text. Notes get a full-height body
+  and a centered empty state; TODO lists add a progress bar, Fluent checkbox
+  glyphs and pending-first ordering; the calendar shows a fixed six-week grid
+  with dimmed adjacent-month dates and a solid accent for today. Narrow panels
+  and large text scales collapse text actions to icons. Verified with headless
+  layout tests only; on-device visual, high-contrast and screen-reader checks
+  remain pending.
 
 The versioned entries below are retained from the upstream baseline. References
 to Store submissions or a published website describe that history, not an active

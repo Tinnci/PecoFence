@@ -865,6 +865,7 @@ mod candidate_error_tests {
                         fill: Some([0.2, 0.3, 0.4, 1.0]),
                         radius: 4.0,
                         text_inset: [0.0; 2],
+                        align: Default::default(),
                     },
                 }],
             )?;

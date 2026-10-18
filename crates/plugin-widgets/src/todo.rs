@@ -1,7 +1,7 @@
 //! Local TODO panel. Tasks live in the provider-owned JSON saved with its fence.
 
 use super::WidgetElement;
-use super::{Colors, WidgetFrame, build_panel_header};
+use super::{CONTENT_TOP, Colors, Control, HeaderAction, WidgetFrame, build_panel_header, glyph};
 use pecofence_plugin_api::design;
 use pecofence_plugin_api::*;
 use serde::{Deserialize, Serialize};
@@ -359,8 +359,29 @@ fn apply_change(
     Ok(Some(bytes))
 }
 
+const LIST_TOP: f32 = 78.0;
+const ROW_HEIGHT: f32 = 40.0;
+const ROW_PITCH: f32 = 44.0;
+const FOOTER_HEIGHT: f32 = 28.0;
+const FOOTER_BOTTOM: f32 = 12.0;
+
+fn footer_y(height: f32) -> f32 {
+    height - FOOTER_BOTTOM - FOOTER_HEIGHT
+}
+
 fn page_capacity(height: f32) -> usize {
-    ((height - 112.0) / 42.0).floor().max(1.0) as usize
+    let list = footer_y(height) - 6.0 - LIST_TOP;
+    ((list + ROW_PITCH - ROW_HEIGHT) / ROW_PITCH)
+        .floor()
+        .max(1.0) as usize
+}
+
+/// Display order: pending tasks keep their order, completed ones sink below them.
+/// Actions still address the stored index, so reordering never changes commands.
+fn display_order(config: &TodoConfig) -> Vec<(usize, &TodoTask)> {
+    let mut order: Vec<_> = config.tasks.iter().enumerate().collect();
+    order.sort_by_key(|(_, task)| task.done);
+    order
 }
 
 fn build_todo(
@@ -372,110 +393,188 @@ fn build_todo(
     colors: Colors,
     chinese: bool,
 ) {
-    let v = frame.viewport;
-    let width = (v.w - design::CONTENT_INSET * 2.0).max(0.0);
-    let pending = config.tasks.iter().filter(|task| !task.done).count();
+    let total = config.tasks.len();
+    let done = config.tasks.iter().filter(|task| task.done).count();
+    let pending = total - done;
+    let full = total >= MAX_TASKS;
+    // Narrow panels (small fences or large text scales) collapse labels to icons.
+    let narrow = frame.viewport.w - design::CONTENT_INSET * 2.0 < 300.0;
+    let meta = match (chinese, total, pending) {
+        (true, 0, _) => "没有任务".to_string(),
+        (false, 0, _) => "No tasks".to_string(),
+        (true, _, 0) => format!("{total} 项已全部完成"),
+        (false, _, 0) => format!("All {total} done"),
+        (true, _, _) => format!("{pending} 项待办 · {done} 项已完成"),
+        (false, _, _) => format!("{pending} to do · {done} done"),
+    };
     build_panel_header(
         frame,
-        if chinese {
-            format!("待办 · {pending} 项")
-        } else {
-            format!("To do · {pending}")
-        },
-        if config.tasks.len() >= MAX_TASKS {
-            if chinese { "已满" } else { "Full" }
-        } else if chinese {
-            "＋ 添加"
-        } else {
-            "+ Add"
-        },
-        (config.tasks.len() < MAX_TASKS).then_some(ADD),
-        if chinese {
-            "点击标题编辑 · 勾选框完成或恢复"
-        } else {
-            "Click a title to edit; check to complete or restore"
-        },
+        if chinese { "待办" } else { "To do" },
+        meta,
+        &[HeaderAction {
+            id: 2,
+            content: match (full, chinese, narrow) {
+                (true, true, _) => Control::Text("已满"),
+                (true, false, _) => Control::Text("Full"),
+                (false, true, true) => Control::Icon(glyph::ADD, "添加"),
+                (false, false, true) => Control::Icon(glyph::ADD, "Add"),
+                (false, true, false) => Control::Text("＋ 添加"),
+                (false, false, false) => Control::Text("+ Add"),
+            },
+            kind: design::ButtonKind::Accent,
+            action: (!full).then_some(ADD),
+            width: if narrow && !full {
+                design::CONTROL_HEIGHT
+            } else {
+                76.0
+            },
+        }],
         colors,
     );
-    if config.tasks.is_empty() {
-        frame.add(WidgetElement {
-            id: 9,
-            parent: None,
-            rect: RectDip {
-                x: v.x + 18.0,
-                y: v.y + 80.0,
-                w: width - 8.0,
-                h: 32.0,
-            },
-            text: (if chinese {
-                "暂无任务，点击右上角添加"
-            } else {
-                "No tasks yet. Add one above."
-            })
-            .into(),
-            size: design::BODY,
-            weight: 400,
-            foreground: colors.secondary,
-            fill: None,
-            radius: 0.0,
-            action: None,
-            role: "text",
+    let v = frame.viewport;
+    let width = (v.w - design::CONTENT_INSET * 2.0).max(0.0);
+    let left = v.x + design::CONTENT_INSET;
+    if total > 0 {
+        let track = RectDip {
+            x: left,
+            y: v.y + CONTENT_TOP,
+            w: width,
+            h: 4.0,
+        };
+        frame.add(
+            WidgetElement::text(10, track, "", design::CAPTION, 400, colors.secondary)
+                .role("progressbar")
+                .fill(Some(colors.subtle), 2.0),
+        );
+        frame.set_last_accessible_name(if chinese {
+            format!("已完成 {done}/{total}")
+        } else {
+            format!("{done} of {total} done")
         });
+        if done > 0 {
+            frame.add(
+                WidgetElement::text(
+                    11,
+                    RectDip {
+                        w: track.w * done as f32 / total as f32,
+                        ..track
+                    },
+                    "",
+                    design::CAPTION,
+                    400,
+                    colors.accent,
+                )
+                .parent(10)
+                .role("presentation")
+                .fill(Some(colors.accent), 2.0),
+            );
+        }
+    } else {
+        let list_bottom = v.y + footer_y(v.h) - 6.0;
+        let middle = (v.y + LIST_TOP + list_bottom) / 2.0;
+        frame.add(
+            WidgetElement::text(
+                12,
+                RectDip {
+                    x: left,
+                    y: middle - 52.0,
+                    w: width,
+                    h: 36.0,
+                },
+                glyph::CHECKLIST,
+                28.0,
+                400,
+                colors.faint(),
+            )
+            .role("presentation")
+            .icon()
+            .align(TextAlign::Center),
+        );
+        frame.set_last_accessible_name(String::new());
+        frame.add(
+            WidgetElement::text(
+                9,
+                RectDip {
+                    x: left,
+                    y: middle - 12.0,
+                    w: width,
+                    h: 24.0,
+                },
+                if chinese {
+                    "暂无任务"
+                } else {
+                    "Nothing to do"
+                },
+                design::SUBTITLE,
+                600,
+                colors.secondary,
+            )
+            .align(TextAlign::Center),
+        );
+        frame.add(
+            WidgetElement::text(
+                13,
+                RectDip {
+                    x: left,
+                    y: middle + 14.0,
+                    w: width,
+                    h: 20.0,
+                },
+                if chinese {
+                    "点击“添加”创建第一项"
+                } else {
+                    "Use Add to create your first task"
+                },
+                design::CAPTION,
+                400,
+                colors.secondary,
+            )
+            .align(TextAlign::Center),
+        );
     }
     let start = page.saturating_mul(capacity);
-    for (slot, (index, task)) in config
-        .tasks
-        .iter()
-        .enumerate()
+    for (slot, (index, task)) in display_order(config)
+        .into_iter()
         .skip(start)
         .take(capacity)
         .enumerate()
     {
-        let y = v.y + 68.0 + slot as f32 * 42.0;
-        frame.add(WidgetElement {
-            id: task_node(task.id, 0),
-            parent: None,
-            rect: RectDip {
-                x: v.x + design::CONTENT_INSET,
-                y,
-                w: width,
-                h: 37.0,
-            },
-            text: ("").into(),
-            size: design::BODY,
-            weight: 400,
-            foreground: if task.done {
-                colors.secondary
-            } else {
-                colors.primary
-            },
-            fill: Some(colors.subtle),
-            radius: design::CARD_RADIUS,
-            action: None,
-            role: "group",
-        });
-        frame.add(WidgetElement {
-            id: task_node(task.id, 1),
-            parent: Some(task_node(task.id, 0)),
-            rect: RectDip {
-                x: v.x + design::CONTENT_INSET,
-                y,
-                w: 36.0,
-                h: 37.0,
-            },
-            text: (if task.done { "☑" } else { "□" }).into(),
-            size: 19.0,
-            weight: 400,
-            foreground: if task.done {
-                colors.accent
-            } else {
-                colors.primary
-            },
-            fill: None,
-            radius: 0.0,
-            action: Some(TASK_BASE + index as u64),
-            role: "checkbox",
-        });
+        let row = RectDip {
+            x: left,
+            y: v.y + LIST_TOP + slot as f32 * ROW_PITCH,
+            w: width,
+            h: ROW_HEIGHT,
+        };
+        let ink = if task.done {
+            colors.secondary
+        } else {
+            colors.primary
+        };
+        // Completed rows drop their card so pending work stays visually dominant.
+        frame.add(
+            WidgetElement::text(task_node(task.id, 0), row, "", design::BODY, 400, ink)
+                .role("group")
+                .fill((!task.done).then_some(colors.subtle), design::CARD_RADIUS),
+        );
+        frame.add(
+            WidgetElement::text(
+                task_node(task.id, 1),
+                RectDip { w: 40.0, ..row },
+                if task.done {
+                    glyph::CHECKBOX_CHECKED
+                } else {
+                    glyph::CHECKBOX
+                },
+                18.0,
+                400,
+                if task.done { colors.accent } else { ink },
+            )
+            .parent(task_node(task.id, 0))
+            .role("checkbox")
+            .action(Some(TASK_BASE + index as u64))
+            .icon()
+            .align(TextAlign::Center),
+        );
         frame.set_last_accessible_name(if chinese {
             format!(
                 "{}：{}",
@@ -499,139 +598,132 @@ fn build_todo(
         });
         // Keep the complete title in the text/semantic node. The renderer clips
         // to this rectangle; opening the editor reveals the complete text.
-        frame.add(WidgetElement {
-            id: task_node(task.id, 2),
-            parent: Some(task_node(task.id, 0)),
-            rect: RectDip {
-                x: v.x + design::CONTENT_INSET + 36.0,
-                y,
-                w: (width - 36.0).max(0.0),
-                h: 37.0,
-            },
-            text: (&task.title).into(),
-            size: design::BODY,
-            weight: 400,
-            foreground: if task.done {
-                colors.secondary
-            } else {
-                colors.primary
-            },
-            fill: None,
-            radius: 0.0,
-            action: Some(EDIT_BASE + index as u64),
-            role: "button",
-        });
+        frame.add(
+            WidgetElement::text(
+                task_node(task.id, 2),
+                RectDip {
+                    x: row.x + 40.0,
+                    w: (row.w - 48.0).max(0.0),
+                    ..row
+                },
+                &task.title,
+                design::BODY,
+                400,
+                ink,
+            )
+            .parent(task_node(task.id, 0))
+            .role("button")
+            .action(Some(EDIT_BASE + index as u64))
+            .align(TextAlign::MiddleLeading),
+        );
     }
-    let footer_y = v.y + v.h - 37.0;
-    if config.tasks.iter().any(|task| task.done) {
-        let btn = colors.button(design::ButtonKind::Subtle, 26.0);
-        frame.add(WidgetElement {
-            id: 4,
-            parent: None,
-            rect: RectDip {
-                x: v.x + design::CONTENT_INSET,
-                y: footer_y,
-                w: 110.0,
-                h: 26.0,
-            },
-            text: (if chinese {
-                "清除已完成"
+    let footer = RectDip {
+        x: left,
+        y: v.y + footer_y(v.h),
+        w: 0.0,
+        h: FOOTER_HEIGHT,
+    };
+    let mut x = left;
+    if done > 0 {
+        let label = match (chinese, narrow) {
+            (true, false) => format!("清除已完成 · {done}"),
+            (false, false) => format!("Clear done · {done}"),
+            (true, true) => format!("清除 {done} 项已完成"),
+            (false, true) => format!("Clear {done} done"),
+        };
+        let w = if narrow { FOOTER_HEIGHT } else { 128.0 };
+        frame.button(
+            4,
+            RectDip { x, w, ..footer },
+            if narrow {
+                Control::Icon(glyph::BROOM, &label)
             } else {
-                "Clear done"
-            })
-            .into(),
-            size: 12.0,
-            weight: 400,
-            foreground: colors.secondary,
-            fill: btn.1,
-            radius: btn.2,
-            action: Some(CLEAR_DONE),
-            role: "button",
-        });
+                Control::Text(&label)
+            },
+            design::ButtonKind::Subtle,
+            Some(CLEAR_DONE),
+            colors,
+        );
+        x += w + 6.0;
     }
     if can_undo {
-        let btn = colors.button(design::ButtonKind::Accent, 26.0);
-        frame.add(WidgetElement {
-            id: 5,
-            parent: None,
-            rect: RectDip {
-                x: v.x + 130.0,
-                y: footer_y,
-                w: 115.0,
-                h: 26.0,
+        frame.button(
+            5,
+            RectDip {
+                x,
+                w: FOOTER_HEIGHT,
+                ..footer
             },
-            text: (if chinese {
-                "撤销上一步"
-            } else {
-                "Undo last"
-            })
-            .into(),
-            size: 12.0,
-            weight: 600,
-            foreground: btn.0,
-            fill: btn.1,
-            radius: btn.2,
-            action: Some(UNDO),
-            role: "button",
-        });
+            Control::Icon(
+                glyph::UNDO,
+                if chinese {
+                    "撤销上一步"
+                } else {
+                    "Undo last"
+                },
+            ),
+            design::ButtonKind::Flat,
+            Some(UNDO),
+            colors,
+        );
+        x += FOOTER_HEIGHT + 6.0;
     }
-    let pages = config.tasks.len().max(1).div_ceil(capacity);
+    let pages = total.max(1).div_ceil(capacity);
     if pages > 1 {
-        let btn = colors.button(design::ButtonKind::Subtle, 26.0);
-        frame.add(WidgetElement {
-            id: 6,
-            parent: None,
-            rect: RectDip {
-                x: v.x + v.w - 112.0,
-                y: footer_y,
-                w: 30.0,
-                h: 26.0,
+        let right = left + width;
+        let label_w = (right - x - FOOTER_HEIGHT * 2.0).clamp(0.0, 48.0);
+        let label_w = if label_w < 24.0 { 0.0 } else { label_w };
+        frame.button(
+            6,
+            RectDip {
+                x: right - FOOTER_HEIGHT * 2.0 - label_w,
+                w: FOOTER_HEIGHT,
+                ..footer
             },
-            text: ("‹").into(),
-            size: 20.0,
-            weight: 600,
-            foreground: btn.0,
-            fill: btn.1,
-            radius: btn.2,
-            action: (page > 0).then_some(PREVIOUS_PAGE),
-            role: "button",
-        });
-        frame.add(WidgetElement {
-            id: 7,
-            parent: None,
-            rect: RectDip {
-                x: v.x + v.w - 79.0,
-                y: footer_y,
-                w: 42.0,
-                h: 26.0,
+            Control::Icon(
+                glyph::CHEVRON_LEFT,
+                if chinese {
+                    "上一页"
+                } else {
+                    "Previous page"
+                },
+            ),
+            design::ButtonKind::Flat,
+            (page > 0).then_some(PREVIOUS_PAGE),
+            colors,
+        );
+        if label_w > 0.0 {
+            frame.add(
+                WidgetElement::text(
+                    7,
+                    RectDip {
+                        x: right - FOOTER_HEIGHT - label_w,
+                        w: label_w,
+                        ..footer
+                    },
+                    format!("{}/{}", page + 1, pages),
+                    design::CAPTION,
+                    400,
+                    colors.secondary,
+                )
+                .align(TextAlign::Center),
+            );
+        }
+        frame.button(
+            8,
+            RectDip {
+                x: right - FOOTER_HEIGHT,
+                w: FOOTER_HEIGHT,
+                ..footer
             },
-            text: format!("{}/{}", page + 1, pages),
-            size: 12.0,
-            weight: 400,
-            foreground: colors.secondary,
-            fill: None,
-            radius: 0.0,
-            action: None,
-            role: "text",
-        });
-        frame.add(WidgetElement {
-            id: 8,
-            parent: None,
-            rect: RectDip {
-                x: v.x + v.w - 36.0,
-                y: footer_y,
-                w: 30.0,
-                h: 26.0,
-            },
-            text: ("›").into(),
-            size: 20.0,
-            weight: 600,
-            foreground: btn.0,
-            fill: btn.1,
-            radius: btn.2,
-            action: (page + 1 < pages).then_some(NEXT_PAGE),
-            role: "button",
-        });
+            Control::Icon(
+                glyph::CHEVRON_RIGHT,
+                if chinese { "下一页" } else { "Next page" },
+            ),
+            design::ButtonKind::Flat,
+            (page + 1 < pages).then_some(NEXT_PAGE),
+            colors,
+        );
     }
 }
 
@@ -986,5 +1078,88 @@ mod tests {
         assert_eq!(later_paged.parent, later_all.parent);
         assert!(!after.semantics().iter().any(|n| n.name == "Remove"));
         assert_eq!(task_node(MAX_TASK_ID, 2) >> 63, 1);
+    }
+
+    #[test]
+    fn completed_tasks_sink_below_pending_ones_but_keep_their_actions() {
+        let config = read_config(
+            r#"{"tasks":[{"title":"Done first","done":true},{"title":"Open","done":false}]}"#,
+        )
+        .unwrap();
+        let scene = scene_for(&config, 0, 5, true);
+        let open = scene.semantics().iter().find(|n| n.name == "Open").unwrap();
+        let done = scene
+            .semantics()
+            .iter()
+            .find(|n| n.name == "Done first")
+            .unwrap();
+        assert!(open.rect.y < done.rect.y);
+        assert_eq!(open.action, Some(EDIT_BASE + 1));
+        assert_eq!(done.action, Some(EDIT_BASE));
+        assert!(
+            scene
+                .semantics()
+                .iter()
+                .any(|n| n.role == "progressbar" && n.name == "1 of 2 done")
+        );
+    }
+
+    #[test]
+    fn todo_controls_fit_at_every_text_scale() {
+        let config = TodoConfig {
+            next_id: 21,
+            tasks: (0..20)
+                .map(|n| TodoTask {
+                    id: n + 1,
+                    title: format!("Task {n}"),
+                    done: n % 3 == 0,
+                })
+                .collect(),
+        };
+        for scale in [1.0, 1.25, 1.5, 2.0, 2.25] {
+            for chinese in [false, true] {
+                let input = FrameInput {
+                    viewport: RectDip {
+                        x: 0.0,
+                        y: 0.0,
+                        w: 420.0,
+                        h: 370.0,
+                    },
+                    locale: if chinese { "zh-CN" } else { "en" },
+                    presentation: Presentation::Compact,
+                    grouping: Grouping::Single,
+                    exposure: Exposure::Desktop,
+                    active: true,
+                    text_scale: scale,
+                    theme_epoch: 1,
+                    device_epoch: 1,
+                };
+                let logical = design::ContentScale::new(input.viewport, scale).logical_viewport();
+                let capacity = page_capacity(logical.h);
+                let mut frame = WidgetFrame::new(
+                    MountKey {
+                        instance: InstanceKey {
+                            id: 1,
+                            activation: 1,
+                        },
+                        generation: 1,
+                    },
+                    1,
+                    1,
+                    input,
+                );
+                build_todo(
+                    &mut frame,
+                    &config,
+                    1,
+                    capacity,
+                    true,
+                    Colors::from_theme(None),
+                    chinese,
+                );
+                let scene = frame.finish(&mut design::LayoutTracker::default()).unwrap();
+                crate::assert_controls_fit(&scene);
+            }
+        }
     }
 }

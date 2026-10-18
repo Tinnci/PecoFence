@@ -1,6 +1,6 @@
 //! Platform-free presentation rules. Layout is in DIPs; display DPI is applied only
 //! by the host surface. Accessibility text scaling reflows the layout before paint.
-use crate::{Canvas, FontRole, HitNode, RectDip, Result, TextSpec, ThemeSnapshot};
+use crate::{Canvas, FontRole, HitNode, RectDip, Result, TextAlign, TextSpec, ThemeSnapshot};
 
 pub const FONT_TEXT: &str = "Segoe UI Variable Text";
 pub const FONT_SMALL: &str = "Segoe UI Variable Small";
@@ -288,6 +288,7 @@ pub struct Component<'a> {
     pub stroke: Option<crate::StrokeStyle>,
     pub radius: f32,
     pub text_inset: [f32; 2],
+    pub align: TextAlign,
 }
 
 impl Component<'_> {
@@ -331,6 +332,7 @@ impl Component<'_> {
                         size_dip: self.size,
                         weight: self.weight,
                         font: self.font,
+                        align: self.align,
                     },
                     self.foreground,
                 )?;

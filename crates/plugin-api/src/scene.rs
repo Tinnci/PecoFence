@@ -3,6 +3,7 @@
 use crate::design::Component;
 use crate::{
     Canvas, Error, FontRole, FrameIdentity, HitNode, PreparedFrame, RectDip, Result, SemanticNode,
+    TextAlign,
 };
 use std::collections::{HashMap, HashSet};
 
@@ -16,6 +17,7 @@ pub struct NodeStyle {
     pub stroke: Option<crate::StrokeStyle>,
     pub radius: f32,
     pub text_inset: [f32; 2],
+    pub align: TextAlign,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -204,6 +206,7 @@ impl PreparedFrame for Scene {
                     stroke: style.stroke,
                     radius: style.radius,
                     text_inset: style.text_inset,
+                    align: style.align,
                 }
                 .paint(canvas)?;
             }
@@ -256,6 +259,7 @@ mod tests {
                 fill: None,
                 radius: 4.0,
                 text_inset: [0.0; 2],
+                align: Default::default(),
             },
         }
     }
