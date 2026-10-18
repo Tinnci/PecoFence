@@ -407,6 +407,7 @@ mod tests {
             radius: 4.0,
             text_inset: [0.0; 2],
             align: TextAlign::TopLeading,
+            path: None,
             stroke: Some(StrokeStyle {
                 rgba: [1.0; 4],
                 width: 2.0,
@@ -455,6 +456,7 @@ mod tests {
                         radius: radius * text_scale,
                         text_inset: [0.0; 2],
                         align: Default::default(),
+                        path: None,
                     },
                 })
                 .collect();
@@ -673,6 +675,7 @@ mod tests {
             radius: 4.0,
             text_inset: [6.0, 4.0],
             align: TextAlign::TopLeading,
+            path: None,
         }
         .paint(&mut canvas)
         .unwrap();

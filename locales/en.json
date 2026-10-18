@@ -633,5 +633,6 @@
   "新建便笺": "New note",
   "所有更改已保存。": "All changes saved.",
   "正在应用更改…": "Applying changes…",
-  "更改已应用，正在等待保存。": "Changes applied; waiting to save."
+  "更改已应用，正在等待保存。": "Changes applied; waiting to save.",
+  "图表": "Diagram"
 }

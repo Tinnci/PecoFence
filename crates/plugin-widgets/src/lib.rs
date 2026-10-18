@@ -11,9 +11,12 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+mod diagram;
 mod lunar;
+mod mermaid;
 mod note;
 mod todo;
+pub use diagram::{DIAGRAM_PROVIDER, DiagramPlugin, diagram_template};
 pub use note::{NOTE_PROVIDER, NotePlugin};
 pub use todo::{TODO_PROVIDER, TodoPlugin};
 
@@ -358,6 +361,14 @@ pub(crate) mod paper {
     pub(crate) const TERRACOTTA: [f32; 4] = srgb(0xA9, 0x50, 0x2D);
     pub(crate) const TERRACOTTA_INK: [f32; 4] = srgb(0x94, 0x45, 0x26);
     pub(crate) const CREAM: [f32; 4] = srgb(0xFF, 0xF8, 0xEE);
+    /// Diagram stage, a shade under the card, and the surfaces drawn on it.
+    pub(crate) const STAGE: [f32; 4] = srgb(0xEF, 0xE8, 0xDB);
+    pub(crate) const SHAPE: [f32; 4] = srgb(0xFF, 0xFC, 0xF6);
+    pub(crate) const SHAPE_LINE: [f32; 4] = srgb(0xC9, 0xBC, 0xA6);
+    pub(crate) const LINK: [f32; 4] = srgb(0x7E, 0x73, 0x64);
+    pub(crate) const BAR: [f32; 4] = srgb(0xE0, 0xD5, 0xC2);
+    pub(crate) const WARNING_WASH: [f32; 4] = srgb(0xF7, 0xE9, 0xCF);
+    pub(crate) const WARNING_INK: [f32; 4] = srgb(0x7A, 0x4F, 0x00);
 }
 
 #[derive(Clone, Copy)]
@@ -538,6 +549,8 @@ pub(crate) struct WidgetElement<'a> {
     role: &'a str,
     font: Option<FontRole>,
     align: TextAlign,
+    /// Polyline in the same logical coordinates as `rect`, stroked instead of filled.
+    path: Option<(Vec<(f32, f32)>, bool, pecofence_plugin_api::StrokeStyle)>,
 }
 
 impl<'a> WidgetElement<'a> {
@@ -564,7 +577,35 @@ impl<'a> WidgetElement<'a> {
             role: "text",
             font: None,
             align: TextAlign::TopLeading,
+            path: None,
         }
+    }
+
+    /// A stroked line or closed outline; never hit-tested. `rect` should bound it.
+    pub(crate) fn line(
+        id: u64,
+        rect: RectDip,
+        points: Vec<(f32, f32)>,
+        closed: bool,
+        rgba: [f32; 4],
+        width: f32,
+    ) -> Self {
+        // Straight lines have an empty box, which the painter skips and clips to
+        // nothing; pad it by the stroke so the whole line and its caps are kept.
+        let pad = width.max(1.0) + 1.0;
+        let rect = RectDip {
+            x: rect.x - pad,
+            y: rect.y - pad,
+            w: rect.w + pad * 2.0,
+            h: rect.h + pad * 2.0,
+        };
+        let mut element = Self::text(id, rect, "", design::BODY, 400, rgba).role("presentation");
+        element.path = Some((
+            points,
+            closed,
+            pecofence_plugin_api::StrokeStyle { rgba, width },
+        ));
+        element
     }
 
     pub(crate) fn role(mut self, role: &'a str) -> Self {
@@ -663,6 +704,7 @@ impl WidgetFrame {
             role,
             font,
             align,
+            path,
         } = element;
         let font = font.unwrap_or(if size < design::BODY {
             FontRole::Small
@@ -674,6 +716,30 @@ impl WidgetFrame {
         let rect = self.scale.rect(rect);
         let size = self.scale.value(size);
         let radius = self.scale.value(radius);
+        let (path, stroke) = match path {
+            Some((points, closed, stroke)) => (
+                Some(pecofence_plugin_api::Path {
+                    points: points
+                        .into_iter()
+                        .map(|(x, y)| {
+                            let p = self.scale.rect(RectDip {
+                                x,
+                                y,
+                                w: 0.0,
+                                h: 0.0,
+                            });
+                            pecofence_plugin_api::PointDip { x: p.x, y: p.y }
+                        })
+                        .collect(),
+                    closed,
+                }),
+                Some(pecofence_plugin_api::StrokeStyle {
+                    rgba: stroke.rgba,
+                    width: self.scale.value(stroke.width),
+                }),
+            ),
+            None => (None, None),
+        };
         self.nodes.push(SceneNode {
             id,
             parent,
@@ -683,7 +749,7 @@ impl WidgetFrame {
             text,
             action,
             style: NodeStyle {
-                stroke: None,
+                stroke,
                 size,
                 font,
                 weight,
@@ -692,6 +758,7 @@ impl WidgetFrame {
                 radius,
                 text_inset: [0.0, 0.0],
                 align,
+                path,
             },
         });
     }

@@ -18,6 +18,9 @@ pub struct NodeStyle {
     pub radius: f32,
     pub text_inset: [f32; 2],
     pub align: TextAlign,
+    /// Polyline drawn with `stroke` instead of a rectangle border, in the same
+    /// coordinates as `rect` (diagram edges and arrowheads). Never hit-tested.
+    pub path: Option<crate::Path>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -83,6 +86,12 @@ impl Scene {
                 || !style.text_inset.iter().all(|v| v.is_finite() && *v >= 0.0)
                 || !color_valid(style.foreground)
                 || style.fill.is_some_and(|color| !color_valid(color))
+                || style.path.as_ref().is_some_and(|path| {
+                    !path
+                        .points
+                        .iter()
+                        .all(|p| p.x.is_finite() && p.y.is_finite())
+                })
                 || style.stroke.is_some_and(|stroke| {
                     !color_valid(stroke.rgba) || !stroke.width.is_finite() || stroke.width <= 0.0
                 })
@@ -207,6 +216,7 @@ impl PreparedFrame for Scene {
                     radius: style.radius,
                     text_inset: style.text_inset,
                     align: style.align,
+                    path: style.path.as_ref(),
                 }
                 .paint(canvas)?;
             }
@@ -260,6 +270,7 @@ mod tests {
                 radius: 4.0,
                 text_inset: [0.0; 2],
                 align: Default::default(),
+                path: None,
             },
         }
     }

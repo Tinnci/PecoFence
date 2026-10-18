@@ -291,6 +291,7 @@ pub struct Component<'a> {
     pub radius: f32,
     pub text_inset: [f32; 2],
     pub align: TextAlign,
+    pub path: Option<&'a crate::Path>,
 }
 
 impl Component<'_> {
@@ -307,7 +308,9 @@ impl Component<'_> {
                     fill,
                 )?;
             }
-            if let Some(mut stroke) = self.stroke {
+            if let (Some(path), Some(stroke)) = (self.path, self.stroke) {
+                canvas.stroke_path(path, stroke)?;
+            } else if let Some(mut stroke) = self.stroke {
                 stroke.width = stroke.width.min(self.rect.w).min(self.rect.h);
                 let inset = stroke.width / 2.0;
                 canvas.draw_rect(

@@ -730,6 +730,7 @@ impl App {
             pecofence_plugin_widgets::CALENDAR_PROVIDER => ("日历", 420.0, 370.0),
             pecofence_plugin_widgets::TODO_PROVIDER => ("待办清单", 420.0, 370.0),
             pecofence_plugin_widgets::NOTE_PROVIDER => ("便笺", 420.0, 370.0),
+            pecofence_plugin_widgets::DIAGRAM_PROVIDER => ("图表", 560.0, 400.0),
             _ => return,
         };
         let rect = self.place_new_fence_dip(width, height, x, y, near);
@@ -746,7 +747,9 @@ impl App {
             self.schedule_save();
             if matches!(
                 provider,
-                pecofence_plugin_widgets::NOTE_PROVIDER | pecofence_plugin_widgets::TODO_PROVIDER
+                pecofence_plugin_widgets::NOTE_PROVIDER
+                    | pecofence_plugin_widgets::TODO_PROVIDER
+                    | pecofence_plugin_widgets::DIAGRAM_PROVIDER
             ) && let Some(pecofence_core::FenceSnapshot {
                 content: pecofence_core::FenceContentSpec::Panel { panel },
                 ..
@@ -759,11 +762,22 @@ impl App {
                     .ok()
                     .map(|handle| handle.key());
                 if let Some(key) = key {
+                    let diagram = provider == pecofence_plugin_widgets::DIAGRAM_PROVIDER;
+                    let chinese = matches!(
+                        pecofence_core::i18n::language(),
+                        pecofence_core::i18n::Language::SimplifiedChinese
+                            | pecofence_core::i18n::Language::TraditionalChinese
+                    );
                     self.queue.push(Command::PanelTextRequested {
                         key,
                         action: 1,
-                        initial: String::new(),
-                        multiline: provider == pecofence_plugin_widgets::NOTE_PROVIDER,
+                        // A new diagram starts from an editable example rather than a blank page.
+                        initial: if diagram {
+                            pecofence_plugin_widgets::diagram_template(chinese).to_string()
+                        } else {
+                            String::new()
+                        },
+                        multiline: diagram || provider == pecofence_plugin_widgets::NOTE_PROVIDER,
                     });
                 }
             }

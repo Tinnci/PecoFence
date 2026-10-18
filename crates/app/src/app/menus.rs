@@ -2,11 +2,12 @@
 
 use super::*;
 
-fn new_widget_menu(clock: u32, calendar: u32, note: u32, todo: u32) -> PopupMenu {
+fn new_widget_menu(clock: u32, calendar: u32, note: u32, todo: u32, diagram: u32) -> PopupMenu {
     let menu = PopupMenu::new();
     for (id, title) in [
         (note, "便笺"),
         (todo, "待办清单"),
+        (diagram, "图表"),
         (clock, "数字时钟"),
         (calendar, "日历"),
     ] {
@@ -28,6 +29,7 @@ const CMD_NEW_CLOCK: u32 = 11;
 const CMD_NEW_CALENDAR: u32 = 12;
 const CMD_NEW_TODO: u32 = 13;
 const CMD_NEW_NOTE: u32 = 14;
+const CMD_NEW_DIAGRAM: u32 = 15;
 const CMD_ITEM_OPEN: u32 = 100;
 const CMD_ITEM_LOCATION: u32 = 101;
 const CMD_ITEM_PROPERTIES: u32 = 102;
@@ -41,6 +43,7 @@ const CMD_FENCE_NEW_CLOCK: u32 = 334;
 const CMD_FENCE_NEW_CALENDAR: u32 = 335;
 const CMD_FENCE_NEW_TODO: u32 = 336;
 const CMD_FENCE_NEW_NOTE: u32 = 337;
+const CMD_FENCE_NEW_DIAGRAM: u32 = 338;
 const CMD_ITEM_MOVE_BASE: u32 = 200;
 const CMD_NEW_FENCE_HERE: u32 = 250;
 /// Command-id range handed to Explorer's `IContextMenu`.
@@ -117,7 +120,13 @@ impl App {
         )
         .submenu(
             pecofence_core::i18n::text("新建小组件"),
-            new_widget_menu(CMD_NEW_CLOCK, CMD_NEW_CALENDAR, CMD_NEW_NOTE, CMD_NEW_TODO),
+            new_widget_menu(
+                CMD_NEW_CLOCK,
+                CMD_NEW_CALENDAR,
+                CMD_NEW_NOTE,
+                CMD_NEW_TODO,
+                CMD_NEW_DIAGRAM,
+            ),
         )
         .item(
             CMD_PEEK,
@@ -192,6 +201,9 @@ impl App {
             }
             CMD_NEW_TODO => {
                 self.new_widget_near(pecofence_plugin_widgets::TODO_PROVIDER, x, y, None)
+            }
+            CMD_NEW_DIAGRAM => {
+                self.new_widget_near(pecofence_plugin_widgets::DIAGRAM_PROVIDER, x, y, None)
             }
             CMD_APPLY_RULES => self.queue.push(Command::ApplyRulesNow),
             CMD_REPAIR_ICONS => {
@@ -604,6 +616,7 @@ impl App {
                 CMD_FENCE_NEW_CALENDAR,
                 CMD_FENCE_NEW_NOTE,
                 CMD_FENCE_NEW_TODO,
+                CMD_FENCE_NEW_DIAGRAM,
             ),
         );
         // Tabbed fences (Fences 6): split a tab out, move it along the strip, or merge this
@@ -754,6 +767,9 @@ impl App {
             }
             CMD_FENCE_NEW_TODO => {
                 self.new_widget_near(pecofence_plugin_widgets::TODO_PROVIDER, x, y, Some(host))
+            }
+            CMD_FENCE_NEW_DIAGRAM => {
+                self.new_widget_near(pecofence_plugin_widgets::DIAGRAM_PROVIDER, x, y, Some(host))
             }
             CMD_FENCE_ICON_32 | CMD_FENCE_ICON_48 | CMD_FENCE_ICON_64 | CMD_FENCE_ICON_96 => {
                 let size = match cmd {

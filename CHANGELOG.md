@@ -47,6 +47,12 @@
   clock still follows the fence theme, and high contrast keeps system colors.
   Every text pair is tested at WCAG 4.5:1 or better. Not yet checked on device;
   Chinese titles fall back to the system CJK font.
+- Add a Mermaid diagram widget (`pecofence.diagram`), inspired by Pele but fully
+  native: a dependency-free parser and layered layout for flowcharts and Gantt
+  charts, drawn as themed scene nodes with a new polyline primitive. New
+  diagrams open the editor with an example; parse errors keep the last good
+  diagram and show the line. Headless tests only. See
+  [diagram widget](docs/DIAGRAM_WIDGET.md).
 
 The versioned entries below are retained from the upstream baseline. References
 to Store submissions or a published website describe that history, not an active

@@ -799,6 +799,15 @@ impl App {
                     error.to_string(),
                 )
             })?;
+        panel_manager
+            .borrow_mut()
+            .register_provider(Rc::new(pecofence_plugin_widgets::DiagramPlugin))
+            .map_err(|error| {
+                windows_core::Error::new(
+                    windows_core::HRESULT(0x80004005u32 as i32),
+                    error.to_string(),
+                )
+            })?;
 
         let chrome = Rc::new(FenceChrome::new()?);
         let mut theme = theme;

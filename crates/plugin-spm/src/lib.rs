@@ -852,6 +852,7 @@ fn prepare_scene(
                     },
                     text_inset: [6.0 * text_scale, 4.0 * text_scale],
                     align: Default::default(),
+                    path: None,
                 },
             }
         })

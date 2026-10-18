@@ -5,7 +5,7 @@ https://support.microsoft.com/en-us/windows/apps/stickynotes/create-a-sticky-not
 
 ## 创建与呈现
 
-托盘和面板右键的“新建小组件”复用同一个菜单：便笺、待办清单、数字时钟、日历。
+托盘和面板右键的“新建小组件”复用同一个菜单：便笺、待办清单、图表、数字时钟、日历（图表见 [图表组件](DIAGRAM_WIDGET.md)）。
 MSIX 的 Windows Explorer 文件夹背景菜单扩展并列提供“新建便笺”和“新建待办清单”；普通 ZIP 安装不自动注册该扩展。新增 Shell action 使用 ID 4，保留已有 1–3 的含义与 GUID。
 便笺与待办使用相同的 420×370 DIP 初始尺寸、主题颜色和 16 DIP 内容边距；沿用相邻放置、碰撞避让和 DPI 恢复。
 便笺、待办和日历共用页眉：标题下方是一行摘要（便笺字数/行数、待办进度、日历今天或已选日期），右侧为胶囊或图标操作。按钮文字、勾选框和日期通过插件文本的 `TextAlign` 居中绘制。面板较窄或文字缩放较大时，文字按钮收起为 Segoe Fluent Icons 图标并保留无障碍名称。

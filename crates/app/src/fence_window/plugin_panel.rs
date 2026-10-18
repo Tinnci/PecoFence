@@ -870,6 +870,7 @@ mod candidate_error_tests {
                         radius: 4.0,
                         text_inset: [0.0; 2],
                         align: Default::default(),
+                        path: None,
                     },
                 }],
             )?;
