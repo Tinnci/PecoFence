@@ -304,6 +304,7 @@ impl App {
         }
         self.apply_fence_appearance(id); // locked + backdrop/opacity + quick-hide exclusion
         self.apply_portal_deco(id);
+        self.configure_widget_grid(id);
         if snap_geometry {
             self.apply_column_snap(id);
         }
@@ -459,6 +460,32 @@ impl App {
                 h: metrics.cell_h,
             },
         })
+    }
+
+    /// Loading and tab switching preserve geometry, but must still update the live
+    /// resize rules and presentation (and clear them when a file tab becomes active).
+    fn configure_widget_grid(&self, id: ContainerId) {
+        let grid = self.widget_grid(id);
+        let Some(w) = self.fences.get(&id) else {
+            return;
+        };
+        w.set_widget_grid(grid);
+        if let Some(grid) = grid {
+            let scale = monitors::dpi_for_window(w.hwnd()).max(96) as f32 / 96.0;
+            let rect = w.rect();
+            let height = if w.is_rolled() {
+                w.expanded_height_px()
+            } else {
+                rect.bottom - rect.top
+            };
+            let span = grid.rules.span_for_size(
+                (rect.right - rect.left) as f32 / scale,
+                height as f32 / scale,
+                grid.cell,
+                self.ctx.behavior.text_scale.get(),
+            );
+            w.set_widget_presentation(span.presentation());
+        }
     }
 
     /// Size a widget window from its stored span (or, for windows saved before spans

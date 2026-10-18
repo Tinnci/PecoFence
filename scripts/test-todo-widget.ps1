@@ -25,6 +25,8 @@ foreach ($entry in $runtimeManifest.files) {
   New-Item -ItemType Directory -Force -Path (Split-Path -Parent $destination) | Out-Null
   Copy-Item -LiteralPath (Join-Path (Split-Path -Parent $binaryPath) $entry.path) -Destination $destination
 }
+$fonts = Join-Path (Split-Path -Parent $binaryPath) 'fonts'
+if (Test-Path $fonts) { Copy-Item -LiteralPath $fonts -Destination $stage -Recurse }
 Set-Content -Path $scriptPath -Encoding UTF8 -Value @(
   'sleep 400'
   'new-todo 1200 700'
@@ -87,6 +89,9 @@ try {
   foreach ($tag in @('note-cancelled', 'note-closed')) {
     if ($nativeLog -notmatch ("\[" + $tag + "\].*rename=false")) { throw "Native note editor did not close: $tag" }
   }
+  if ($nativeLog -notmatch '\[note-closed\].*frameless=true widget_grid=true') {
+    throw 'The newly created note has no frameless widget resize grid'
+  }
   $configPath = Join-Path $configDir 'workspace.v2.json'
   $saved = Get-Content -Raw -Encoding UTF8 $configPath | ConvertFrom-Json
   $todo = @($saved.layouts.contents | Where-Object { $_.content.panel.provider -eq 'pecofence.todo' })
@@ -101,9 +106,17 @@ try {
   }
   $before = $saved.layouts.containers | ConvertTo-Json -Compress -Depth 20
 
-  $args2 = @('--portable', '--config-dir', $configDir, '--no-hide-icons', '--exit-after', '1200')
+  Set-Content -Path $scriptPath -Encoding UTF8 -Value @('sleep 400', 'dump grid-reloaded', 'exit')
+  $args2 = @('--portable', '--config-dir', $configDir, '--no-hide-icons', '--test-script', $scriptPath, '--exit-after', '3000')
   $process = Start-Process -FilePath $stagedBinary -ArgumentList $args2 -PassThru -Wait
   if ($process.ExitCode -ne 0) { throw "Restart failed: $($process.ExitCode)" }
+  $restartLog = (Get-ChildItem -LiteralPath $env:LOCALAPPDATA -Recurse -Filter '*.log' | ForEach-Object {
+    Get-Content -LiteralPath $_.FullName -Raw -Encoding UTF8
+  }) -join "`n"
+  $gridWindows = @([regex]::Matches($restartLog, '\[grid-reloaded\].*frameless=true widget_grid=true'))
+  if ($gridWindows.Count -ne 2) {
+    throw "Expected two frameless widget grids after restart; found $($gridWindows.Count)"
+  }
   $reloaded = Get-Content -Raw -Encoding UTF8 $configPath | ConvertFrom-Json
   $restored = @($reloaded.layouts.contents | Where-Object { $_.content.panel.provider -eq 'pecofence.todo' })
   if ($restored.Count -ne 1) { throw 'TODO fence was lost after restart' }

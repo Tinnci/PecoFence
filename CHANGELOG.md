@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.0.5 — Native widget grid
+
+- Size widgets in whole icon cells and show single widgets without a title bar, with a fading grab handle and move cursor.
+- Initialize live resize rules and presentation on load and tab switches; preserve saved geometry and clear widget rules on file tabs.
+- Verify frameless widget grids after restart alongside TODO and note persistence.
+
 ## 0.0.4 — Native branch integration
 
 - Merge all fetched upstream branch histories with explicit native architecture resolutions. Keep native WinUI Settings, schema-2 workspaces, SPM and bundled fonts; exclude WebView UI/runtime and flat-model replacements.
