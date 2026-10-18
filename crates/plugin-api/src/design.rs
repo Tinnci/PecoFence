@@ -23,6 +23,28 @@ pub fn control_visible(rect: RectDip, viewport: RectDip) -> bool {
         && rect.y + rect.h <= viewport.y + viewport.h + 0.01
 }
 
+/// Inside-aligned contrast feedback shared by native chrome and plugin controls.
+/// A stronger outline represents selection or press without tinting the text background.
+pub fn contrast_outline(
+    rect: RectDip,
+    grid: PixelGrid,
+    ink: [f32; 4],
+    strong: bool,
+) -> Option<(RectDip, crate::StrokeStyle)> {
+    let width = grid.hairline() * if strong { 2.0 } else { 1.0 };
+    let x = grid.snap(rect.x) + width / 2.0;
+    let y = grid.snap(rect.y) + width / 2.0;
+    let w = grid.snap(rect.x + rect.w) - width / 2.0 - x;
+    let h = grid.snap(rect.y + rect.h) - width / 2.0 - y;
+    if ![x, y, w, h].iter().all(|v| v.is_finite()) || w <= 0.0 || h <= 0.0 {
+        return None;
+    }
+    Some((
+        RectDip { x, y, w, h },
+        crate::StrokeStyle { rgba: ink, width },
+    ))
+}
+
 /// Host-owned interaction state shared by all content providers. IDs identify
 /// controls, not actions (two separate controls may invoke the same action).
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -91,35 +113,36 @@ impl ControlInteraction {
     ) -> Result<()> {
         let find = |id: Option<u64>| hits.iter().find(|hit| Some(hit.id) == id);
         if let Some(hit) = find(self.hovered) {
-            let mut fill = if self.pressed == self.hovered {
-                theme.control_pressed
+            if theme.high_contrast {
+                if let Some((rect, stroke)) = contrast_outline(
+                    hit.rect,
+                    grid,
+                    theme.text_primary,
+                    self.pressed == self.hovered,
+                ) {
+                    canvas.draw_rect(rect, stroke)?;
+                }
             } else {
-                theme.control_hover
-            };
-            // Feedback is over an already-painted frame, including its text.
-            fill[3] = fill[3].min(0.16);
-            canvas.fill_rounded_rect(
-                hit.rect,
-                radius.min(hit.rect.w / 2.0).min(hit.rect.h / 2.0),
-                fill,
-            )?;
+                let mut fill = if self.pressed == self.hovered {
+                    theme.control_pressed
+                } else {
+                    theme.control_hover
+                };
+                // Feedback is over an already-painted frame, including its text.
+                fill[3] = fill[3].min(0.16);
+                canvas.fill_rounded_rect(
+                    hit.rect,
+                    radius.min(hit.rect.w / 2.0).min(hit.rect.h / 2.0),
+                    fill,
+                )?;
+            }
         }
         if let Some(hit) = find(self.focused) {
-            let inset = grid.hairline();
-            canvas.draw_rect(
-                RectDip {
-                    x: grid.snap(hit.rect.x) + inset,
-                    y: grid.snap(hit.rect.y) + inset,
-                    w: (grid.snap(hit.rect.x + hit.rect.w) - grid.snap(hit.rect.x) - inset * 2.0)
-                        .max(0.0),
-                    h: (grid.snap(hit.rect.y + hit.rect.h) - grid.snap(hit.rect.y) - inset * 2.0)
-                        .max(0.0),
-                },
-                crate::StrokeStyle {
-                    rgba: theme.focus_stroke,
-                    width: inset,
-                },
-            )?;
+            if let Some((rect, stroke)) =
+                contrast_outline(hit.rect, grid, theme.focus_stroke, theme.high_contrast)
+            {
+                canvas.draw_rect(rect, stroke)?;
+            }
         }
         Ok(())
     }
@@ -226,6 +249,7 @@ pub struct Component<'a> {
     pub font: FontRole,
     pub foreground: [f32; 4],
     pub fill: Option<[f32; 4]>,
+    pub stroke: Option<crate::StrokeStyle>,
     pub radius: f32,
     pub text_inset: [f32; 2],
 }
@@ -242,6 +266,19 @@ impl Component<'_> {
                     self.rect,
                     self.radius.min(self.rect.w / 2.0).min(self.rect.h / 2.0),
                     fill,
+                )?;
+            }
+            if let Some(mut stroke) = self.stroke {
+                stroke.width = stroke.width.min(self.rect.w).min(self.rect.h);
+                let inset = stroke.width / 2.0;
+                canvas.draw_rect(
+                    RectDip {
+                        x: self.rect.x + inset,
+                        y: self.rect.y + inset,
+                        w: (self.rect.w - stroke.width).max(0.0),
+                        h: (self.rect.h - stroke.width).max(0.0),
+                    },
+                    stroke,
                 )?;
             }
             if !self.text.is_empty() {
@@ -375,6 +412,37 @@ mod tests {
                 action: 5,
             },
         ]
+    }
+
+    #[test]
+    fn outlines_cover_integer_device_pixels_and_stay_within_snapped_controls() {
+        for scale in [1.0, 1.25, 1.5, 2.0] {
+            let grid = PixelGrid::new(scale);
+            let rect = RectDip {
+                x: 10.3,
+                y: 7.2,
+                w: 80.1,
+                h: 31.8,
+            };
+            for strong in [false, true] {
+                let (line, stroke) = contrast_outline(rect, grid, [1.0; 4], strong).unwrap();
+                for edge in [
+                    line.x - stroke.width / 2.0,
+                    line.y - stroke.width / 2.0,
+                    line.x + line.w + stroke.width / 2.0,
+                    line.y + line.h + stroke.width / 2.0,
+                ] {
+                    assert!((edge * scale - (edge * scale).round()).abs() < 0.001);
+                }
+                assert_eq!(grid.snap(rect.x), line.x - stroke.width / 2.0);
+                assert!(
+                    (line.x + line.w + stroke.width / 2.0 - grid.snap(rect.x + rect.w)).abs()
+                        < 0.001
+                );
+                assert!(line.w > 0.0 && line.h > 0.0);
+            }
+            assert!(contrast_outline(RectDip { w: 0.0, ..rect }, grid, [1.0; 4], true).is_none());
+        }
     }
 
     #[test]

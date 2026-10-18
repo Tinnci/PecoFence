@@ -13,6 +13,9 @@ pub(super) fn theme_for(
     if style == pecofence_core::ThemeStyle::LiquidGlass {
         theme = theme.with_liquid_glass();
     }
+    if let Some(colors) = systheme::contrast_colors() {
+        return theme.with_contrast_colors(colors.window, colors.window_text);
+    }
     match accent {
         Some(p) => theme.with_accent(if mode == ThemeMode::Dark {
             p.light2
@@ -427,14 +430,23 @@ impl App {
         let accent = systheme::accent_palette();
         let accent_changed = accent != self.accent;
         let style = self.state.config.settings.theme_style;
-        let style_changed = self.ctx.theme.borrow().liquid_glass
-            != (style == pecofence_core::ThemeStyle::LiquidGlass);
-        if mode == self.theme_mode && !style_changed && !accent_changed && !force {
-            return;
-        }
-        let theme_changed = mode != self.theme_mode || style_changed;
         let mut theme = theme_for(mode, style, accent.as_ref());
         theme.title_height = self.ctx.chrome.title_height();
+        let old_theme = *self.ctx.theme.borrow();
+        let style_changed = old_theme.liquid_glass != theme.liquid_glass;
+        let contrast_changed = old_theme.high_contrast != theme.high_contrast
+            || (theme.high_contrast
+                && (old_theme.solid_fill != theme.solid_fill
+                    || old_theme.text_primary != theme.text_primary));
+        if mode == self.theme_mode
+            && !style_changed
+            && !accent_changed
+            && !contrast_changed
+            && !force
+        {
+            return;
+        }
+        let theme_changed = mode != self.theme_mode || style_changed || contrast_changed;
         // The wallpaper sets are accent-independent and expensive: rebuild them only for a
         // mode change (or a forced refresh), not for a Settings › Colours retint.
         let backdrops = if theme_changed || force {

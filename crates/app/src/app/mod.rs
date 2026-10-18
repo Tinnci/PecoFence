@@ -645,6 +645,7 @@ impl App {
                         }
                         msg::WM_SETTINGCHANGE
                         | msg::WM_THEMECHANGED
+                        | msg::WM_SYSCOLORCHANGE
                         | msg::WM_DWMCOLORIZATIONCOLORCHANGED => {
                             if let Ok(mut guard) = cell.try_borrow_mut()
                                 && let Some(app) = guard.as_mut()

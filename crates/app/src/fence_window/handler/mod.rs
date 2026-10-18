@@ -29,8 +29,8 @@ pub(super) fn focus_session(view: &RefCell<Option<FenceViewState>>, hwnd: HWND) 
 
 /// Second half of a cancelled tab / tear-off drag, with no borrow held: releases the capture
 /// (WM_CAPTURECHANGED then finds no drag to commit) and hands a torn-off fence back to its host.
-pub(super) fn finish_drag_cancel(cancel: DragCancel, queue: &CommandQueue) {
-    window::release_capture();
+pub(super) fn finish_drag_cancel(owner: HWND, cancel: DragCancel, queue: &CommandQueue) {
+    super::interaction::finish_capture_release(owner, true);
     let clear_hint = |hinted| {
         if hinted {
             queue.push(Command::MergeHint {
@@ -64,6 +64,7 @@ pub(super) fn finish_drag_cancel(cancel: DragCancel, queue: &CommandQueue) {
 pub(super) struct HandlerCtx {
     pub(super) fence_id: ContainerId,
     pub(super) view: ViewCell,
+    pub(super) accessibility: Rc<pecofence_platform::accessibility::WindowAccessibility>,
     pub(super) anchor: AnchorCell,
     pub(super) taskbar_created: u32,
     pub(super) di_getdragimage: u32,
@@ -102,10 +103,12 @@ impl FenceWindow {
         fctx: &FenceContext,
         fence_id: ContainerId,
         view: Rc<RefCell<Option<FenceViewState>>>,
+        accessibility: Rc<pecofence_platform::accessibility::WindowAccessibility>,
     ) -> MessageHandler {
         let ctx = HandlerCtx {
             fence_id,
             view,
+            accessibility,
             anchor: fctx.anchor.clone(),
             taskbar_created: fctx.taskbar_created,
             di_getdragimage: dragdrop::di_getdragimage_msg(),
@@ -125,6 +128,20 @@ impl FenceWindow {
         Box::new(
             move |hwnd: HWND, message: u32, wparam: usize, lparam: isize| -> Option<isize> {
                 let h = &ctx;
+                let _capture_boundary = super::interaction::CaptureReleaseBoundary {
+                    view: &h.view,
+                    hwnd,
+                };
+                if let Some(result) = h
+                    .accessibility
+                    .handle_message(hwnd, message, wparam, lparam)
+                {
+                    return Some(result);
+                }
+                if let Some(result) = super::accessibility::handle_message(h, hwnd, message, wparam)
+                {
+                    return Some(result);
+                }
                 if trace_test_input
                     && matches!(
                         message,
@@ -141,6 +158,15 @@ impl FenceWindow {
                         ?hwnd, message, wparam, lparam,
                         "native pointer event"
                     );
+                }
+                if let Some(result) = super::interaction::inactive_input_result(message)
+                    && h.view.try_borrow().ok().is_some_and(|guard| {
+                        guard
+                            .as_ref()
+                            .is_some_and(|view| !view.input_lifecycle().window())
+                    })
+                {
+                    return Some(result);
                 }
                 if let Some(result) =
                     super::plugin_panel::handle_message(h, message, wparam, lparam)

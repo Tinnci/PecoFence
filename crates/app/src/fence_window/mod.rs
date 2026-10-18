@@ -5,7 +5,8 @@
 
 use crate::anchor::{self, AnchorCell};
 use crate::commands::{
-    Command, CommandQueue, TransferMode, WM_APP_FADE_DONE, WM_APP_SET_VISIBLE, WM_APP_TAB_SWAP_DONE,
+    Command, CommandQueue, TransferMode, WM_APP_FADE_DONE, WM_APP_PLUGIN_CAPTURE_RELEASE,
+    WM_APP_SET_VISIBLE, WM_APP_TAB_SWAP_DONE,
 };
 use crate::icons::{IconCache, Lookup};
 use crate::layout::{
@@ -45,6 +46,7 @@ use std::rc::Rc;
 use std::time::{Duration, Instant};
 use windows_core::Result;
 
+mod accessibility;
 mod api;
 mod chrome_scene;
 mod consts;
@@ -53,6 +55,7 @@ mod file_scene;
 mod frame;
 mod handler;
 mod hit;
+mod interaction;
 mod items;
 mod plugin_panel;
 mod render;

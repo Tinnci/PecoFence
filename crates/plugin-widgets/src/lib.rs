@@ -260,6 +260,7 @@ fn invalidate() -> PanelUpdate {
 
 #[derive(Clone, Copy)]
 pub(crate) struct Colors {
+    high_contrast: bool,
     pub(crate) primary: [f32; 4],
     pub(crate) secondary: [f32; 4],
     pub(crate) accent: [f32; 4],
@@ -271,6 +272,7 @@ impl Colors {
         let fallback = ThemeSnapshot::dark();
         let theme = theme.unwrap_or(&fallback);
         Self {
+            high_contrast: theme.high_contrast,
             primary: theme.text_primary,
             secondary: theme.text_secondary,
             accent: theme.accent,
@@ -280,8 +282,10 @@ impl Colors {
 }
 
 /// Named component input keeps layout, appearance and action intent explicit.
-/// Only this preparation-time adapter applies content scaling and assigns IDs.
+/// The caller declares stable identity; this preparation-time adapter applies content scaling.
 pub(crate) struct WidgetElement<'a> {
+    id: u64,
+    parent: Option<u64>,
     rect: RectDip,
     text: String,
     size: f32,
@@ -337,6 +341,8 @@ impl WidgetFrame {
 
     pub(crate) fn add(&mut self, element: WidgetElement<'_>) {
         let WidgetElement {
+            id,
+            parent,
             rect,
             text,
             size,
@@ -357,16 +363,16 @@ impl WidgetFrame {
         let rect = self.scale.rect(rect);
         let size = self.scale.value(size);
         let radius = self.scale.value(radius);
-        let id = self.nodes.len() as u64 + 1;
         self.nodes.push(SceneNode {
             id,
-            parent: None,
+            parent,
             rect,
             role: role.into(),
             name: text.clone(),
             text,
             action,
             style: NodeStyle {
+                stroke: None,
                 size,
                 font,
                 weight,
@@ -391,6 +397,8 @@ fn build_panel_header(
     let v = frame.viewport;
     let width = (v.w - design::CONTENT_INSET * 2.0).max(0.0);
     frame.add(WidgetElement {
+        id: 1,
+        parent: None,
         rect: RectDip {
             x: v.x + design::CONTENT_INSET,
             y: v.y + 12.0,
@@ -407,6 +415,8 @@ fn build_panel_header(
         role: "heading",
     });
     frame.add(WidgetElement {
+        id: 2,
+        parent: None,
         rect: RectDip {
             x: v.x + v.w - 75.0,
             y: v.y + 10.0,
@@ -423,6 +433,8 @@ fn build_panel_header(
         role: "button",
     });
     frame.add(WidgetElement {
+        id: 3,
+        parent: None,
         rect: RectDip {
             x: v.x + design::CONTENT_INSET,
             y: v.y + 44.0,
@@ -469,6 +481,8 @@ fn build_clock(frame: &mut WidgetFrame, config: WidgetConfig, colors: Colors, ch
     if v.h < 120.0 {
         let show_date = v.w >= 400.0;
         frame.add(WidgetElement {
+            id: 1,
+            parent: None,
             rect: RectDip {
                 x: v.x + design::CONTENT_INSET,
                 y: v.y,
@@ -486,6 +500,8 @@ fn build_clock(frame: &mut WidgetFrame, config: WidgetConfig, colors: Colors, ch
         });
         if show_date {
             frame.add(WidgetElement {
+                id: 2,
+                parent: None,
                 rect: RectDip {
                     x: v.x + v.w * 0.5,
                     y: v.y,
@@ -507,6 +523,8 @@ fn build_clock(frame: &mut WidgetFrame, config: WidgetConfig, colors: Colors, ch
     let time_size = if v.w < 260.0 { 37.0 } else { 52.0 };
     let top = v.y + ((v.h - 115.0) / 2.0).max(12.0);
     frame.add(WidgetElement {
+        id: 1,
+        parent: None,
         rect: RectDip {
             x: v.x + inset,
             y: top,
@@ -523,6 +541,8 @@ fn build_clock(frame: &mut WidgetFrame, config: WidgetConfig, colors: Colors, ch
         role: "text",
     });
     frame.add(WidgetElement {
+        id: 2,
+        parent: None,
         rect: RectDip {
             x: v.x + inset + 2.0,
             y: top + 76.0,
@@ -569,6 +589,8 @@ fn build_calendar(
     let row_h = ((v.h - 112.0).max(0.0) / 6.0).min(46.0);
     let header_y = v.y + 12.0;
     frame.add(WidgetElement {
+        id: 1,
+        parent: None,
         rect: RectDip {
             x: v.x + pad,
             y: header_y,
@@ -594,6 +616,8 @@ fn build_calendar(
         (NEXT, v.x + v.w - 45.0, "›"),
     ] {
         frame.add(WidgetElement {
+            id: 2 + action,
+            parent: None,
             rect: RectDip {
                 x,
                 y: header_y,
@@ -621,7 +645,14 @@ fn build_calendar(
     };
     let grid_y = header_y + 54.0;
     for (col, label) in labels.iter().enumerate() {
+        let weekday = if config.week_starts_on_sunday {
+            (col + 6) % 7
+        } else {
+            col
+        };
         frame.add(WidgetElement {
+            id: 10 + weekday as u64,
+            parent: None,
             rect: RectDip {
                 x: v.x + pad + col as f32 * cell_w + 5.0,
                 y: grid_y,
@@ -644,6 +675,9 @@ fn build_calendar(
         first.weekday().num_days_from_monday() as usize
     };
     for day in 1..=days {
+        let Some(date) = first.with_day(day) else {
+            continue;
+        };
         let slot = lead + day as usize - 1;
         let col = slot % 7;
         let row = slot / 7;
@@ -656,6 +690,8 @@ fn build_calendar(
         let is_today = offset == 0 && day == today.day();
         let selected = selected_day == Some(day);
         frame.add(WidgetElement {
+            id: calendar_day_id(date),
+            parent: None,
             rect,
             text: day.to_string(),
             size: design::SUBTITLE,
@@ -670,7 +706,22 @@ fn build_calendar(
             action: Some(DAY_BASE + day as u64),
             role: "button",
         });
+        frame.set_last_accessible_name(format!("{year:04}-{month:02}-{day:02}"));
+        if selected
+            && colors.high_contrast
+            && let Some(node) = frame.nodes.last_mut()
+        {
+            node.style.stroke = Some(pecofence_plugin_api::StrokeStyle {
+                rgba: colors.primary,
+                width: 2.0,
+            });
+        }
     }
+}
+
+// Chrono's supported civil dates fit in i32 days; preserve all signed bits.
+fn calendar_day_id(date: NaiveDate) -> u64 {
+    (1 << 32) | u64::from(date.num_days_from_ce() as u32)
 }
 
 fn month_for(today: NaiveDate, offset: i32) -> (i32, u32) {
@@ -682,6 +733,88 @@ fn month_for(today: NaiveDate, offset: i32) -> (i32, u32) {
 mod tests {
     use super::*;
     use pecofence_render::HeadlessCanvas;
+
+    #[test]
+    fn contrast_calendar_selection_has_a_border_without_an_extra_hit_target() {
+        let input = FrameInput {
+            viewport: RectDip {
+                x: 0.0,
+                y: 0.0,
+                w: 420.0,
+                h: 330.0,
+            },
+            locale: "zh-CN",
+            presentation: Presentation::Compact,
+            grouping: Grouping::Single,
+            exposure: Exposure::Desktop,
+            active: true,
+            text_scale: 1.5,
+            theme_epoch: 1,
+            device_epoch: 1,
+        };
+        let mut frame = WidgetFrame::new(
+            MountKey {
+                instance: InstanceKey {
+                    id: 1,
+                    activation: 1,
+                },
+                generation: 1,
+            },
+            1,
+            0,
+            input,
+        );
+        let mut theme = ThemeSnapshot::dark();
+        theme.high_contrast = true;
+        theme.surface_subtle = [0.0; 4];
+        build_calendar(
+            &mut frame,
+            WidgetConfig::default(),
+            0,
+            Some(20),
+            Colors::from_theme(Some(&theme)),
+            true,
+            NaiveDate::from_ymd_opt(2024, 2, 15).unwrap(),
+        );
+        let scene = frame.finish(&mut LayoutTracker::default()).unwrap();
+        let selected = scene
+            .nodes()
+            .iter()
+            .find(|node| node.action == Some(DAY_BASE + 20))
+            .unwrap();
+        assert_eq!(selected.style.stroke.unwrap().rgba, theme.text_primary);
+        assert_eq!(selected.style.fill.unwrap()[3], 0.0);
+        assert_eq!(
+            scene
+                .nodes()
+                .iter()
+                .filter(|node| node.style.stroke.is_some())
+                .count(),
+            1
+        );
+        let hit = scene
+            .hit_tree()
+            .iter()
+            .find(|hit| hit.action == DAY_BASE + 20)
+            .unwrap();
+        let semantic = scene
+            .semantics()
+            .iter()
+            .find(|node| node.id == selected.id)
+            .unwrap();
+        assert_eq!(hit.rect, selected.rect);
+        assert_eq!(semantic.rect, hit.rect);
+        assert_eq!(scene.hit_tree().len(), 32);
+        let mut canvas = pecofence_render::HeadlessCanvas::default();
+        scene.paint(&mut canvas).unwrap();
+        assert!(canvas.is_balanced());
+        assert!(
+            canvas
+                .commands()
+                .iter()
+                .any(|command| matches!(command, pecofence_render::DrawCommand::DrawRect(_, _)))
+        );
+    }
 
     #[test]
     fn capsule_clock_uses_the_available_height_instead_of_clipping_a_large_layout() {
@@ -877,5 +1010,137 @@ mod tests {
         let mut canvas = HeadlessCanvas::default();
         frame.paint(&mut canvas).unwrap();
         assert!(canvas.is_balanced());
+    }
+    fn identity_frame(width: f32, height: f32, text_scale: f32) -> WidgetFrame {
+        WidgetFrame::new(
+            MountKey {
+                instance: InstanceKey {
+                    id: 1,
+                    activation: 1,
+                },
+                generation: 1,
+            },
+            1,
+            1,
+            FrameInput {
+                viewport: RectDip {
+                    x: 0.0,
+                    y: 0.0,
+                    w: width,
+                    h: height,
+                },
+                locale: "en",
+                presentation: Presentation::Compact,
+                grouping: Grouping::Single,
+                exposure: Exposure::Desktop,
+                active: true,
+                text_scale,
+                theme_epoch: 1,
+                device_epoch: 1,
+            },
+        )
+    }
+
+    fn calendar_scene(offset: i32, sunday: bool, scale: f32) -> Scene {
+        let mut frame = identity_frame(420.0, 330.0, scale);
+        build_calendar(
+            &mut frame,
+            WidgetConfig {
+                week_starts_on_sunday: sunday,
+                ..Default::default()
+            },
+            offset,
+            None,
+            Colors::from_theme(None),
+            false,
+            NaiveDate::from_ymd_opt(2024, 2, 15).unwrap(),
+        );
+        frame.finish(&mut LayoutTracker::default()).unwrap()
+    }
+
+    #[test]
+    fn calendar_identity_tracks_civil_dates_and_weekdays_instead_of_slots() {
+        let february = calendar_scene(0, false, 1.0);
+        let march = calendar_scene(1, false, 1.0);
+        let feb_day = february
+            .semantics()
+            .iter()
+            .find(|n| n.name == "2024-02-01")
+            .unwrap();
+        let march_day = march
+            .semantics()
+            .iter()
+            .find(|n| n.name == "2024-03-01")
+            .unwrap();
+        assert_ne!(feb_day.id, march_day.id);
+        assert_eq!(feb_day.action, march_day.action); // existing day action numbering is unchanged
+        let mut interaction = design::ControlInteraction {
+            focused: Some(feb_day.id),
+            ..Default::default()
+        };
+        interaction.reconcile(march.hit_tree());
+        assert_eq!(
+            interaction.focused, None,
+            "focus cannot jump to the next month's same day number"
+        );
+        let sunday = calendar_scene(0, true, 1.5);
+        let scaled_day = sunday
+            .semantics()
+            .iter()
+            .find(|n| n.name == "2024-02-01")
+            .unwrap();
+        assert_eq!(scaled_day.id, feb_day.id);
+        for label in ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"] {
+            let before = february
+                .semantics()
+                .iter()
+                .find(|n| n.name == label)
+                .unwrap();
+            let after = sunday.semantics().iter().find(|n| n.name == label).unwrap();
+            assert_eq!(before.id, after.id);
+        }
+        for action in [PREVIOUS, NEXT, TODAY] {
+            assert_eq!(
+                february
+                    .hit_tree()
+                    .iter()
+                    .find(|n| n.action == action)
+                    .unwrap()
+                    .id,
+                march
+                    .hit_tree()
+                    .iter()
+                    .find(|n| n.action == action)
+                    .unwrap()
+                    .id
+            );
+        }
+        assert_ne!(
+            calendar_day_id(NaiveDate::from_ymd_opt(-1, 1, 1).unwrap()),
+            calendar_day_id(NaiveDate::from_ymd_opt(1, 1, 1).unwrap())
+        );
+    }
+
+    #[test]
+    fn clock_identity_survives_optional_date_and_layout_changes() {
+        let mut scenes = Vec::new();
+        for (width, height, scale) in [(250.0, 60.0, 1.0), (500.0, 60.0, 1.0), (500.0, 330.0, 1.5)]
+        {
+            let mut frame = identity_frame(width, height, scale);
+            build_clock(
+                &mut frame,
+                WidgetConfig::default(),
+                Colors::from_theme(None),
+                false,
+            );
+            scenes.push(frame.finish(&mut LayoutTracker::default()).unwrap());
+        }
+        assert_eq!(scenes[0].semantics().len(), 1);
+        assert_eq!(scenes[1].semantics().len(), 2);
+        assert_eq!(scenes[2].semantics().len(), 2);
+        for scene in &scenes {
+            assert_eq!(scene.semantics()[0].id, scenes[0].semantics()[0].id);
+        }
+        assert_eq!(scenes[1].semantics()[1].id, scenes[2].semantics()[1].id);
     }
 }

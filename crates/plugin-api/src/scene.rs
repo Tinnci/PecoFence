@@ -13,6 +13,7 @@ pub struct NodeStyle {
     pub font: FontRole,
     pub foreground: [f32; 4],
     pub fill: Option<[f32; 4]>,
+    pub stroke: Option<crate::StrokeStyle>,
     pub radius: f32,
     pub text_inset: [f32; 2],
 }
@@ -80,6 +81,9 @@ impl Scene {
                 || !style.text_inset.iter().all(|v| v.is_finite() && *v >= 0.0)
                 || !color_valid(style.foreground)
                 || style.fill.is_some_and(|color| !color_valid(color))
+                || style.stroke.is_some_and(|stroke| {
+                    !color_valid(stroke.rgba) || !stroke.width.is_finite() || stroke.width <= 0.0
+                })
             {
                 return Err(Error::Invalid(format!(
                     "invalid scene geometry/style for node {}",
@@ -185,6 +189,7 @@ impl PreparedFrame for Scene {
                     font: style.font,
                     foreground: style.foreground,
                     fill: style.fill,
+                    stroke: style.stroke,
                     radius: style.radius,
                     text_inset: style.text_inset,
                 }
@@ -231,6 +236,7 @@ mod tests {
             text: "Action".into(),
             action: Some(7),
             style: NodeStyle {
+                stroke: None,
                 size: 14.0,
                 weight: 400,
                 font: FontRole::Text,
@@ -276,6 +282,20 @@ mod tests {
         assert!(scene(vec![invalid]).is_err());
         let mut invalid = node(1);
         invalid.style.text_inset[0] = -1.0;
+        assert!(scene(vec![invalid]).is_err());
+        for width in [0.0, -1.0, f32::NAN, f32::INFINITY] {
+            let mut invalid = node(1);
+            invalid.style.stroke = Some(crate::StrokeStyle {
+                rgba: [1.0; 4],
+                width,
+            });
+            assert!(scene(vec![invalid]).is_err());
+        }
+        let mut invalid = node(1);
+        invalid.style.stroke = Some(crate::StrokeStyle {
+            rgba: [2.0; 4],
+            width: 1.0,
+        });
         assert!(scene(vec![invalid]).is_err());
     }
     #[test]

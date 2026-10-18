@@ -44,6 +44,7 @@
 //! edit-item <title> <name>   open rename for an item whose display name contains <name>
 //! crash                      force an access violation (tests the crash logger)
 //! exit                       quit the process
+//! wait-file <path>           debug-only harness barrier; keeps pumping native messages
 //! exit-if-file <path>        quit when a test harness creates a stop marker
 //! ```
 //!
@@ -550,6 +551,19 @@ impl App {
                     // SAFETY: deliberately not — this is the crash under test.
                     unsafe {
                         std::ptr::null_mut::<u32>().write_volatile(1);
+                    }
+                }
+                #[cfg(debug_assertions)]
+                ["wait-file", ..] => {
+                    if pecofence_core::brand::var_os("PECOFENCE_UI_TEST_WINDOWS").is_some()
+                        && let Some((_, path)) = line.split_once(' ')
+                        && !std::path::Path::new(path.trim()).is_file()
+                    {
+                        if let Some(t) = self.test.as_mut() {
+                            t.pos -= 1;
+                            t.wait_until = Some(Instant::now() + Duration::from_millis(50));
+                        }
+                        return;
                     }
                 }
                 ["exit-if-file", path] => {

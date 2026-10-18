@@ -160,7 +160,7 @@ pub(super) fn on_lbuttondown(
             queue.push(Command::RaiseFence(hwnd));
             return Some(0);
         }
-        let in_content = !v.rolled_up && y >= v.title_h_px();
+        let in_content = v.input_lifecycle().body() && y >= v.title_h_px();
         if let Some(col) = v.divider_hit(x, y) {
             v.col_drag = Some(ColDrag {
                 col,
@@ -611,7 +611,7 @@ pub(super) fn on_rbuttondown(
     });
     match cancel {
         Some(c) => {
-            finish_drag_cancel(c, queue);
+            finish_drag_cancel(hwnd, c, queue);
             Some(0)
         }
         None => None,
@@ -705,6 +705,9 @@ pub(super) fn on_mousewheel(
     let mut guard = view.borrow_mut();
     if let Some(v) = guard.as_mut() {
         v.hide_tip();
+        if !v.input_lifecycle().body() {
+            return Some(0);
+        }
         if v.scrollbar_pressed() {
             // The thumb drag / track or arrow repeat owns the offset (Win32
             // SB_THUMBTRACK ignores the wheel): a notch would start a glide

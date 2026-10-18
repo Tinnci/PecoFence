@@ -218,6 +218,8 @@ fn build_note(
         h: (v.h - 116.0).max(0.0),
     };
     frame.add(WidgetElement {
+        id: 4,
+        parent: None,
         rect: body,
         text: ("").into(),
         size: design::BODY,
@@ -228,7 +230,10 @@ fn build_note(
         action: Some(EDIT),
         role: "button",
     });
+    frame.set_last_accessible_name(if chinese { "编辑便笺" } else { "Edit note" }.into());
     frame.add(WidgetElement {
+        id: 5,
+        parent: Some(4),
         rect: RectDip {
             x: body.x + 12.0,
             y: body.y + 10.0,
@@ -260,6 +265,8 @@ fn build_note(
 
     if can_undo {
         frame.add(WidgetElement {
+            id: 6,
+            parent: None,
             rect: RectDip {
                 x: v.x + design::CONTENT_INSET,
                 y: v.y + v.h - 37.0,
@@ -282,6 +289,8 @@ fn build_note(
         });
     }
     frame.add(WidgetElement {
+        id: 7,
+        parent: None,
         rect: RectDip {
             x: v.x + 130.0,
             y: v.y + v.h - 37.0,
@@ -336,5 +345,76 @@ mod tests {
         };
         let bytes = serde_json::to_vec(&config).unwrap().into();
         assert_eq!(parse(&PanelConfig { version: 1, bytes }).unwrap(), config);
+    }
+    #[test]
+    fn note_footer_and_body_identity_do_not_depend_on_undo_visibility() {
+        let mut scenes = Vec::new();
+        for undo in [false, true] {
+            let mut frame = WidgetFrame::new(
+                MountKey {
+                    instance: InstanceKey {
+                        id: 1,
+                        activation: 1,
+                    },
+                    generation: 1,
+                },
+                1,
+                1,
+                FrameInput {
+                    viewport: RectDip {
+                        x: 0.0,
+                        y: 0.0,
+                        w: 420.0,
+                        h: 330.0,
+                    },
+                    locale: "en",
+                    presentation: Presentation::Compact,
+                    grouping: Grouping::Single,
+                    exposure: Exposure::Desktop,
+                    active: true,
+                    text_scale: 1.0,
+                    theme_epoch: 1,
+                    device_epoch: 1,
+                },
+            );
+            build_note(
+                &mut frame,
+                &NoteConfig {
+                    text: "Keep this text".into(),
+                },
+                undo,
+                Colors::from_theme(None),
+                false,
+            );
+            scenes.push(frame.finish(&mut design::LayoutTracker::default()).unwrap());
+        }
+        let before = &scenes[0];
+        let after = &scenes[1];
+        for name in [
+            "Keep this text",
+            "Edit note",
+            "Ctrl+Enter / blur saves; Esc cancels",
+        ] {
+            let a = before.semantics().iter().find(|n| n.name == name).unwrap();
+            let b = after.semantics().iter().find(|n| n.name == name).unwrap();
+            assert_eq!(a.id, b.id);
+        }
+        let text = after
+            .semantics()
+            .iter()
+            .find(|n| n.name == "Keep this text")
+            .unwrap();
+        let body = after
+            .semantics()
+            .iter()
+            .find(|n| n.name == "Edit note")
+            .unwrap();
+        assert_eq!(text.parent, Some(body.id));
+        let undo = after
+            .semantics()
+            .iter()
+            .find(|n| n.action == Some(UNDO))
+            .unwrap();
+        assert!(!before.semantics().iter().any(|n| n.id == undo.id));
     }
 }

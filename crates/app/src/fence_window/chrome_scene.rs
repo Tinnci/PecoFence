@@ -152,6 +152,10 @@ impl ChromeScene {
             .find(|node| node.id == ChromeTarget::Tab(id))
     }
 
+    pub fn viewport(&self) -> RectDip {
+        self.viewport
+    }
+
     pub fn height(&self) -> f32 {
         self.viewport.h
     }

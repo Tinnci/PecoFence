@@ -6,7 +6,10 @@ pub struct FenceViewState {
     #[allow(dead_code)]
     pub fence_id: ContainerId,
     pub title: String,
+    pub(super) accessibility: pecofence_platform::accessibility::Publisher,
     pub(super) plugin_panel: Option<super::plugin_panel::PluginPanelContent>,
+    /// Window-owned native effect; outlives any mounted panel or pending frame.
+    pub(super) input_capture_release: Rc<Cell<bool>>,
     pub rolled_up: bool,
     pub is_inbox: bool,
     /// Expanded window height in physical pixels (restored when un-rolling).
@@ -208,13 +211,13 @@ pub struct FenceViewState {
     pub(super) pending_rename: Option<ItemId>,
     pub(super) tip: Option<Tooltip>,
     pub(super) tip_target: Option<TipTarget>,
-    pub(super) tip_shown: bool,
+    /// Visible tooltip lifetime, independent of queued TIMER_TIP_HIDE messages.
+    pub(super) tip_expires: Option<Instant>,
     /// When a visible infotip was last hidden (fast re-show while sweeping between items).
     pub(super) tip_hidden_at: Option<Instant>,
     /// Client px where TIMER_TIP was armed and whether it is armed: like TME_HOVER the tip
     /// shows only once the pointer has rested inside the SM_C[XY]MOUSEHOVER box for the delay.
-    pub(super) tip_anchor: (i32, i32),
-    pub(super) tip_armed: bool,
+    pub(super) tip_wait: Option<super::tooltip::TipWait>,
     /// Items on the clipboard via 剪切 (drawn at half alpha like Explorer).
     pub(super) cut: HashSet<ItemId>,
     /// Ctrl+wheel accumulator (touchpads deliver fractional notches).

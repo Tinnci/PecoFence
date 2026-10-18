@@ -702,6 +702,32 @@ impl StateBrushes {
     }
 }
 
+/// Native controls use the same inside-aligned outline as scene controls.
+fn draw_contrast_outline(
+    session: &DrawingSession<'_>,
+    theme: &Theme,
+    px: Px,
+    rect: Rect,
+    strong: bool,
+) -> Result<()> {
+    let ink = theme.text_primary;
+    if let Some((r, stroke)) = design::contrast_outline(
+        pecofence_plugin_api::RectDip {
+            x: rect.left,
+            y: rect.top,
+            w: rect.width(),
+            h: rect.height(),
+        },
+        px.grid,
+        [ink.r, ink.g, ink.b, ink.a],
+        strong,
+    ) {
+        let brush = session.create_solid_brush(ink)?;
+        session.draw_rect(&Rect::from_xywh(r.x, r.y, r.w, r.h), &brush, stroke.width);
+    }
+    Ok(())
+}
+
 /// Paints one item's state layers (selection, hover, pressed, focus ring) under its content.
 /// Precedence: a drop target is an accent selection (its alpha fades in over 83 ms and wins
 /// over a fading selection); selection and hover blend by alpha so a fading selection still
@@ -726,35 +752,58 @@ fn draw_item_state(
 ) {
     let drop = drop_target.clamp(0.0, 1.0);
     let sel = selection.max(drop);
-    // One subtle layer: PointerOver = SubtleFillColorSecondary, Pressed = SubtleFillColorTertiary
-    // (an instant colour swap of the same layer; its alpha keeps following the hover fade).
-    // Kept under a partial selection so the two fades never pop.
-    let subtle_a = hover.clamp(0.0, 1.0) * (1.0 - sel);
-    if subtle_a > 0.0 {
-        let subtle = if pressed {
-            theme.subtle_pressed
-        } else {
-            theme.subtle_hover
-        };
-        brushes.hover.set_color(with_alpha(subtle, subtle_a));
-        session.fill_rounded_rect(&RoundedRect::uniform(rect, 4.0), &brushes.hover);
-    }
-    if sel > 0.0 {
-        // Accent while this fence is the active window; neutral grey otherwise (drop targets
-        // stay accent — drag feedback is not selection).
-        let t = inactive * (1.0 - drop);
-        let fill = lerp(theme.selection_fill, theme.selection_fill_inactive, t);
-        // Hot-selected: the fill strengthens under the pointer (drag hover is already 0).
-        let hot = hover.clamp(0.0, 1.0) * selection.clamp(0.0, 1.0);
-        let fill = ColorF {
-            a: (fill.a + HOT_SELECTED_LIFT * hot).min(1.0),
-            ..fill
-        };
-        let stroke = lerp(theme.selection_stroke, theme.selection_stroke_inactive, t);
-        brushes.sel_fill.set_color(with_alpha(fill, sel));
-        brushes.sel_stroke.set_color(with_alpha(stroke, sel));
-        session.fill_rounded_rect(&RoundedRect::uniform(rect, 4.0), &brushes.sel_fill);
-        session.draw_rounded_rect(&px.ring(rect, 4.0), &brushes.sel_stroke, px.hair());
+    if theme.high_contrast {
+        if hover > 0.0 || sel > 0.0 || pressed {
+            let ink = theme.text_primary;
+            if let Some((r, stroke)) = design::contrast_outline(
+                pecofence_plugin_api::RectDip {
+                    x: rect.left,
+                    y: rect.top,
+                    w: rect.width(),
+                    h: rect.height(),
+                },
+                px.grid,
+                [ink.r, ink.g, ink.b, ink.a],
+                pressed || sel > 0.0,
+            ) {
+                session.draw_rect(
+                    &Rect::from_xywh(r.x, r.y, r.w, r.h),
+                    brushes.a(ink),
+                    stroke.width,
+                );
+            }
+        }
+    } else {
+        // One subtle layer: PointerOver = SubtleFillColorSecondary, Pressed = SubtleFillColorTertiary
+        // (an instant colour swap of the same layer; its alpha keeps following the hover fade).
+        // Kept under a partial selection so the two fades never pop.
+        let subtle_a = hover.clamp(0.0, 1.0) * (1.0 - sel);
+        if subtle_a > 0.0 {
+            let subtle = if pressed {
+                theme.subtle_pressed
+            } else {
+                theme.subtle_hover
+            };
+            brushes.hover.set_color(with_alpha(subtle, subtle_a));
+            session.fill_rounded_rect(&RoundedRect::uniform(rect, 4.0), &brushes.hover);
+        }
+        if sel > 0.0 {
+            // Accent while this fence is the active window; neutral grey otherwise (drop targets
+            // stay accent — drag feedback is not selection).
+            let t = inactive * (1.0 - drop);
+            let fill = lerp(theme.selection_fill, theme.selection_fill_inactive, t);
+            // Hot-selected: the fill strengthens under the pointer (drag hover is already 0).
+            let hot = hover.clamp(0.0, 1.0) * selection.clamp(0.0, 1.0);
+            let fill = ColorF {
+                a: (fill.a + HOT_SELECTED_LIFT * hot).min(1.0),
+                ..fill
+            };
+            let stroke = lerp(theme.selection_stroke, theme.selection_stroke_inactive, t);
+            brushes.sel_fill.set_color(with_alpha(fill, sel));
+            brushes.sel_stroke.set_color(with_alpha(stroke, sel));
+            session.fill_rounded_rect(&RoundedRect::uniform(rect, 4.0), &brushes.sel_fill);
+            session.draw_rounded_rect(&px.ring(rect, 4.0), &brushes.sel_stroke, px.hair());
+        }
     }
     if focused {
         // FocusVisual: 2 px outer stroke on the cell edge, 1 px inner stroke just inside it.
@@ -1158,6 +1207,21 @@ impl FenceChrome {
         style: FenceStyle,
     ) -> Result<()> {
         session.clear(ColorF::TRANSPARENT);
+        let backdrop = if theme.high_contrast {
+            Backdrop::Solid
+        } else {
+            backdrop
+        };
+        let style = if theme.high_contrast {
+            FenceStyle {
+                tint: None,
+                title_color: None,
+                ..style
+            }
+        } else {
+            style
+        };
+        let opacity = if theme.high_contrast { 1.0 } else { opacity };
         let px = Px::new(scale);
         // Per-fence opacity: <1 thins the layer over the glass, >1 adds a solid veil on top.
         let opacity = opacity.clamp(0.4, 1.8);
@@ -1294,7 +1358,7 @@ impl FenceChrome {
         }
 
         // Title-row reveal ("title on hover"); a rolled fence always shows its title row.
-        let title_a = if rolled_up {
+        let title_a = if rolled_up || theme.high_contrast {
             1.0
         } else {
             state.title.clamp(0.0, 1.0)
@@ -1306,7 +1370,9 @@ impl FenceChrome {
         let pill_a = state.hover * title_a;
         if pill_a > 0.0 && tabs.len() <= 1 {
             let row = Rect::from_xywh(4.0, 4.0, (width - 8.0).max(0.0), (title_h - 8.0).max(0.0));
-            if theme.liquid_glass {
+            if theme.high_contrast {
+                draw_contrast_outline(session, theme, px, row, false)?;
+            } else if theme.liquid_glass {
                 draw_header_glass(session, &backdrop, theme, scale, 1, row, 0.28, pill_a)?;
             } else {
                 let pill = session.create_solid_brush(with_alpha(theme.subtle_hover, pill_a))?;
@@ -1460,11 +1526,14 @@ impl FenceChrome {
                         &fill,
                     );
                 }
-                let color = tabs
-                    .iter()
-                    .find(|t| t.active)
-                    .and_then(|t| t.color)
-                    .unwrap_or(theme.accent);
+                let color = if theme.high_contrast {
+                    theme.text_primary
+                } else {
+                    tabs.iter()
+                        .find(|t| t.active)
+                        .and_then(|t| t.color)
+                        .unwrap_or(theme.accent)
+                };
                 marker(x, w, color, title_a)?;
             }
             // A dragged tab (lens, marker and caption) is always above its neighbours.
@@ -1497,6 +1566,9 @@ impl FenceChrome {
                         .create_solid_brush(with_alpha(theme.subtle_hover, tab.hover * ta))?;
                     session.fill_rounded_rect(&RoundedRect::uniform(rect, radius), &fill);
                 }
+                if theme.high_contrast && (tab.hover > 0.0 || tab.pressed) {
+                    draw_contrast_outline(session, theme, px, rect, tab.pressed)?;
+                }
                 if tab.drop_target > 0.0 {
                     let a = tab.drop_target.min(1.0) * ta;
                     let fill = session.create_solid_brush(with_alpha(theme.selection_fill, a))?;
@@ -1505,9 +1577,12 @@ impl FenceChrome {
                     session.draw_rounded_rect(&px.ring(rect, radius), &ring, px.hair());
                 }
                 // A persistent marker identifies the selected tab even on uniform wallpaper.
-                if pill.is_none() && tab.active {
+                if theme.high_contrast && pill.is_none() && tab.active {
+                    marker(tab.x, tab.w, theme.text_primary, ta)?;
+                } else if !theme.high_contrast && pill.is_none() && tab.active {
                     marker(tab.x, tab.w, tab.color.unwrap_or(theme.accent), ta)?;
-                } else if !tab.active
+                } else if !theme.high_contrast
+                    && !tab.active
                     && let Some(color) = tab.color
                 {
                     marker(tab.x, tab.w, color, ta * 0.7)?;
@@ -1517,7 +1592,9 @@ impl FenceChrome {
                 let fitted = crate::text::fit_width(tab.title, &fmt, (tab.w - padding).max(0.0));
                 let foreground =
                     header_foreground(&backdrop, theme, tab.key, rect, scale, opacity, style.tint);
-                let color = if tab.pressed && !tab.dragging {
+                let color = if theme.high_contrast {
+                    theme.text_primary
+                } else if tab.pressed && !tab.dragging {
                     foreground.text_tertiary
                 } else {
                     tab.title_color
@@ -1546,7 +1623,9 @@ impl FenceChrome {
                 // Up (Segoe Fluent E74A) in a 28×28 box: transparent at rest, SubtleFill
                 // fading in on hover, SubtleFillColorTertiary + tertiary glyph while pressed.
                 let box_r = TitleDeco::up_box(title_h);
-                if theme.liquid_glass && (state.up_pressed || state.up_hover > 0.0) {
+                if theme.high_contrast && (state.up_pressed || state.up_hover > 0.0) {
+                    draw_contrast_outline(session, theme, px, box_r, state.up_pressed)?;
+                } else if theme.liquid_glass && (state.up_pressed || state.up_hover > 0.0) {
                     draw_header_glass(
                         session,
                         &backdrop,
@@ -1633,7 +1712,7 @@ impl FenceChrome {
         // the chevron stays fully shown until the height has settled, so an expand started
         // with the pointer off the title row (context menu, keyboard) does not pop it to the
         // hover alpha on its first frame.
-        let chevron_a = if rolled_up || roll_t > 0.0 {
+        let chevron_a = if theme.high_contrast || rolled_up || roll_t > 0.0 {
             1.0
         } else {
             state.hover.clamp(0.0, 1.0)
@@ -1642,7 +1721,9 @@ impl FenceChrome {
             let box_r = TitleDeco::chevron_box(width, title_h);
             let foreground =
                 header_foreground(&backdrop, theme, 7, box_r, scale, opacity, style.tint);
-            if theme.liquid_glass && (state.chevron_pressed || state.chevron_hover > 0.0) {
+            if theme.high_contrast && (state.chevron_pressed || state.chevron_hover > 0.0) {
+                draw_contrast_outline(session, theme, px, box_r, state.chevron_pressed)?;
+            } else if theme.liquid_glass && (state.chevron_pressed || state.chevron_hover > 0.0) {
                 draw_header_glass(
                     session,
                     &backdrop,
@@ -2351,6 +2432,94 @@ fn empty_text_top(avail: f32, line_height: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn contrast_chrome_bypasses_sampled_material_even_with_user_tint_and_low_opacity() {
+        let _ole = pecofence_platform::com::OleGuard::init().unwrap();
+        let stack = crate::RenderStack::new().unwrap();
+        let mut surface = crate::Panel::new(&stack).unwrap();
+        surface.resize(320, 180).unwrap();
+        let chrome = FenceChrome::new().unwrap();
+        let material = RefCell::new(crate::gpu_glass::GpuGlass::default());
+        let wallpaper = Rc::new(Vec::new());
+        // Any accidental material or foreground-sampling call would panic on
+        // this borrow. Contrast rendering must use the opaque system pair.
+        let _no_material_access = material.borrow_mut();
+        let mut bitmaps = BitmapCache::new();
+        for (bg, text) in [([0; 3], [255; 3]), ([255; 3], [0; 3])] {
+            let theme = Theme::dark()
+                .with_liquid_glass()
+                .with_contrast_colors(bg, text);
+            for dpi in [96, 144] {
+                assert!(
+                    surface
+                        .draw_candidate(dpi, |session, width, height| {
+                            chrome.draw(
+                                session,
+                                &mut bitmaps,
+                                &theme,
+                                dpi as f32 / 96.0,
+                                width,
+                                height,
+                                Backdrop::GpuGlass {
+                                    material: &material,
+                                    wallpaper: &wallpaper,
+                                    rect: [0, 0, 320, 180],
+                                    scale: dpi as f32 / 96.0,
+                                },
+                                "文件 Archives",
+                                Some("中文 details"),
+                                false,
+                                0.0,
+                                0.4,
+                                &[],
+                                None,
+                                TitleDeco {
+                                    up_button: true,
+                                    folder_icon: true,
+                                },
+                                TitleState {
+                                    hover: 1.0,
+                                    up_hover: 1.0,
+                                    up_pressed: true,
+                                    chevron_hover: 1.0,
+                                    chevron_pressed: true,
+                                    ..TitleState::default()
+                                },
+                                FenceStyle {
+                                    tint: Some(ColorF::new(1.0, 0.0, 0.0, 1.0)),
+                                    title_color: Some(ColorF::new(1.0, 0.0, 1.0, 1.0)),
+                                    title_size: 1,
+                                },
+                            )?;
+                            let brushes = StateBrushes::new(session, &theme)?;
+                            for (hover, selection, pressed, focused) in [
+                                (1.0, 0.0, false, false),
+                                (1.0, 0.0, true, false),
+                                (1.0, 1.0, false, false),
+                                (1.0, 1.0, true, true),
+                            ] {
+                                draw_item_state(
+                                    session,
+                                    &theme,
+                                    &brushes,
+                                    Px::new(dpi as f32 / 96.0),
+                                    Rect::from_xywh(12.0, 48.0, 80.0, 32.0),
+                                    hover,
+                                    selection,
+                                    0.0,
+                                    pressed,
+                                    focused,
+                                    0.0,
+                                );
+                            }
+                            Ok(())
+                        })
+                        .unwrap()
+                );
+            }
+        }
+    }
 
     #[test]
     fn title_tab_and_count_fonts_share_text_scale_and_height_returns_to_baseline() {

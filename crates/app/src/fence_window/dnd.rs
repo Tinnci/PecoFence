@@ -33,6 +33,36 @@ pub(super) struct DropSpot {
     pub(super) self_drop: bool,
 }
 
+/// Identity of a resolved drop across data-object callbacks and modal menus.
+/// An insertion slot also depends on the entire stable order, not just its index.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct DropCommitIdentity {
+    active: ContentId,
+    tab: Option<ContentId>,
+    folder: Option<(ItemId, PathBuf)>,
+    insertion: Option<(usize, Vec<ItemId>)>,
+    self_drop: bool,
+}
+
+/// Report an accepted effect only together with its queued action, after any
+/// modal/native callback has finished and the original target is still current.
+fn commit_drop(
+    pending: Option<Command>,
+    effect: DropEffect,
+    expected: Option<&DropCommitIdentity>,
+    current: impl FnOnce() -> Option<DropCommitIdentity>,
+    queue: &CommandQueue,
+) -> DropEffect {
+    let Some(command) = pending else {
+        return DropEffect::None;
+    };
+    if effect == DropEffect::None || expected.is_none() || current().as_ref() != expected {
+        return DropEffect::None;
+    }
+    queue.push(command);
+    effect
+}
+
 /// What the data object being dragged over us carries.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum DropKind {
@@ -305,7 +335,9 @@ impl FenceDropHandler {
         let Some(v) = guard.as_mut() else {
             return none;
         };
-        if v.plugin_panel.is_some() {
+        if v.plugin_panel.is_some() || pt.is_some_and(|pt| !v.drop_input_available(pt)) {
+            v.drag_scroll = None;
+            v.apply_drop_feedback(None);
             return none;
         }
         let Some(pt) = pt else {
@@ -486,20 +518,29 @@ impl DropHandler for FenceDropHandler {
         let internal = Self::internal();
         // Resolve the target and clear the highlights under one borrow.
         let resolved = self.view.try_borrow_mut().ok().and_then(|mut g| {
-            g.as_mut().map(|v| {
-                let spot = v.drop_spot_at(pt.x, pt.y, internal.as_ref());
-                let tab_fence = spot.tab.and_then(|i| v.tabs.get(i)).map(|t| t.id);
-                let folder = spot
-                    .folder
-                    .and_then(|i| v.items.get(i))
-                    .map(|it| it.path.clone());
-                v.drag_scroll = None;
-                if v.snap_scroll() {
-                    let _ = v.redraw_content();
-                }
-                v.apply_drop_feedback(None);
-                (spot, v.active, tab_fence, folder, v.hwnd)
-            })
+            g.as_mut()
+                .filter(|v| v.drop_input_available(pt) && v.plugin_panel.is_none())
+                .map(|v| {
+                    let spot = v.drop_spot_at(pt.x, pt.y, internal.as_ref());
+                    let tab_fence = spot.tab.and_then(|i| v.tabs.get(i)).map(|t| t.id);
+                    let folder = spot
+                        .folder
+                        .and_then(|i| v.items.get(i))
+                        .map(|it| it.path.clone());
+                    v.drag_scroll = None;
+                    if v.snap_scroll() {
+                        let _ = v.redraw_content();
+                    }
+                    v.apply_drop_feedback(None);
+                    (
+                        spot,
+                        v.active,
+                        tab_fence,
+                        folder,
+                        v.hwnd,
+                        v.drop_commit_identity(spot),
+                    )
+                })
         });
         self.forget_data(false);
         // A right-button drag ends in Explorer's Move / Copy / Shortcut / Cancel menu instead
@@ -515,8 +556,10 @@ impl DropHandler for FenceDropHandler {
                 h.drop(data, pt, effect);
             }
         };
+        let expected = resolved.as_ref().map(|value| value.5.clone());
+        let mut pending = None;
         let effect = 'resolve: {
-            let Some((spot, active, tab_fence, folder, hwnd)) = resolved else {
+            let Some((spot, active, tab_fence, folder, hwnd, _)) = resolved else {
                 break 'resolve DropEffect::None;
             };
             let to = tab_fence.unwrap_or(active);
@@ -538,7 +581,7 @@ impl DropHandler for FenceDropHandler {
                         }
                     }
                     let name = dragdrop::file_group_descriptor_name(data);
-                    self.queue.push(Command::ExternalUrlDrop { url, name, to });
+                    pending = Some(Command::ExternalUrlDrop { url, name, to });
                     effect
                 }
                 DropKind::Files if internal.is_some() => {
@@ -556,7 +599,7 @@ impl DropHandler for FenceDropHandler {
                         let (Some(mode), false) = (transfer_mode(effect), paths.is_empty()) else {
                             break 'resolve DropEffect::None;
                         };
-                        self.queue.push(Command::DropIntoFolder {
+                        pending = Some(Command::DropIntoFolder {
                             paths,
                             folder,
                             fence: active,
@@ -565,7 +608,7 @@ impl DropHandler for FenceDropHandler {
                         break 'resolve effect;
                     }
                     if let Some(index) = spot.insert {
-                        self.queue.push(Command::ReorderItems {
+                        pending = Some(Command::ReorderItems {
                             fence: active,
                             items: d.items,
                             index,
@@ -575,7 +618,7 @@ impl DropHandler for FenceDropHandler {
                     if to == d.from {
                         break 'resolve DropEffect::None;
                     }
-                    self.queue.push(Command::MoveItems { items: d.items, to });
+                    pending = Some(Command::MoveItems { items: d.items, to });
                     DropEffect::Move
                 }
                 DropKind::Files => {
@@ -612,18 +655,36 @@ impl DropHandler for FenceDropHandler {
                         break 'resolve DropEffect::None;
                     };
                     match (folder, folder_paths) {
-                        (Some(folder), Some(paths)) => self.queue.push(Command::DropIntoFolder {
-                            paths,
-                            folder,
-                            fence: active,
-                            mode,
-                        }),
-                        _ => self.queue.push(Command::ExternalDrop { paths, to, mode }),
+                        (Some(folder), Some(paths)) => {
+                            pending = Some(Command::DropIntoFolder {
+                                paths,
+                                folder,
+                                fence: active,
+                                mode,
+                            })
+                        }
+                        _ => pending = Some(Command::ExternalDrop { paths, to, mode }),
                     }
                     effect
                 }
             }
         };
+        // IDataObject access and right-drag menus can pump native messages. Do
+        // not send an action to a hidden/replaced target or report Move to the
+        // source unless the action was actually accepted for that same target.
+        let effect = commit_drop(
+            pending,
+            effect,
+            expected.as_ref(),
+            || {
+                let guard = self.view.try_borrow().ok()?;
+                let v = guard.as_ref()?;
+                (v.plugin_panel.is_none() && v.drop_input_available(pt)).then(|| {
+                    v.drop_commit_identity(v.drop_spot_at(pt.x, pt.y, Self::internal().as_ref()))
+                })
+            },
+            &self.queue,
+        );
         drop_image(effect);
         let spent = drop_started.elapsed();
         if spent > Duration::from_millis(8) {
@@ -638,6 +699,33 @@ impl DropHandler for FenceDropHandler {
 }
 
 impl FenceViewState {
+    fn drop_input_available(&self, pt: DragPoint) -> bool {
+        if !self.input_lifecycle().window() {
+            return false;
+        }
+        let r = window::window_rect(self.hwnd);
+        pt.x >= r.left
+            && pt.x < r.right
+            && pt.y >= r.top
+            && pt.y < r.bottom
+            && (self.input_lifecycle().body() || pt.y - r.top < self.title_h_px())
+    }
+
+    fn drop_commit_identity(&self, spot: DropSpot) -> DropCommitIdentity {
+        DropCommitIdentity {
+            active: self.active,
+            tab: spot.tab.and_then(|i| self.tabs.get(i)).map(|tab| tab.id),
+            folder: spot
+                .folder
+                .and_then(|i| self.items.get(i))
+                .map(|item| (item.id, item.path.clone())),
+            insertion: spot
+                .insert
+                .map(|index| (index, self.items.iter().map(|item| item.id).collect())),
+            self_drop: spot.self_drop,
+        }
+    }
+
     /// Insertion index for reordering at a client-pixel point: only in a 手动-sorted virtual
     /// fence and only inside the item area.
     pub(super) fn insertion_at(&self, x_px: i32, y_px: i32) -> Option<usize> {
@@ -1069,5 +1157,109 @@ impl FenceViewState {
             offset: (press_x - origin_x, press_y - origin_y),
             bgra,
         })
+    }
+}
+
+#[cfg(test)]
+mod identity_tests {
+    use super::*;
+
+    #[test]
+    fn modal_drop_requires_the_same_live_target_before_queuing_or_reporting_move() {
+        let queue = CommandQueue::new();
+        let original = DropCommitIdentity {
+            active: ContentId::from_u128(1),
+            tab: None,
+            folder: Some((ItemId::from_u128(2), PathBuf::from(r"C:\Folder"))),
+            insertion: None,
+            self_drop: false,
+        };
+        let command = || {
+            Some(Command::MoveItems {
+                items: vec![ItemId::from_u128(10)],
+                to: original.active,
+            })
+        };
+        assert_eq!(
+            commit_drop(
+                command(),
+                DropEffect::Move,
+                Some(&original),
+                || Some(original.clone()),
+                &queue
+            ),
+            DropEffect::Move
+        );
+        assert!(
+            matches!(queue.drain().as_slice(), [Command::MoveItems { to, .. }] if *to == original.active)
+        );
+        // None represents a hidden, retired, removed or inaccessible target after a native callback.
+        assert_eq!(
+            commit_drop(
+                command(),
+                DropEffect::Move,
+                Some(&original),
+                || None,
+                &queue
+            ),
+            DropEffect::None
+        );
+        assert!(queue.drain().is_empty());
+        let mut changed = original.clone();
+        changed.folder.as_mut().unwrap().0 = ItemId::from_u128((1 << 96) | 2);
+        assert_eq!(
+            commit_drop(
+                command(),
+                DropEffect::Move,
+                Some(&original),
+                || Some(changed),
+                &queue
+            ),
+            DropEffect::None
+        );
+        assert!(queue.drain().is_empty());
+        let mut renamed = original.clone();
+        renamed.folder.as_mut().unwrap().1 = PathBuf::from(r"C:\Renamed");
+        assert_eq!(
+            commit_drop(
+                command(),
+                DropEffect::Move,
+                Some(&original),
+                || Some(renamed),
+                &queue
+            ),
+            DropEffect::None
+        );
+        assert!(queue.drain().is_empty());
+        let mut insertion = original.clone();
+        insertion.folder = None;
+        insertion.insertion = Some((1, vec![ItemId::from_u128(4), ItemId::from_u128(5)]));
+        let mut reordered = insertion.clone();
+        reordered.insertion.as_mut().unwrap().1.reverse();
+        assert_eq!(
+            commit_drop(
+                command(),
+                DropEffect::Move,
+                Some(&insertion),
+                || Some(reordered),
+                &queue
+            ),
+            DropEffect::None
+        );
+        assert!(
+            queue.drain().is_empty(),
+            "The same slot now has another meaning"
+        );
+        assert_eq!(
+            commit_drop(
+                None,
+                DropEffect::Move,
+                Some(&original),
+                || Some(original.clone()),
+                &queue
+            ),
+            DropEffect::None
+        );
+        assert!(queue.drain().is_empty(), "No Move without an action");
     }
 }

@@ -80,16 +80,27 @@ pub(super) fn show_with_fade(view: &ViewCell, hwnd: HWND, entrance: bool) {
 /// visible and fades with the plate (its HWND is hidden on completion); on a plain hide it is
 /// hidden here, with no borrow held: `ShowWindow` on it may re-enter the message loop.
 pub(super) fn hide_with_fade(view: &ViewCell, hwnd: HWND, exit: bool, destroy: bool) -> bool {
-    if !desktop::is_visible(hwnd) {
-        return false;
-    }
-    let (animated, shadow) = {
+    let _capture_boundary = super::interaction::CaptureReleaseBoundary { view, hwnd };
+    let visible = desktop::is_visible(hwnd);
+    let (animated, shadow, cancel) = {
         let mut guard = view.borrow_mut();
         match guard.as_mut() {
-            Some(v) => (v.begin_fade_out(exit, destroy), Some(v.shadow.hwnd())),
-            None => (false, None),
+            Some(v) => {
+                let cancelled = v
+                    .suspend_window_input()
+                    .map(|cancel| (cancel, v.queue.clone()));
+                (
+                    visible && v.begin_fade_out(exit, destroy),
+                    Some(v.shadow.hwnd()),
+                    cancelled,
+                )
+            }
+            None => (false, None, None),
         }
     };
+    if let Some((cancel, queue)) = cancel {
+        super::handler::finish_drag_cancel(hwnd, cancel, &queue);
+    }
     if !animated {
         if let Some(shadow) = shadow {
             desktop::hide_window(shadow);
@@ -297,7 +308,10 @@ impl FenceViewState {
 
     /// Whether the title row is shown right now (title-on-hover rule).
     pub(super) fn title_visible_target(&self) -> bool {
-        !self.behavior.title_on_hover.get() || self.mouse_inside || self.roll_target()
+        self.theme.high_contrast
+            || !self.behavior.title_on_hover.get()
+            || self.mouse_inside
+            || self.roll_target()
     }
 
     /// End height (device px) of the roll / auto-height tween in flight.
@@ -320,7 +334,7 @@ impl FenceViewState {
     }
 
     pub(super) fn start_roll_anim(&mut self, rolled: bool) {
-        self.hide_tip();
+        self.suspend_body_input();
         let now = Instant::now();
         // Painted x per tab before the target state changes: the pills slide the 64 DIP the
         // item-count reserve takes (or frees) instead of jumping there.

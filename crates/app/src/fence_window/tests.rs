@@ -694,3 +694,40 @@ fn scrollbar_drag_inverse_reaches_max_scroll() {
     let scrolled = dy * (content_h - view_h) / (track_h - thumb_h);
     assert!((scrolled - max_scroll).abs() < 1e-3);
 }
+
+#[test]
+fn queued_tip_timer_cannot_expire_a_new_rest_period() {
+    let first = Instant::now();
+    let old_deadline = first + Duration::from_millis(400);
+    let pending = super::tooltip::TipWait {
+        anchor: (30, 40),
+        deadline: first + Duration::from_millis(700),
+    };
+    assert_eq!(pending.remaining_ms(old_deadline), Some(301));
+    assert_eq!(
+        pending.remaining_ms(pending.deadline - Duration::from_nanos(1)),
+        Some(1)
+    );
+    assert_eq!(pending.remaining_ms(pending.deadline), None);
+    assert_eq!(
+        pending.remaining_ms(pending.deadline + Duration::from_millis(1)),
+        None
+    );
+    assert!(!tip_hover_moved(pending.anchor, (31, 41), (4, 4)));
+    assert!(tip_hover_moved(pending.anchor, (32, 40), (4, 4)));
+}
+
+#[test]
+fn queued_auto_pop_cannot_hide_a_new_tooltip() {
+    let first = Instant::now();
+    let old_auto_pop = first + Duration::from_secs(5);
+    let new_auto_pop = first + Duration::from_secs(9);
+    assert_eq!(
+        super::tooltip::tip_timer_remaining_ms(new_auto_pop, old_auto_pop),
+        Some(4001)
+    );
+    assert_eq!(
+        super::tooltip::tip_timer_remaining_ms(new_auto_pop, new_auto_pop),
+        None
+    );
+}

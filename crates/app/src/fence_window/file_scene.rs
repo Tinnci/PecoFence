@@ -84,8 +84,21 @@ impl FileScene {
         }
     }
 
+    pub fn accessibility_nodes(&self) -> impl Iterator<Item = &SemanticNode<ItemId>> {
+        self.visible
+            .iter()
+            .copied()
+            .filter(|index| Some(*index) != self.overlay)
+            .chain(self.overlay)
+            .map(|index| &self.semantics[index])
+    }
+
     pub fn semantics(&self) -> &[SemanticNode<ItemId>] {
         &self.semantics
+    }
+
+    pub fn semantic(&self, id: ItemId) -> Option<&SemanticNode<ItemId>> {
+        self.by_id.get(&id).map(|&index| &self.semantics[index])
     }
 
     pub fn header(&self) -> Option<(f32, DetailColumns)> {
@@ -320,6 +333,23 @@ mod tests {
         assert!(frame.hit(f32::NAN, 50.0).is_none());
     }
 
+    #[test]
+    fn semantic_lookup_keeps_identity_across_reorder_and_rejects_reused_slots() {
+        let original = scene(vec![node(1, 0.0, 40.0, 1.0), node(2, 80.0, 40.0, 1.0)]);
+        let id = original.hit(10.0, 45.0).unwrap().1;
+        let reordered = scene(vec![node(2, 0.0, 40.0, 1.0), node(1, 80.0, 40.0, 1.0)]);
+        let semantic = reordered.semantic(id).unwrap();
+        assert_eq!(semantic.rect.x, 80.0);
+        assert_eq!(semantic.name, original.semantic(id).unwrap().name);
+        let replaced = scene(vec![node(3, 0.0, 40.0, 1.0), node(2, 80.0, 40.0, 1.0)]);
+        assert!(
+            replaced.semantic(id).is_none(),
+            "The old index now names another file"
+        );
+        // Stable identity includes all UUID bits, not just a narrowed integer key.
+        let high = ItemId::from_u128((1 << 96) | 1);
+        assert!(original.semantic(high).is_none());
+    }
     #[test]
     fn overlapping_animated_cells_follow_paint_order() {
         let frame = scene(vec![node(1, 0.0, 40.0, 1.0), node(2, 0.0, 40.0, 1.0)]);

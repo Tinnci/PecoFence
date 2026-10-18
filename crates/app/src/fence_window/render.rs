@@ -442,6 +442,7 @@ impl FenceViewState {
             })?;
         if ok {
             self.chrome_scene = Some(chrome_scene);
+            self.publish_accessibility();
         }
         self.note_draw_result(ok);
         let ntabs = self.tabs.len();
@@ -730,14 +731,16 @@ impl FenceViewState {
                 exposure,
                 exposure != pecofence_plugin_api::Exposure::Hidden,
             );
-            let ok = panel.draw(
+            let drawn = panel.draw(
                 &self.content_panel,
                 self.dpi,
                 self.behavior.text_scale.get(),
                 (u64::from(self.stack.device_generation()) << 32) | u64::from(self.dpi),
                 &foreground,
-            )?;
-            self.note_draw_result(ok);
+            );
+            panel.wake_capture_release(self.hwnd);
+            self.note_draw_result(drawn?);
+            self.publish_accessibility();
             return Ok(());
         }
         if self.row_metrics().is_some() {
@@ -887,6 +890,7 @@ impl FenceViewState {
             })?;
         if ok {
             self.file_scene = Some(file_scene);
+            self.publish_accessibility();
         }
         self.note_draw_result(ok);
         self.note_content_fades(now);
@@ -1076,6 +1080,7 @@ impl FenceViewState {
             })?;
         if ok {
             self.file_scene = Some(file_scene);
+            self.publish_accessibility();
         }
         self.note_draw_result(ok);
         self.note_content_fades(now);

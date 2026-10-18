@@ -99,6 +99,51 @@ pub fn apps_use_light_theme() -> bool {
     read_dword("AppsUseLightTheme").unwrap_or(1) != 0
 }
 
+/// System-owned text/background pair for contrast themes. Query, never modify,
+/// the current accessibility setting (SPI_GETHIGHCONTRAST / GetSysColor).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ContrastColors {
+    pub window: [u8; 3],
+    pub window_text: [u8; 3],
+}
+
+pub fn contrast_colors() -> Option<ContrastColors> {
+    #[repr(C)]
+    struct HighContrast {
+        size: u32,
+        flags: u32,
+        scheme: *mut u16,
+    }
+    let mut state = HighContrast {
+        size: size_of::<HighContrast>() as u32,
+        flags: 0,
+        scheme: core::ptr::null_mut(),
+    };
+    // SAFETY: SPI_GETHIGHCONTRAST (0x0042) writes the initialized, correctly
+    // sized HIGHCONTRASTW buffer. The returned scheme pointer is not accessed.
+    let ok = unsafe {
+        SystemParametersInfoW(
+            0x0042,
+            state.size,
+            (&mut state as *mut HighContrast).cast(),
+            0,
+        )
+    };
+    if !ok.as_bool() || state.flags & 1 == 0 {
+        return None;
+    }
+    let color = |index| {
+        // SAFETY: COLOR_WINDOW (5) and COLOR_WINDOWTEXT (8) are defined indices;
+        // COLORREF is 0x00BBGGRR and requires no ownership or cleanup.
+        let value = unsafe { GetSysColor(index) };
+        [value as u8, (value >> 8) as u8, (value >> 16) as u8]
+    };
+    Some(ContrastColors {
+        window: color(5),
+        window_text: color(8),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

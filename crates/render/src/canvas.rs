@@ -370,6 +370,78 @@ impl Canvas for Direct2dCanvas<'_> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn component_border_is_inside_the_original_hit_and_text_clip() {
+        use pecofence_plugin_api::design::Component;
+        let rect = RectDip {
+            x: 3.0,
+            y: 4.0,
+            w: 40.0,
+            h: 24.0,
+        };
+        let mut canvas = HeadlessCanvas::default();
+        Component {
+            rect,
+            text: "Selected",
+            size: 14.0,
+            weight: 600,
+            font: FontRole::Text,
+            foreground: [1.0; 4],
+            fill: None,
+            radius: 4.0,
+            text_inset: [0.0; 2],
+            stroke: Some(StrokeStyle {
+                rgba: [1.0; 4],
+                width: 2.0,
+            }),
+        }
+        .paint(&mut canvas)
+        .unwrap();
+        assert!(canvas.is_balanced());
+        assert!(matches!(canvas.commands(), [DrawCommand::PushClip(clip),
+            DrawCommand::DrawRect(border, style), DrawCommand::DrawText(text, _, _), DrawCommand::PopClip]
+            if *clip == rect && *text == rect && border.x - style.width / 2.0 == rect.x
+            && border.x + border.w + style.width / 2.0 == rect.x + rect.w));
+    }
+
+    #[test]
+    fn contrast_feedback_uses_opaque_outlines_without_washing_out_text() {
+        use pecofence_plugin_api::{
+            HitNode, ThemeSnapshot,
+            design::{ControlInteraction, PixelGrid},
+        };
+        let hits = [HitNode {
+            id: 1,
+            action: 7,
+            rect: RectDip {
+                x: 10.0,
+                y: 10.0,
+                w: 80.0,
+                h: 32.0,
+            },
+        }];
+        let mut theme = ThemeSnapshot::dark();
+        theme.high_contrast = true;
+        for ink in [[1.0; 4], [0.0, 0.0, 0.0, 1.0]] {
+            theme.text_primary = ink;
+            for pressed in [None, Some(1)] {
+                let state = ControlInteraction {
+                    hovered: Some(1),
+                    pressed,
+                    focused: None,
+                };
+                let mut canvas = HeadlessCanvas::default();
+                state
+                    .paint(&mut canvas, &hits, &theme, PixelGrid::new(1.5), 4.0)
+                    .unwrap();
+                assert!(
+                    matches!(canvas.commands(), [DrawCommand::DrawRect(_, stroke)]
+                    if stroke.rgba == ink && stroke.width > 0.0)
+                );
+            }
+        }
+    }
+
     #[cfg(windows)]
     #[test]
     fn native_text_format_cache_reuses_styles_and_bounds_accessibility_size_history() {
@@ -469,6 +541,7 @@ mod tests {
         };
         let mut canvas = HeadlessCanvas::default();
         Component {
+            stroke: None,
             rect,
             text: "A long filename / 很长的文件名",
             size: BODY * 2.0,

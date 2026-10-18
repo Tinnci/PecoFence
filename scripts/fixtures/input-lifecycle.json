@@ -1,0 +1,204 @@
+{
+  "schemaVersion": 2,
+  "settings": {
+    "language": "system",
+    "backdrop": "acrylic",
+    "theme": "followWindowsMode",
+    "themeStyle": "fluent",
+    "iconSize": 48,
+    "quickHide": {
+      "enabled": true,
+      "scope": "all",
+      "alwaysShowAtStartup": true,
+      "delayMs": 300,
+      "autoHideIdleSec": 0,
+      "autoShowOnUse": true,
+      "wallpaperEngineClassWhitelist": []
+    },
+    "rollUp": {
+      "doubleClickTitle": true,
+      "autoOnScreenEdge": true,
+      "hoverPeek": false,
+      "hoverOpenMs": 400,
+      "closeGraceMs": 400,
+      "clickToExpand": false,
+      "titleOnHover": false,
+      "hideInactiveScrollbar": false
+    },
+    "showDesktop": "keepVisible",
+    "hideRealIcons": false,
+    "showRealIconsWhenFencesHidden": false,
+    "snapping": {
+      "enabled": false,
+      "gapPx": 8,
+      "sizeToCells": false,
+      "guideLines": false
+    },
+    "zorder": "insertAboveHost",
+    "autostart": false,
+    "telemetry": false,
+    "peek": {
+      "enabled": false,
+      "dim": true,
+      "hotkey": "ctrlAltSpace"
+    },
+    "icons": {
+      "tintRgb": null,
+      "tintStrength": 0.6,
+      "chameleon": false
+    },
+    "desktopPath": "__FIXTURE_DESKTOP__"
+  },
+  "items": {},
+  "layouts": [
+    {
+      "fingerprint": [],
+      "containers": [
+        {
+          "id": "22222222-2222-4222-8222-000000000001",
+          "geometry": {
+            "monitor": "",
+            "x": 300,
+            "y": 200,
+            "w": 700,
+            "h": 400,
+            "workW": 1920.0,
+            "workH": 1040.0,
+            "anchor": "leftTop"
+          },
+          "rolledUp": false,
+          "expandedH": 400,
+          "autoHeight": false,
+          "appearance": null,
+          "excludeFromQuickHide": false,
+          "locked": false,
+          "tabs": [
+            "11111111-1111-4111-8111-000000000001"
+          ],
+          "activeTab": "11111111-1111-4111-8111-000000000001"
+        },
+        {
+          "id": "22222222-2222-4222-8222-000000000002",
+          "geometry": {
+            "monitor": "",
+            "x": 1100,
+            "y": 200,
+            "w": 700,
+            "h": 400,
+            "workW": 1920.0,
+            "workH": 1040.0,
+            "anchor": "leftTop"
+          },
+          "rolledUp": false,
+          "expandedH": 400,
+          "autoHeight": false,
+          "appearance": null,
+          "excludeFromQuickHide": false,
+          "locked": false,
+          "tabs": [
+            "11111111-1111-4111-8111-000000000002"
+          ],
+          "activeTab": "11111111-1111-4111-8111-000000000002"
+        },
+        {
+          "id": "c5e5e934-9219-43e0-83c4-00b184f246fa",
+          "geometry": {
+            "monitor": "",
+            "x": 20,
+            "y": 700,
+            "w": 400.0,
+            "h": 300.0,
+            "workW": 1920.0,
+            "workH": 1040.0,
+            "anchor": "leftTop"
+          },
+          "rolledUp": false,
+          "expandedH": 300.0,
+          "autoHeight": false,
+          "appearance": null,
+          "excludeFromQuickHide": false,
+          "locked": false,
+          "tabs": [
+            "c71f437f-f73c-4d97-8910-6a5b160f3d69"
+          ],
+          "activeTab": "c71f437f-f73c-4d97-8910-6a5b160f3d69"
+        }
+      ],
+      "contents": [
+        {
+          "id": "11111111-1111-4111-8111-000000000001",
+          "title": "LifecycleA",
+          "view": {
+            "iconSize": 48,
+            "sort": "manual",
+            "labelLines": 2,
+            "reverse": false,
+            "layout": "details",
+            "spacing": "normal",
+            "columnWidths": null,
+            "columnsVisible": null,
+            "groupByDate": false
+          },
+          "content": {
+            "kind": "folderPortal",
+            "root": "__FIXTURE_FILES__",
+            "recursive": false,
+            "filter": null,
+            "navigate": true,
+            "hideTitleIcon": false
+          }
+        },
+        {
+          "id": "11111111-1111-4111-8111-000000000002",
+          "title": "LifecycleB",
+          "view": {
+            "iconSize": 48,
+            "sort": "manual",
+            "labelLines": 2,
+            "reverse": false,
+            "layout": "details",
+            "spacing": "normal",
+            "columnWidths": null,
+            "columnsVisible": null,
+            "groupByDate": false
+          },
+          "content": {
+            "kind": "folderPortal",
+            "root": "__FIXTURE_FILES__",
+            "recursive": false,
+            "filter": null,
+            "navigate": true,
+            "hideTitleIcon": false
+          }
+        },
+        {
+          "id": "c71f437f-f73c-4d97-8910-6a5b160f3d69",
+          "title": "LifecycleInbox",
+          "view": {
+            "iconSize": 48,
+            "sort": "manual",
+            "labelLines": 2,
+            "reverse": false,
+            "layout": "icons",
+            "spacing": "normal",
+            "columnWidths": null,
+            "columnsVisible": null,
+            "groupByDate": false
+          },
+          "content": {
+            "kind": "fileCollection",
+            "inbox": true,
+            "items": []
+          }
+        }
+      ]
+    }
+  ],
+  "rules": {
+    "defaultTarget": "inbox",
+    "keepUpdated": true,
+    "list": []
+  },
+  "undoLog": [],
+  "snapshots": []
+}

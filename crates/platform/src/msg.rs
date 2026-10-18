@@ -95,6 +95,10 @@ u32_consts!(
 
 /// Winuser.h `WM_TIMECHANGE` (0x001E); not present in the generated binding set.
 pub const WM_TIMECHANGE: u32 = 0x001E;
+/// Winuser.h `WM_SYSCOLORCHANGE`, absent from the generated binding set.
+pub const WM_SYSCOLORCHANGE: u32 = 0x0015;
+/// Winuser.h `WM_CANCELMODE`; not present in the generated binding set.
+pub const WM_CANCELMODE: u32 = 0x001F;
 
 isize_consts!(
     HTCLIENT,

@@ -764,6 +764,7 @@ fn theme_snapshot_for(theme: &pecofence_render::Theme, revision: u64) -> ThemeSn
     }
     let rgba = |c: pecofence_render::ColorF| [c.r, c.g, c.b, c.a];
     snapshot.revision = revision;
+    snapshot.high_contrast = theme.high_contrast;
     snapshot.text_primary = rgba(theme.text_primary);
     snapshot.text_secondary = rgba(theme.text_secondary);
     snapshot.surface_panel = rgba(theme.solid_fill);
@@ -775,6 +776,13 @@ fn theme_snapshot_for(theme: &pecofence_render::Theme, revision: u64) -> ThemeSn
     snapshot.accent = rgba(theme.accent);
     snapshot.info = snapshot.accent;
     snapshot.unknown = snapshot.text_secondary;
+    if theme.high_contrast {
+        snapshot.accent = snapshot.text_primary;
+        snapshot.info = snapshot.text_primary;
+        snapshot.danger = snapshot.text_primary;
+        snapshot.warning = snapshot.text_primary;
+        snapshot.success = snapshot.text_primary;
+    }
     snapshot
 }
 
@@ -1336,6 +1344,36 @@ mod pipe_tests {
 #[cfg(test)]
 mod theme_host_tests {
     use super::*;
+
+    #[test]
+    fn contrast_mode_and_system_pair_changes_invalidate_all_provider_tokens() {
+        let host = ThemeHost::new();
+        let plain = pecofence_render::Theme::dark();
+        host.sync(&plain);
+        let previous = host.epoch();
+        let contrast = plain.with_contrast_colors([0, 0, 0], [255, 240, 160]);
+        host.sync(&contrast);
+        assert!(host.epoch() > previous);
+        let snapshot = host.snapshot();
+        assert!(snapshot.high_contrast);
+        for status in [
+            snapshot.accent,
+            snapshot.danger,
+            snapshot.warning,
+            snapshot.success,
+            snapshot.info,
+            snapshot.text_secondary,
+        ] {
+            assert_eq!(status, snapshot.text_primary);
+        }
+        assert_eq!(snapshot.surface_panel, [0.0, 0.0, 0.0, 1.0]);
+        let previous = host.epoch();
+        host.sync(&plain.with_contrast_colors([255; 3], [0; 3]));
+        assert!(host.epoch() > previous);
+        assert_eq!(host.snapshot().text_primary, [0.0, 0.0, 0.0, 1.0]);
+        host.sync(&plain);
+        assert!(!host.snapshot().high_contrast);
+    }
 
     #[test]
     fn control_state_colors_propagate_without_changing_the_body_palette() {

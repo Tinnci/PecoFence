@@ -17,20 +17,65 @@ const UNDO: u64 = 5;
 const TASK_BASE: u64 = 1_000;
 const EDIT_BASE: u64 = 2_000;
 const MAX_TASKS: usize = 128;
+// Upper bit separates task controls from fixed scene controls; two low bits identify row parts.
+const MAX_TASK_ID: u64 = (1 << 61) - 1;
 const MAX_TITLE_CHARS: usize = 160;
 const MAX_CONFIG_BYTES: usize = 64 * 1024;
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct TodoConfig {
+    pub next_id: u64,
     pub tasks: Vec<TodoTask>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TodoTask {
+    #[serde(default)]
+    pub id: u64,
     pub title: String,
     pub done: bool,
+}
+
+impl Default for TodoConfig {
+    fn default() -> Self {
+        Self {
+            next_id: 1,
+            tasks: Vec::new(),
+        }
+    }
+}
+
+fn normalize_ids(config: &mut TodoConfig) -> Result<()> {
+    let mut used = std::collections::HashSet::new();
+    let mut next = config.next_id.max(1);
+    for task in &config.tasks {
+        if task.id > MAX_TASK_ID || (task.id != 0 && !used.insert(task.id)) {
+            return Err(Error::Invalid(
+                "invalid or duplicate TODO task identity".into(),
+            ));
+        }
+        next = next.max(task.id + 1);
+    }
+    for task in &mut config.tasks {
+        if task.id == 0 {
+            if next > MAX_TASK_ID {
+                return Err(Error::Exhausted);
+            }
+            task.id = next;
+            next += 1;
+        }
+    }
+    if next > MAX_TASK_ID + 1 {
+        return Err(Error::Exhausted);
+    }
+    config.next_id = next;
+    Ok(())
+}
+
+fn task_node(id: u64, part: u64) -> u64 {
+    (1 << 63) | (id << 2) | part
 }
 
 fn parse(config: &PanelConfig) -> Result<TodoConfig> {
@@ -42,7 +87,7 @@ fn parse(config: &PanelConfig) -> Result<TodoConfig> {
             "TODO list exceeds configuration size limit".into(),
         ));
     }
-    let parsed: TodoConfig =
+    let mut parsed: TodoConfig =
         serde_json::from_slice(&config.bytes).map_err(|e| Error::Invalid(e.to_string()))?;
     if parsed.tasks.len() > MAX_TASKS
         || parsed.tasks.iter().any(|task| {
@@ -53,6 +98,7 @@ fn parse(config: &PanelConfig) -> Result<TodoConfig> {
             "TODO list exceeds task or title limits".into(),
         ));
     }
+    normalize_ids(&mut parsed)?;
     Ok(parsed)
 }
 
@@ -229,7 +275,13 @@ impl PanelInstance for TodoWidget {
                             "TODO list is full (128 tasks); clear completed tasks first".into(),
                         ));
                     }
+                    if next.next_id > MAX_TASK_ID {
+                        return Err(Error::Exhausted);
+                    }
+                    let id = next.next_id;
+                    next.next_id += 1;
                     next.tasks.push(TodoTask {
+                        id,
                         title: title.into(),
                         done: false,
                     });
@@ -288,8 +340,11 @@ impl PanelInstance for TodoWidget {
 fn apply_change(
     config: &mut TodoConfig,
     undo: &mut Option<TodoConfig>,
-    next: TodoConfig,
+    mut next: TodoConfig,
 ) -> Result<Option<Arc<[u8]>>> {
+    // Undo restores tasks but must not rewind the identity allocator.
+    next.next_id = next.next_id.max(config.next_id);
+    normalize_ids(&mut next)?;
     if next == *config {
         return Ok(None);
     }
@@ -344,6 +399,8 @@ fn build_todo(
     );
     if config.tasks.is_empty() {
         frame.add(WidgetElement {
+            id: 9,
+            parent: None,
             rect: RectDip {
                 x: v.x + 18.0,
                 y: v.y + 80.0,
@@ -376,6 +433,8 @@ fn build_todo(
     {
         let y = v.y + 68.0 + slot as f32 * 42.0;
         frame.add(WidgetElement {
+            id: task_node(task.id, 0),
+            parent: None,
             rect: RectDip {
                 x: v.x + design::CONTENT_INSET,
                 y,
@@ -396,6 +455,8 @@ fn build_todo(
             role: "group",
         });
         frame.add(WidgetElement {
+            id: task_node(task.id, 1),
+            parent: Some(task_node(task.id, 0)),
             rect: RectDip {
                 x: v.x + design::CONTENT_INSET,
                 y,
@@ -439,6 +500,8 @@ fn build_todo(
         // Keep the complete title in the text/semantic node. The renderer clips
         // to this rectangle; opening the editor reveals the complete text.
         frame.add(WidgetElement {
+            id: task_node(task.id, 2),
+            parent: Some(task_node(task.id, 0)),
             rect: RectDip {
                 x: v.x + design::CONTENT_INSET + 36.0,
                 y,
@@ -462,6 +525,8 @@ fn build_todo(
     let footer_y = v.y + v.h - 37.0;
     if config.tasks.iter().any(|task| task.done) {
         frame.add(WidgetElement {
+            id: 4,
+            parent: None,
             rect: RectDip {
                 x: v.x + design::CONTENT_INSET,
                 y: footer_y,
@@ -485,6 +550,8 @@ fn build_todo(
     }
     if can_undo {
         frame.add(WidgetElement {
+            id: 5,
+            parent: None,
             rect: RectDip {
                 x: v.x + 130.0,
                 y: footer_y,
@@ -509,6 +576,8 @@ fn build_todo(
     let pages = config.tasks.len().max(1).div_ceil(capacity);
     if pages > 1 {
         frame.add(WidgetElement {
+            id: 6,
+            parent: None,
             rect: RectDip {
                 x: v.x + v.w - 112.0,
                 y: footer_y,
@@ -525,6 +594,8 @@ fn build_todo(
             role: "button",
         });
         frame.add(WidgetElement {
+            id: 7,
+            parent: None,
             rect: RectDip {
                 x: v.x + v.w - 79.0,
                 y: footer_y,
@@ -541,6 +612,8 @@ fn build_todo(
             role: "text",
         });
         frame.add(WidgetElement {
+            id: 8,
+            parent: None,
             rect: RectDip {
                 x: v.x + v.w - 36.0,
                 y: footer_y,
@@ -567,7 +640,9 @@ mod tests {
     #[test]
     fn todo_config_round_trips_and_rejects_empty_titles() {
         let config = TodoConfig {
+            next_id: 2,
             tasks: vec![TodoTask {
+                id: 1,
                 title: "Buy milk".into(),
                 done: false,
             }],
@@ -583,8 +658,10 @@ mod tests {
             .is_err()
         );
         let oversized = TodoConfig {
+            next_id: 2,
             tasks: (0..MAX_TASKS)
                 .map(|_| TodoTask {
+                    id: 1,
                     title: "📝".repeat(MAX_TITLE_CHARS),
                     done: false,
                 })
@@ -598,7 +675,9 @@ mod tests {
     #[test]
     fn rejected_changes_preserve_tasks_and_previous_undo() {
         let original = TodoConfig {
+            next_id: 2,
             tasks: vec![TodoTask {
+                id: 1,
                 title: "Original".into(),
                 done: true,
             }],
@@ -623,7 +702,9 @@ mod tests {
     #[test]
     fn edited_and_cleared_tasks_can_be_restored_without_losing_completion() {
         let original = TodoConfig {
+            next_id: 2,
             tasks: vec![TodoTask {
+                id: 1,
                 title: "原始标题".into(),
                 done: true,
             }],
@@ -691,8 +772,10 @@ mod tests {
             input,
         );
         let config = TodoConfig {
+            next_id: 21,
             tasks: (0..20)
                 .map(|n| TodoTask {
+                    id: n + 1,
                     title: format!("Task {n}"),
                     done: false,
                 })
@@ -749,5 +832,156 @@ mod tests {
         let mut canvas = HeadlessCanvas::default();
         frame.paint(&mut canvas).unwrap();
         assert!(canvas.is_balanced());
+    }
+    fn read_config(json: &str) -> Result<TodoConfig> {
+        parse(&PanelConfig {
+            version: 1,
+            bytes: json.as_bytes().to_vec().into(),
+        })
+    }
+
+    #[test]
+    fn legacy_tasks_receive_unique_persistable_ids_without_changing_titles() {
+        let config = read_config(
+            r#"{"tasks":[{"title":"同名","done":false},{"title":"同名","done":true}]}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            config.tasks.iter().map(|task| task.id).collect::<Vec<_>>(),
+            vec![1, 2]
+        );
+        assert_eq!(config.next_id, 3);
+        assert_eq!(
+            read_config(&serde_json::to_string(&config).unwrap()).unwrap(),
+            config
+        );
+        assert!(
+            read_config(
+                r#"{"tasks":[{"id":1,"title":"A","done":false},{"id":1,"title":"B","done":false}]}"#
+            )
+            .is_err()
+        );
+        assert!(
+            read_config(&format!(
+                r#"{{"tasks":[{{"id":{},"title":"A","done":false}}]}}"#,
+                MAX_TASK_ID + 1
+            ))
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn clear_undo_and_restart_do_not_reuse_task_identity() {
+        let mut config =
+            read_config(r#"{"tasks":[{"title":"A","done":true},{"title":"B","done":false}]}"#)
+                .unwrap();
+        let mut undo = None;
+        apply_change(&mut config, &mut undo, TodoConfig::default()).unwrap();
+        assert_eq!(config.next_id, 3);
+        let mut added = config.clone();
+        added.tasks.push(TodoTask {
+            id: 0,
+            title: "C".into(),
+            done: false,
+        });
+        apply_change(&mut config, &mut undo, added).unwrap();
+        assert_eq!(config.tasks[0].id, 3);
+        let restore = undo.clone().unwrap();
+        apply_change(&mut config, &mut undo, restore).unwrap();
+        assert!(config.tasks.is_empty());
+        assert_eq!(config.next_id, 4);
+        let mut restarted = read_config(&serde_json::to_string(&config).unwrap()).unwrap();
+        let mut added = restarted.clone();
+        added.tasks.push(TodoTask {
+            id: 0,
+            title: "D".into(),
+            done: false,
+        });
+        apply_change(&mut restarted, &mut None, added).unwrap();
+        assert_eq!(restarted.tasks[0].id, 4);
+    }
+
+    fn scene_for(
+        config: &TodoConfig,
+        page: usize,
+        capacity: usize,
+        undo: bool,
+    ) -> pecofence_plugin_api::scene::Scene {
+        let input = FrameInput {
+            viewport: RectDip {
+                x: 0.0,
+                y: 0.0,
+                w: 420.0,
+                h: 330.0,
+            },
+            locale: "en",
+            presentation: Presentation::Compact,
+            grouping: Grouping::Single,
+            exposure: Exposure::Desktop,
+            active: true,
+            text_scale: 1.0,
+            theme_epoch: 1,
+            device_epoch: 1,
+        };
+        let mut frame = WidgetFrame::new(
+            MountKey {
+                instance: InstanceKey {
+                    id: 1,
+                    activation: 1,
+                },
+                generation: 1,
+            },
+            1,
+            1,
+            input,
+        );
+        build_todo(
+            &mut frame,
+            config,
+            page,
+            capacity,
+            undo,
+            Colors::from_theme(None),
+            false,
+        );
+        frame.finish(&mut design::LayoutTracker::default()).unwrap()
+    }
+
+    #[test]
+    fn task_controls_keep_identity_and_parent_across_clear_paging_and_footer_changes() {
+        let mut config = read_config(r#"{"tasks":[{"title":"Remove","done":true},{"title":"Keep","done":false},{"title":"Later","done":false}]}"#).unwrap();
+        let before = scene_for(&config, 0, 5, false);
+        let original = before
+            .semantics()
+            .iter()
+            .find(|n| n.name == "Keep")
+            .unwrap();
+        let original_id = original.id;
+        let original_parent = original.parent;
+        let original_action = original.action;
+        config.tasks.retain(|task| !task.done);
+        let after = scene_for(&config, 0, 5, true);
+        let kept = after.semantics().iter().find(|n| n.name == "Keep").unwrap();
+        assert_eq!(kept.id, original_id);
+        assert_eq!(kept.parent, original_parent);
+        assert_ne!(kept.action, original_action); // the existing layout revision still guards index-based commands
+        let toggle = after
+            .semantics()
+            .iter()
+            .find(|n| n.role == "checkbox" && n.name.ends_with("Keep"))
+            .unwrap();
+        assert_eq!(toggle.parent, original_parent);
+        assert_ne!(toggle.id, kept.id);
+        let page = scene_for(&config, 1, 1, true);
+        let later_paged = page.semantics().iter().find(|n| n.name == "Later").unwrap();
+        let later_all = after
+            .semantics()
+            .iter()
+            .find(|n| n.name == "Later")
+            .unwrap();
+        assert_eq!(later_paged.id, later_all.id);
+        assert_eq!(later_paged.parent, later_all.parent);
+        assert!(!after.semantics().iter().any(|n| n.name == "Remove"));
+        assert_eq!(task_node(MAX_TASK_ID, 2) >> 63, 1);
     }
 }

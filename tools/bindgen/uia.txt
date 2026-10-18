@@ -1,0 +1,10 @@
+--out crates/platform/src/uia_bindings.rs
+--flat --dead-code
+--filter
+ VARIANT
+ UiaRect
+ SafeArrayCreateVector
+ SafeArrayAccessData
+ SafeArrayUnaccessData
+ SafeArrayDestroy
+ VariantClear

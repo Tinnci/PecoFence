@@ -86,7 +86,10 @@ try {
   $toggle = $dark.GetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern)
   if ($toggle.Current.ToggleState -ne [System.Windows.Automation.ToggleState]::On) { throw 'Toggle lost its checked state' }
   Save-MenuImage $dark 'dark'
-  $dark.SetFocus()
+  # Flyout owns focus after opening. Programmatic UIA SetFocus can fail
+  # during activation; exercise actual keyboard navigation instead. Each key
+  # remains guarded by the isolated process's foreground ownership.
+  Send-OwnedKey 36 # Home: first enabled item
   Send-OwnedKey 13
 
   $light = Find-MenuElement 'Peco Light toggle'
@@ -99,7 +102,6 @@ try {
   $invoke.Invoke()
 
   $cancel = Find-MenuElement 'Peco Cancel toggle'
-  $cancel.SetFocus()
   Send-OwnedKey 27
   if (-not $process.WaitForExit(15000)) { throw 'Menu test did not finish after cancellation' }
   if ($process.ExitCode -ne 0) { throw "Menu test failed: $($process.ExitCode)" }

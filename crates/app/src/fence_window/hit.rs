@@ -74,7 +74,7 @@ impl FenceViewState {
 
     /// Is the client-pixel point anywhere in the Details header band (column menu)?
     pub(super) fn header_band_hit(&self, x_px: i32, y_px: i32) -> bool {
-        if self.layout != ViewLayout::Details || self.rolled_up {
+        if self.layout != ViewLayout::Details || !self.input_lifecycle().body() {
             return false;
         }
         let (cw, _) = self.content_size_px();
@@ -190,7 +190,7 @@ impl FenceViewState {
 
     /// Details header column under a client-pixel point.
     pub(super) fn header_hit(&self, x_px: i32, y_px: i32) -> Option<DetailColumn> {
-        if self.layout != ViewLayout::Details || self.rolled_up {
+        if self.layout != ViewLayout::Details || !self.input_lifecycle().body() {
             return None;
         }
         let scale = self.scale();
@@ -205,7 +205,7 @@ impl FenceViewState {
 
     /// Details header divider under a client-pixel point (resize grip).
     pub(super) fn divider_hit(&self, x_px: i32, y_px: i32) -> Option<DetailColumn> {
-        if self.layout != ViewLayout::Details || self.rolled_up {
+        if self.layout != ViewLayout::Details || !self.input_lifecycle().body() {
             return None;
         }
         let scale = self.scale();
@@ -287,7 +287,7 @@ impl FenceViewState {
 
     /// Item index under a client-pixel point, if any.
     pub(super) fn hit_item(&self, x_px: i32, y_px: i32) -> Option<usize> {
-        if self.rolled_up {
+        if !self.input_lifecycle().body() {
             return None;
         }
         let scale = self.scale();

@@ -51,7 +51,7 @@ pub(super) fn on_killfocus(
 // Ctrl+C / X / V clipboard, Ctrl+Shift+N new folder, F5 refresh, Ctrl+Tab.
 pub(super) fn on_keydown(
     h: &HandlerCtx,
-    _hwnd: HWND,
+    hwnd: HWND,
     wparam: usize,
     _lparam: isize,
 ) -> Option<isize> {
@@ -85,6 +85,13 @@ pub(super) fn on_keydown(
     const VK_X: u32 = 0x58;
     const VK_F5: u32 = 0x74;
     const VK_SPACE: u32 = 0x20;
+    if !v.input_lifecycle().body()
+        && !(vk == VK_TAB && ctrl)
+        && vk != msg::VK_ESCAPE
+        && !(vk == VK_BACK && v.deco.up_button)
+    {
+        return Some(0);
+    }
     let mode = cursor_mode(shift, ctrl);
     // Navigation keys are swallowed while the scrollbar thumb / track /
     // arrow is held: the direct manipulation owns the offset (Esc below
@@ -193,7 +200,7 @@ pub(super) fn on_keydown(
             // drag's Esc leaves the selection alone too).
             if let Some(c) = v.cancel_tab_or_remote_drag() {
                 drop(guard);
-                finish_drag_cancel(c, queue);
+                finish_drag_cancel(hwnd, c, queue);
                 return Some(0);
             }
             v.selected.clear();
@@ -232,6 +239,9 @@ pub(super) fn on_char(h: &HandlerCtx, _hwnd: HWND, wparam: usize, _lparam: isize
     let Some(v) = guard.as_mut() else {
         return Some(0);
     };
+    if !v.input_lifecycle().body() {
+        return Some(0);
+    }
     if v.type_ahead_char(ch) {
         let _ = v.redraw_content();
     }
@@ -255,6 +265,9 @@ pub(super) fn on_syskeydown(
     let guard = view.borrow();
     let v = guard.as_ref()?;
     if vk == msg::VK_RETURN {
+        if !v.input_lifecycle().body() {
+            return Some(0);
+        }
         let ids = v.selected_ids();
         if !ids.is_empty() {
             queue.push(Command::ItemProperties {
@@ -287,7 +300,11 @@ pub(super) fn on_contextmenu(
     let Some(v) = guard.as_mut() else {
         return Some(0);
     };
-    let ids = v.selected_ids();
+    let ids = if v.input_lifecycle().body() {
+        v.selected_ids()
+    } else {
+        Vec::new()
+    };
     if ids.is_empty() {
         // Background menu at the content's top-left.
         let win = window::window_rect(hwnd);

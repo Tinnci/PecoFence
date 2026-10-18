@@ -14,9 +14,33 @@ pub(super) fn tip_delay_ms(hover_ms: u32, reshow_ms: u32, hidden_ago: Option<Dur
 /// What the infotip describes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum TipTarget {
-    Item(usize),
+    Item(ContentId, ItemId),
     Tab(ContentId),
-    Up,
+    Up(ContentId),
+}
+
+/// Pending native hover timer. A queued WM_TIMER can survive KillTimer and arrive
+/// after a new target is armed, so the message itself is never proof of expiry.
+#[derive(Clone, Copy, Debug)]
+pub(super) struct TipWait {
+    pub anchor: (i32, i32),
+    pub deadline: Instant,
+}
+
+impl TipWait {
+    pub fn remaining_ms(self, now: Instant) -> Option<u32> {
+        tip_timer_remaining_ms(self.deadline, now)
+    }
+}
+
+pub(super) fn tip_timer_remaining_ms(deadline: Instant, now: Instant) -> Option<u32> {
+    let remaining = deadline.saturating_duration_since(now);
+    (!remaining.is_zero()).then(|| {
+        remaining
+            .as_millis()
+            .saturating_add(1)
+            .min(u32::MAX as u128) as u32
+    })
 }
 
 /// TME_HOVER rectangle test: has the pointer left the `rect` (SPI_GETMOUSEHOVERWIDTH x
@@ -37,12 +61,13 @@ impl FenceViewState {
         hit: Option<usize>,
     ) -> Option<TipTarget> {
         if self.up_button_at(x_px, y_px) {
-            return Some(TipTarget::Up);
+            return Some(TipTarget::Up(self.active));
         }
         if let Some(t) = self.tab_at(x_px, y_px) {
             return Some(TipTarget::Tab(self.tabs.get(t)?.id));
         }
-        hit.map(TipTarget::Item)
+        hit.and_then(|i| self.items.get(i))
+            .map(|item| TipTarget::Item(self.active, item.id))
     }
 
     /// NOTE: `TTM_TRACKACTIVATE` makes comctl32 send `WM_NOTIFY` (TTN_SHOW / TTN_POP) back to
@@ -52,25 +77,23 @@ impl FenceViewState {
     pub(super) fn hide_tip(&mut self) {
         window::kill_timer(self.hwnd, TIMER_TIP);
         window::kill_timer(self.hwnd, TIMER_TIP_HIDE);
-        if self.tip_shown {
+        if self.tip_expires.take().is_some() {
             if let Some(t) = self.tip.as_mut() {
                 t.hide();
             }
-            self.tip_shown = false;
             self.tip_hidden_at = Some(Instant::now());
         }
         self.tip_target = None;
-        self.tip_armed = false;
+        self.tip_wait = None;
     }
 
     /// Auto-pop (TIMER_TIP_HIDE): the tip goes away but the target stays, so it does not come
     /// back until the pointer moves onto something else (comctl32 after TTDT_AUTOPOP).
     pub(super) fn autopop_tip(&mut self) {
-        if self.tip_shown {
+        if self.tip_expires.take().is_some() {
             if let Some(t) = self.tip.as_mut() {
                 t.hide();
             }
-            self.tip_shown = false;
             self.tip_hidden_at = Some(Instant::now());
         }
     }
@@ -82,9 +105,9 @@ impl FenceViewState {
     /// after the short TTDT_RESHOW delay. A tip already shown / auto-popped never re-arms.
     pub(super) fn update_tip_target(&mut self, target: Option<TipTarget>, x: i32, y: i32) {
         if target == self.tip_target {
-            if self.tip_armed
+            if let Some(wait) = self.tip_wait
                 && tip_hover_moved(
-                    self.tip_anchor,
+                    wait.anchor,
                     (x, y),
                     pecofence_platform::sysparams::mouse_hover_rect(),
                 )
@@ -108,15 +131,19 @@ impl FenceViewState {
             self.tip_hidden_at.map(|t| t.elapsed()),
         );
         window::set_timer(self.hwnd, TIMER_TIP, delay);
-        self.tip_anchor = (x, y);
-        self.tip_armed = true;
+        self.tip_wait = Some(TipWait {
+            anchor: (x, y),
+            deadline: Instant::now() + Duration::from_millis(u64::from(delay)),
+        });
     }
 
     /// Infotip text: items get Explorer's name / 类型 / 大小 / 修改日期, a shrunken tab pill its
     /// full caption, the portal up button "向上".
     pub(super) fn tip_text(&self) -> Option<String> {
         match self.tip_target? {
-            TipTarget::Up => Some(pecofence_core::i18n::text("向上").to_string()),
+            TipTarget::Up(content) => {
+                (content == self.active).then(|| pecofence_core::i18n::text("向上").to_string())
+            }
             TipTarget::Tab(id) => {
                 if !self.tabs.iter().any(|tab| tab.id == id) {
                     return None;
@@ -125,9 +152,12 @@ impl FenceViewState {
                     .tab_tip(id)
                     .map(str::to_owned)
             }
-            TipTarget::Item(i) => {
-                let it = self.items.get(i)?;
-                let mut s = it.name.clone();
+            TipTarget::Item(content, id) => {
+                if content != self.active {
+                    return None;
+                }
+                let it = self.items.iter().find(|item| item.id == id)?;
+                let mut s = self.committed_file_scene()?.semantic(id)?.name.clone();
                 if let Some(t) = fileinfo::type_name(&it.path, it.is_folder) {
                     s.push_str(&pecofence_core::i18n::format(
                         "\n类型: {0}",
@@ -152,7 +182,36 @@ impl FenceViewState {
         }
     }
 
-    pub(super) fn show_tip(&mut self) {
+    pub(super) fn show_tip(&mut self, anchor: (i32, i32)) {
+        // Resolve delayed work against the currently published surfaces, never the
+        // index or pointer geometry from when the native timer was armed.
+        let pt = window::cursor_pos();
+        if !self.input_lifecycle().window()
+            || desktop::root_ancestor(desktop::window_from_point(pt.x, pt.y)) != self.hwnd
+        {
+            self.hide_tip();
+            return;
+        }
+        let client = window::screen_to_client(self.hwnd, pt);
+        let hit =
+            if !self.input_lifecycle().body() || self.scrollbar_hit(client.x, client.y).is_some() {
+                None
+            } else {
+                self.hit_item(client.x, client.y)
+            };
+        let target = self.tip_target_at(client.x, client.y, hit);
+        if target != self.tip_target {
+            self.update_tip_target(target, client.x, client.y);
+            return;
+        }
+        if tip_hover_moved(
+            anchor,
+            (client.x, client.y),
+            pecofence_platform::sysparams::mouse_hover_rect(),
+        ) {
+            self.arm_tip_timer(client.x, client.y);
+            return;
+        }
         let Some(text) = self.tip_text() else {
             return;
         };
@@ -162,7 +221,6 @@ impl FenceViewState {
                 .map_err(|e| tracing::warn!(error = %e, "tooltip window failed"))
                 .ok();
         }
-        let pt = window::cursor_pos();
         let scale = self.scale();
         if let Some(t) = self.tip.as_mut() {
             t.show(
@@ -170,13 +228,11 @@ impl FenceViewState {
                 pt.x + (12.0 * scale).round() as i32,
                 pt.y + (20.0 * scale).round() as i32,
             );
-            self.tip_shown = true;
-            self.tip_armed = false;
-            window::set_timer(
-                self.hwnd,
-                TIMER_TIP_HIDE,
-                pecofence_platform::sysparams::message_duration_secs() * 1000,
-            );
+            let duration_ms =
+                pecofence_platform::sysparams::message_duration_secs().saturating_mul(1000);
+            self.tip_expires = Some(Instant::now() + Duration::from_millis(u64::from(duration_ms)));
+            self.tip_wait = None;
+            window::set_timer(self.hwnd, TIMER_TIP_HIDE, duration_ms);
         }
     }
 }

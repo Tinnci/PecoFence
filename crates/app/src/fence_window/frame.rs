@@ -80,6 +80,10 @@ impl FenceWindow {
     /// tween. Returns true while something still moves (the app then asks the frame clock for
     /// the next frame). Re-entrancy: the window is resized with no borrow held.
     pub fn on_frame(&self, now: Instant) -> bool {
+        let _publication = super::interaction::CaptureReleaseBoundary {
+            view: &self.view,
+            hwnd: self.hwnd(),
+        };
         let hwnd = self.hwnd();
         let moved = flush_window_drag(&self.view, hwnd, now, None);
         // Phase 1: compute under a short borrow.

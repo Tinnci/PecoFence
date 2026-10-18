@@ -70,12 +70,24 @@ pub(super) fn on_timer_tip(
     _lparam: isize,
 ) -> Option<isize> {
     let HandlerCtx { view, .. } = h;
+    let Ok(mut guard) = view.try_borrow_mut() else {
+        // An owned native popup may re-enter while the view is borrowed. Retry
+        // without discarding the pending deadline or showing from stale state.
+        window::set_timer(hwnd, TIMER_TIP, 16);
+        return Some(0);
+    };
     window::kill_timer(hwnd, TIMER_TIP);
-    if let Ok(mut guard) = view.try_borrow_mut()
-        && let Some(v) = guard.as_mut()
-    {
-        // Fired (or suppressed by a gesture): no longer armed either way.
-        v.tip_armed = false;
+    if let Some(v) = guard.as_mut() {
+        let Some(wait) = v.tip_wait else {
+            // A cancelled timer may already have a message in the queue.
+            return Some(0);
+        };
+        if let Some(remaining) = wait.remaining_ms(Instant::now()) {
+            // This may be the old target's queued message. Keep the new rest period.
+            window::set_timer(hwnd, TIMER_TIP, remaining);
+            return Some(0);
+        }
+        v.tip_wait = None;
         if v.tip_target.is_some()
             && v.drag.is_none()
             && v.marquee.is_none()
@@ -83,7 +95,7 @@ pub(super) fn on_timer_tip(
             && v.scroll_drag.is_none()
             && !v.ole_drag
         {
-            v.show_tip();
+            v.show_tip(wait.anchor);
         }
     }
     Some(0)
@@ -96,11 +108,21 @@ pub(super) fn on_timer_tip_hide(
     _lparam: isize,
 ) -> Option<isize> {
     let HandlerCtx { view, .. } = h;
+    // TTM_TRACKACTIVATE sends TTN_POP synchronously. Do not consume the
+    // only auto-pop wake while another operation still owns the view.
+    let Ok(mut guard) = view.try_borrow_mut() else {
+        window::set_timer(hwnd, TIMER_TIP_HIDE, 16);
+        return Some(0);
+    };
     window::kill_timer(hwnd, TIMER_TIP_HIDE);
-    // try_borrow_mut: TTM_TRACKACTIVATE sends TTN_POP synchronously.
-    if let Ok(mut guard) = view.try_borrow_mut()
-        && let Some(v) = guard.as_mut()
-    {
+    if let Some(v) = guard.as_mut() {
+        if let Some(deadline) = v.tip_expires
+            && let Some(remaining) =
+                super::super::tooltip::tip_timer_remaining_ms(deadline, Instant::now())
+        {
+            window::set_timer(hwnd, TIMER_TIP_HIDE, remaining);
+            return Some(0);
+        }
         v.autopop_tip();
     }
     Some(0)

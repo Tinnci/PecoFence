@@ -11,9 +11,10 @@ pub enum ThemeMode {
     Dark,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Theme {
     pub mode: ThemeMode,
+    pub high_contrast: bool,
     pub liquid_glass: bool,
     /// Fence body fill when no wallpaper backdrop is available (SolidBackgroundFillColorBase).
     pub solid_fill: ColorF,
@@ -72,6 +73,7 @@ impl Theme {
     pub const fn dark() -> Self {
         Self {
             mode: ThemeMode::Dark,
+            high_contrast: false,
             liquid_glass: false,
             solid_fill: ColorF::from_rgba8(0x1B, 0x25, 0x2C, 0xF2),
             layer_fill: ColorF::from_rgba8(0x31, 0x40, 0x48, 0x4D),
@@ -104,6 +106,7 @@ impl Theme {
     pub const fn light() -> Self {
         Self {
             mode: ThemeMode::Light,
+            high_contrast: false,
             liquid_glass: false,
             solid_fill: ColorF::from_rgba8(0xF4, 0xF7, 0xF8, 0xF2),
             layer_fill: ColorF::from_rgba8(0xFF, 0xFF, 0xFF, 0x80),
@@ -160,9 +163,47 @@ impl Theme {
         }
     }
 
+    /// Keep text on the system Window/WindowText pair. Selection and feedback
+    /// use outlines rather than overlays, so text never needs a guessed inverse.
+    pub fn with_contrast_colors(mut self, window: [u8; 3], text: [u8; 3]) -> Self {
+        let color = |[r, g, b]: [u8; 3]| ColorF::from_rgba8(r, g, b, 255);
+        let bg = color(window);
+        let fg = color(text);
+        self.high_contrast = true;
+        self.liquid_glass = false;
+        self.solid_fill = bg;
+        self.layer_fill = bg;
+        self.glass_layer_fill = bg;
+        self.glass_rim_top = fg;
+        self.glass_rim_bottom = fg;
+        self.text_primary = fg;
+        self.text_secondary = fg;
+        self.text_tertiary = fg;
+        self.control_strong = fg;
+        self.drop_highlight = ColorF::TRANSPARENT;
+        self.tab_active_fill = ColorF::TRANSPARENT;
+        self.title_fill = bg;
+        self.stroke = fg;
+        self.divider = fg;
+        self.subtle_hover = ColorF::TRANSPARENT;
+        self.subtle_pressed = ColorF::TRANSPARENT;
+        self.selection_fill = ColorF::TRANSPARENT;
+        self.selection_stroke = fg;
+        self.selection_fill_inactive = ColorF::TRANSPARENT;
+        self.selection_stroke_inactive = fg;
+        self.focus_outer = fg;
+        self.focus_inner = bg;
+        self.accent = fg;
+        self.corner_radius = 4.0;
+        self
+    }
+
     /// Liquid Glass-inspired chrome. Keep mode and accent independent of the material.
     /// The composition root clips to this radius, including content and height animations.
     pub const fn with_liquid_glass(mut self) -> Self {
+        if self.high_contrast {
+            return self;
+        }
         self.liquid_glass = true;
         self.corner_radius = 24.0;
         self.glass_rim_top = ColorF::from_rgba8(0xFF, 0xFF, 0xFF, 0xCD);
@@ -295,6 +336,9 @@ impl Theme {
     /// system accent — WinUI `AccentFillColorDefault`: pass `AccentLight2` for the dark theme
     /// and `AccentDark1` for the light theme. The alphas stay as in the defaults.
     pub fn with_accent(mut self, rgb: [u8; 3]) -> Self {
+        if self.high_contrast {
+            return self;
+        }
         let [r, g, b] = rgb;
         let tint = |a: f32| ColorF {
             r: r as f32 / 255.0,
@@ -339,6 +383,32 @@ pub use pecofence_plugin_api::design::{FONT_DISPLAY, FONT_ICONS, FONT_SMALL, FON
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn contrast_pair_survives_material_accent_and_wallpaper_preferences() {
+        for (bg, fg) in [
+            ([0, 0, 0], [255, 255, 255]),
+            ([255, 255, 255], [0, 0, 0]),
+            ([32, 24, 40], [240, 220, 130]),
+        ] {
+            let base = Theme::dark()
+                .with_liquid_glass()
+                .with_contrast_colors(bg, fg);
+            assert!(base.high_contrast);
+            assert!(!base.liquid_glass);
+            assert_eq!(base.solid_fill.a, 1.0);
+            assert_eq!(base.text_primary.a, 1.0);
+            assert_eq!(base.text_primary, base.text_secondary);
+            assert_eq!(base.text_primary, base.focus_outer);
+            assert_eq!(base.selection_fill.a, 0.0);
+            assert_eq!(base.selection_stroke, base.text_primary);
+            let after = base
+                .with_liquid_glass()
+                .with_accent([255, 0, 0])
+                .over_glass(&crate::Image::solid(2, 2, [180; 3]));
+            assert_eq!(after, base);
+        }
+    }
+
     #[test]
     fn floating_glass_protects_text_without_changing_the_desktop_material() {
         for mode in [ThemeMode::Light, ThemeMode::Dark] {

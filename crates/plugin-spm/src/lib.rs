@@ -9,8 +9,8 @@ use pecofence_plugin_api::*;
 use serde::{Deserialize, Serialize};
 use spm_contracts::{
     Body, BuildBriefingRequest, DaemonSessionId, DeliveryScopeId, DetailLevel, Envelope, Event,
-    GateStatus, IdempotencyKey, ProjectId, ProjectQuery, ProjectSnapshot, RefreshRequest, Request,
-    ResolveNavigationRequest, Response, Revision, RpcMethod, ViewKind,
+    GateStatus, IdempotencyKey, ProjectId, ProjectQuery, ProjectSnapshot, RecordId, RefreshRequest,
+    Request, ResolveNavigationRequest, Response, Revision, RpcMethod, ViewKind,
 };
 use std::sync::Arc;
 use std::{collections::HashMap, rc::Rc};
@@ -22,6 +22,7 @@ const ACTION_EXPAND: u64 = 3;
 const ACTION_BACK_TO_LIST: u64 = 4;
 const ACTION_OPEN_BASE: u64 = 1_000;
 const ACTION_SELECT_BASE: u64 = 2_000;
+const ROW_LOCAL_BASE: u64 = 1 << 32;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SpmConfig {
@@ -40,9 +41,22 @@ pub struct ViewNode {
     pub foreground: [f32; 4],
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum RecordPart {
+    Row,
+    Detail,
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RecordBinding {
+    pub record_id: RecordId,
+    pub part: RecordPart,
+}
+
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct PanelView {
     pub nodes: Vec<ViewNode>,
+    /// Dynamic layout nodes retain complete business identity until host-local IDs are assigned.
+    pub records: HashMap<u64, RecordBinding>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -171,6 +185,7 @@ fn build_workspace_view(
     tokens: &PanelTokens,
 ) -> PanelView {
     let mut nodes = Vec::new();
+    let mut records = HashMap::new();
     let panel = tokens.panel;
     let subtle = tokens.subtle;
     let primary = tokens.primary;
@@ -225,7 +240,7 @@ fn build_workspace_view(
             Some(subtle),
             accent,
         );
-        return PanelView { nodes };
+        return PanelView { nodes, records };
     };
     push(
         10,
@@ -345,6 +360,13 @@ fn build_workspace_view(
             Some(subtle),
             accent,
         );
+        records.insert(
+            41,
+            RecordBinding {
+                record_id: item.record_id.clone(),
+                part: RecordPart::Detail,
+            },
+        );
         push(
             41,
             RectDip {
@@ -365,7 +387,7 @@ fn build_workspace_view(
             Some(subtle),
             primary,
         );
-        return PanelView { nodes };
+        return PanelView { nodes, records };
     }
     let list_width = if breakpoint == WorkspaceBreakpoint::Wide {
         (viewport.w - 408.0).max(320.0)
@@ -376,8 +398,15 @@ fn build_workspace_view(
     for (index, item) in snapshot.preview_items.iter().take(visible).enumerate() {
         let y = row_top + index as f32 * row_height;
         let action = Some(ACTION_SELECT_BASE + index as u64);
+        records.insert(
+            ROW_LOCAL_BASE + index as u64,
+            RecordBinding {
+                record_id: item.record_id.clone(),
+                part: RecordPart::Row,
+            },
+        );
         push(
-            100 + index as u64,
+            ROW_LOCAL_BASE + index as u64,
             RectDip {
                 x: 16.0,
                 y,
@@ -404,6 +433,15 @@ fn build_workspace_view(
         let detail = selected_item
             .and_then(|index| snapshot.preview_items.get(index))
             .or_else(|| snapshot.preview_items.first());
+        if let Some(item) = detail {
+            records.insert(
+                800,
+                RecordBinding {
+                    record_id: item.record_id.clone(),
+                    part: RecordPart::Detail,
+                },
+            );
+        }
         push(
             800,
             RectDip {
@@ -435,7 +473,7 @@ fn build_workspace_view(
         Some(subtle),
         accent,
     );
-    PanelView { nodes }
+    PanelView { nodes, records }
 }
 
 fn build_compact_view(
@@ -443,6 +481,7 @@ fn build_compact_view(
     viewport: RectDip,
     tokens: &PanelTokens,
 ) -> PanelView {
+    let mut records = HashMap::new();
     let panel = tokens.panel;
     let subtle = tokens.subtle;
     let primary = tokens.primary;
@@ -498,7 +537,7 @@ fn build_compact_view(
             Some(subtle),
             accent,
         );
-        return PanelView { nodes };
+        return PanelView { nodes, records };
     };
     push(
         10,
@@ -535,8 +574,15 @@ fn build_compact_view(
     );
     let items_top = 100.0;
     for (index, item) in snapshot.preview_items.iter().take(3).enumerate() {
+        records.insert(
+            ROW_LOCAL_BASE + index as u64,
+            RecordBinding {
+                record_id: item.record_id.clone(),
+                part: RecordPart::Row,
+            },
+        );
         push(
-            100 + index as u64,
+            ROW_LOCAL_BASE + index as u64,
             RectDip {
                 x: inset,
                 y: items_top + index as f32 * 44.0,
@@ -589,7 +635,7 @@ fn build_compact_view(
         Some(subtle),
         accent,
     );
-    PanelView { nodes }
+    PanelView { nodes, records }
 }
 
 fn build_capsule_view(
@@ -687,7 +733,10 @@ fn build_capsule_view(
         fill: Some(badge),
         foreground: accent,
     });
-    PanelView { nodes }
+    PanelView {
+        nodes,
+        records: HashMap::new(),
+    }
 }
 
 pub fn build_presentation_view(
@@ -782,6 +831,7 @@ fn prepare_scene(
                 role: node.role.into(),
                 action: node.action,
                 style: NodeStyle {
+                    stroke: None,
                     size: if node.role == "heading" {
                         design::TITLE
                     } else {
@@ -868,6 +918,7 @@ impl PanelProvider for SpmPlugin {
             snapshot: None,
             snapshot_cursor: SnapshotCursor::for_query(project_query),
             layout_tracker: LayoutTracker::default(),
+            scene_identities: SceneIdentities::default(),
             source_revision: 0,
             prepared_source_revision: 0,
             layout_revision: 0,
@@ -881,6 +932,74 @@ impl PanelProvider for SpmPlugin {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+enum SceneKey {
+    Fixed(u8, u64),
+    Record(RecordId, RecordPart),
+}
+#[derive(Default)]
+struct SceneIdentities {
+    next: u64,
+    ids: HashMap<SceneKey, u64>,
+}
+impl SceneIdentities {
+    fn bind(
+        &mut self,
+        view: &mut PanelView,
+        snapshot: Option<&ProjectSnapshot>,
+        presentation: Presentation,
+    ) -> Result<()> {
+        let current: std::collections::HashSet<_> = snapshot
+            .into_iter()
+            .flat_map(|s| s.preview_items.iter().map(|i| &i.record_id))
+            .collect();
+        // Retain all current records, including ones outside the viewport. Dropped
+        // records release map storage; the allocator never reuses their IDs.
+        self.ids.retain(|key, _| match key {
+            SceneKey::Fixed(..) => true,
+            SceneKey::Record(id, _) => current.contains(id),
+        });
+        let mode = match presentation {
+            Presentation::Workspace => 0,
+            Presentation::Compact => 1,
+            Presentation::Capsule => 2,
+        };
+        for node in &mut view.nodes {
+            if node.id == 1 {
+                continue;
+            } // root identity is stable in every presentation
+            let key = view.records.get(&node.id).map_or_else(
+                || SceneKey::Fixed(mode, node.id),
+                |record| SceneKey::Record(record.record_id.clone(), record.part),
+            );
+            node.id = if let Some(id) = self.ids.get(&key) {
+                *id
+            } else {
+                let id = self.next.max(2);
+                self.next = id.checked_add(1).ok_or(Error::Exhausted)?;
+                self.ids.insert(key, id);
+                id
+            };
+        }
+        view.records.clear(); // layout-local bindings have now been consumed
+        Ok(())
+    }
+}
+
+fn validate_record_ids(snapshot: &ProjectSnapshot) -> Result<()> {
+    let mut ids = std::collections::HashSet::new();
+    if snapshot
+        .preview_items
+        .iter()
+        .any(|item| !ids.insert(&item.record_id))
+    {
+        return Err(Error::Invalid(
+            "duplicate SPM preview record identity".into(),
+        ));
+    }
+    Ok(())
+}
+
 pub struct SpmPanel {
     ctx: PluginContext,
     key: InstanceKey,
@@ -890,11 +1009,12 @@ pub struct SpmPanel {
     snapshot: Option<ProjectSnapshot>,
     snapshot_cursor: SnapshotCursor,
     layout_tracker: LayoutTracker,
+    scene_identities: SceneIdentities,
     source_revision: u64,
     prepared_source_revision: u64,
     layout_revision: u64,
     frame_revision: u64,
-    selected_item: Option<usize>,
+    selected_item: Option<RecordId>,
     pending_actions: HashMap<Token, (RpcMethod, Option<Revision>)>,
     action_status: Option<String>,
     tokens: PanelTokens,
@@ -934,6 +1054,9 @@ impl PanelInstance for SpmPanel {
                 bytes,
             } if subscription == self.subscription => {
                 let envelope = decode_event(&bytes)?;
+                if let Body::Event(Event::Snapshot(snapshot)) = &envelope.body {
+                    validate_record_ids(snapshot)?;
+                }
                 if !self.snapshot_cursor.accept(&envelope) {
                     return Ok(PanelUpdate::default());
                 }
@@ -944,6 +1067,14 @@ impl PanelInstance for SpmPanel {
                     .source_revision
                     .checked_add(1)
                     .ok_or(Error::Exhausted)?;
+                if self.selected_item.as_ref().is_some_and(|id| {
+                    !snapshot
+                        .preview_items
+                        .iter()
+                        .any(|item| &item.record_id == id)
+                }) {
+                    self.selected_item = None;
+                }
                 self.snapshot = Some(snapshot);
                 Ok(PanelUpdate {
                     commands: vec![HostCommand::Invalidate],
@@ -993,12 +1124,12 @@ impl PanelInstance for SpmPanel {
                 } else if let Some(index) = action
                     .checked_sub(ACTION_SELECT_BASE)
                     .map(|value| value as usize)
-                    && self
+                    && let Some(item) = self
                         .snapshot
                         .as_ref()
-                        .is_some_and(|snapshot| index < snapshot.preview_items.len())
+                        .and_then(|snapshot| snapshot.preview_items.get(index))
                 {
-                    self.selected_item = Some(index);
+                    self.selected_item = Some(item.record_id.clone());
                     return Ok(PanelUpdate {
                         commands: vec![HostCommand::Invalidate],
                         relayout: true,
@@ -1050,7 +1181,13 @@ impl PanelInstance for SpmPanel {
                 self.snapshot.as_ref(),
                 input.presentation,
                 viewport,
-                self.selected_item,
+                self.selected_item.as_ref().and_then(|id| {
+                    self.snapshot
+                        .as_ref()?
+                        .preview_items
+                        .iter()
+                        .position(|item| &item.record_id == id)
+                }),
                 &self.tokens,
             )
         } else {
@@ -1072,6 +1209,8 @@ impl PanelInstance for SpmPanel {
                 foreground: self.tokens.secondary,
             });
         }
+        self.scene_identities
+            .bind(&mut view, self.snapshot.as_ref(), input.presentation)?;
         for node in &mut view.nodes {
             node.rect = scale.rect(node.rect);
         }
@@ -1320,6 +1459,7 @@ mod tests {
                 snapshot: None,
                 snapshot_cursor: SnapshotCursor::default(),
                 layout_tracker: LayoutTracker::default(),
+                scene_identities: SceneIdentities::default(),
                 source_revision: 0,
                 prepared_source_revision: 0,
                 layout_revision: 0,
@@ -1809,5 +1949,181 @@ mod tests {
         frame.paint(&mut canvas).unwrap();
         assert!(canvas.is_balanced());
         assert!(!canvas.commands().is_empty());
+    }
+    fn identity_input(presentation: Presentation, width: f32) -> FrameInput {
+        FrameInput {
+            viewport: RectDip {
+                x: 0.0,
+                y: 0.0,
+                w: width,
+                h: 760.0,
+            },
+            locale: "en",
+            presentation,
+            grouping: Grouping::Single,
+            exposure: Exposure::Desktop,
+            active: true,
+            text_scale: 1.0,
+            theme_epoch: 1,
+            device_epoch: 1,
+        }
+    }
+
+    fn accept_snapshot(panel: &mut SpmPanel, snapshot: ProjectSnapshot) -> Result<PanelUpdate> {
+        panel.event(PanelEvent::Snapshot {
+            subscription: panel.subscription,
+            bytes: serde_json::to_vec(&envelope(snapshot)).unwrap().into(),
+        })
+    }
+
+    fn mount_identity_panel(panel: &mut SpmPanel) {
+        panel.mount = Some(MountKey {
+            instance: panel.key,
+            generation: 1,
+        });
+    }
+
+    fn two_records() -> ProjectSnapshot {
+        let mut data = snapshot(DaemonSessionId::new(), 1);
+        data.preview_items[0].record_id = RecordId::new("Record-A").unwrap();
+        let mut second = data.preview_items[0].clone();
+        second.record_id = RecordId::new("Record-B").unwrap();
+        second.title = "Second business item".into();
+        data.preview_items.push(second);
+        data
+    }
+
+    fn record_node(frame: &dyn PreparedFrame, record: &str) -> u64 {
+        frame
+            .semantics()
+            .iter()
+            .find(|n| n.role == "listitem" && n.name.starts_with(&format!("{record} ·")))
+            .unwrap()
+            .id
+    }
+
+    #[test]
+    fn reordered_snapshot_keeps_selected_record_and_scene_identity_across_modes() {
+        let (mut panel, calls, _keep) = panel();
+        mount_identity_panel(&mut panel);
+        let mut data = two_records();
+        accept_snapshot(&mut panel, data.clone()).unwrap();
+        let first = panel
+            .prepare_frame(identity_input(Presentation::Workspace, 1120.0))
+            .unwrap();
+        let b = record_node(first.as_ref(), "Record-B");
+        panel
+            .event(PanelEvent::Invoke {
+                action: ACTION_SELECT_BASE + 1,
+                layout_revision: first.identity().layout_revision,
+            })
+            .unwrap();
+        assert_eq!(panel.selected_item.as_ref().unwrap().as_str(), "Record-B");
+        data.preview_items.swap(0, 1);
+        data.revision = Revision(2);
+        accept_snapshot(&mut panel, data.clone()).unwrap();
+        // The source changed before drawing: an old action cannot run against its new index.
+        panel
+            .event(PanelEvent::Invoke {
+                action: ACTION_OPEN_BASE + 1,
+                layout_revision: first.identity().layout_revision,
+            })
+            .unwrap();
+        assert!(calls.requests.borrow().is_empty());
+        let reordered = panel
+            .prepare_frame(identity_input(Presentation::Workspace, 1120.0))
+            .unwrap();
+        assert_eq!(record_node(reordered.as_ref(), "Record-B"), b);
+        assert!(
+            reordered
+                .semantics()
+                .iter()
+                .any(|n| n.role == "complementary" && n.name.contains("Record-B"))
+        );
+        let detail_id = reordered
+            .semantics()
+            .iter()
+            .find(|n| n.role == "complementary")
+            .unwrap()
+            .id;
+        let mut interaction = design::ControlInteraction {
+            focused: Some(b),
+            ..Default::default()
+        };
+        interaction.reconcile(reordered.hit_tree());
+        assert_eq!(interaction.focused, Some(b));
+        let compact = panel
+            .prepare_frame(identity_input(Presentation::Compact, 480.0))
+            .unwrap();
+        assert_eq!(record_node(compact.as_ref(), "Record-B"), b);
+        let narrow = panel
+            .prepare_frame(identity_input(Presentation::Workspace, 600.0))
+            .unwrap();
+        let detail = narrow
+            .semantics()
+            .iter()
+            .find(|n| n.role == "article")
+            .unwrap();
+        assert_eq!(detail.id, detail_id);
+        assert!(detail.name.contains("Record-B"));
+        assert_eq!(panel.selected_item.as_ref().unwrap().as_str(), "Record-B");
+    }
+
+    #[test]
+    fn removed_record_clears_selection_and_its_scene_id_is_never_reassigned() {
+        let (mut panel, _, _keep) = panel();
+        mount_identity_panel(&mut panel);
+        let mut data = two_records();
+        accept_snapshot(&mut panel, data.clone()).unwrap();
+        let initial = panel
+            .prepare_frame(identity_input(Presentation::Workspace, 1120.0))
+            .unwrap();
+        let b = record_node(initial.as_ref(), "Record-B");
+        panel
+            .event(PanelEvent::Invoke {
+                action: ACTION_SELECT_BASE + 1,
+                layout_revision: initial.identity().layout_revision,
+            })
+            .unwrap();
+        let removed = data.preview_items.pop().unwrap();
+        data.revision = Revision(2);
+        accept_snapshot(&mut panel, data.clone()).unwrap();
+        assert!(panel.selected_item.is_none());
+        let after = panel
+            .prepare_frame(identity_input(Presentation::Workspace, 1120.0))
+            .unwrap();
+        assert!(!after.semantics().iter().any(|n| n.id == b));
+        assert!(
+            !panel
+                .scene_identities
+                .ids
+                .keys()
+                .any(|k| matches!(k, SceneKey::Record(id, _) if id == &removed.record_id))
+        );
+        data.preview_items.push(removed);
+        data.revision = Revision(3);
+        accept_snapshot(&mut panel, data).unwrap();
+        let restored = panel
+            .prepare_frame(identity_input(Presentation::Workspace, 1120.0))
+            .unwrap();
+        assert_ne!(record_node(restored.as_ref(), "Record-B"), b);
+    }
+
+    #[test]
+    fn duplicate_business_ids_are_rejected_before_advancing_the_source_cursor() {
+        let (mut panel, _, _keep) = panel();
+        mount_identity_panel(&mut panel);
+        let data = two_records();
+        accept_snapshot(&mut panel, data.clone()).unwrap();
+        let revision = panel.source_revision;
+        let mut invalid = data.clone();
+        invalid.revision = Revision(2);
+        invalid.preview_items[1].record_id = invalid.preview_items[0].record_id.clone();
+        assert!(accept_snapshot(&mut panel, invalid).is_err());
+        assert_eq!(panel.source_revision, revision);
+        assert_eq!(panel.snapshot.as_ref().unwrap(), &data);
+        let mut valid = data;
+        valid.revision = Revision(2);
+        assert!(accept_snapshot(&mut panel, valid).unwrap().relayout);
     }
 }

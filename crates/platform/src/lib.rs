@@ -20,6 +20,17 @@
 )]
 mod bindings;
 
+pub mod accessibility;
+
+#[allow(
+    non_snake_case,
+    non_camel_case_types,
+    non_upper_case_globals,
+    clippy::all,
+    dead_code
+)]
+mod uia_bindings;
+
 pub mod autostart;
 pub mod clipboard;
 pub mod com;

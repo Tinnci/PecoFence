@@ -8,6 +8,7 @@ fn main() {
     let etcs: Vec<String> = match std::env::args().skip(1).collect::<Vec<_>>() {
         v if v.is_empty() => vec![
             "tools/bindgen/platform.txt".to_string(),
+            "tools/bindgen/uia.txt".to_string(),
             "tools/bindgen/shell-extension.txt".to_string(),
             "tools/bindgen/composition.txt".to_string(),
             "tools/bindgen/gpu-glass.txt".to_string(),

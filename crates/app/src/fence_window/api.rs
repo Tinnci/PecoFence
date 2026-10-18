@@ -55,7 +55,8 @@ impl FenceWindow {
         items: Vec<ItemView>,
     ) -> Result<Self> {
         let view: Rc<RefCell<Option<FenceViewState>>> = Rc::new(RefCell::new(None));
-        let handler = Self::make_handler(ctx, fence_id, view.clone());
+        let accessibility = Rc::new(pecofence_platform::accessibility::WindowAccessibility::new());
+        let handler = Self::make_handler(ctx, fence_id, view.clone(), accessibility.clone());
         let shadow = ShadowWindow::create(&ctx.shadow_class, ctx.shadow_style.get())?;
 
         let height = if rolled_up {
@@ -119,7 +120,9 @@ impl FenceWindow {
         let mut state = FenceViewState {
             fence_id,
             title: title.to_string(),
+            accessibility: accessibility.publisher(),
             plugin_panel: None,
+            input_capture_release: Rc::new(Cell::new(false)),
             rolled_up,
             is_inbox,
             expanded_h_px: expanded_h_px.max(1),
@@ -236,10 +239,9 @@ impl FenceWindow {
             pending_rename: None,
             tip: None,
             tip_target: None,
-            tip_shown: false,
+            tip_expires: None,
             tip_hidden_at: None,
-            tip_anchor: (0, 0),
-            tip_armed: false,
+            tip_wait: None,
             cut: HashSet::new(),
             wheel_zoom_accum: 0,
             auto_height,
@@ -377,7 +379,7 @@ impl FenceWindow {
             },
         );
         format!(
-            "title={:?} opacity={:.2} scale={:.3} fade={fade} retired={} rolled={} rolling={} peeking={} items={} tabs={} selected={} focused={:?} shadow_visible={} shadow_alpha={} layout={:?} locked={} auto_height={} active={} scroll={:.1} client={:?} client_offset=({},{}) chrome={:?} glass={:?} wallpaper_uploads={} title_size={} tab_fonts={:?} tab_rects={:?} capture={} tab_drag={} window_drag={} detach_pending={} semantic_nodes={}",
+            "title={:?} opacity={:.2} scale={:.3} fade={fade} retired={} rolled={} rolling={} peeking={} items={} tabs={} selected={} focused={:?} shadow_visible={} shadow_alpha={} layout={:?} locked={} auto_height={} active={} scroll={:.1} client={:?} client_offset=({},{}) chrome={:?} glass={:?} wallpaper_uploads={} title_size={} tab_fonts={:?} tab_rects={:?} capture={} tab_drag={} window_drag={} detach_pending={} semantic_nodes={} input_window={} input_body={} pressed={} marquee={} scrollbar_press={}",
             v.title,
             v.root.opacity(),
             v.root.scale().x,
@@ -421,6 +423,11 @@ impl FenceWindow {
             ) + v
                 .committed_chrome_scene()
                 .map_or(0, |scene| scene.semantics().len()),
+            v.input_lifecycle().window(),
+            v.input_lifecycle().body(),
+            v.pressed.is_some(),
+            v.marquee.is_some(),
+            v.scrollbar_pressed(),
         )
     }
 
@@ -499,6 +506,10 @@ impl FenceWindow {
     }
 
     pub(super) fn with_view(&self, f: impl FnOnce(&mut FenceViewState)) {
+        let _capture_boundary = super::interaction::CaptureReleaseBoundary {
+            view: &self.view,
+            hwnd: self.hwnd(),
+        };
         if let Some(v) = self.view.borrow_mut().as_mut() {
             f(v);
         }
@@ -509,10 +520,21 @@ impl FenceWindow {
     }
 
     pub fn set_content(&self, content: &pecofence_core::FenceContentSpec) {
+        let Some(capture_release) = self
+            .view
+            .borrow()
+            .as_ref()
+            .map(|view| view.input_capture_release.clone())
+        else {
+            return;
+        };
         let panel = match content {
             pecofence_core::FenceContentSpec::Panel { panel } => {
                 match self.panel_manager.borrow_mut().open_panel(panel) {
-                    Ok(panel) => Some(super::plugin_panel::PluginPanelContent::new(panel)),
+                    Ok(panel) => Some(super::plugin_panel::PluginPanelContent::new(
+                        panel,
+                        capture_release,
+                    )),
                     Err(error) => {
                         tracing::warn!(%error, provider = %panel.provider, "panel activation failed");
                         None
@@ -541,6 +563,10 @@ impl FenceWindow {
         key: pecofence_plugin_api::InstanceKey,
         update: &pecofence_plugin_api::PanelUpdate,
     ) -> Option<bool> {
+        let _capture_boundary = super::interaction::CaptureReleaseBoundary {
+            view: &self.view,
+            hwnd: self.hwnd(),
+        };
         let Ok(mut guard) = self.view.try_borrow_mut() else {
             return None;
         };

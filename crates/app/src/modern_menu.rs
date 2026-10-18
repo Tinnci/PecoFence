@@ -50,6 +50,18 @@ fn project(
         .collect()
 }
 
+/// Contrast resources belong to WinUI/Windows, independently of the saved
+/// light/dark preference used by ordinary application-owned menus.
+fn menu_theme(dark: bool, contrast: bool) -> WindowTheme {
+    if contrast {
+        WindowTheme::System
+    } else if dark {
+        WindowTheme::Dark
+    } else {
+        WindowTheme::Light
+    }
+}
+
 fn show(
     context: &AppContext,
     entries: &[tray::MenuEntry],
@@ -73,11 +85,10 @@ fn show(
         menu,
         AppMenuOptions {
             above_anchor: above,
-            theme: if tray::menu_dark() {
-                WindowTheme::Dark
-            } else {
-                WindowTheme::Light
-            },
+            theme: menu_theme(
+                tray::menu_dark(),
+                pecofence_platform::theme::contrast_colors().is_some(),
+            ),
             on_closed: Some(Callback::new(move |()| completion.set(true))),
         },
     )?;
@@ -103,6 +114,15 @@ pub(crate) fn install(context: &AppContext, mode: ThemeMode) -> tray::MenuRender
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn system_contrast_policy_takes_precedence_over_the_app_menu_preference() {
+        for dark in [false, true] {
+            assert_eq!(menu_theme(dark, true), WindowTheme::System);
+        }
+        assert_eq!(menu_theme(false, false), WindowTheme::Light);
+        assert_eq!(menu_theme(true, false), WindowTheme::Dark);
+    }
 
     #[test]
     fn nested_projection_keeps_distinct_keys_and_original_command_ids() {

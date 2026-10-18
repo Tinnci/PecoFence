@@ -1,5 +1,8 @@
 //! Generic bridge between object-safe panel instances and the host composition surface.
 
+#[cfg(test)]
+use super::interaction::finish_capture_release;
+use super::interaction::flush_capture_release;
 use super::*;
 use pecofence_plugin_api::ThemeSnapshot;
 use pecofence_plugin_api::design::FrameInvalidation;
@@ -100,6 +103,7 @@ pub(super) struct PluginPanelContent {
     committed: Option<Rc<dyn PreparedFrame>>,
     storage: Option<(u64, u32, u64)>,
     pressed: Option<(u64, u64, Rc<dyn PreparedFrame>)>,
+    capture_release_pending: Rc<Cell<bool>>,
     pub(super) invalidation: FrameInvalidation,
     interaction: ControlInteraction,
     viewport: RectDip,
@@ -109,12 +113,13 @@ pub(super) struct PluginPanelContent {
 }
 
 impl PluginPanelContent {
-    pub fn new(handle: PanelHandle) -> Self {
+    pub fn new(handle: PanelHandle, capture_release_pending: Rc<Cell<bool>>) -> Self {
         Self {
             handle,
             committed: None,
             storage: None,
             pressed: None,
+            capture_release_pending,
             invalidation: FrameInvalidation::Content,
             interaction: ControlInteraction::default(),
             viewport: RectDip::default(),
@@ -124,15 +129,105 @@ impl PluginPanelContent {
         }
     }
 
+    /// Cancel a pointer gesture without discarding the successfully published frame.
+    /// Return capture ownership before clearing it; native ReleaseCapture must run
+    /// outside the view borrow because WM_CAPTURECHANGED is synchronous.
+    fn cancel_pointer(&mut self) -> bool {
+        let captured = self.pressed.take().is_some();
+        self.capture_release_pending
+            .set(self.capture_release_pending.get() || captured);
+        self.interaction.pressed = None;
+        self.interaction.hovered = None;
+        captured
+    }
+
+    pub(super) fn cancel_input(&mut self) -> bool {
+        let captured = self.cancel_pointer();
+        self.interaction.focused = None;
+        captured
+    }
+
+    pub(super) fn wake_capture_release(&self, hwnd: HWND) {
+        if self.capture_release_pending.get() {
+            // Host commands can redraw outside this fence's window procedure.
+            // Wake its pump without borrowing it synchronously or synthesizing
+            // WM_CANCELMODE (a delayed cancel must not cancel a newer gesture).
+            window::post_message(hwnd, WM_APP_PLUGIN_CAPTURE_RELEASE, 0, 0);
+        }
+    }
+
+    fn capture_lost(&mut self) {
+        self.cancel_pointer();
+        // The OS already moved ownership away. Do not release a later owner.
+        self.capture_release_pending.set(false);
+    }
+
+    fn release_at(&mut self, x: f32, y: f32) -> Option<(u64, u64, u64)> {
+        self.interaction.pressed = None;
+        let (control, action, down_frame) = self.pressed.take()?;
+        let down_identity = down_frame.identity();
+        let current = self.committed.as_ref()?;
+        pecofence_plugin_api::design::released_action(
+            down_identity,
+            current.identity(),
+            down_frame.hit_tree(),
+            current.hit_tree(),
+            control,
+            self.hit_at(x, y),
+        )
+        .filter(|released| *released == action)
+        .map(|action| (control, action, down_identity.layout_revision))
+    }
+
     fn bind_storage(&mut self, surface_epoch: u64, dpi: u32, device_epoch: u64) {
         let storage = Some((surface_epoch, dpi, device_epoch));
         if self.storage != storage {
             self.committed = None;
-            self.pressed = None;
-            self.interaction = ControlInteraction::default();
+            self.cancel_input();
             self.storage = storage;
             self.invalidation.request(FrameInvalidation::Layout);
         }
+    }
+
+    pub fn accessibility_frame(
+        &self,
+        surface: u64,
+        dpi: u32,
+        device: u64,
+    ) -> Option<&dyn PreparedFrame> {
+        if self.storage != Some((surface, dpi, device))
+            || !self.handle.active.get()
+            || self.exposure() == Exposure::Hidden
+        {
+            return None;
+        }
+        self.committed.as_deref()
+    }
+
+    pub(super) fn invoke_committed(
+        &self,
+        control: u64,
+        action: u64,
+        layout_revision: u64,
+    ) -> pecofence_plugin_api::Result<PanelUpdate> {
+        if !self.handle.active.get()
+            || self.exposure() == Exposure::Hidden
+            || !self.committed.as_ref().is_some_and(|frame| {
+                frame.identity().layout_revision == layout_revision
+                    && frame
+                        .hit_tree()
+                        .iter()
+                        .any(|hit| hit.id == control && hit.action == action)
+            })
+        {
+            return Err(pecofence_plugin_api::Error::Invalid(
+                "stale or unavailable panel action".into(),
+            ));
+        }
+        self.handle.event(PanelEvent::Invoke {
+            action,
+            layout_revision,
+        })
     }
 
     pub fn semantic_count(&self) -> usize {
@@ -182,8 +277,7 @@ impl PluginPanelContent {
         };
         if self.handle.exposure.get() == Exposure::Hidden || !self.handle.active.get() {
             self.committed = None;
-            self.pressed = None;
-            self.interaction = ControlInteraction::default();
+            self.cancel_input();
             self.invalidation.request(FrameInvalidation::Content);
             // A skipped hidden frame is not a graphics-device failure.
             return Ok(true);
@@ -339,6 +433,14 @@ impl PluginPanelContent {
     }
 }
 
+impl Drop for PluginPanelContent {
+    fn drop(&mut self) {
+        // The window, not a mounted component, owns native capture effects.
+        // Unmounting must retain release work even after this frame is gone.
+        self.cancel_input();
+    }
+}
+
 // Customer-defined FACILITY_ITF error, distinct from native D2D/Composition failures.
 const PANEL_PAINT_REJECTED: windows_core::HRESULT = windows_core::HRESULT(0xA0040001u32 as i32);
 
@@ -365,7 +467,7 @@ fn canvas_feedback(
 }
 
 impl FenceViewState {
-    fn redraw_plugin_feedback(&mut self) {
+    pub(super) fn redraw_plugin_feedback(&mut self) {
         if let Some(panel) = &mut self.plugin_panel {
             match panel.repaint_feedback(&self.content_panel, self.dpi) {
                 Ok(ok) => self.note_draw_result(ok),
@@ -447,14 +549,24 @@ pub(super) fn handle_message(
     wparam: usize,
     lparam: isize,
 ) -> Option<isize> {
+    {
+        let mut guard = handler.view.try_borrow_mut().ok()?;
+        let view = guard.as_mut()?;
+        let device_epoch = (u64::from(view.stack.device_generation()) << 32) | u64::from(view.dpi);
+        if let Some(panel) = view.plugin_panel.as_mut() {
+            panel.bind_storage(view.content_panel.surface_epoch(), view.dpi, device_epoch);
+        }
+    }
+    // A cancelled old body press must release capture before the current
+    // message can start a new native title/tab gesture on this same HWND.
+    let hwnd = handler.view.borrow().as_ref()?.hwnd;
+    flush_capture_release(&handler.view, hwnd);
+    if message == WM_APP_PLUGIN_CAPTURE_RELEASE {
+        return Some(0);
+    }
     let mut guard = handler.view.try_borrow_mut().ok()?;
     let view = guard.as_mut()?;
-    let device_epoch = (u64::from(view.stack.device_generation()) << 32) | u64::from(view.dpi);
-    let surface_epoch = view.content_panel.surface_epoch();
-    let dpi = view.dpi;
-    view.plugin_panel
-        .as_mut()?
-        .bind_storage(surface_epoch, dpi, device_epoch);
+    view.plugin_panel.as_ref()?;
     if message == msg::WM_GETMINMAXINFO {
         let scale = view.scale();
         let presentation = view
@@ -473,6 +585,29 @@ pub(super) fn handle_message(
             );
         }
         return Some(0);
+    }
+    // Frozen content surfaces remain available during roll/fade animations, but
+    // their controls must not remain interactive while concealed or retiring.
+    let input_available = view.input_lifecycle().body()
+        && view
+            .plugin_panel
+            .as_ref()
+            .is_some_and(|panel| panel.handle.active.get() && panel.exposure() != Exposure::Hidden);
+    if !input_available {
+        let panel = view.plugin_panel.as_mut()?;
+        let feedback_changed = panel.interaction != ControlInteraction::default();
+        let captured = panel.cancel_input();
+        if feedback_changed {
+            // The frozen body can be revealed again without a new source frame.
+            // Clear its old focus/press ink as well as the corresponding state.
+            view.redraw_plugin_feedback();
+        }
+        let hwnd = view.hwnd;
+        drop(guard);
+        if captured && window::get_capture() == hwnd {
+            window::release_capture();
+        }
+        return None;
     }
     if message == msg::WM_SETCURSOR && msg::lo_i16(lparam) as isize == msg::HTCLIENT {
         let point = window::screen_to_client(view.hwnd, window::cursor_pos());
@@ -495,6 +630,8 @@ pub(super) fn handle_message(
     let scale = view.scale();
     let x = msg::lo_i16(lparam) as f32 / scale;
     let y = (msg::hi_i16(lparam) as i32 - view.title_h_px()) as f32 / scale;
+    let header_dragging =
+        view.tab_drag.is_some() || view.remote_drag.is_some() || view.detach_pending;
     let panel = view.plugin_panel.as_mut()?;
     match message {
         msg::WM_MOUSEMOVE => {
@@ -512,13 +649,37 @@ pub(super) fn handle_message(
             None
         }
         msg::WM_KILLFOCUS => {
-            panel.interaction.focused = None;
-            panel.interaction.pressed = None;
-            panel.pressed = None;
+            let captured = panel.cancel_input();
             view.redraw_plugin_feedback();
             let hwnd = view.hwnd;
             drop(guard);
-            if window::get_capture() == hwnd {
+            if captured && window::get_capture() == hwnd {
+                window::release_capture();
+            }
+            None
+        }
+        msg::WM_KEYDOWN
+            if wparam as u32 == msg::VK_ESCAPE
+                && !header_dragging
+                && (panel.pressed.is_some() || panel.interaction.focused.is_some()) =>
+        {
+            let captured = panel.cancel_input();
+            view.redraw_plugin_feedback();
+            let hwnd = view.hwnd;
+            drop(guard);
+            if captured && window::get_capture() == hwnd {
+                window::release_capture();
+            }
+            Some(0)
+        }
+        // WM_CANCELMODE is sent before modal menus and other system input
+        // ownership changes, even when keyboard focus has not changed yet.
+        msg::WM_CANCELMODE => {
+            let captured = panel.cancel_pointer();
+            view.redraw_plugin_feedback();
+            let hwnd = view.hwnd;
+            drop(guard);
+            if captured && window::get_capture() == hwnd {
                 window::release_capture();
             }
             None
@@ -542,22 +703,13 @@ pub(super) fn handle_message(
                                 .hit_tree()
                                 .iter()
                                 .find(|hit| Some(hit.id) == focused)
-                                .map(|hit| (hit.action, frame.identity().layout_revision))
+                                .map(|hit| (hit.id, hit.action, frame.identity().layout_revision))
                         });
-                        if let Some((action, layout_revision)) = target {
-                            match panel.handle.event(PanelEvent::Invoke {
-                                action,
-                                layout_revision,
-                            }) {
-                                Ok(update) => {
-                                    if let Err(error) = view.apply_plugin_update(update) {
-                                        tracing::warn!(%error, "keyboard panel update failed");
-                                    }
-                                }
-                                Err(error) => {
-                                    tracing::warn!(%error, "keyboard panel event rejected")
-                                }
-                            }
+                        if let Some((control, action, layout_revision)) = target
+                            && let Err(error) =
+                                view.invoke_plugin_control(control, action, layout_revision)
+                        {
+                            tracing::warn!(%error, "keyboard panel action failed");
                         }
                     }
                     Some(0)
@@ -581,6 +733,7 @@ pub(super) fn handle_message(
             panel.interaction.pressed = panel.pressed.as_ref().map(|(id, _, _)| *id);
             panel.interaction.hovered = panel.interaction.pressed;
             let capture = panel.pressed.is_some();
+            panel.capture_release_pending.set(false);
             view.redraw_plugin_feedback();
             let hwnd = view.hwnd;
             drop(guard);
@@ -590,34 +743,11 @@ pub(super) fn handle_message(
             Some(0)
         }
         msg::WM_LBUTTONUP if y >= 0.0 || panel.pressed.is_some() => {
-            let pressed = panel.pressed.take();
-            panel.interaction.pressed = None;
-            let invoke = pressed.and_then(|(control, action, down_frame)| {
-                let down_identity = down_frame.identity();
-                let current_identity = panel.committed.as_ref()?.identity();
-                pecofence_plugin_api::design::released_action(
-                    down_identity,
-                    current_identity,
-                    down_frame.hit_tree(),
-                    panel.committed.as_ref()?.hit_tree(),
-                    control,
-                    panel.hit_at(x, y),
-                )
-                .filter(|released| *released == action)
-                .map(|action| (action, down_identity.layout_revision))
-            });
-            if let Some((action, layout_revision)) = invoke {
-                match panel.handle.event(PanelEvent::Invoke {
-                    action,
-                    layout_revision,
-                }) {
-                    Ok(update) => {
-                        if let Err(error) = view.apply_plugin_update(update) {
-                            tracing::warn!(%error, "panel update failed");
-                        }
-                    }
-                    Err(error) => tracing::warn!(%error, "panel event rejected"),
-                }
+            let invoke = panel.release_at(x, y);
+            if let Some((control, action, layout_revision)) = invoke
+                && let Err(error) = view.invoke_plugin_control(control, action, layout_revision)
+            {
+                tracing::warn!(%error, "pointer panel action failed");
             }
             view.redraw_plugin_feedback();
             drop(guard);
@@ -625,8 +755,7 @@ pub(super) fn handle_message(
             Some(0)
         }
         msg::WM_CAPTURECHANGED => {
-            panel.pressed = None;
-            panel.interaction.pressed = None;
+            panel.capture_lost();
             view.redraw_plugin_feedback();
             None
         }
@@ -716,6 +845,7 @@ mod candidate_error_tests {
                     text: "Action".into(),
                     action: Some(7),
                     style: NodeStyle {
+                        stroke: None,
                         size: 14.0,
                         weight: 400,
                         font: FontRole::Text,
@@ -743,19 +873,69 @@ mod candidate_error_tests {
         surface.resize(120, 80).unwrap();
         let prepares = Rc::new(Cell::new(0));
         let fail = Rc::new(Cell::new(false));
-        let mut content = PluginPanelContent::new(PanelHandle::new(
-            InstanceKey {
-                id: 1,
-                activation: 1,
-            },
-            Box::new(TestPanel {
-                prepares: prepares.clone(),
-                fail: fail.clone(),
-            }),
-        ));
+        let capture_release = Rc::new(Cell::new(false));
+        let mut content = PluginPanelContent::new(
+            PanelHandle::new(
+                InstanceKey {
+                    id: 1,
+                    activation: 1,
+                },
+                Box::new(TestPanel {
+                    prepares: prepares.clone(),
+                    fail: fail.clone(),
+                }),
+            ),
+            capture_release.clone(),
+        );
         let theme = Theme::dark();
         assert!(content.draw(&surface, 96, 1.0, 1, &theme).unwrap());
         let committed = content.committed.as_ref().unwrap().clone();
+        let press = |content: &mut PluginPanelContent| {
+            content.pressed = Some((1, 7, committed.clone()));
+            content.interaction.pressed = Some(1);
+            content.interaction.hovered = Some(1);
+            content.interaction.focused = Some(1);
+        };
+        press(&mut content);
+        assert_eq!(content.release_at(10.0, 10.0), Some((1, 7, 1)));
+        assert_eq!(content.release_at(10.0, 10.0), None, "one release only");
+        press(&mut content);
+        assert!(content.cancel_pointer());
+        assert_eq!(
+            content.interaction.focused,
+            Some(1),
+            "capture loss keeps keyboard focus"
+        );
+        assert!(content.interaction.hovered.is_none());
+        assert!(content.repaint_feedback(&surface, 96).unwrap());
+        assert_eq!(
+            content.release_at(10.0, 10.0),
+            None,
+            "cancelled pointer cannot invoke unchanged layout"
+        );
+        assert_eq!(
+            prepares.get(),
+            1,
+            "cancellation replays the published frame"
+        );
+        assert!(Rc::ptr_eq(content.committed.as_ref().unwrap(), &committed));
+        press(&mut content);
+        assert!(content.cancel_input());
+        assert_eq!(content.interaction, ControlInteraction::default());
+        assert!(!content.cancel_input(), "cancellation is idempotent");
+        assert!(
+            capture_release.replace(false),
+            "cancel retains the native release effect"
+        );
+        assert!(
+            !capture_release.replace(false),
+            "one native release per cancellation"
+        );
+        assert_eq!(
+            content.release_at(10.0, 10.0),
+            None,
+            "Escape/focus suspension cannot invoke"
+        );
         content.invalidation.request(FrameInvalidation::Layout);
         fail.set(true);
         assert!(content.draw(&surface, 96, 1.0, 1, &theme).unwrap());
@@ -770,8 +950,15 @@ mod candidate_error_tests {
             "feedback must not prepare a source frame"
         );
         assert!(content.invalidation.needs_layout());
+        press(&mut content);
         surface.resize(240, 80).unwrap();
         content.bind_storage(surface.surface_epoch(), 96, 1);
+        content.bind_storage(surface.surface_epoch(), 96, 1);
+        assert!(
+            capture_release.replace(false),
+            "storage cancellation survives repeated binding"
+        );
+        assert!(!capture_release.replace(false));
         assert!(content.committed.is_none());
         assert!(content.hit_at(10.0, 10.0).is_none());
         content.set_container_state(Grouping::Single, Exposure::Hidden, false);
@@ -784,6 +971,15 @@ mod candidate_error_tests {
         assert!(content.draw(&surface, 96, 1.0, 1, &theme).unwrap());
         assert_eq!(prepares.get(), 3);
         assert_eq!(content.invalidation, FrameInvalidation::Clean);
+        let frame = content.committed.as_ref().unwrap().clone();
+        content.pressed = Some((1, 7, frame));
+        content.interaction.pressed = Some(1);
+        drop(content);
+        assert!(
+            capture_release.replace(false),
+            "unmount cannot drop native capture release"
+        );
+        assert!(!capture_release.get());
     }
 
     #[test]
@@ -800,5 +996,56 @@ mod candidate_error_tests {
                 .code(),
             native
         );
+    }
+
+    #[test]
+    fn deferred_release_only_affects_its_native_capture_owner() {
+        let class = WindowClass::register(
+            &format!("PecoFence.CaptureReleaseTest.{}", std::process::id()),
+            window::ClassOptions::default(),
+        )
+        .unwrap();
+        let losses = Rc::new(Cell::new(0));
+        let observed = losses.clone();
+        let owner = WindowBuilder::new(&class)
+            .bounds(-10000, -10000, 40, 40)
+            .create(Box::new(move |_, message, _, _| {
+                if message == msg::WM_CAPTURECHANGED {
+                    observed.set(observed.get() + 1);
+                }
+                None
+            }))
+            .unwrap();
+        let other = WindowBuilder::new(&class)
+            .bounds(-10000, -10000, 40, 40)
+            .create(Box::new(|_, _, _, _| None))
+            .unwrap();
+        window::set_capture(owner.hwnd());
+        assert_eq!(window::get_capture(), owner.hwnd());
+        finish_capture_release(owner.hwnd(), false);
+        assert_eq!(window::get_capture(), owner.hwnd());
+        finish_capture_release(other.hwnd(), true);
+        assert_eq!(
+            window::get_capture(),
+            owner.hwnd(),
+            "unrelated HWND keeps capture"
+        );
+        finish_capture_release(owner.hwnd(), true);
+        assert!(window::get_capture().0.is_null());
+        assert_eq!(
+            losses.get(),
+            1,
+            "native capture notification is synchronous"
+        );
+        finish_capture_release(owner.hwnd(), true);
+        assert_eq!(losses.get(), 1);
+        window::set_capture(other.hwnd());
+        finish_capture_release(owner.hwnd(), true);
+        assert_eq!(
+            window::get_capture(),
+            other.hwnd(),
+            "late release cannot steal capture"
+        );
+        window::release_capture();
     }
 }
