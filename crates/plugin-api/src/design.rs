@@ -7,7 +7,12 @@ pub const FONT_SMALL: &str = "Segoe UI Variable Small";
 pub const FONT_DISPLAY: &str = "Segoe UI Variable Display";
 pub const FONT_ICONS: &str = "Segoe Fluent Icons";
 /// Built-in Windows serif with optical sizes; Han text falls back through DirectWrite.
+/// Fallback for [`FontRole::Serif`] when the bundled Noto Serif SC is missing.
 pub const FONT_SERIF: &str = "Sitka Subheading";
+/// Bundled warm-paper title face (`fonts/` beside the EXE), semibold.
+pub const FONT_PAPER_SERIF: &str = "Noto Serif SC";
+/// Bundled warm-paper body face (`fonts/` beside the EXE), regular.
+pub const FONT_PAPER_BODY: &str = "Noto Sans SC";
 pub const CAPTION: f32 = 12.0;
 pub const BODY: f32 = 14.0;
 pub const SUBTITLE: f32 = 16.0;

@@ -19,7 +19,7 @@ packages = sorted(
 sections = {}
 lines = [
     "PecoFence — third-party dependencies and runtime notices",
-    "Includes runtime and build/test Rust dependencies from Cargo.lock plus the separately licensed Windows App SDK runtime.",
+    "Includes runtime and build/test Rust dependencies from Cargo.lock plus the separately licensed Windows App SDK runtime and widget fonts.",
     "",
 ]
 for package in packages:
@@ -56,6 +56,13 @@ lines.extend((
     + " at " + sdk["upstreamRuntimeList"]["commit"],
     "Runtime list: " + sdk["upstreamRuntimeList"]["path"],
     "Runtime list SHA-256: " + sdk["upstreamRuntimeList"]["sha256"],
+))
+lines.extend((
+    "", "=" * 72, "Noto Sans SC 2.004 / Noto Serif SC 2.003 (subset, fonts/)", "=" * 72,
+    "Public source: https://github.com/notofonts/noto-cjk",
+    "Subsetting and provenance: third_party/noto-cjk/README.md",
+    "",
+    (ROOT / "third_party/noto-cjk/OFL.txt").read_text(encoding="utf-8").strip(),
 ))
 Path(sys.argv[1]).write_text("\n".join(lines) + "\n", encoding="utf-8")
 print(f'Bundled {len(sections)} license texts for {len(packages)} dependencies')

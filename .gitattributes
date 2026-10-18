@@ -29,3 +29,4 @@ third_party/winappsdk/WINDOWS-APP-SDK-LICENSE.txt -text -whitespace
 *.jpg binary
 *.woff binary
 *.woff2 binary
+*.otf binary

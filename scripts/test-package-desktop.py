@@ -57,11 +57,13 @@ class PackagingTests(unittest.TestCase):
         (self.root / "scripts").mkdir()
         sdk_dir = self.root / "third_party/winappsdk"
         sdk_dir.mkdir(parents=True)
+        (self.root / "third_party/noto-cjk").mkdir()
         for name in (
             "LICENSE", "NOTICE", "docs/PORTABLE.md", "docs/UPGRADING.md",
             "docs/PORTABLE_UPDATE.md", "scripts/update-portable-pair.ps1",
             "third_party/winappsdk/WINDOWS-APP-SDK-LICENSE.txt",
             "third_party/winappsdk/app.manifest", "third_party/winappsdk/runtime.txt",
+            *pkg.FONT_ASSETS,
         ):
             (self.root / name).write_text(name, encoding="utf-8")
         runtime_one = image(dll=True)

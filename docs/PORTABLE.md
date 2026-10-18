@@ -8,6 +8,9 @@ Extract the complete ZIP and run `pecofence.exe`. Keep these files together:
 - `pecofence.exe`
 - `pecofence-watchdog.exe`
 - The included `Windows App SDK Runtime 2.5.1` files and language-resource folders
+- `fonts/`: subset Noto Serif SC and Noto Sans SC for the note, TODO and calendar
+  widgets, with their SIL Open Font License (`fonts/OFL.txt`). Deleting the folder
+  makes those widgets fall back to the built-in Windows fonts.
 - `WINDOWS-APP-SDK-LICENSE.txt` and the `THIRD-PARTY-LICENSES.txt` notices
 
 Windows 11 x64 is required. Settings use native Win32 controls and the complete

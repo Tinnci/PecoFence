@@ -269,8 +269,12 @@ pub enum FontRole {
     Small,
     Display,
     Icons,
-    /// Serif display face for widget titles (warm paper style).
+    /// Serif display face for widget titles (warm paper style): bundled Noto
+    /// Serif SC when present, else the built-in serif.
     Serif,
+    /// Body face for the warm paper widgets: bundled Noto Sans SC when present,
+    /// else the Segoe UI Variable text ramp. The rest of the app keeps `Text`.
+    PaperBody,
 }
 
 /// Placement of text inside its layout rectangle. The default keeps the

@@ -795,6 +795,29 @@
     D2D_RECT_F
     D2D1_ANTIALIAS_MODE_ALIASED
 
+    // ---- DirectWrite private font collection (bundled warm-paper widget fonts); windows-canvas
+    // only creates formats against the system collection.
+    DWriteCreateFactory
+    DWRITE_FACTORY_TYPE_SHARED
+    IDWriteFactory
+    IDWriteFactory3
+    IDWriteFactory5
+    IDWriteFontSetBuilder
+    IDWriteFontCollection
+    IDWriteFontSetBuilder1
+    IDWriteFontSet
+    IDWriteFontCollection1
+    IDWriteFontFile
+    IDWriteTextFormat
+    IDWriteTextLayout
+    DWRITE_TEXT_METRICS
+    DWRITE_TEXT_ALIGNMENT_CENTER
+    DWRITE_PARAGRAPH_ALIGNMENT_CENTER
+    D2D1_DRAW_TEXT_OPTIONS_NONE
+    DWRITE_MEASURING_MODE_NATURAL
+    DWRITE_FONT_STYLE_NORMAL
+    DWRITE_FONT_STRETCH_NORMAL
+
     // ---- Peek overlay
     VK_SPACE
     GetKeyboardLayout

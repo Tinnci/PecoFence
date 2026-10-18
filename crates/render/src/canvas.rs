@@ -4,15 +4,27 @@ use pecofence_plugin_api::{
 
 /// Resolve the design-system font family for a plugin text role. Segoe UI
 /// Variable is the Windows 11 system font; DirectWrite exposes its optical
-/// sizes as separate families, so each role names its family directly.
+/// sizes as separate families, so each role names its family directly. The
+/// warm-paper roles name the system fallback for their bundled family.
 #[cfg(windows)]
 fn text_font_family(role: FontRole) -> &'static str {
     match role {
-        FontRole::Text => crate::theme::FONT_TEXT,
+        FontRole::Text | FontRole::PaperBody => crate::theme::FONT_TEXT,
         FontRole::Small => crate::theme::FONT_SMALL,
         FontRole::Display => crate::theme::FONT_DISPLAY,
         FontRole::Icons => crate::theme::FONT_ICONS,
         FontRole::Serif => crate::theme::FONT_SERIF,
+    }
+}
+
+/// Family in the bundled private collection (`fonts/` beside the EXE) for the
+/// warm-paper roles; `None` keeps the system family from [`text_font_family`].
+#[cfg(windows)]
+fn bundled_font_family(role: FontRole) -> Option<&'static str> {
+    match role {
+        FontRole::Serif => Some(crate::theme::FONT_PAPER_SERIF),
+        FontRole::PaperBody => Some(crate::theme::FONT_PAPER_BODY),
+        FontRole::Text | FontRole::Small | FontRole::Display | FontRole::Icons => None,
     }
 }
 
@@ -111,6 +123,14 @@ impl Canvas for HeadlessCanvas {
     }
 }
 
+/// A cached text format: system collection through windows-canvas, or the
+/// bundled warm-paper fonts through the platform's private collection.
+#[cfg(windows)]
+enum CachedFormat {
+    System(windows_canvas::TextFormat),
+    Bundled(pecofence_platform::fonts::PrivateTextFormat),
+}
+
 /// Bounded, per-panel DirectWrite formats shared across full paints and pointer
 /// feedback. TextFormat is device-independent; DPI is not part of the key.
 #[cfg(windows)]
@@ -118,39 +138,72 @@ impl Canvas for HeadlessCanvas {
 pub struct TextFormatCache {
     formats: std::collections::HashMap<
         (FontRole, u32, u16, pecofence_plugin_api::TextAlign),
-        windows_canvas::TextFormat,
+        CachedFormat,
     >,
 }
 
 #[cfg(windows)]
 impl TextFormatCache {
-    fn get(&mut self, text: &TextSpec) -> Result<&windows_canvas::TextFormat> {
+    fn get(&mut self, text: &TextSpec) -> Result<&CachedFormat> {
         let key = (text.font, text.size_dip.to_bits(), text.weight, text.align);
         if !self.formats.contains_key(&key) {
             // Accessibility sliders can produce many distinct sizes over a session.
             if self.formats.len() >= 128 {
                 self.formats.clear();
             }
-            let format = windows_canvas::TextFormat::with_weight(
-                text_font_family(text.font),
-                text.size_dip,
-                windows_canvas::FontWeight(i32::from(text.weight)),
-            )
-            .map_err(|error| Error::Backend(error.to_string()))?;
-            use pecofence_plugin_api::TextAlign;
-            use windows_canvas::{ParagraphAlignment, TextAlignment};
-            let format = match text.align {
-                TextAlign::TopLeading => format,
-                TextAlign::MiddleLeading => {
-                    format.with_paragraph_alignment(ParagraphAlignment::Center)
-                }
-                TextAlign::Center => format
-                    .with_alignment(TextAlignment::Center)
-                    .with_paragraph_alignment(ParagraphAlignment::Center),
+            let format = match Self::bundled(text) {
+                Some(format) => CachedFormat::Bundled(format),
+                None => CachedFormat::System(Self::system(text)?),
             };
             self.formats.insert(key, format);
         }
         Ok(self.formats.get(&key).expect("format just inserted"))
+    }
+
+    /// Bundled-font format for the warm-paper roles; `None` when the files or the
+    /// family are missing, so the caller falls back to the system family.
+    fn bundled(text: &TextSpec) -> Option<pecofence_platform::fonts::PrivateTextFormat> {
+        use pecofence_platform::fonts::PrivateTextAlignment;
+        use pecofence_plugin_api::TextAlign;
+        let family = bundled_font_family(text.font)?;
+        let fonts = pecofence_platform::fonts::bundled()?;
+        if !fonts.has_family(family) {
+            return None;
+        }
+        let alignment = match text.align {
+            TextAlign::TopLeading => PrivateTextAlignment::TopLeading,
+            TextAlign::MiddleLeading => PrivateTextAlignment::MiddleLeading,
+            TextAlign::Center => PrivateTextAlignment::Center,
+        };
+        // Simplified Chinese faces: Han outside the subset falls back to SC glyphs.
+        fonts
+            .text_format(
+                family,
+                text.size_dip,
+                i32::from(text.weight),
+                "zh-cn",
+                alignment,
+            )
+            .inspect_err(|error| tracing::warn!(%error, family, "bundled text format failed"))
+            .ok()
+    }
+
+    fn system(text: &TextSpec) -> Result<windows_canvas::TextFormat> {
+        let format = windows_canvas::TextFormat::with_weight(
+            text_font_family(text.font),
+            text.size_dip,
+            windows_canvas::FontWeight(i32::from(text.weight)),
+        )
+        .map_err(|error| Error::Backend(error.to_string()))?;
+        use pecofence_plugin_api::TextAlign;
+        use windows_canvas::{ParagraphAlignment, TextAlignment};
+        Ok(match text.align {
+            TextAlign::TopLeading => format,
+            TextAlign::MiddleLeading => format.with_paragraph_alignment(ParagraphAlignment::Center),
+            TextAlign::Center => format
+                .with_alignment(TextAlignment::Center)
+                .with_paragraph_alignment(ParagraphAlignment::Center),
+        })
     }
 }
 
@@ -200,7 +253,7 @@ impl<'a> Direct2dCanvas<'a> {
         }
     }
 
-    fn text_format(&mut self, text: &TextSpec) -> Result<&windows_canvas::TextFormat> {
+    fn text_format(&mut self, text: &TextSpec) -> Result<&CachedFormat> {
         self.shared_formats
             .as_deref_mut()
             .unwrap_or(&mut self.formats)
@@ -314,13 +367,25 @@ impl Canvas for Direct2dCanvas<'_> {
         }
         let brush = self.brush(rgba)?;
         let session = self.session;
-        let format = self.text_format(text)?;
-        session.draw_text(
-            &text.text,
-            format,
-            &windows_canvas::Rect::from_xywh(rect.x, rect.y, rect.w, rect.h),
-            &brush,
-        );
+        match self.text_format(text)? {
+            CachedFormat::System(format) => session.draw_text(
+                &text.text,
+                format,
+                &windows_canvas::Rect::from_xywh(rect.x, rect.y, rect.w, rect.h),
+                &brush,
+            ),
+            CachedFormat::Bundled(format) => {
+                use windows_canvas::Paint;
+                format
+                    .draw(
+                        session.raw(),
+                        &text.text,
+                        [rect.x, rect.y, rect.x + rect.w, rect.y + rect.h],
+                        brush.as_raw_brush(),
+                    )
+                    .map_err(|error| Error::Backend(error.to_string()))?;
+            }
+        }
         Ok(())
     }
 
@@ -346,14 +411,19 @@ impl Canvas for Direct2dCanvas<'_> {
     }
 
     fn measure_text(&mut self, text: &TextSpec, width: f32) -> Result<TextMetrics> {
-        let format = self.text_format(text)?;
-        let layout = windows_canvas::TextLayout::new(&text.text, format, width.max(1.0), 10_000.0)
-            .map_err(|error| Error::Backend(error.to_string()))?;
-        let metrics = layout.metrics();
-        Ok(TextMetrics {
-            width: metrics.width_including_trailing_whitespace,
-            height: metrics.height,
-        })
+        let (width, height) = match self.text_format(text)? {
+            CachedFormat::System(format) => {
+                let layout =
+                    windows_canvas::TextLayout::new(&text.text, format, width.max(1.0), 10_000.0)
+                        .map_err(|error| Error::Backend(error.to_string()))?;
+                let metrics = layout.metrics();
+                (metrics.width_including_trailing_whitespace, metrics.height)
+            }
+            CachedFormat::Bundled(format) => format
+                .measure(&text.text, width.max(1.0), 10_000.0)
+                .map_err(|error| Error::Backend(error.to_string()))?,
+        };
+        Ok(TextMetrics { width, height })
     }
 
     fn push_clip(&mut self, rect: RectDip) -> Result<()> {
