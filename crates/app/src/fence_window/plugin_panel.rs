@@ -108,7 +108,7 @@ pub(super) struct PluginPanelContent {
     interaction: ControlInteraction,
     viewport: RectDip,
     feedback_theme: ThemeSnapshot,
-    feedback_radius: f32,
+    fallback_feedback_radius: f32,
     text_formats: RefCell<pecofence_render::TextFormatCache>,
 }
 
@@ -124,7 +124,7 @@ impl PluginPanelContent {
             interaction: ControlInteraction::default(),
             viewport: RectDip::default(),
             feedback_theme: ThemeSnapshot::dark(),
-            feedback_radius: pecofence_plugin_api::design::CONTROL_RADIUS,
+            fallback_feedback_radius: pecofence_plugin_api::design::CONTROL_RADIUS,
             text_formats: RefCell::default(),
         }
     }
@@ -334,10 +334,11 @@ impl PluginPanelContent {
                     &mut canvas,
                     viewport,
                     &interaction,
-                    paint_frame.hit_tree(),
+                    paint_frame.as_ref(),
                     &feedback_theme,
                     scale,
-                    pecofence_plugin_api::design::CONTROL_RADIUS * text_scale,
+                    pecofence_plugin_api::design::ContentScale::new(viewport, text_scale)
+                        .value(pecofence_plugin_api::design::CONTROL_RADIUS),
                 )
             });
             if let Err(error) = paint {
@@ -354,7 +355,9 @@ impl PluginPanelContent {
         if drawn {
             self.viewport = viewport;
             self.feedback_theme = (*feedback_theme).clone();
-            self.feedback_radius = pecofence_plugin_api::design::CONTROL_RADIUS * text_scale;
+            self.fallback_feedback_radius =
+                pecofence_plugin_api::design::ContentScale::new(viewport, text_scale)
+                    .value(pecofence_plugin_api::design::CONTROL_RADIUS);
             self.interaction = interaction;
             self.committed = Some(candidate);
             self.invalidation = FrameInvalidation::Clean;
@@ -411,10 +414,10 @@ impl PluginPanelContent {
                     &mut canvas,
                     self.viewport,
                     &self.interaction,
-                    frame.hit_tree(),
+                    frame.as_ref(),
                     &self.feedback_theme,
                     dpi as f32 / 96.0,
-                    self.feedback_radius,
+                    self.fallback_feedback_radius,
                 )
             }) {
                 error = Some(issue);
@@ -456,13 +459,19 @@ fn canvas_feedback(
     canvas: &mut dyn pecofence_plugin_api::Canvas,
     viewport: RectDip,
     state: &ControlInteraction,
-    hits: &[pecofence_plugin_api::HitNode],
+    frame: &dyn PreparedFrame,
     theme: &ThemeSnapshot,
     scale: f32,
     radius: f32,
 ) -> pecofence_plugin_api::Result<()> {
     canvas.push_clip(viewport)?;
-    let painted = state.paint(canvas, hits, theme, PixelGrid::new(scale), radius);
+    let painted = state.paint_with_radii(
+        canvas,
+        frame.hit_tree(),
+        theme,
+        PixelGrid::new(scale),
+        |id| frame.control_corner_radius(id).unwrap_or(radius),
+    );
     painted.and(canvas.pop_clip())
 }
 
@@ -779,6 +788,9 @@ mod candidate_error_tests {
         fn identity(&self) -> pecofence_plugin_api::FrameIdentity {
             self.scene.identity()
         }
+        fn control_corner_radius(&self, id: u64) -> Option<f32> {
+            self.scene.control_corner_radius(id)
+        }
         fn hit_tree(&self) -> &[pecofence_plugin_api::HitNode] {
             self.scene.hit_tree()
         }
@@ -863,6 +875,51 @@ mod candidate_error_tests {
         }
         fn unmount(&mut self, _: MountKey) {}
         fn begin_stop(&mut self, _: StopReason) {}
+    }
+
+    #[test]
+    fn host_feedback_uses_committed_shape_instead_of_global_fallback() {
+        let mut provider = TestPanel {
+            prepares: Rc::new(Cell::new(0)),
+            fail: Rc::new(Cell::new(false)),
+        };
+        let input = FrameInput {
+            viewport: RectDip {
+                x: 0.0,
+                y: 0.0,
+                w: 120.0,
+                h: 80.0,
+            },
+            locale: "en",
+            presentation: Presentation::Compact,
+            grouping: Grouping::Single,
+            exposure: Exposure::Desktop,
+            active: true,
+            text_scale: 1.0,
+            theme_epoch: 1,
+            device_epoch: 1,
+        };
+        let frame = provider.prepare_frame(input).unwrap();
+        let mut canvas = pecofence_render::HeadlessCanvas::default();
+        canvas_feedback(
+            &mut canvas,
+            input.viewport,
+            &ControlInteraction {
+                hovered: Some(1),
+                ..Default::default()
+            },
+            frame.as_ref(),
+            &ThemeSnapshot::dark(),
+            2.0,
+            99.0,
+        )
+        .unwrap();
+        assert!(canvas.is_balanced());
+        assert!(
+            matches!(canvas.commands(), [pecofence_render::DrawCommand::PushClip(_),
+            pecofence_render::DrawCommand::FillRoundedRect(rect, radius, _),
+            pecofence_render::DrawCommand::PopClip] if *rect == frame.hit_tree()[0].rect && *radius == 4.0)
+        );
     }
 
     #[test]

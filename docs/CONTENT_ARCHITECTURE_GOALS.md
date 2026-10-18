@@ -302,3 +302,15 @@ UI 线程收到通知后再次从当前有效的已提交场景确认完整节�
 验证：外部 Windows UIA 隔离夹具通过真实 InvokePattern 撤销便笺，收到恰好一次、源运行时 ID 匹配的 InvokedEvent；按钮消失后旧 pattern 被拒绝，未产生额外事件。文件树、中文文本、折叠/展开、待办清除/撤销及页脚身份检查同时通过。.cache/uia-event-server-20261018/report.json 为 passed=true、invokedEvents=1、externalInvoke=true、staleInvokeRejected=true。此前发送接口返回成功但未收到事件的诊断未算作通过。
 
 本轮提交前 Linux 插件 API/组件/SPM 共 51 项，Windows 原生 UIA/COM、渲染、窗口共 113 项通过；严格 Clippy 与构建检查通过。事件成功不代表结构/属性/焦点、Toggle/Selection/Value 或屏幕阅读器契约已经完整；实际 DPI/文字比例/高对比/跨屏、图像/材质场景及真实输入验收继续保留为整体目标。发行时从提交后的干净源码构建，安装校验及配置备份记录留在本机，不上传用户工作区。
+
+## 第二十四轮：反馈形状归属已提交场景（2026-10-18）
+
+确认宿主仍按单一 CONTROL_RADIUS × text_scale 绘制所有插件的悬停层，与 SceneNode.style.radius 形成第二套规则。待办标题、勾选区、清除等直角动作区域也会得到圆角反馈；未来引入更大圆角或胶囊控件时也会失配。便笺正文的编辑按钮本来已有圆角，不属于直角失配实例。
+
+PreparedFrame 增加只读 control_corner_radius 查询，Scene 从同一不可变节点派生最终 DIP 圆角，按节点尺寸限制半径。ControlInteraction 支持按控件身份解析半径，宿主初次绘制与反馈重绘均查询当前已提交帧，避免从活动 provider 或尚未发布的候选样式读取形状。未提供元数据的自定义 PreparedFrame 保留默认方法与宿主回退，回退文字比例现在经过 ContentScale 的统一范围/非有限值处理。反馈层对非法自定义半径防御性归零，不向 D2D 传递非有限几何。
+
+本轮保持矩形命中与语义边界；圆角只定义反馈填充轮廓，不擅自改变触摸/鼠标可点击范围。高对比和键盘焦点继续使用内对齐对比描边，不用透明填充覆盖文字。
+
+新增回归直接比较场景底图与反馈记录的矩形、圆角：直角、普通圆角、受控件尺寸限制的大圆角，覆盖文字比例 100/150/225% 与独立显示 DPI 96/120/144/192。Windows 宿主回归用刻意不匹配的默认半径证明反馈读取已提交元数据，且裁剪平衡。测试与构建结果见本轮验证记录；命令记录不能替代真实显示器的像素/跨屏/高对比验收。没有替换刚安装的 Windows 正式版，整体目标继续进行。
+
+本轮验证记录：Linux API/插件/渲染共 58 项通过（.cache/shape-linux-tests.log）；Windows 原生 UIA/COM 11、渲染 49、窗口/宿主 55，共 115 项通过（.cache/shape-windows-native.log）。两平台 all-targets 严格 Clippy、Windows 开发构建与固定运行时暂存、fmt/diff 检查通过；日志为 .cache/shape-{linux,windows}-clippy.log、.cache/shape-windows-dev.log。

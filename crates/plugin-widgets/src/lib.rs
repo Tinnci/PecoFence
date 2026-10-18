@@ -268,6 +268,30 @@ pub(crate) struct Colors {
 }
 
 impl Colors {
+    /// Accent wash for emphasis fills; high contrast keeps the opaque subtle surface.
+    pub(crate) fn accent_wash(&self) -> [f32; 4] {
+        if self.high_contrast {
+            self.subtle
+        } else {
+            [self.accent[0], self.accent[1], self.accent[2], 0.22]
+        }
+    }
+
+    /// Foreground, fill and pill radius for a button of height `h` (logical DIPs).
+    pub(crate) fn button(
+        &self,
+        kind: design::ButtonKind,
+        h: f32,
+    ) -> ([f32; 4], Option<[f32; 4]>, f32) {
+        use design::ButtonKind::*;
+        let (foreground, fill) = match kind {
+            Accent => (self.accent, Some(self.accent_wash())),
+            Subtle => (self.primary, Some(self.subtle)),
+            Flat => (self.primary, None),
+        };
+        (foreground, fill, design::pill_radius(h))
+    }
+
     pub(crate) fn from_theme(theme: Option<&ThemeSnapshot>) -> Self {
         let fallback = ThemeSnapshot::dark();
         let theme = theme.unwrap_or(&fallback);
@@ -414,21 +438,22 @@ fn build_panel_header(
         action: None,
         role: "heading",
     });
+    let btn = colors.button(design::ButtonKind::Accent, design::CONTROL_HEIGHT);
     frame.add(WidgetElement {
         id: 2,
         parent: None,
         rect: RectDip {
             x: v.x + v.w - 75.0,
-            y: v.y + 10.0,
+            y: v.y + 13.0,
             w: 60.0,
-            h: 34.0,
+            h: design::CONTROL_HEIGHT,
         },
         text: (action_label).into(),
         size: design::BODY,
         weight: 600,
-        foreground: colors.accent,
-        fill: Some(colors.subtle),
-        radius: design::CONTROL_RADIUS,
+        foreground: btn.0,
+        fill: btn.1,
+        radius: btn.2,
         action,
         role: "button",
     });
@@ -611,25 +636,36 @@ fn build_calendar(
         role: "heading",
     });
     for (action, x, label) in [
-        (PREVIOUS, v.x + v.w - 120.0, "‹"),
-        (TODAY, v.x + v.w - 85.0, if chinese { "今" } else { "T" }),
-        (NEXT, v.x + v.w - 45.0, "›"),
+        (PREVIOUS, v.x + v.w - pad - 108.0, "‹"),
+        (
+            TODAY,
+            v.x + v.w - pad - 72.0,
+            if chinese { "今" } else { "T" },
+        ),
+        (NEXT, v.x + v.w - pad - 36.0, "›"),
     ] {
+        let kind = if action == TODAY {
+            design::ButtonKind::Accent
+        } else {
+            design::ButtonKind::Flat
+        };
+        let btn = colors.button(kind, design::CONTROL_HEIGHT);
         frame.add(WidgetElement {
             id: 2 + action,
             parent: None,
             rect: RectDip {
                 x,
-                y: header_y,
+                y: header_y + 2.0,
                 w: 32.0,
-                h: 31.0,
+                h: design::CONTROL_HEIGHT,
             },
             text: (label).into(),
             size: design::TITLE,
-            weight: 600,
-            foreground: colors.primary,
-            fill: Some(colors.subtle),
-            radius: design::CONTROL_RADIUS,
+            weight: if action == TODAY { 600 } else { 400 },
+            foreground: btn.0,
+            // Chevrons stay flat so host hover/press feedback is visible on them.
+            fill: btn.1,
+            radius: btn.2,
             action: Some(action),
             role: "button",
         });
@@ -701,8 +737,14 @@ fn build_calendar(
             } else {
                 colors.primary
             },
-            fill: (is_today || selected).then_some(colors.subtle),
-            radius: design::CONTROL_RADIUS,
+            fill: if is_today {
+                Some(colors.accent_wash())
+            } else if selected {
+                Some(colors.subtle)
+            } else {
+                None
+            },
+            radius: (cell_w - 4.0).min(row_h - 3.0).max(0.0) / 2.0,
             action: Some(DAY_BASE + day as u64),
             role: "button",
         });

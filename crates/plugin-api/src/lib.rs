@@ -465,6 +465,12 @@ pub trait PreparedFrame {
     fn hit_tree(&self) -> &[HitNode];
     fn semantics(&self) -> &[SemanticNode];
     fn paint(&self, canvas: &mut dyn Canvas) -> Result<()>;
+    /// Corner radius in final DIPs from the committed control's paint geometry.
+    /// None keeps the host fallback for providers without shape metadata.
+    /// Monitor DPI must not be applied here.
+    fn control_corner_radius(&self, _id: u64) -> Option<f32> {
+        None
+    }
 }
 
 pub enum PanelEvent {

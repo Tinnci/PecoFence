@@ -226,7 +226,7 @@ fn build_note(
         weight: 400,
         foreground: colors.primary,
         fill: Some(colors.subtle),
-        radius: design::CONTROL_RADIUS,
+        radius: design::CARD_RADIUS,
         action: Some(EDIT),
         role: "button",
     });
@@ -264,6 +264,7 @@ fn build_note(
     });
 
     if can_undo {
+        let btn = colors.button(design::ButtonKind::Accent, 26.0);
         frame.add(WidgetElement {
             id: 6,
             parent: None,
@@ -281,9 +282,9 @@ fn build_note(
             .into(),
             size: 12.0,
             weight: 600,
-            foreground: colors.accent,
-            fill: None,
-            radius: 0.0,
+            foreground: btn.0,
+            fill: btn.1,
+            radius: btn.2,
             action: Some(UNDO),
             role: "button",
         });

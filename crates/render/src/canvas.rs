@@ -405,6 +405,105 @@ mod tests {
     }
 
     #[test]
+    fn scene_feedback_matches_painted_corners_at_independent_text_and_display_scales() {
+        use pecofence_plugin_api::{
+            FrameIdentity, InstanceKey, MountKey, PreparedFrame, ThemeSnapshot,
+            design::{ControlInteraction, PixelGrid},
+            scene::{NodeStyle, Scene, SceneNode},
+        };
+        for text_scale in [1.0, 1.5, 2.25] {
+            let nodes = [0.0, 4.0, 100.0]
+                .into_iter()
+                .enumerate()
+                .map(|(index, radius)| SceneNode {
+                    id: index as u64,
+                    parent: None,
+                    rect: RectDip {
+                        x: index as f32 * 90.0,
+                        y: 0.0,
+                        w: 80.0,
+                        h: 32.0 * text_scale,
+                    },
+                    role: "button".into(),
+                    name: "Action".into(),
+                    text: "Action".into(),
+                    action: Some(7),
+                    style: NodeStyle {
+                        size: 14.0 * text_scale,
+                        weight: 400,
+                        font: FontRole::Text,
+                        foreground: [1.0; 4],
+                        fill: Some([0.2; 4]),
+                        stroke: None,
+                        radius: radius * text_scale,
+                        text_inset: [0.0; 2],
+                    },
+                })
+                .collect();
+            let frame = Scene::new(
+                FrameIdentity {
+                    mount_key: MountKey {
+                        instance: InstanceKey {
+                            id: 1,
+                            activation: 1,
+                        },
+                        generation: 1,
+                    },
+                    frame_revision: 1,
+                    layout_revision: 1,
+                    theme_epoch: 1,
+                    device_epoch: 1,
+                },
+                RectDip {
+                    x: 0.0,
+                    y: 0.0,
+                    w: 300.0,
+                    h: 100.0,
+                },
+                nodes,
+            )
+            .unwrap();
+            let mut base = HeadlessCanvas::default();
+            frame.paint(&mut base).unwrap();
+            let shapes: Vec<_> = base
+                .commands()
+                .iter()
+                .filter_map(|command| {
+                    if let DrawCommand::FillRoundedRect(rect, radius, _) = command {
+                        Some((*rect, *radius))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            assert_eq!(shapes.len(), 3);
+            for dpi in [96.0, 120.0, 144.0, 192.0] {
+                for hit in frame.hit_tree() {
+                    let mut canvas = HeadlessCanvas::default();
+                    ControlInteraction {
+                        hovered: Some(hit.id),
+                        ..Default::default()
+                    }
+                    .paint_with_radii(
+                        &mut canvas,
+                        frame.hit_tree(),
+                        &ThemeSnapshot::dark(),
+                        PixelGrid::new(dpi / 96.0),
+                        |id| frame.control_corner_radius(id).unwrap(),
+                    )
+                    .unwrap();
+                    let expected = shapes[hit.id as usize];
+                    assert!(
+                        matches!(canvas.commands(), [DrawCommand::FillRoundedRect(rect, radius, _)]
+                        if (*rect, *radius) == expected)
+                    );
+                }
+            }
+            assert_eq!(frame.control_corner_radius(99), None);
+        }
+    }
+
+    #[test]
     fn contrast_feedback_uses_opaque_outlines_without_washing_out_text() {
         use pecofence_plugin_api::{
             HitNode, ThemeSnapshot,

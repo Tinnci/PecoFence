@@ -176,6 +176,18 @@ impl PreparedFrame for Scene {
         &self.semantics
     }
 
+    fn control_corner_radius(&self, id: u64) -> Option<f32> {
+        self.nodes
+            .iter()
+            .find(|node| node.id == id && node.action.is_some())
+            .map(|node| {
+                node.style
+                    .radius
+                    .min(node.rect.w / 2.0)
+                    .min(node.rect.h / 2.0)
+            })
+    }
+
     fn paint(&self, canvas: &mut dyn Canvas) -> Result<()> {
         canvas.push_clip(self.viewport)?;
         let painted = (|| {

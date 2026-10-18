@@ -450,7 +450,7 @@ fn build_todo(
                 colors.primary
             },
             fill: Some(colors.subtle),
-            radius: design::CONTROL_RADIUS,
+            radius: design::CARD_RADIUS,
             action: None,
             role: "group",
         });
@@ -524,6 +524,7 @@ fn build_todo(
     }
     let footer_y = v.y + v.h - 37.0;
     if config.tasks.iter().any(|task| task.done) {
+        let btn = colors.button(design::ButtonKind::Subtle, 26.0);
         frame.add(WidgetElement {
             id: 4,
             parent: None,
@@ -542,13 +543,14 @@ fn build_todo(
             size: 12.0,
             weight: 400,
             foreground: colors.secondary,
-            fill: None,
-            radius: 0.0,
+            fill: btn.1,
+            radius: btn.2,
             action: Some(CLEAR_DONE),
             role: "button",
         });
     }
     if can_undo {
+        let btn = colors.button(design::ButtonKind::Accent, 26.0);
         frame.add(WidgetElement {
             id: 5,
             parent: None,
@@ -566,15 +568,16 @@ fn build_todo(
             .into(),
             size: 12.0,
             weight: 600,
-            foreground: colors.accent,
-            fill: None,
-            radius: 0.0,
+            foreground: btn.0,
+            fill: btn.1,
+            radius: btn.2,
             action: Some(UNDO),
             role: "button",
         });
     }
     let pages = config.tasks.len().max(1).div_ceil(capacity);
     if pages > 1 {
+        let btn = colors.button(design::ButtonKind::Subtle, 26.0);
         frame.add(WidgetElement {
             id: 6,
             parent: None,
@@ -587,9 +590,9 @@ fn build_todo(
             text: ("‹").into(),
             size: 20.0,
             weight: 600,
-            foreground: colors.primary,
-            fill: None,
-            radius: 0.0,
+            foreground: btn.0,
+            fill: btn.1,
+            radius: btn.2,
             action: (page > 0).then_some(PREVIOUS_PAGE),
             role: "button",
         });
@@ -623,9 +626,9 @@ fn build_todo(
             text: ("›").into(),
             size: 20.0,
             weight: 600,
-            foreground: colors.primary,
-            fill: None,
-            radius: 0.0,
+            foreground: btn.0,
+            fill: btn.1,
+            radius: btn.2,
             action: (page + 1 < pages).then_some(NEXT_PAGE),
             role: "button",
         });

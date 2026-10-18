@@ -11,8 +11,26 @@ pub const BODY: f32 = 14.0;
 pub const SUBTITLE: f32 = 16.0;
 pub const TITLE: f32 = 20.0;
 pub const CONTROL_RADIUS: f32 = 4.0;
+/// Corner radius for grouped surfaces such as note bodies and list rows.
+pub const CARD_RADIUS: f32 = 8.0;
 pub const CONTROL_HEIGHT: f32 = 32.0;
 pub const CONTENT_INSET: f32 = 16.0;
+
+/// Visual weight of a pill button; the theme decides the concrete colors.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ButtonKind {
+    /// Primary action: accent text on an accent wash.
+    Accent,
+    /// Secondary action: primary text on the subtle surface.
+    Subtle,
+    /// Icon-like action with no resting fill, so host hover feedback is visible.
+    Flat,
+}
+
+/// Pill radius for a control of the given height.
+pub fn pill_radius(height: f32) -> f32 {
+    height.max(0.0) / 2.0
+}
 
 pub fn control_visible(rect: RectDip, viewport: RectDip) -> bool {
     rect.w > 0.0
@@ -111,6 +129,18 @@ impl ControlInteraction {
         grid: PixelGrid,
         radius: f32,
     ) -> Result<()> {
+        self.paint_with_radii(canvas, hits, theme, grid, |_| radius)
+    }
+
+    /// Resolve shape metadata from the same immutable frame as the hit tree.
+    pub fn paint_with_radii(
+        &self,
+        canvas: &mut dyn Canvas,
+        hits: &[HitNode],
+        theme: &ThemeSnapshot,
+        grid: PixelGrid,
+        radius_for: impl Fn(u64) -> f32,
+    ) -> Result<()> {
         let find = |id: Option<u64>| hits.iter().find(|hit| Some(hit.id) == id);
         if let Some(hit) = find(self.hovered) {
             if theme.high_contrast {
@@ -130,6 +160,12 @@ impl ControlInteraction {
                 };
                 // Feedback is over an already-painted frame, including its text.
                 fill[3] = fill[3].min(0.16);
+                let radius = radius_for(hit.id);
+                let radius = if radius.is_finite() {
+                    radius.max(0.0)
+                } else {
+                    0.0
+                };
                 canvas.fill_rounded_rect(
                     hit.rect,
                     radius.min(hit.rect.w / 2.0).min(hit.rect.h / 2.0),
