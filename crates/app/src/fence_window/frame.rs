@@ -166,7 +166,7 @@ fn animation_bounds_command(
     rect: RECT,
     rolled_at_end: Option<bool>,
 ) -> Option<Command> {
-    rolled_at_end.map(|_| Command::FenceBoundsChanged { fence, rect })
+    rolled_at_end.map(|_| Command::FenceRollFinished { fence, rect })
 }
 
 #[cfg(test)]
@@ -180,7 +180,7 @@ mod tests {
         for rolled in [true, false] {
             assert!(matches!(
                 animation_bounds_command(fence, RECT::default(), Some(rolled)),
-                Some(Command::FenceBoundsChanged { fence: id, .. }) if id == fence
+                Some(Command::FenceRollFinished { fence: id, .. }) if id == fence
             ));
         }
     }

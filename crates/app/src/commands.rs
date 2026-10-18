@@ -58,6 +58,11 @@ pub enum Command {
         fence: ContainerId,
         rect: RECT,
     },
+    /// A roll tween settled; persist geometry without treating it as a grid resize.
+    FenceRollFinished {
+        fence: ContainerId,
+        rect: RECT,
+    },
     ToggleRollUp(ContainerId),
     /// A hover-peeked fence was double-clicked: keep it expanded.
     CommitExpanded(ContainerId),

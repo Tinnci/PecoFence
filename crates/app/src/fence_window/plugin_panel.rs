@@ -649,6 +649,15 @@ pub(super) fn handle_message(
                 )
             }
         };
+        // A panel's content minimum applies only while expanded. SetWindowPos
+        // also consults this constraint during the roll tween; enforcing the
+        // body minimum then leaves an empty plate after its content is hidden.
+        let minimum_height = panel_minimum_height(
+            minimum_height,
+            view.title_h_px(),
+            view.rolled_up,
+            view.roll_anim.is_some(),
+        );
         // SAFETY: this branch is only reached for WM_GETMINMAXINFO.
         unsafe {
             window::minmaxinfo_set_min_track(lparam, minimum_width, minimum_height);
@@ -832,9 +841,34 @@ pub(super) fn handle_message(
     }
 }
 
+fn panel_minimum_height(expanded: i32, title: i32, rolled: bool, rolling: bool) -> i32 {
+    if rolled || rolling {
+        title.max(1)
+    } else {
+        expanded
+    }
+}
+
 #[cfg(test)]
 mod candidate_error_tests {
     use super::*;
+
+    #[test]
+    fn panel_minimum_allows_both_roll_directions_and_restores_expanded_constraint() {
+        for scale in [1.0_f32, 1.5, 2.0] {
+            let title = (36.0 * scale) as i32;
+            for expanded in [(96.0 * scale) as i32, (316.0 * scale) as i32] {
+                assert_eq!(
+                    panel_minimum_height(expanded, title, false, false),
+                    expanded
+                );
+                assert_eq!(panel_minimum_height(expanded, title, false, true), title);
+                assert_eq!(panel_minimum_height(expanded, title, true, true), title);
+                assert_eq!(panel_minimum_height(expanded, title, true, false), title);
+            }
+        }
+        assert_eq!(panel_minimum_height(96, 0, true, false), 1);
+    }
 
     struct TestPanel {
         prepares: Rc<Cell<u64>>,

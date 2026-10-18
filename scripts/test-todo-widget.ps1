@@ -130,7 +130,72 @@ try {
   }
   $after = $reloaded.layouts.containers | ConvertTo-Json -Compress -Depth 20
   if ($before -ne $after) { throw 'TODO fence position changed after restart' }
-  Write-Output "PASS: TODO operations plus multiline note edit, undo, native editor cancellation and restart restore ($instance)"
+
+  # Extra release-package review: exercise both sides of a mixed tab group.
+  foreach ($content in $reloaded.layouts.contents) {
+    if ($content.content.panel.provider -eq 'pecofence.todo') { $content.title='GridTodo' }
+    if ($content.content.panel.provider -eq 'pecofence.note') { $content.title='GridNote' }
+  }
+  $file = @($reloaded.layouts.contents | Where-Object { $_.content.kind -eq 'fileCollection' })[0]
+  if (!$file) { throw 'No isolated file fence for mixed-tab regression' }
+  $file.title='GridFiles'
+  $reloaded | ConvertTo-Json -Depth 100 | Set-Content $configPath -Encoding UTF8
+  Set-Content $scriptPath -Encoding UTF8 -Value @(
+    'sleep 400', 'merge GridTodo GridFiles', 'sleep 600',
+    'activate GridTodo', 'sleep 500', 'dump widget-tab',
+    'roll GridTodo', 'sleep 600', 'dump widget-rolled',
+    'unroll GridTodo', 'sleep 700', 'dump widget-expanded',
+    'activate GridFiles', 'sleep 500', 'dump file-tab',
+    'detach GridTodo', 'sleep 600', 'dump detached-widget', 'exit'
+  )
+  $process=Start-Process $stagedBinary -ArgumentList @('--portable','--config-dir',$configDir,'--no-hide-icons','--test-script',$scriptPath,'--exit-after','10000') -PassThru -Wait
+  if ($process.ExitCode -ne 0) { throw 'Mixed-tab run failed' }
+  $tabLog=(Get-ChildItem $env:LOCALAPPDATA -Recurse -Filter '*.log' | ForEach-Object { Get-Content $_.FullName -Raw -Encoding UTF8 }) -join "`n"
+  if ($tabLog -notmatch '\[widget-tab\].*tabs=2.*frameless=false widget_grid=true') { throw 'Widget tab has no grid' }
+  if ($tabLog -notmatch '\[file-tab\].*tabs=2.*frameless=false widget_grid=false') { throw 'File tab retained stale widget rules' }
+  if ($tabLog -notmatch '\[detached-widget\].*title="GridTodo".*tabs=1.*frameless=true widget_grid=true') { throw 'Detached widget has no frameless grid' }
+
+  function Assert-RollGeometry([string]$log, [string]$open, [string]$closed, [string]$restored) {
+    $rows = @{}
+    foreach ($tag in @($open, $closed, $restored)) {
+      $row = @($log -split "`n" | Where-Object { $_ -match ("\[" + $tag + "\].*tabs=2") })
+      if ($row.Count -ne 1) { throw "Missing unique tab group geometry: $tag" }
+      if ($row[0] -notmatch 'rect=\((-?\d+),(-?\d+),(-?\d+),(-?\d+)\)') { throw "Missing native rectangle: $tag" }
+      $width = [int]$Matches[3] - [int]$Matches[1]
+      $height = [int]$Matches[4] - [int]$Matches[2]
+      if ($row[0] -notmatch 'title_height_px=(\d+) expanded_height_px=(\d+)') { throw "Missing height diagnostics: $tag" }
+      $rows[$tag] = @{ width=$width; height=$height; title=[int]$Matches[1]; expanded=[int]$Matches[2] }
+      $rolled = if ($tag -eq $closed) { 'true' } else { 'false' }
+      if ($row[0] -notmatch ("rolled=" + $rolled + " rolling=false")) { throw "Roll did not settle: $tag" }
+    }
+    if ($rows[$closed].height -ne $rows[$closed].title) { throw "Collapsed panel exceeds title height: $closed" }
+    if ($rows[$open].height -ne $rows[$restored].height) { throw "Expanded height not restored: $restored" }
+    if ($rows[$open].expanded -ne $rows[$closed].expanded) { throw "Collapse overwrote saved expanded height: $closed" }
+    if ($rows[$open].width -ne $rows[$closed].width) { throw "Collapse changed panel width: $closed" }
+    Write-Output "PASS: $open $($rows[$open].height) px -> $closed $($rows[$closed].height) px -> $restored $($rows[$restored].height) px"
+  }
+  Assert-RollGeometry $tabLog 'widget-tab' 'widget-rolled' 'widget-expanded'
+
+  # Calendar uses the same native min/max bridge but a different content minimum.
+  # Change only this isolated note fixture after its persistence tests passed.
+  $calendarConfig = Get-Content $configPath -Raw -Encoding UTF8 | ConvertFrom-Json
+  $calendar = @($calendarConfig.layouts.contents | Where-Object { $_.title -eq 'GridNote' })[0]
+  $calendar.title = 'GridCalendar'
+  $calendar.content.panel.provider = 'pecofence.calendar'
+  $calendar.content.panel.config = [pscustomobject]@{}
+  $calendarConfig | ConvertTo-Json -Depth 100 | Set-Content $configPath -Encoding UTF8
+  Set-Content $scriptPath -Encoding UTF8 -Value @(
+    'sleep 400', 'merge GridCalendar GridFiles', 'sleep 600',
+    'activate GridCalendar', 'sleep 500', 'dump calendar-open',
+    'roll GridCalendar', 'sleep 600', 'dump calendar-rolled',
+    'unroll GridCalendar', 'sleep 700', 'dump calendar-restored', 'exit'
+  )
+  $process = Start-Process $stagedBinary -ArgumentList @('--portable','--config-dir',$configDir,'--no-hide-icons','--test-script',$scriptPath,'--exit-after','10000') -PassThru -Wait
+  if ($process.ExitCode -ne 0) { throw 'Calendar roll regression failed' }
+  $calendarLog = (Get-ChildItem $env:LOCALAPPDATA -Recurse -Filter '*.log' | ForEach-Object { Get-Content $_.FullName -Raw -Encoding UTF8 }) -join "`n"
+  Assert-RollGeometry $calendarLog 'calendar-open' 'calendar-rolled' 'calendar-restored'
+
+  Write-Output "PASS: native TODO/calendar collapse geometry and expand restore; widget grids on reload, mixed-tab switch and detach; TODO operations plus multiline note edit, undo, native editor cancellation and restart restore ($instance)"
   $passed = $true
 } finally {
   $env:PECOFENCE_INSTANCE = $previousInstance

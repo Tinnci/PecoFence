@@ -1283,7 +1283,9 @@ impl App {
             return;
         }
         match cmd {
-            Command::FenceBoundsChanged { fence, rect } => {
+            Command::FenceBoundsChanged { fence, rect }
+            | Command::FenceRollFinished { fence, rect } => {
+                let roll_finished = matches!(cmd, Command::FenceRollFinished { .. });
                 let (rolled, expanded) = self
                     .fences
                     .get(&fence)
@@ -1291,7 +1293,10 @@ impl App {
                     .unwrap_or((false, rect.bottom - rect.top));
                 self.state.set_fence_bounds(fence, rect, rolled, expanded);
                 // A resized widget keeps the span it was snapped to.
-                if !rolled && let Some(grid) = self.widget_grid(fence) {
+                if !roll_finished
+                    && !rolled
+                    && let Some(grid) = self.widget_grid(fence)
+                {
                     let scale = self.fences.get(&fence).map_or(1.0, |w| {
                         monitors::dpi_for_window(w.hwnd()).max(96) as f32 / 96.0
                     });

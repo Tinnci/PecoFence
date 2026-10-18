@@ -383,7 +383,7 @@ impl FenceWindow {
             },
         );
         format!(
-            "title={:?} opacity={:.2} scale={:.3} fade={fade} retired={} rolled={} rolling={} peeking={} items={} tabs={} selected={} focused={:?} shadow_visible={} shadow_alpha={} layout={:?} locked={} auto_height={} active={} scroll={:.1} client={:?} client_offset=({},{}) chrome={:?} glass={:?} wallpaper_uploads={} title_size={} tab_fonts={:?} tab_rects={:?} capture={} tab_drag={} window_drag={} detach_pending={} semantic_nodes={} input_window={} input_body={} pressed={} marquee={} scrollbar_press={} frameless={} widget_grid={}",
+            "title={:?} opacity={:.2} scale={:.3} fade={fade} retired={} rolled={} rolling={} peeking={} items={} tabs={} selected={} focused={:?} shadow_visible={} shadow_alpha={} layout={:?} locked={} auto_height={} active={} scroll={:.1} client={:?} client_offset=({},{}) chrome={:?} glass={:?} wallpaper_uploads={} title_size={} tab_fonts={:?} tab_rects={:?} capture={} tab_drag={} window_drag={} detach_pending={} semantic_nodes={} input_window={} input_body={} pressed={} marquee={} scrollbar_press={} frameless={} widget_grid={} title_height_px={} expanded_height_px={}",
             v.title,
             v.root.opacity(),
             v.root.scale().x,
@@ -434,6 +434,8 @@ impl FenceWindow {
             v.scrollbar_pressed(),
             v.frameless,
             v.widget_grid.is_some(),
+            v.title_h_px(),
+            v.expanded_h_px,
         )
     }
 
