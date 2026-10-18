@@ -220,3 +220,48 @@ impl PrivateTextFormat {
         Ok((metrics.widthIncludingTrailingWhitespace, metrics.height))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn font_files() -> Vec<PathBuf> {
+        let dir = std::env::var_os("PECOFENCE_TEST_FONT_DIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| {
+                Path::new(env!("CARGO_MANIFEST_DIR")).join("../../third_party/noto-cjk")
+            });
+        BUNDLED_FONT_FILES
+            .iter()
+            .map(|name| dir.join(name))
+            .collect()
+    }
+
+    #[test]
+    fn bundled_collection_exposes_the_configured_families() {
+        let fonts = PrivateFonts::from_files(&font_files()).unwrap();
+        for family in ["Noto Sans SC", "Noto Serif SC"] {
+            assert!(fonts.has_family(family), "missing bundled family {family}");
+        }
+        assert!(!fonts.has_family("PecoFence nonexistent font"));
+    }
+
+    #[test]
+    fn bundled_formats_measure_cjk_text_and_fallback_glyphs() {
+        let fonts = PrivateFonts::from_files(&font_files()).unwrap();
+        for (family, weight) in [("Noto Sans SC", 400), ("Noto Serif SC", 600)] {
+            let format = fonts
+                .text_format(
+                    family,
+                    18.0,
+                    weight,
+                    "zh-cn",
+                    PrivateTextAlignment::TopLeading,
+                )
+                .unwrap();
+            let (width, height) = format.measure("中文 ABC 龘", 1000.0, 1000.0).unwrap();
+            assert!(width.is_finite() && width > 0.0);
+            assert!(height.is_finite() && height > 0.0);
+        }
+    }
+}
