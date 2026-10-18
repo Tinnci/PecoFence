@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::JoinHandle;
+use std::time::Duration;
 use windows_core::{Error, PCWSTR, Result};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -28,6 +29,8 @@ pub struct DirWatcher {
     handle: Arc<SendHandle>,
     stop: Arc<AtomicBool>,
     thread: Option<JoinHandle<()>>,
+    /// Creation time of the folder the handle was opened on (see [`Self::still_at`]).
+    created: Option<u64>,
 }
 
 impl DirWatcher {
@@ -56,6 +59,7 @@ impl DirWatcher {
         }
         let handle = Arc::new(SendHandle(handle));
         let stop = Arc::new(AtomicBool::new(false));
+        let created = folder_created(dir);
         let dir = dir.to_path_buf();
         let thread = {
             let handle = handle.clone();
@@ -64,24 +68,52 @@ impl DirWatcher {
                 .name(format!("pecofence-watch-{}", dir.display()))
                 .stack_size(256 * 1024)
                 .spawn(move || watch_loop(handle, dir, stop, on_events))
-                .map_err(|e| Error::new(windows_core::HRESULT(E_FAIL.0), e.to_string()))?
+        };
+        let thread = match thread {
+            Ok(t) => t,
+            Err(e) => {
+                // SAFETY: no thread took the handle.
+                unsafe {
+                    let _ = CloseHandle(handle.0);
+                }
+                return Err(Error::new(windows_core::HRESULT(E_FAIL.0), e.to_string()));
+            }
         };
         Ok(Self {
             handle,
             stop,
             thread: Some(thread),
+            created,
         })
+    }
+
+    /// False when the folder this watcher follows is no longer the one at `dir`: the handle
+    /// moves with a folder that is renamed or moved away, so the watcher keeps running on it,
+    /// and a new folder made at `dir` has another creation time.
+    pub fn still_at(&self, dir: &Path) -> bool {
+        self.created.is_none() || folder_created(dir) == self.created
+    }
+
+    /// False once the watcher thread has exited (its folder was deleted, renamed or unmounted).
+    pub fn is_running(&self) -> bool {
+        self.thread.as_ref().is_some_and(|t| !t.is_finished())
     }
 }
 
 impl Drop for DirWatcher {
     fn drop(&mut self) {
         self.stop.store(true, Ordering::SeqCst);
-        // SAFETY: cancels the blocking ReadDirectoryChangesW on the watcher thread, then closes.
-        unsafe {
-            let _ = CancelIoEx(self.handle.0, None);
-        }
         if let Some(t) = self.thread.take() {
+            // A cancel that lands between two ReadDirectoryChangesW calls finds nothing to
+            // abort, and the next call would block until the folder changes: repeat it until
+            // the thread has seen `stop`.
+            while !t.is_finished() {
+                // SAFETY: cancels the blocking ReadDirectoryChangesW on the watcher thread.
+                unsafe {
+                    let _ = CancelIoEx(self.handle.0, None);
+                }
+                std::thread::sleep(Duration::from_millis(1));
+            }
             let _ = t.join();
         }
         // SAFETY: handle is no longer used by any thread.
@@ -89,6 +121,11 @@ impl Drop for DirWatcher {
             let _ = CloseHandle(self.handle.0);
         }
     }
+}
+
+fn folder_created(dir: &Path) -> Option<u64> {
+    use std::os::windows::fs::MetadataExt;
+    std::fs::metadata(dir).ok().map(|m| m.creation_time())
 }
 
 const FILTER: u32 = (FILE_NOTIFY_CHANGE_FILE_NAME
@@ -185,4 +222,31 @@ fn parse(buf: &[u8], dir: &Path) -> Vec<FsEvent> {
         offset += next;
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn watcher_detects_renamed_folder_and_stops_without_an_event() {
+        let root = std::env::temp_dir().join(format!(
+            "pecofence-watcher-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let source = root.join("source");
+        std::fs::create_dir_all(&source).unwrap();
+        let watcher = DirWatcher::start(&source, |_| {}).unwrap();
+        assert!(watcher.is_running());
+        assert!(watcher.still_at(&source));
+        std::fs::rename(&source, root.join("moved")).unwrap();
+        assert!(!watcher.still_at(&source));
+        // No subsequent filesystem event is needed to release the blocking read.
+        drop(watcher);
+        std::fs::remove_dir_all(root).unwrap();
+    }
 }

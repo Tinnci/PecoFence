@@ -1,6 +1,7 @@
 //! Keyboard, char, context-menu key and activation / focus messages.
 
 use super::*;
+use pecofence_platform::quicklook;
 
 // Selection colour follows activation (Explorer: accent only in the active
 // view). Our own rename popup and a context menu keep the fence "active".
@@ -108,6 +109,9 @@ pub(super) fn on_keydown(
                 _ => (0, 1),
             };
             v.move_cursor(dx, dy, mode);
+            if let Some(path) = v.preview_path() {
+                quicklook::switch(path);
+            }
             let _ = v.redraw_content();
         }
         VK_SPACE if ctrl => {
@@ -205,6 +209,7 @@ pub(super) fn on_keydown(
             }
             v.selected.clear();
             v.type_ahead.clear();
+            quicklook::close();
             release = v.end_marquee()
                 || v.drag.take().is_some()
                 || v.end_scrollbar_press()
@@ -222,7 +227,7 @@ pub(super) fn on_keydown(
 
 // Type-to-select: printable characters accumulate into a prefix (control
 // codes — Ctrl+letter, Enter, Esc, Backspace, Tab — were handled as keys).
-pub(super) fn on_char(h: &HandlerCtx, _hwnd: HWND, wparam: usize, _lparam: isize) -> Option<isize> {
+pub(super) fn on_char(h: &HandlerCtx, _hwnd: HWND, wparam: usize, lparam: isize) -> Option<isize> {
     let HandlerCtx { view, .. } = h;
     let code = wparam as u32;
     if code < 0x20 || code == 0x7F {
@@ -240,6 +245,14 @@ pub(super) fn on_char(h: &HandlerCtx, _hwnd: HWND, wparam: usize, _lparam: isize
         return Some(0);
     };
     if !v.input_lifecycle().body() {
+        return Some(0);
+    }
+    if ch == ' ' && !v.typing_ahead() && !window::key_down(msg::VK_SHIFT) {
+        if lparam & (1 << 30) == 0
+            && let Some(path) = v.preview_path()
+        {
+            quicklook::toggle(path);
+        }
         return Some(0);
     }
     if v.type_ahead_char(ch) {

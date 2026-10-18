@@ -43,8 +43,9 @@ impl App {
             .iter()
             .filter_map(|f| self.state.portal_path(f.id).map(|p| (f.id, p)))
             .collect();
-        self.portal_watchers
-            .retain(|id, (path, _)| portals.iter().any(|(pid, p)| pid == id && p == path));
+        self.portal_watchers.retain(|id, (path, watcher)| {
+            portals.iter().any(|(pid, p)| pid == id && p == path) && watcher.is_running()
+        });
         for (id, dir) in portals {
             if self.portal_watchers.contains_key(&id) {
                 continue;

@@ -1,0 +1,780 @@
+{
+  "version": 1,
+  "nativeBaseline": "acb5a7ab8f0e0b47c485ff5efae1b82181a273c7",
+  "upstreamMain": "12799fde02be53619488e6618064c623fe4900c4",
+  "upstreamTaskScheduler": "52fd93b3357752f78660519c45634bb89a636f83",
+  "resolutionPolicy": "Preserve native WinUI and schema-2; merging history does not enable every upstream feature.",
+  "conflicts": [
+    {
+      "path": ".cargo/config.toml",
+      "resolution": "Keep fork implementation, licensing, branding and verified dependency/runtime baseline."
+    },
+    {
+      "path": ".gitattributes",
+      "resolution": "Keep fork implementation, licensing, branding and verified dependency/runtime baseline."
+    },
+    {
+      "path": ".github/pull_request_template.md",
+      "resolution": "Keep fork build, security, native runtime and package verification gates."
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "resolution": "Keep fork build, security, native runtime and package verification gates."
+    },
+    {
+      "path": ".github/workflows/release.yml",
+      "resolution": "Keep fork build, security, native runtime and package verification gates."
+    },
+    {
+      "path": ".github/workflows/winget.yml",
+      "resolution": "Keep fork build, security, native runtime and package verification gates."
+    },
+    {
+      "path": ".gitignore",
+      "resolution": "Keep fork implementation, licensing, branding and verified dependency/runtime baseline."
+    },
+    {
+      "path": "CHANGELOG.md",
+      "resolution": "Keep fork implementation, licensing, branding and verified dependency/runtime baseline."
+    },
+    {
+      "path": "Cargo.lock",
+      "resolution": "Adapt upstream native fix to the fork; preserve its public/config contracts."
+    },
+    {
+      "path": "Cargo.toml",
+      "resolution": "Adapt upstream native fix to the fork; preserve its public/config contracts."
+    },
+    {
+      "path": "NOTICE",
+      "resolution": "Keep fork implementation, licensing, branding and verified dependency/runtime baseline."
+    },
+    {
+      "path": "README.md",
+      "resolution": "Keep fork implementation, licensing, branding and verified dependency/runtime baseline."
+    },
+    {
+      "path": "crates/app/Cargo.toml",
+      "resolution": "Keep fork implementation, licensing, branding and verified dependency/runtime baseline."
+    },
+    {
+      "path": "crates/app/build.rs",
+      "resolution": "Keep fork implementation, licensing, branding and verified dependency/runtime baseline."
+    },
+    {
+      "path": "crates/app/src/anchor.rs",
+      "resolution": "Keep fork implementation, licensing, branding and verified dependency/runtime baseline."
+    },
+    {
+      "path": "crates/app/src/app/dnd.rs",
+      "resolution": "Keep schema-2 containers/plugins, native settings commands and persistence; upstream flat-model/UI features do not replace them."
+    },
+    {
+      "path": "crates/app/src/app/fence_options.rs",
+      "resolution": "Keep schema-2 containers/plugins, native settings commands and persistence; upstream flat-model/UI features do not replace them."
+    },
+    {
+      "path": "crates/app/src/app/fences.rs",
+      "resolution": "Keep schema-2 containers/plugins, native settings commands and persistence; upstream flat-model/UI features do not replace them."
+    },
+    {
+      "path": "crates/app/src/app/fileops.rs",
+      "resolution": "Keep schema-2 containers/plugins, native settings commands and persistence; upstream flat-model/UI features do not replace them."
+    },
+    {
+      "path": "crates/app/src/app/items.rs",
+      "resolution": "Keep schema-2 containers/plugins, native settings commands and persistence; upstream flat-model/UI features do not replace them."
+    },
+    {
+      "path": "crates/app/src/app/menus.rs",
+      "resolution": "Keep schema-2 containers/plugins, native settings commands and persistence; upstream flat-model/UI features do not replace them."
+    },
+    {
+      "path": "crates/app/src/app/mod.rs",
+      "resolution": "Keep schema-2 containers/plugins, native settings commands and persistence; upstream flat-model/UI features do not replace them."
+    },
+    {
+      "path": "crates/app/src/app/motion.rs",
+      "resolution": "Keep schema-2 containers/plugins, native settings commands and persistence; upstream flat-model/UI features do not replace them."
+    },
+    {
+      "path": "crates/app/src/app/peek.rs",
+      "resolution": "Keep schema-2 containers/plugins, native settings commands and persistence; upstream flat-model/UI features do not replace them."
+    },
+    {
+      "path": "crates/app/src/app/portals.rs",
+      "resolution": "Adapt upstream native fix to the fork; preserve its public/config contracts."
+    },
+    {
+      "path": "crates/app/src/app/settings.rs",
+      "resolution": "Keep schema-2 containers/plugins, native settings commands and persistence; upstream flat-model/UI features do not replace them."
+    },
+    {
+      "path": "crates/app/src/app/sync.rs",
+      "resolution": "Keep schema-2 containers/plugins, native settings commands and persistence; upstream flat-model/UI features do not replace them."
+    },
+    {
+      "path": "crates/app/src/app/tabs.rs",
+      "resolution": "Keep schema-2 containers/plugins, native settings commands and persistence; upstream flat-model/UI features do not replace them."
+    },
+    {
+      "path": "crates/app/src/app/tests.rs",
+      "resolution": "Keep schema-2 containers/plugins, native settings commands and persistence; upstream flat-model/UI features do not replace them."
+    },
+    {
+      "path": "crates/app/src/app/testscript.rs",
+      "resolution": "Keep schema-2 containers/plugins, native settings commands and persistence; upstream flat-model/UI features do not replace them."
+    },
+    {
+      "path": "crates/app/src/app/visuals.rs",
+      "resolution": "Keep schema-2 containers/plugins, native settings commands and persistence; upstream flat-model/UI features do not replace them."
+    },
+    {
+      "path": "crates/app/src/app/wallpaper_refresh.rs",
+      "resolution": "Keep schema-2 containers/plugins, native settings commands and persistence; upstream flat-model/UI features do not replace them."
+    },
+    {
+      "path": "crates/app/src/commands.rs",
+      "resolution": "Keep fork implementation, licensing, branding and verified dependency/runtime baseline."
+    },
+    {
+      "path": "crates/app/src/fence_window/api.rs",
+      "resolution": "Keep schema-2 containers/plugins, native settings commands and persistence; upstream flat-model/UI features do not replace them."
+    },
+    {
+      "path": "crates/app/src/fence_window/consts.rs",
+      "resolution": "Keep schema-2 containers/plugins, native settings commands and persistence; upstream flat-model/UI features do not replace them."
+    },
+    {
+      "path": "crates/app/src/fence_window/dnd.rs",
+      "resolution": "Keep schema-2 containers/plugins, native settings commands and persistence; upstream flat-model/UI features do not replace them."
+    },
+    {
+      "path": "crates/app/src/fence_window/frame.rs",
+      "resolution": "Keep schema-2 containers/plugins, native settings commands and persistence; upstream flat-model/UI features do not replace them."
+    },
+    {
+      "path": "crates/app/src/fence_window/handler/keyboard.rs",
+      "resolution": "Adapt upstream native fix to the fork; preserve its public/config contracts."
+    },
+    {
+      "path": "crates/app/src/fence_window/handler/misc.rs",
+      "resolution": "Keep schema-2 containers/plugins, native settings commands and persistence; upstream flat-model/UI features do not replace them."
+    },
+    {
+      "path": "crates/app/src/fence_window/handler/mod.rs",
+      "resolution": "Keep schema-2 containers/plugins, native settings commands and persistence; upstream flat-model/UI features do not replace them."
+    },
+    {
+      "path": "crates/app/src/fence_window/handler/mouse.rs",
+      "resolution": "Keep schema-2 containers/plugins, native settings commands and persistence; upstream flat-model/UI features do not replace them."
+    },
+    {
+      "path": "crates/app/src/fence_window/handler/mouse_move.rs",
+      "resolution": "Keep schema-2 containers/plugins, native settings commands and persistence; upstream flat-model/UI features do not replace them."
+    },
+    {
+      "path": "crates/app/src/fence_window/handler/nc.rs",
+      "resolution": "Keep schema-2 containers/plugins, native settings commands and persistence; upstream flat-model/UI features do not replace them."
+    },
+    {
+      "path": "crates/app/src/fence_window/handler/timers.rs",
+      "resolution": "Keep schema-2 containers/plugins, native settings commands and persistence; upstream flat-model/UI features do not replace them."
+    },
+    {
+      "path": "crates/app/src/fence_window/hit.rs",
+      "resolution": "Keep schema-2 containers/plugins, native settings commands and persistence; upstream flat-model/UI features do not replace them."
+    },
+    {
+      "path": "crates/app/src/fence_window/items.rs",
+      "resolution": "Keep schema-2 containers/plugins, native settings commands and persistence; upstream flat-model/UI features do not replace them."
+    },
+    {
+      "path": "crates/app/src/fence_window/mod.rs",
+      "resolution": "Keep schema-2 containers/plugins, native settings commands and persistence; upstream flat-model/UI features do not replace them."
+    },
+    {
+      "path": "crates/app/src/fence_window/render.rs",
+      "resolution": "Keep schema-2 containers/plugins, native settings commands and persistence; upstream flat-model/UI features do not replace them."
+    },
+    {
+      "path": "crates/app/src/fence_window/roll.rs",
+      "resolution": "Keep schema-2 containers/plugins, native settings commands and persistence; upstream flat-model/UI features do not replace them."
+    },
+    {
+      "path": "crates/app/src/fence_window/scroll.rs",
+      "resolution": "Keep schema-2 containers/plugins, native settings commands and persistence; upstream flat-model/UI features do not replace them."
+    },
+    {
+      "path": "crates/app/src/fence_window/selection.rs",
+      "resolution": "Adapt upstream native fix to the fork; preserve its public/config contracts."
+    },
+    {
+      "path": "crates/app/src/fence_window/snap.rs",
+      "resolution": "Keep schema-2 containers/plugins, native settings commands and persistence; upstream flat-model/UI features do not replace them."
+    },
+    {
+      "path": "crates/app/src/fence_window/state.rs",
+      "resolution": "Keep schema-2 containers/plugins, native settings commands and persistence; upstream flat-model/UI features do not replace them."
+    },
+    {
+      "path": "crates/app/src/fence_window/tabs.rs",
+      "resolution": "Keep schema-2 containers/plugins, native settings commands and persistence; upstream flat-model/UI features do not replace them."
+    },
+    {
+      "path": "crates/app/src/fence_window/tests.rs",
+      "resolution": "Keep schema-2 containers/plugins, native settings commands and persistence; upstream flat-model/UI features do not replace them."
+    },
+    {
+      "path": "crates/app/src/fence_window/tooltip.rs",
+      "resolution": "Keep schema-2 containers/plugins, native settings commands and persistence; upstream flat-model/UI features do not replace them."
+    },
+    {
+      "path": "crates/app/src/fence_window/window_drag.rs",
+      "resolution": "Keep schema-2 containers/plugins, native settings commands and persistence; upstream flat-model/UI features do not replace them."
+    },
+    {
+      "path": "crates/app/src/icons.rs",
+      "resolution": "Keep fork implementation, licensing, branding and verified dependency/runtime baseline."
+    },
+    {
+      "path": "crates/app/src/layout.rs",
+      "resolution": "Keep fork implementation, licensing, branding and verified dependency/runtime baseline."
+    },
+    {
+      "path": "crates/app/src/main.rs",
+      "resolution": "Keep fork implementation, licensing, branding and verified dependency/runtime baseline."
+    },
+    {
+      "path": "crates/app/src/peek.rs",
+      "resolution": "Keep fork implementation, licensing, branding and verified dependency/runtime baseline."
+    },
+    {
+      "path": "crates/app/src/rename.rs",
+      "resolution": "Keep fork implementation, licensing, branding and verified dependency/runtime baseline."
+    },
+    {
+      "path": "crates/app/src/settings_host.rs",
+      "resolution": "Keep native WinUI Settings; reject WebView source/runtime."
+    },
+    {
+      "path": "crates/app/src/shadow.rs",
+      "resolution": "Keep fork implementation, licensing, branding and verified dependency/runtime baseline."
+    },
+    {
+      "path": "crates/app/src/state.rs",
+      "resolution": "Keep schema-2 containers/plugins, native settings commands and persistence; upstream flat-model/UI features do not replace them."
+    },
+    {
+      "path": "crates/core/Cargo.toml",
+      "resolution": "Keep schema-2 containers/plugins, native settings commands and persistence; upstream flat-model/UI features do not replace them."
+    },
+    {
+      "path": "crates/core/src/brand.rs",
+      "resolution": "Keep schema-2 containers/plugins, native settings commands and persistence; upstream flat-model/UI features do not replace them."
+    },
+    {
+      "path": "crates/core/src/config_store.rs",
+      "resolution": "Keep schema-2 containers/plugins, native settings commands and persistence; upstream flat-model/UI features do not replace them."
+    },
+    {
+      "path": "crates/core/src/geometry.rs",
+      "resolution": "Keep schema-2 containers/plugins, native settings commands and persistence; upstream flat-model/UI features do not replace them."
+    },
+    {
+      "path": "crates/core/src/i18n.rs",
+      "resolution": "Keep schema-2 containers/plugins, native settings commands and persistence; upstream flat-model/UI features do not replace them."
+    },
+    {
+      "path": "crates/core/src/lib.rs",
+      "resolution": "Keep schema-2 containers/plugins, native settings commands and persistence; upstream flat-model/UI features do not replace them."
+    },
+    {
+      "path": "crates/core/src/model.rs",
+      "resolution": "Keep schema-2 containers/plugins, native settings commands and persistence; upstream flat-model/UI features do not replace them."
+    },
+    {
+      "path": "crates/core/src/rules.rs",
+      "resolution": "Keep schema-2 containers/plugins, native settings commands and persistence; upstream flat-model/UI features do not replace them."
+    },
+    {
+      "path": "crates/platform/Cargo.toml",
+      "resolution": "Keep fork shell/runtime adapters; compatible filename, URL, icon-stack and memory fixes already ported in acb5a7a."
+    },
+    {
+      "path": "crates/platform/src/autostart.rs",
+      "resolution": "Keep fork shell/runtime adapters; compatible filename, URL, icon-stack and memory fixes already ported in acb5a7a."
+    },
+    {
+      "path": "crates/platform/src/bindings.rs",
+      "resolution": "Keep fork shell/runtime adapters; compatible filename, URL, icon-stack and memory fixes already ported in acb5a7a."
+    },
+    {
+      "path": "crates/platform/src/clipboard.rs",
+      "resolution": "Keep fork shell/runtime adapters; compatible filename, URL, icon-stack and memory fixes already ported in acb5a7a."
+    },
+    {
+      "path": "crates/platform/src/com.rs",
+      "resolution": "Keep fork shell/runtime adapters; compatible filename, URL, icon-stack and memory fixes already ported in acb5a7a."
+    },
+    {
+      "path": "crates/platform/src/crashlog.rs",
+      "resolution": "Keep fork shell/runtime adapters; compatible filename, URL, icon-stack and memory fixes already ported in acb5a7a."
+    },
+    {
+      "path": "crates/platform/src/desktop.rs",
+      "resolution": "Adapt upstream native fix to the fork; preserve its public/config contracts."
+    },
+    {
+      "path": "crates/platform/src/dragdrop.rs",
+      "resolution": "Keep fork shell/runtime adapters; compatible filename, URL, icon-stack and memory fixes already ported in acb5a7a."
+    },
+    {
+      "path": "crates/platform/src/edit.rs",
+      "resolution": "Keep fork shell/runtime adapters; compatible filename, URL, icon-stack and memory fixes already ported in acb5a7a."
+    },
+    {
+      "path": "crates/platform/src/filedialog.rs",
+      "resolution": "Keep fork shell/runtime adapters; compatible filename, URL, icon-stack and memory fixes already ported in acb5a7a."
+    },
+    {
+      "path": "crates/platform/src/fileinfo.rs",
+      "resolution": "Keep fork shell/runtime adapters; compatible filename, URL, icon-stack and memory fixes already ported in acb5a7a."
+    },
+    {
+      "path": "crates/platform/src/fonts.rs",
+      "resolution": "Keep fork shell/runtime adapters; compatible filename, URL, icon-stack and memory fixes already ported in acb5a7a."
+    },
+    {
+      "path": "crates/platform/src/frameclock.rs",
+      "resolution": "Keep fork shell/runtime adapters; compatible filename, URL, icon-stack and memory fixes already ported in acb5a7a."
+    },
+    {
+      "path": "crates/platform/src/layered.rs",
+      "resolution": "Keep fork shell/runtime adapters; compatible filename, URL, icon-stack and memory fixes already ported in acb5a7a."
+    },
+    {
+      "path": "crates/platform/src/lib.rs",
+      "resolution": "Adapt upstream native fix to the fork; preserve its public/config contracts."
+    },
+    {
+      "path": "crates/platform/src/memstats.rs",
+      "resolution": "Keep fork shell/runtime adapters; compatible filename, URL, icon-stack and memory fixes already ported in acb5a7a."
+    },
+    {
+      "path": "crates/platform/src/monitors.rs",
+      "resolution": "Keep fork shell/runtime adapters; compatible filename, URL, icon-stack and memory fixes already ported in acb5a7a."
+    },
+    {
+      "path": "crates/platform/src/msg.rs",
+      "resolution": "Keep fork shell/runtime adapters; compatible filename, URL, icon-stack and memory fixes already ported in acb5a7a."
+    },
+    {
+      "path": "crates/platform/src/process.rs",
+      "resolution": "Keep fork shell/runtime adapters; compatible filename, URL, icon-stack and memory fixes already ported in acb5a7a."
+    },
+    {
+      "path": "crates/platform/src/rawinput.rs",
+      "resolution": "Keep fork shell/runtime adapters; compatible filename, URL, icon-stack and memory fixes already ported in acb5a7a."
+    },
+    {
+      "path": "crates/platform/src/shell.rs",
+      "resolution": "Keep fork shell/runtime adapters; compatible filename, URL, icon-stack and memory fixes already ported in acb5a7a."
+    },
+    {
+      "path": "crates/platform/src/shell_icons.rs",
+      "resolution": "Keep fork shell/runtime adapters; compatible filename, URL, icon-stack and memory fixes already ported in acb5a7a."
+    },
+    {
+      "path": "crates/platform/src/shell_menu.rs",
+      "resolution": "Keep fork shell/runtime adapters; compatible filename, URL, icon-stack and memory fixes already ported in acb5a7a."
+    },
+    {
+      "path": "crates/platform/src/theme.rs",
+      "resolution": "Keep fork shell/runtime adapters; compatible filename, URL, icon-stack and memory fixes already ported in acb5a7a."
+    },
+    {
+      "path": "crates/platform/src/tray.rs",
+      "resolution": "Keep fork shell/runtime adapters; compatible filename, URL, icon-stack and memory fixes already ported in acb5a7a."
+    },
+    {
+      "path": "crates/platform/src/wallpaper.rs",
+      "resolution": "Keep fork shell/runtime adapters; compatible filename, URL, icon-stack and memory fixes already ported in acb5a7a."
+    },
+    {
+      "path": "crates/platform/src/watcher.rs",
+      "resolution": "Adapt upstream native fix to the fork; preserve its public/config contracts."
+    },
+    {
+      "path": "crates/platform/src/window.rs",
+      "resolution": "Adapt upstream native fix to the fork; preserve its public/config contracts."
+    },
+    {
+      "path": "crates/platform/src/winevent.rs",
+      "resolution": "Keep fork shell/runtime adapters; compatible filename, URL, icon-stack and memory fixes already ported in acb5a7a."
+    },
+    {
+      "path": "crates/render/Cargo.toml",
+      "resolution": "Keep plugin scenes, bundled fonts and custom native renderer; independent revoker fix already ported in acb5a7a."
+    },
+    {
+      "path": "crates/render/examples/gpu_glass_bench.rs",
+      "resolution": "Keep plugin scenes, bundled fonts and custom native renderer; independent revoker fix already ported in acb5a7a."
+    },
+    {
+      "path": "crates/render/examples/liquid_glass_preview.rs",
+      "resolution": "Keep plugin scenes, bundled fonts and custom native renderer; independent revoker fix already ported in acb5a7a."
+    },
+    {
+      "path": "crates/render/examples/liquid_glass_wallpaper.rs",
+      "resolution": "Keep plugin scenes, bundled fonts and custom native renderer; independent revoker fix already ported in acb5a7a."
+    },
+    {
+      "path": "crates/render/src/backdrop.rs",
+      "resolution": "Keep plugin scenes, bundled fonts and custom native renderer; independent revoker fix already ported in acb5a7a."
+    },
+    {
+      "path": "crates/render/src/bitmaps.rs",
+      "resolution": "Keep plugin scenes, bundled fonts and custom native renderer; independent revoker fix already ported in acb5a7a."
+    },
+    {
+      "path": "crates/render/src/comp.rs",
+      "resolution": "Keep plugin scenes, bundled fonts and custom native renderer; independent revoker fix already ported in acb5a7a."
+    },
+    {
+      "path": "crates/render/src/fence_chrome.rs",
+      "resolution": "Keep plugin scenes, bundled fonts and custom native renderer; independent revoker fix already ported in acb5a7a."
+    },
+    {
+      "path": "crates/render/src/gpu_bindings.rs",
+      "resolution": "Keep plugin scenes, bundled fonts and custom native renderer; independent revoker fix already ported in acb5a7a."
+    },
+    {
+      "path": "crates/render/src/gpu_glass.rs",
+      "resolution": "Keep plugin scenes, bundled fonts and custom native renderer; independent revoker fix already ported in acb5a7a."
+    },
+    {
+      "path": "crates/render/src/lib.rs",
+      "resolution": "Keep plugin scenes, bundled fonts and custom native renderer; independent revoker fix already ported in acb5a7a."
+    },
+    {
+      "path": "crates/render/src/liquid_glass.rs",
+      "resolution": "Keep plugin scenes, bundled fonts and custom native renderer; independent revoker fix already ported in acb5a7a."
+    },
+    {
+      "path": "crates/render/src/motion.rs",
+      "resolution": "Keep plugin scenes, bundled fonts and custom native renderer; independent revoker fix already ported in acb5a7a."
+    },
+    {
+      "path": "crates/render/src/panel.rs",
+      "resolution": "Keep plugin scenes, bundled fonts and custom native renderer; independent revoker fix already ported in acb5a7a."
+    },
+    {
+      "path": "crates/render/src/stack.rs",
+      "resolution": "Keep plugin scenes, bundled fonts and custom native renderer; independent revoker fix already ported in acb5a7a."
+    },
+    {
+      "path": "crates/render/src/theme.rs",
+      "resolution": "Keep plugin scenes, bundled fonts and custom native renderer; independent revoker fix already ported in acb5a7a."
+    },
+    {
+      "path": "crates/watchdog/Cargo.toml",
+      "resolution": "Adapt upstream native fix to the fork; preserve its public/config contracts."
+    },
+    {
+      "path": "crates/watchdog/src/main.rs",
+      "resolution": "Adapt upstream native fix to the fork; preserve its public/config contracts."
+    },
+    {
+      "path": "docs/DEVELOPMENT.md",
+      "resolution": "Keep fork implementation, licensing, branding and verified dependency/runtime baseline."
+    },
+    {
+      "path": "docs/FEATURES.md",
+      "resolution": "Keep fork implementation, licensing, branding and verified dependency/runtime baseline."
+    },
+    {
+      "path": "docs/LOCALIZATION.md",
+      "resolution": "Keep fork implementation, licensing, branding and verified dependency/runtime baseline."
+    },
+    {
+      "path": "docs/PORTABLE.md",
+      "resolution": "Keep fork implementation, licensing, branding and verified dependency/runtime baseline."
+    },
+    {
+      "path": "docs/README.md",
+      "resolution": "Keep fork implementation, licensing, branding and verified dependency/runtime baseline."
+    },
+    {
+      "path": "docs/RELEASING.md",
+      "resolution": "Keep fork implementation, licensing, branding and verified dependency/runtime baseline."
+    },
+    {
+      "path": "docs/STORE.md",
+      "resolution": "Keep fork implementation, licensing, branding and verified dependency/runtime baseline."
+    },
+    {
+      "path": "docs/UPGRADING.md",
+      "resolution": "Keep fork implementation, licensing, branding and verified dependency/runtime baseline."
+    },
+    {
+      "path": "docs/assets/README.md",
+      "resolution": "Keep fork implementation, licensing, branding and verified dependency/runtime baseline."
+    },
+    {
+      "path": "docs/assets/hero-de.png",
+      "resolution": "Keep fork implementation, licensing, branding and verified dependency/runtime baseline."
+    },
+    {
+      "path": "docs/assets/hero-en.png",
+      "resolution": "Keep fork implementation, licensing, branding and verified dependency/runtime baseline."
+    },
+    {
+      "path": "docs/assets/hero-es.png",
+      "resolution": "Keep fork implementation, licensing, branding and verified dependency/runtime baseline."
+    },
+    {
+      "path": "docs/assets/hero-fr.png",
+      "resolution": "Keep fork implementation, licensing, branding and verified dependency/runtime baseline."
+    },
+    {
+      "path": "docs/assets/hero-ja.png",
+      "resolution": "Keep fork implementation, licensing, branding and verified dependency/runtime baseline."
+    },
+    {
+      "path": "docs/assets/hero-ko.png",
+      "resolution": "Keep fork implementation, licensing, branding and verified dependency/runtime baseline."
+    },
+    {
+      "path": "docs/assets/hero-pt-BR.png",
+      "resolution": "Keep fork implementation, licensing, branding and verified dependency/runtime baseline."
+    },
+    {
+      "path": "docs/assets/hero-ru.png",
+      "resolution": "Keep fork implementation, licensing, branding and verified dependency/runtime baseline."
+    },
+    {
+      "path": "docs/assets/hero-zh-CN.png",
+      "resolution": "Keep fork implementation, licensing, branding and verified dependency/runtime baseline."
+    },
+    {
+      "path": "docs/assets/hero-zh-TW.png",
+      "resolution": "Keep fork implementation, licensing, branding and verified dependency/runtime baseline."
+    },
+    {
+      "path": "docs/assets/peek.gif",
+      "resolution": "Keep fork implementation, licensing, branding and verified dependency/runtime baseline."
+    },
+    {
+      "path": "docs/assets/tabs.gif",
+      "resolution": "Keep fork implementation, licensing, branding and verified dependency/runtime baseline."
+    },
+    {
+      "path": "docs/readme/README.de.md",
+      "resolution": "Keep fork implementation, licensing, branding and verified dependency/runtime baseline."
+    },
+    {
+      "path": "docs/readme/README.es.md",
+      "resolution": "Keep fork implementation, licensing, branding and verified dependency/runtime baseline."
+    },
+    {
+      "path": "docs/readme/README.fr.md",
+      "resolution": "Keep fork implementation, licensing, branding and verified dependency/runtime baseline."
+    },
+    {
+      "path": "docs/readme/README.ja.md",
+      "resolution": "Keep fork implementation, licensing, branding and verified dependency/runtime baseline."
+    },
+    {
+      "path": "docs/readme/README.ko.md",
+      "resolution": "Keep fork implementation, licensing, branding and verified dependency/runtime baseline."
+    },
+    {
+      "path": "docs/readme/README.pt-BR.md",
+      "resolution": "Keep fork implementation, licensing, branding and verified dependency/runtime baseline."
+    },
+    {
+      "path": "docs/readme/README.ru.md",
+      "resolution": "Keep fork implementation, licensing, branding and verified dependency/runtime baseline."
+    },
+    {
+      "path": "docs/readme/README.zh-CN.md",
+      "resolution": "Keep fork implementation, licensing, branding and verified dependency/runtime baseline."
+    },
+    {
+      "path": "docs/readme/README.zh-TW.md",
+      "resolution": "Keep fork implementation, licensing, branding and verified dependency/runtime baseline."
+    },
+    {
+      "path": "extras/pecofence-promo/README.md",
+      "resolution": "Keep fork implementation, licensing, branding and verified dependency/runtime baseline."
+    },
+    {
+      "path": "extras/pecofence-promo/package.json",
+      "resolution": "Keep fork implementation, licensing, branding and verified dependency/runtime baseline."
+    },
+    {
+      "path": "extras/pecofence-promo/scripts/render.mjs",
+      "resolution": "Keep fork implementation, licensing, branding and verified dependency/runtime baseline."
+    },
+    {
+      "path": "extras/pecofence-promo/src/Root.tsx",
+      "resolution": "Keep fork implementation, licensing, branding and verified dependency/runtime baseline."
+    },
+    {
+      "path": "locales/de.json",
+      "resolution": "Keep catalogs for the native UI; do not replace them with upstream WebView/flat-model strings."
+    },
+    {
+      "path": "locales/en.json",
+      "resolution": "Keep catalogs for the native UI; do not replace them with upstream WebView/flat-model strings."
+    },
+    {
+      "path": "locales/es.json",
+      "resolution": "Keep catalogs for the native UI; do not replace them with upstream WebView/flat-model strings."
+    },
+    {
+      "path": "locales/fr.json",
+      "resolution": "Keep catalogs for the native UI; do not replace them with upstream WebView/flat-model strings."
+    },
+    {
+      "path": "locales/ja.json",
+      "resolution": "Keep catalogs for the native UI; do not replace them with upstream WebView/flat-model strings."
+    },
+    {
+      "path": "locales/ko.json",
+      "resolution": "Keep catalogs for the native UI; do not replace them with upstream WebView/flat-model strings."
+    },
+    {
+      "path": "locales/pt-BR.json",
+      "resolution": "Keep catalogs for the native UI; do not replace them with upstream WebView/flat-model strings."
+    },
+    {
+      "path": "locales/ru.json",
+      "resolution": "Keep catalogs for the native UI; do not replace them with upstream WebView/flat-model strings."
+    },
+    {
+      "path": "locales/zh-TW.json",
+      "resolution": "Keep catalogs for the native UI; do not replace them with upstream WebView/flat-model strings."
+    },
+    {
+      "path": "packaging/msix/AppxManifest.xml",
+      "resolution": "Keep fork build, security, native runtime and package verification gates."
+    },
+    {
+      "path": "packaging/msix/identity.json",
+      "resolution": "Keep fork build, security, native runtime and package verification gates."
+    },
+    {
+      "path": "scripts/check-interaction-workflow.py",
+      "resolution": "Keep fork build, security, native runtime and package verification gates."
+    },
+    {
+      "path": "scripts/check-locales.py",
+      "resolution": "Keep fork build, security, native runtime and package verification gates."
+    },
+    {
+      "path": "scripts/check-readme-translations.py",
+      "resolution": "Keep fork build, security, native runtime and package verification gates."
+    },
+    {
+      "path": "scripts/make-msix-assets.py",
+      "resolution": "Keep fork build, security, native runtime and package verification gates."
+    },
+    {
+      "path": "scripts/make-msix.ps1",
+      "resolution": "Keep fork build, security, native runtime and package verification gates."
+    },
+    {
+      "path": "scripts/make-portable.ps1",
+      "resolution": "Keep fork build, security, native runtime and package verification gates."
+    },
+    {
+      "path": "scripts/make-readme-media.py",
+      "resolution": "Keep fork build, security, native runtime and package verification gates."
+    },
+    {
+      "path": "scripts/package-source.py",
+      "resolution": "Keep fork build, security, native runtime and package verification gates."
+    },
+    {
+      "path": "scripts/test-language-smoke.py",
+      "resolution": "Keep fork build, security, native runtime and package verification gates."
+    },
+    {
+      "path": "scripts/write-license-notices.py",
+      "resolution": "Keep fork build, security, native runtime and package verification gates."
+    },
+    {
+      "path": "third_party/README.md",
+      "resolution": "Keep fork implementation, licensing, branding and verified dependency/runtime baseline."
+    },
+    {
+      "path": "tools/bindgen/composition.txt",
+      "resolution": "Keep fork implementation, licensing, branding and verified dependency/runtime baseline."
+    },
+    {
+      "path": "tools/bindgen/gpu-glass.txt",
+      "resolution": "Keep fork implementation, licensing, branding and verified dependency/runtime baseline."
+    },
+    {
+      "path": "tools/bindgen/platform.txt",
+      "resolution": "Keep fork implementation, licensing, branding and verified dependency/runtime baseline."
+    },
+    {
+      "path": "tools/bindgen/src/main.rs",
+      "resolution": "Keep fork implementation, licensing, branding and verified dependency/runtime baseline."
+    }
+  ],
+  "branchHeads": {
+    "upstream/anchor-elevated": "8899f1774673e4969dab74bc6cdc4d05991ce01c",
+    "upstream/bugfix-review-round": "2bcaf24a97ea28bea52e1ac4a355c298acd521f3",
+    "upstream/drag-alignment-aids": "99729170f70f1299ff0163e78384d5e3e8b19c99",
+    "upstream/drop-language-section": "f918279c99a64af2fe9aa08dea2ded3434247a1a",
+    "upstream/feat/left-tab-column": "71752ab5dd865fd3c9d002b950bc129dfc5b1910",
+    "upstream/feat/tab-strip-scroll": "e3aae0401f7e5ca126ee9fd9ff7e54c234e0d77b",
+    "upstream/feat/tab-switch-on-hover": "1289003ea82c665d53223c3b57b49fb1942a5af7",
+    "upstream/feedback-diagnostics": "8399f0d24037d0859d0ca7ad3e118f7aa6d57246",
+    "upstream/feedback-scroll": "17c255babc4974d2d5c81c695be7421e49f28623",
+    "upstream/fence-clearance": "c132665d66c4d54ceb16fb6fceb0171429995c5b",
+    "upstream/fence-group-select": "fd651d470e464bd600bd1858fd3284af4ef4e171",
+    "upstream/fence-text-locale": "ae3e80a8372cca309d3e496f95966c8071d16f61",
+    "upstream/fix-icon-edges": "53982c6cd52e98f5327410b92a3868415c1bcad9",
+    "upstream/fix/delete-off-ui-thread": "324bfc5b87dcf12c2baf00b182fe544f64ac4f9b",
+    "upstream/fix/desktop-in-front-at-start": "7d107ad31f67905561878ccbb51c9434ecf20024",
+    "upstream/fix/feedback-49-50": "9ea2fc74450ecfb8aa7ef27fca334be30561cca3",
+    "upstream/fix/issue24-monitors": "7d4d0c427b07ac6265cfce7c179911c4969086b9",
+    "upstream/fix/issue33-add-rule": "746cbc798c1478454f551bf4b066b78aa7d28157",
+    "upstream/fix/layouts-per-resolution": "a1c7c264e941aa344e35aee91e6e8e632f2bf7d2",
+    "upstream/fix/marquee-offer-dismiss": "97d146d377447c051f2756c6d90d7fa98b9ca06a",
+    "upstream/fix/marquee-offer-selection": "5aa55d34de91d8b58233c24e612b38bb6c5d79f5",
+    "upstream/fix/rail-collapse-tabs": "2b0918ed1b088714e20af8e7f98a367ba5eca85b",
+    "upstream/fix/rows-stay-put": "aca2a8d49e1ad179635c73a43c707f244e5f53a7",
+    "upstream/inapp-feedback": "125c8d57914ec8d11a8aad6e62ca6d573e83ae34",
+    "upstream/issue-follow-up": "514a8ad39174c2f362b71ad4dad47a0da2b00be0",
+    "upstream/issue74-show-desktop": "a176ff8db18d804e734b99aa94333479f06138eb",
+    "upstream/l10n-polish": "f234c720f9701583aa690f99f64c8d79c1c38561",
+    "upstream/liquid-glass-kube": "5a7bc8924b62e990ea27ffd86380432cc04e77e6",
+    "upstream/main": "12799fde02be53619488e6618064c623fe4900c4",
+    "upstream/memory-reduction": "6bccd69d497401bbfbbb99a0dbab56170b0ff340",
+    "upstream/menu-icons": "112b63c3b04fd0c814e49a4b1546b3ea6539afb5",
+    "upstream/per-fence-title-on-hover": "9ac765025b73973a1b3729b666f4e9b98d9162eb",
+    "upstream/perf/memory-growth": "f192b8f1c5a4ca4fc50693951b3f08282d52f59c",
+    "upstream/readme-linux-do": "ceec64064a55ef5f610baf99cd07dc63fedc9039",
+    "upstream/readme-memory": "b29d7c84e88600adee4c12cd64e94893b05e29a4",
+    "upstream/readme/manual-gifs": "1d32ab0716f18a839009a42ac662e633d0908e18",
+    "upstream/readme/trim": "c120d84b4cf59c70e38a1dcce83d16d9daa3b9fb",
+    "upstream/release/0.2.1": "39ae424e1e4c2266b291574d063891c5ab3bba51",
+    "upstream/resize-alignment": "345f8605e8fa2a7fa3cd9944b5ff7a58577271d9",
+    "upstream/settings-win11": "631497f46d750db021e51a3136731f8bd40ee91a",
+    "upstream/shell-drop-target": "37982510fa546ddbb91f59ea558f062a23b0567f",
+    "upstream/store-notes-0.1.3": "faeff137a1bdb2855b2a1cd249d1f8ebe20b955e",
+    "upstream/task-scheduler-startup": "52fd93b3357752f78660519c45634bb89a636f83",
+    "upstream/ux-night": "f04b124e08204393f55fd14fc4fff2908e3e44bf",
+    "upstream/vd-switch": "335794764152278f82dd529b1e33e5a671be3ca2",
+    "upstream/version-0.1.1": "0548c3f6be56364f5794f5e05d11c54111943754",
+    "upstream/version-0.1.3": "d5247e988a7451e220ed13bf9af069192db1e994",
+    "upstream/version-0.1.5": "bbc6f7dc1ed1fb23240946a2df8d6411b6540087",
+    "upstream/win10-support": "0c1d662049e485c5c084d621b359d35cf381bc0c"
+  }
+}

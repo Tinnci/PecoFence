@@ -195,6 +195,24 @@ impl FenceViewState {
         self.cursor_to(target, mode);
     }
 
+    pub(super) fn preview_path(&self) -> Option<&std::path::Path> {
+        if self.rolled_up {
+            return None;
+        }
+        let idx = self
+            .anchor_index
+            .filter(|i| self.selected.contains(i))
+            .or_else(|| self.selected.iter().min().copied())?;
+        self.items.get(idx).map(|it| it.path.as_path())
+    }
+
+    pub(super) fn typing_ahead(&self) -> bool {
+        !self.type_ahead.is_empty()
+            && self
+                .type_ahead_at
+                .is_some_and(|t| t.elapsed() <= TYPE_AHEAD_TIMEOUT)
+    }
+
     /// Type-to-select (Explorer ListView): characters typed within ~1 s form a prefix; the next
     /// item (cyclically from the anchor) whose name starts with it is selected and scrolled into
     /// view. One letter pressed repeatedly cycles through the items starting with it; a longer

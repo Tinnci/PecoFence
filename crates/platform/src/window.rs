@@ -619,6 +619,24 @@ impl SingleInstance {
             Some(Self(h))
         }
     }
+    /// Whether a running instance holds `name`. Never creates it: a mutex held even for a
+    /// moment would turn away an instance starting then.
+    pub fn is_held(name: &str) -> bool {
+        windows_core::link!("kernel32.dll" "system" fn OpenMutexW(access: u32, inherit: windows_core::BOOL, name: PCWSTR) -> HANDLE);
+        const SYNCHRONIZE: u32 = 0x0010_0000;
+        const ERROR_ACCESS_DENIED: u32 = 5;
+        let w = to_wide(name);
+        // SAFETY: plain FFI calls; the handle is closed at once.
+        unsafe {
+            let h = OpenMutexW(SYNCHRONIZE, false.into(), PCWSTR(w.as_ptr()));
+            if h.0.is_null() {
+                // An elevated instance's mutex can exist without granting this process access.
+                return GetLastError() == ERROR_ACCESS_DENIED;
+            }
+            let _ = CloseHandle(h);
+            true
+        }
+    }
 }
 
 impl Drop for SingleInstance {
@@ -894,5 +912,22 @@ mod frame_tests {
             assert_eq!((origin.x, origin.y), (0, 0), "client origin moved");
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod instance_tests {
+    use super::SingleInstance;
+
+    #[test]
+    fn probe_does_not_create_or_keep_a_mutex_alive() {
+        let name = format!("Local\\PecoFence.NativeMergeTest.{}", std::process::id());
+        assert!(!SingleInstance::is_held(&name));
+        let held = SingleInstance::acquire(&name).expect("isolated test mutex");
+        assert!(SingleInstance::is_held(&name));
+        assert!(SingleInstance::acquire(&name).is_none());
+        drop(held);
+        assert!(!SingleInstance::is_held(&name));
+        assert!(SingleInstance::acquire(&name).is_some());
     }
 }

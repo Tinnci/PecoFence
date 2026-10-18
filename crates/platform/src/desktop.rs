@@ -255,9 +255,52 @@ pub fn has_visible_surface(hwnd: HWND) -> bool {
         && rect.bottom > rect.top
 }
 
-/// Inserts `hwnd` directly above `host` in the z-order (or at the very bottom if `host` is
-/// already the bottom-most window).
+/// `HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED)`: what `SetWindowPos` reports when UIPI refuses it.
+const E_ACCESS_DENIED: windows_core::HRESULT = windows_core::HRESULT(0x8007_0005_u32 as i32);
+
+/// Inserts `hwnd` directly above `host` in the z-order: below the lowest window above `host`
+/// that paints a surface, or at the top of the normal band when there is none (HWND_BOTTOM
+/// would put `hwnd` under a raised `host`) or when that window is topmost while `host` is not:
+/// with no app window open it is the taskbar, and a window inserted after a topmost one becomes
+/// topmost itself. A topmost `host` (a fence during Peek) keeps `hwnd` right above it.
+///
+/// Placing a window below one of an elevated process (an app run as administrator, lowest
+/// above the desktop) is refused by UIPI, which would leave `hwnd` wherever it is — over every
+/// app. When `host` is the bottom-most window (Progman on current Windows), `hwnd` then goes to
+/// the bottom and `host` back under it, which references no foreign window; `hwnd` spends well
+/// under a millisecond behind the desktop.
 pub fn insert_above(hwnd: HWND, host: HWND) -> Result<()> {
+    // SAFETY: plain FFI calls on caller-supplied handles.
+    unsafe {
+        let above = surface_window_above(host, hwnd);
+        if above == hwnd {
+            return Ok(());
+        }
+        let insert_after = if above.0.is_null() || (is_topmost(above) && !is_topmost(host)) {
+            HWND_TOP
+        } else {
+            above
+        };
+        match SetWindowPos(hwnd, Some(insert_after), 0, 0, 0, 0, ANCHOR_FLAGS).ok() {
+            Err(e)
+                if e.code() == E_ACCESS_DENIED
+                    && GetWindow(host, GW_HWNDNEXT as u32).0.is_null() =>
+            {
+                tracing::debug!(
+                    ?above,
+                    "placement under an elevated window refused; anchoring from the bottom"
+                );
+                SetWindowPos(hwnd, Some(HWND_BOTTOM), 0, 0, 0, 0, ANCHOR_FLAGS).ok()?;
+                SetWindowPos(host, Some(HWND_BOTTOM), 0, 0, 0, 0, ANCHOR_FLAGS).ok()
+            }
+            placed => placed,
+        }
+    }
+}
+
+/// The lowest window above `host` that paints a surface, which `insert_above` places `hwnd`
+/// under; `hwnd` itself when it comes first, a null HWND when there is none.
+pub fn surface_window_above(host: HWND, hwnd: HWND) -> HWND {
     // SAFETY: plain FFI calls on caller-supplied handles.
     unsafe {
         let mut above = GetWindow(host, GW_HWNDPREV as u32);
@@ -266,15 +309,7 @@ pub fn insert_above(hwnd: HWND, host: HWND) -> Result<()> {
         while !above.0.is_null() && above != hwnd && !has_visible_surface(above) {
             above = GetWindow(above, GW_HWNDPREV as u32);
         }
-        if above == hwnd {
-            return Ok(());
-        }
-        let insert_after = if above.0.is_null() {
-            HWND_BOTTOM
-        } else {
-            above
-        };
-        SetWindowPos(hwnd, Some(insert_after), 0, 0, 0, 0, ANCHOR_FLAGS).ok()
+        above
     }
 }
 
@@ -421,6 +456,10 @@ pub fn describe_zorder(interesting: &[HWND], all_visible: bool) -> String {
         }
     }
     lines.join("\n")
+}
+
+pub fn is_topmost(hwnd: HWND) -> bool {
+    ex_style(hwnd) & WS_EX_TOPMOST as u32 != 0
 }
 
 #[cfg(test)]

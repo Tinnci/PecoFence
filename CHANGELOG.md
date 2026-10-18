@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.0.4 — Native branch integration
+
+- Merge all fetched upstream branch histories with explicit native architecture resolutions. Keep native WinUI Settings, schema-2 workspaces, SPM and bundled fonts; exclude WebView UI/runtime and flat-model replacements.
+- Fix watcher cancellation/handle cleanup and restart exited portal watchers. Improve desktop z-order anchoring and watchdog recovery when another instance has started.
+- Add optional QuickLook preview using Space, arrow navigation and Esc, when QuickLook is already running.
+- See `docs/NATIVE_BRANCH_MERGE_2026-10-18.md` for retained differences and exact merge scope.
+
 ## Unreleased — Tinnci edition
 
 - Backport compatible upstream fixes for document rules, safe file renaming and
