@@ -82,6 +82,11 @@ debug = "line-tables-only"
 [profile.release.package.pecofence-core]
 opt-level = "s"
 
+# Widget scene construction and annual JSON parsing operate on small bounded
+# inputs; favor compact code here while native raster/GPU rendering stays at 3.
+[profile.release.package.pecofence-plugin-widgets]
+opt-level = "s"
+
 [profile.dev]
 opt-level = 1
 # Tests inherit this profile. Keep local builds small; enable symbols/incremental
