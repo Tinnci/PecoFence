@@ -15,15 +15,15 @@ fn luminance(c: [f32; 4]) -> f32 {
     };
     0.2126 * linear(c[0]) + 0.7152 * linear(c[1]) + 0.0722 * linear(c[2])
 }
-fn contrast(a: [f32; 4], b: [f32; 4]) -> f32 {
+pub(super) fn contrast(a: [f32; 4], b: [f32; 4]) -> f32 {
     let (a, b) = (luminance(a), luminance(b));
     (a.max(b) + 0.05) / (a.min(b) + 0.05)
 }
-fn readable(ink: [f32; 4], ground: [f32; 4], card: [f32; 4]) -> [f32; 4] {
+fn readable(ink: [f32; 4], ground: [f32; 4], card: [f32; 4], minimum: f32) -> [f32; 4] {
     let black = srgb(0, 0, 0);
     let white = srgb(255, 255, 255);
     let score = |c| contrast(c, ground).min(contrast(c, card));
-    if score(ink) >= 4.5 {
+    if score(ink) >= minimum {
         return ink;
     }
     let target = if score(black) >= score(white) {
@@ -33,7 +33,7 @@ fn readable(ink: [f32; 4], ground: [f32; 4], card: [f32; 4]) -> [f32; 4] {
     };
     for step in 1..=100 {
         let c = mix(ink, target, step as f32 / 100.0);
-        if score(c) >= 4.5 {
+        if score(c) >= minimum {
             return c;
         }
     }
@@ -110,21 +110,57 @@ pub(super) fn resolve(theme: Option<&ThemeSnapshot>) -> Colors {
     };
     Colors {
         high_contrast: false,
-        primary: readable(primary, ground, card),
-        secondary: readable(secondary, ground, card),
+        primary: readable(primary, ground, card, 4.5),
+        secondary: readable(secondary, ground, card, 4.5),
         accent: paper::TERRACOTTA,
-        accent_ink: readable(accent_ink, ground, card),
+        accent_ink: readable(accent_ink, ground, card, 4.5),
         subtle: card,
         panel: paper::CREAM,
         faint_ink: if env.style == PaperStyle::Light && brightness == 1.0 {
             paper::INK_FAINT
         } else {
-            readable(secondary, ground, card)
+            readable(secondary, ground, card, 4.5)
         },
         ground: Some(ground),
     }
 }
 impl Colors {
+    /// Semantic editing surface, shared by TODO and diagram fields. Never use a
+    /// raw light-paper swatch for a field in an already resolved dark palette.
+    pub(crate) fn input_surface(self) -> [f32; 4] {
+        self.tone_surface(paper::SHAPE)
+    }
+
+    /// Resolve the final native field as a pair. EDIT paints opaque RGB, so
+    /// flatten alpha first and check ink against this exact surface, rather than
+    /// against the page/card palette. This is the common boundary for all widgets.
+    pub(crate) fn input_palette(self, surface: [f32; 4]) -> ([f32; 4], [f32; 4]) {
+        if self.high_contrast {
+            return (self.primary, self.subtle);
+        }
+        let ground = self.ground.unwrap_or(self.subtle);
+        let alpha = if surface[3].is_finite() {
+            surface[3].clamp(0.0, 1.0)
+        } else {
+            1.0
+        };
+        let mut background = ground;
+        for i in 0..3 {
+            let channel = if surface[i].is_finite() {
+                surface[i].clamp(0.0, 1.0)
+            } else {
+                ground[i]
+            };
+            background[i] = ground[i] + (channel - ground[i]) * alpha;
+        }
+        background[3] = 1.0;
+        // Leave margin for COLORREF's 8-bit channel rounding.
+        (
+            readable(self.primary, background, background, 4.6),
+            background,
+        )
+    }
+
     pub(crate) fn tone_surface(self, color: [f32; 4]) -> [f32; 4] {
         let Some(ground) = self.ground else {
             return self.subtle;
@@ -158,7 +194,7 @@ impl Colors {
         } else if self.ground == Some(paper::GROUND) {
             color
         } else {
-            readable(color, self.ground.unwrap_or(self.subtle), self.subtle)
+            readable(color, self.ground.unwrap_or(self.subtle), self.subtle, 4.5)
         }
     }
 }
@@ -166,6 +202,44 @@ impl Colors {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn native_input_boundary_checks_actual_surface_including_alpha_and_raw_swatches() {
+        for style in [
+            PaperStyle::Adaptive,
+            PaperStyle::Light,
+            PaperStyle::Soft,
+            PaperStyle::Dark,
+        ] {
+            for brightness in [0.6, 0.8, 1.0] {
+                for wallpaper in [0.0, 0.34, 0.35, 0.64, 0.65, 1.0] {
+                    let mut theme = ThemeSnapshot::dark();
+                    theme.paper = pecofence_plugin_api::PaperEnvironment {
+                        style,
+                        brightness,
+                        wallpaper_luminance: Some(wallpaper),
+                    };
+                    let colors = Colors::paper(Some(&theme));
+                    for surface in [
+                        colors.input_surface(),
+                        colors.subtle,
+                        paper::SHAPE,
+                        srgb(255, 244, 184),
+                        [0.9, 0.8, 0.7, 0.2],
+                        [f32::NAN; 4],
+                    ] {
+                        let (ink, background) = colors.input_palette(surface);
+                        assert!(background.iter().all(|v| v.is_finite()));
+                        assert_eq!(background[3], 1.0);
+                        assert!(contrast(ink, background) >= 4.5);
+                        // Native EDIT consumes COLORREF, not float colors.
+                        let quantize = |c: [f32; 4]| c.map(|v| (v * 255.0).round() / 255.0);
+                        assert!(contrast(quantize(ink), quantize(background)) >= 4.5);
+                    }
+                }
+            }
+        }
+    }
+
     #[test]
     fn paper_preferences_keep_text_readable_and_fixed_modes_ignore_wallpaper() {
         for style in [

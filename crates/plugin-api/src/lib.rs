@@ -569,7 +569,10 @@ pub enum TextInputFont {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TextInputStyle {
     pub bounds: RectDip,
+    /// Resolved ink paired with `background`, not inherited independently from
+    /// the host theme. Providers must maintain readable contrast on this surface.
     pub foreground: [f32; 4],
+    /// Final opaque surface: native EDIT consumes RGB and does not blend alpha.
     pub background: [f32; 4],
     pub font_size: f32,
     pub font: TextInputFont,

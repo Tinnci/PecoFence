@@ -173,11 +173,7 @@ fn source_field(frame: &WidgetFrame, colors: Colors) -> TextInputStyle {
     } else {
         stage_rect(v)
     };
-    let page = if colors.high_contrast {
-        colors.subtle
-    } else {
-        colors.tone_surface(paper::SHAPE)
-    };
+    let page = colors.input_surface();
     super::input_field(
         frame.scale,
         field,

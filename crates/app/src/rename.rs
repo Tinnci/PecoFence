@@ -226,7 +226,7 @@ fn begin_rename_at(
     });
 
     let handler: MessageHandler = Box::new(
-        move |_hwnd: HWND, message: u32, wparam: usize, _lparam: isize| -> Option<isize> {
+        move |_hwnd: HWND, message: u32, wparam: usize, lparam: isize| -> Option<isize> {
             match message {
                 msg::WM_COMMAND if msg::hi_u16(wparam) == edit::EN_KILLFOCUS => {
                     end_active(true);
@@ -240,9 +240,11 @@ fn begin_rename_at(
                     });
                     Some(0)
                 }
-                edit::WM_CTLCOLOREDIT_MSG => {
-                    ACTIVE.with(|a| a.borrow().as_ref().map(|s| s.edit.ctl_color(wparam)))
-                }
+                edit::WM_CTLCOLOREDIT_MSG | edit::WM_CTLCOLORSTATIC_MSG => ACTIVE.with(|a| {
+                    a.borrow()
+                        .as_ref()
+                        .and_then(|s| s.edit.color_message(message, wparam, lparam))
+                }),
                 // Styled panel fields paint their own surface and focus underline
                 // around the padded text control.
                 msg::WM_ERASEBKGND if field.is_some() => {

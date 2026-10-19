@@ -8,6 +8,8 @@ pub const EN_KILLFOCUS: u32 = crate::bindings::EN_KILLFOCUS as u32;
 pub const EN_CHANGE_MSG: u32 = crate::bindings::EN_CHANGE as u32;
 pub const EM_SETSEL_MSG: u32 = EM_SETSEL as u32;
 pub const WM_CTLCOLOREDIT_MSG: u32 = WM_CTLCOLOREDIT as u32;
+// Read-only and disabled EDIT controls send WM_CTLCOLORSTATIC to their parent.
+pub const WM_CTLCOLORSTATIC_MSG: u32 = 0x0138;
 
 type KeyHandler = fn(u32) -> bool;
 
@@ -269,15 +271,22 @@ impl EditControl {
         }
     }
 
-    /// Handles `WM_CTLCOLOREDIT` for the parent: sets colours and returns the brush.
-    pub fn ctl_color(&self, hdc_wparam: usize) -> isize {
+    /// Handle both editable and read-only/disabled EDIT painting. A parent must
+    /// forward both messages; otherwise Windows supplies a system surface while
+    /// the field can retain its custom text color. Ignore other child controls.
+    pub fn color_message(&self, message: u32, hdc_wparam: usize, child: isize) -> Option<isize> {
+        if !matches!(message, WM_CTLCOLOREDIT_MSG | WM_CTLCOLORSTATIC_MSG)
+            || child != self.hwnd.0 as isize
+        {
+            return None;
+        }
         // SAFETY: wParam is the control's HDC for this message.
         unsafe {
             let hdc = HDC(hdc_wparam as *mut core::ffi::c_void);
             let _ = SetTextColor(hdc, COLORREF(self.text_color));
             let _ = SetBkColor(hdc, COLORREF(self.back_color));
         }
-        self.brush.0 as isize
+        Some(self.brush.0 as isize)
     }
 }
 
@@ -389,6 +398,62 @@ mod tests {
 
     fn ignore_key(_: u32) -> bool {
         false
+    }
+
+    #[test]
+    fn native_edit_color_messages_keep_text_and_surface_paired_for_read_only_fields() {
+        let class =
+            WindowClass::register("PecoFence.EditControl.Colors.Test", ClassOptions::default())
+                .unwrap();
+        let parent = WindowBuilder::new(&class)
+            .style(style::POPUP)
+            .bounds(0, 0, 400, 120)
+            .create(Box::new(|_, _, _, _| None))
+            .unwrap();
+        for (foreground, background) in [(0x00ECECEC, 0x002B2926), (0x002B2926, 0x00F6FCFF)] {
+            let ctl = EditControl::create_styled(
+                parent.hwnd(),
+                400,
+                120,
+                96,
+                "可读 text",
+                ignore_key,
+                false,
+                EditAppearance {
+                    foreground,
+                    background,
+                    font_size: 14.0,
+                    face: "Segoe UI",
+                },
+            )
+            .unwrap();
+            // SAFETY: the DC and control are owned by this test and remain live.
+            unsafe {
+                let hdc = GetDC(Some(ctl.hwnd()));
+                assert!(!hdc.0.is_null());
+                for message in [WM_CTLCOLOREDIT_MSG, WM_CTLCOLORSTATIC_MSG] {
+                    let brush = ctl.color_message(message, hdc.0 as usize, ctl.hwnd().0 as isize);
+                    assert_eq!(brush, Some(ctl.brush.0 as isize));
+                    // These setters return the previous DC colors, verifying what
+                    // native EDIT will use for text and text-cell background.
+                    assert_eq!(SetTextColor(hdc, COLORREF(0)).0, foreground);
+                    assert_eq!(SetBkColor(hdc, COLORREF(0)).0, background);
+                }
+                assert_eq!(
+                    ctl.color_message(
+                        WM_CTLCOLORSTATIC_MSG,
+                        hdc.0 as usize,
+                        parent.hwnd().0 as isize
+                    ),
+                    None
+                );
+                assert_eq!(
+                    ctl.color_message(WM_PAINT as u32, hdc.0 as usize, ctl.hwnd().0 as isize),
+                    None
+                );
+                ReleaseDC(Some(ctl.hwnd()), hdc);
+            }
+        }
     }
 
     #[test]

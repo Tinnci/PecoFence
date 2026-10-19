@@ -223,12 +223,7 @@ fn field_style(config: &TodoConfig, layout: FieldLayout, field: Field) -> Option
         .len()
         .saturating_sub(start)
         .min(layout.capacity);
-    // A light text box on the page surface reads as "being typed into" on any row.
-    let page = if colors.high_contrast {
-        colors.subtle
-    } else {
-        super::paper::SHAPE
-    };
+    let page = colors.input_surface();
     match field {
         // Editing keeps the row and its checkbox: the box starts just after the
         // checkbox and its text lands exactly on the title.
@@ -1502,6 +1497,70 @@ mod tests {
         assert!(mid_size > start_size && (end_size - start_size).abs() < 0.01);
         assert_eq!(start_bar, None);
         assert!(end_bar.unwrap() > 0.0);
+    }
+
+    #[test]
+    fn todo_add_and_edit_fields_use_readable_resolved_surfaces() {
+        use pecofence_plugin_api::{PaperEnvironment, PaperStyle, ThemeSnapshot};
+        let config = read_config(r#"{"tasks":[{"title":"测试 task","done":false}]}"#).unwrap();
+        for style in [
+            PaperStyle::Adaptive,
+            PaperStyle::Light,
+            PaperStyle::Soft,
+            PaperStyle::Dark,
+        ] {
+            for brightness in [0.6, 0.8, 1.0] {
+                for light in [0.0, 0.34, 0.35, 0.64, 0.65, 1.0] {
+                    for high_contrast in [false, true] {
+                        let mut theme = ThemeSnapshot::dark();
+                        theme.high_contrast = high_contrast;
+                        theme.paper = PaperEnvironment {
+                            style,
+                            brightness,
+                            wallpaper_luminance: Some(light),
+                        };
+                        let colors = Colors::paper(Some(&theme));
+                        for height in [60.0, 348.0] {
+                            let viewport = RectDip {
+                                x: 0.0,
+                                y: 0.0,
+                                w: 400.0,
+                                h: height,
+                            };
+                            let layout = FieldLayout {
+                                scale: design::ContentScale::new(viewport, 1.0),
+                                viewport,
+                                colors,
+                                chinese: true,
+                                page: 0,
+                                capacity: page_capacity(height),
+                            };
+                            for field in [Field::Add, Field::Edit(0)] {
+                                let input = field_style(&config, layout, field).unwrap();
+                                if high_contrast {
+                                    assert_eq!(input.foreground, theme.text_primary);
+                                    assert_eq!(input.background, theme.surface_subtle);
+                                } else {
+                                    assert!(
+                                        crate::paper_theme::contrast(
+                                            input.foreground,
+                                            input.background
+                                        ) >= 4.5,
+                                        "{style:?} brightness={brightness} wallpaper={light} height={height}"
+                                    );
+                                    if style == PaperStyle::Dark {
+                                        assert!(
+                                            input.background[0] < 0.4,
+                                            "dark field must stay dark"
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     #[test]

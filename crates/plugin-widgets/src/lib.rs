@@ -842,9 +842,10 @@ pub(crate) fn input_field(
     radius: f32,
     placeholder: Option<&'static str>,
 ) -> TextInputStyle {
+    let (foreground, background) = colors.input_palette(background);
     TextInputStyle {
         bounds: scale.rect(field),
-        foreground: colors.primary,
+        foreground,
         background,
         font_size: scale.value(design::BODY),
         font,
