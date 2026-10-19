@@ -641,5 +641,8 @@
   "浅色纸张": "Papel claro",
   "柔和纸张": "Papel suave",
   "深色纸张": "Papel oscuro",
-  "纸张亮度": "Brillo del papel"
+  "纸张亮度": "Brillo del papel",
+  "小组件外观": "Aspecto de widgets",
+  "适用于便笺、待办、日历、时钟和图表。": "Se aplica a notas, tareas, calendarios, relojes y diagramas.",
+  "跟随壁纸会根据所在显示器的壁纸亮度自动选择纸色。高对比度模式使用系统颜色。": "El modo automático elige el papel según el brillo del fondo de pantalla del monitor del widget. El alto contraste usa colores del sistema."
 }

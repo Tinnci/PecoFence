@@ -641,5 +641,8 @@
   "浅色纸张": "Helles Papier",
   "柔和纸张": "Gedämpftes Papier",
   "深色纸张": "Dunkles Papier",
-  "纸张亮度": "Papierhelligkeit"
+  "纸张亮度": "Papierhelligkeit",
+  "小组件外观": "Widget-Darstellung",
+  "适用于便笺、待办、日历、时钟和图表。": "Gilt für Notizen, Aufgaben, Kalender, Uhren und Diagramme.",
+  "跟随壁纸会根据所在显示器的壁纸亮度自动选择纸色。高对比度模式使用系统颜色。": "Die automatische Papierfarbe folgt der Hintergrundhelligkeit auf dem Monitor des Widgets. Hoher Kontrast verwendet Systemfarben."
 }

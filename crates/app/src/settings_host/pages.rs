@@ -98,6 +98,7 @@ pub(super) fn page(
     };
     match component.page {
         Page::General => general(view, context),
+        Page::Widgets => widgets(view, context),
         Page::Content => content(component, view, context),
         Page::Rules => super::rule_editor::view(component, view, context),
         Page::Layout => layout(component, view, context),
@@ -185,41 +186,6 @@ fn general(view: &SettingsView, context: &mut ViewContext<SettingsComponent>) ->
                 }))
             }),
         ),
-        field_combo(
-            "小组件纸张",
-            &["跟随壁纸", "浅色纸张", "柔和纸张", "深色纸张"],
-            match s.widget_paper_style {
-                pecofence_core::WidgetPaperStyle::Adaptive => 0,
-                pecofence_core::WidgetPaperStyle::Light => 1,
-                pecofence_core::WidgetPaperStyle::Soft => 2,
-                pecofence_core::WidgetPaperStyle::Dark => 3,
-            },
-            enabled,
-            context.callback(|index: Option<usize>| {
-                Message::Setting(SettingChange::WidgetPaperStyle(match index.unwrap_or(0) {
-                    1 => pecofence_core::WidgetPaperStyle::Light,
-                    2 => pecofence_core::WidgetPaperStyle::Soft,
-                    3 => pecofence_core::WidgetPaperStyle::Dark,
-                    _ => pecofence_core::WidgetPaperStyle::Adaptive,
-                }))
-            }),
-        ),
-        TextBlock::new()
-            .text(format!(
-                "{} · {:.0}%",
-                tr("纸张亮度"),
-                s.widget_paper_brightness * 100.0
-            ))
-            .into(),
-        Slider::new()
-            .minimum(0.6)
-            .maximum(1.0)
-            .value(f64::from(s.widget_paper_brightness))
-            .is_enabled(enabled)
-            .on_value_changed(context.callback(|value| {
-                Message::Setting(SettingChange::WidgetPaperBrightness(value as f32))
-            }))
-            .into(),
         field_combo(
             "显示语言",
             &[
@@ -392,6 +358,66 @@ fn general(view: &SettingsView, context: &mut ViewContext<SettingsComponent>) ->
         ),
     ]);
     StackPanel::new().spacing(10.0).children(rows).into()
+}
+
+fn widgets(view: &SettingsView, context: &mut ViewContext<SettingsComponent>) -> View {
+    let s = &view.settings;
+    let enabled = view.writable;
+    StackPanel::new()
+        .spacing(10.0)
+        .children(vec![
+            TextBlock::new()
+                .text(tr("小组件外观"))
+                .font_size(20.0)
+                .automation_heading_level(windows_reactor::AutomationHeadingLevel::Level2)
+                .into(),
+            TextBlock::new()
+                .text(tr("适用于便笺、待办、日历、时钟和图表。"))
+                .text_wrapping(windows_reactor::TextWrapping::Wrap)
+                .into(),
+            field_combo(
+                "小组件纸张",
+                &["跟随壁纸", "浅色纸张", "柔和纸张", "深色纸张"],
+                match s.widget_paper_style {
+                    pecofence_core::WidgetPaperStyle::Adaptive => 0,
+                    pecofence_core::WidgetPaperStyle::Light => 1,
+                    pecofence_core::WidgetPaperStyle::Soft => 2,
+                    pecofence_core::WidgetPaperStyle::Dark => 3,
+                },
+                enabled,
+                context.callback(|index: Option<usize>| {
+                    Message::Setting(SettingChange::WidgetPaperStyle(match index.unwrap_or(0) {
+                        1 => pecofence_core::WidgetPaperStyle::Light,
+                        2 => pecofence_core::WidgetPaperStyle::Soft,
+                        3 => pecofence_core::WidgetPaperStyle::Dark,
+                        _ => pecofence_core::WidgetPaperStyle::Adaptive,
+                    }))
+                }),
+            ),
+            TextBlock::new()
+                .text(format!(
+                    "{} · {:.0}%",
+                    tr("纸张亮度"),
+                    s.widget_paper_brightness * 100.0
+                ))
+                .into(),
+            Slider::new()
+                .minimum(0.6)
+                .maximum(1.0)
+                .value(f64::from(s.widget_paper_brightness))
+                .is_enabled(enabled)
+                .on_value_changed(context.callback(|value| {
+                    Message::Setting(SettingChange::WidgetPaperBrightness(value as f32))
+                }))
+                .into(),
+            TextBlock::new()
+                .text(tr(
+                    "跟随壁纸会根据所在显示器的壁纸亮度自动选择纸色。高对比度模式使用系统颜色。",
+                ))
+                .text_wrapping(windows_reactor::TextWrapping::Wrap)
+                .into(),
+        ])
+        .into()
 }
 
 fn toggle(

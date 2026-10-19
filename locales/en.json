@@ -641,5 +641,8 @@
   "浅色纸张": "Light paper",
   "柔和纸张": "Soft paper",
   "深色纸张": "Dark paper",
-  "纸张亮度": "Paper brightness"
+  "纸张亮度": "Paper brightness",
+  "小组件外观": "Widget appearance",
+  "适用于便笺、待办、日历、时钟和图表。": "Applies to notes, tasks, calendars, clocks and diagrams.",
+  "跟随壁纸会根据所在显示器的壁纸亮度自动选择纸色。高对比度模式使用系统颜色。": "Follow wallpaper selects a paper color from the wallpaper brightness on the widget’s monitor. High contrast uses system colors."
 }

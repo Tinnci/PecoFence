@@ -52,6 +52,7 @@ struct ContentKey {
 pub(super) enum Page {
     #[default]
     General,
+    Widgets,
     Content,
     Rules,
     Layout,
@@ -59,9 +60,10 @@ pub(super) enum Page {
 }
 
 impl Page {
-    fn all() -> [Self; 5] {
+    fn all() -> [Self; 6] {
         [
             Self::General,
+            Self::Widgets,
             Self::Content,
             Self::Rules,
             Self::Layout,
@@ -72,6 +74,7 @@ impl Page {
     fn title(self) -> &'static str {
         match self {
             Self::General => "常规",
+            Self::Widgets => "小组件外观",
             Self::Content => "内容与窗口",
             Self::Rules => "整理规则",
             Self::Layout => "布局与备份",
@@ -82,6 +85,7 @@ impl Page {
     fn tag(self) -> &'static str {
         match self {
             Self::General => "general",
+            Self::Widgets => "widgets",
             Self::Content => "content",
             Self::Rules => "rules",
             Self::Layout => "layout",
@@ -97,6 +101,7 @@ impl Page {
         // Segoe Fluent Icons, supplied by WinUI's native FontIcon source.
         Icon::font(match self {
             Self::General => "\u{E713}",
+            Self::Widgets => "\u{E790}",
             Self::Content => "\u{E71D}",
             Self::Rules => "\u{E71C}",
             Self::Layout => "\u{E74E}",

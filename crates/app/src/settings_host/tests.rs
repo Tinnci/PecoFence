@@ -662,7 +662,7 @@ fn native_titlebar_hamburger_controls_adaptive_navigation_without_resetting_draf
 }
 
 #[test]
-fn headless_reactor_mounts_all_five_pages_and_full_rule_editor() {
+fn headless_reactor_mounts_all_pages_and_full_rule_editor() {
     let input = input();
     let mut host = ComponentHost::mount(
         RecordingAdapter::new(),
@@ -961,7 +961,7 @@ fn live_self_contained_pages_close_and_reopen_without_desktop_side_effects() {
                         }
                     }
                 }
-                24..=73 => {
+                24..=83 => {
                     use pecofence_core::i18n::{Language, set_language};
                     let languages = [
                         Language::SimplifiedChinese,
@@ -976,13 +976,13 @@ fn live_self_contained_pages_close_and_reopen_without_desktop_side_effects() {
                         Language::Russian,
                     ];
                     let index = (current - 24) as usize;
-                    set_language(languages[index / 5]);
-                    if index % 5 == 1 {
+                    set_language(languages[index / 6]);
+                    if index % 6 == 1 {
                         let expected = [
                             NavigationViewDisplayMode::Expanded,
                             NavigationViewDisplayMode::Compact,
                             NavigationViewDisplayMode::Minimal,
-                        ][(index / 5) % 3];
+                        ][(index / 6) % 3];
                         if host.borrow().shared.navigation_mode.get() != expected {
                             *failure_ui.borrow_mut() =
                                 Some(format!("adaptive navigation did not reach {expected:?}"));
@@ -990,13 +990,13 @@ fn live_self_contained_pages_close_and_reopen_without_desktop_side_effects() {
                             return;
                         }
                     }
-                    if index.is_multiple_of(5) {
+                    if index.is_multiple_of(6) {
                         let hwnd = host.borrow().hwnd().unwrap();
                         let scale = pecofence_platform::monitors::dpi_for_window(hwnd).max(96)
                             as f64
                             / 96.0;
                         let rect = window::window_rect(hwnd);
-                        let width = [1080.0, 800.0, 580.0][(index / 5) % 3];
+                        let width = [1080.0, 800.0, 580.0][(index / 6) % 3];
                         window::set_window_bounds(
                             hwnd,
                             rect.left,
@@ -1009,12 +1009,12 @@ fn live_self_contained_pages_close_and_reopen_without_desktop_side_effects() {
                     }
                     host.borrow().send(Message::LanguageChanged);
                     host.borrow()
-                        .send(Message::Navigate(Page::all()[index % 5]));
+                        .send(Message::Navigate(Page::all()[index % 6]));
                 }
-                74 => host.borrow().send(Message::AskAction(Action::NewWorkspace {
+                84 => host.borrow().send(Message::AskAction(Action::NewWorkspace {
                     confirmed: false,
                 })),
-                75 => {
+                85 => {
                     // Exercise the native titlebar close route while a dialog is open.
                     window::post_message(
                         host.borrow().hwnd().unwrap(),
@@ -1023,7 +1023,7 @@ fn live_self_contained_pages_close_and_reopen_without_desktop_side_effects() {
                         0,
                     );
                 }
-                76 => {
+                86 => {
                     if host.borrow().is_alive() {
                         return;
                     }
@@ -1040,10 +1040,10 @@ fn live_self_contained_pages_close_and_reopen_without_desktop_side_effects() {
                         }
                     }
                 }
-                77 => host.borrow().send(Message::AskAction(Action::NewWorkspace {
+                87 => host.borrow().send(Message::AskAction(Action::NewWorkspace {
                     confirmed: false,
                 })),
-                78 => {
+                88 => {
                     // Application exit must retire an active modal dialog as well.
                     completed_ui.set(true);
                     _ = context.exit();
