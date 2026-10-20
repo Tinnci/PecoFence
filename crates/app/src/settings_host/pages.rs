@@ -28,13 +28,35 @@ pub(super) fn notice(error: bool, message: &str) -> View {
         .into()
 }
 
-/// An immediate setting: a labelled, accessible native switch in a themed settings row.
-pub(super) fn switch(
-    label: &'static str,
-    value: bool,
-    enabled: bool,
-    callback: windows_reactor::Callback<bool>,
-) -> View {
+/// Width of the control column in a settings row (combo boxes, sliders).
+const ROW_CONTROL_WIDTH: f64 = 240.0;
+
+/// A page section heading.
+pub(super) fn section(title: &'static str) -> View {
+    TextBlock::new()
+        .text(tr(title))
+        .font_size(20.0)
+        .margin(windows_reactor::Thickness {
+            left: 0.0,
+            top: 12.0,
+            right: 0.0,
+            bottom: 0.0,
+        })
+        .automation_heading_level(windows_reactor::AutomationHeadingLevel::Level2)
+        .into()
+}
+
+/// A wrapped explanatory line under a section heading.
+pub(super) fn note(text: &'static str) -> View {
+    TextBlock::new()
+        .text(tr(text))
+        .text_wrapping(windows_reactor::TextWrapping::Wrap)
+        .into()
+}
+
+/// One settings row, as in Windows Settings: the label on the left and its control on the
+/// right of a themed card, so switches, lists and sliders line up down the page.
+pub(super) fn row(label: &'static str, control: View) -> View {
     card(
         Grid::new()
             .columns([GridLength::STAR, GridLength::Auto])
@@ -49,14 +71,50 @@ pub(super) fn switch(
                         top: 0.0,
                         bottom: 0.0,
                     }),
-                ToggleSwitch::new()
+                Border::new()
                     .grid_column(1)
-                    .automation_name(tr(label))
                     .vertical_alignment(VerticalAlignment::Center)
-                    .is_on(value)
-                    .is_enabled(enabled)
-                    .on_toggled(callback),
+                    .content(control),
             ))
+            .into(),
+    )
+}
+
+/// An immediate setting: a labelled, accessible native switch in a themed settings row.
+pub(super) fn switch(
+    label: &'static str,
+    value: bool,
+    enabled: bool,
+    callback: windows_reactor::Callback<bool>,
+) -> View {
+    row(
+        label,
+        ToggleSwitch::new()
+            .automation_name(tr(label))
+            .is_on(value)
+            .is_enabled(enabled)
+            .on_toggled(callback)
+            .into(),
+    )
+}
+
+/// A slider setting row; `label` names it for UI Automation.
+fn slider_row(
+    label: &'static str,
+    (min, max, value): (f64, f64, f64),
+    enabled: bool,
+    callback: windows_reactor::Callback<f64>,
+) -> View {
+    row(
+        label,
+        Slider::new()
+            .width(ROW_CONTROL_WIDTH)
+            .automation_name(tr(label))
+            .minimum(min)
+            .maximum(max)
+            .value(value)
+            .is_enabled(enabled)
+            .on_value_changed(callback)
             .into(),
     )
 }
@@ -110,11 +168,7 @@ fn general(view: &SettingsView, context: &mut ViewContext<SettingsComponent>) ->
     let s = &view.settings;
     let enabled = view.writable;
     let mut rows = vec![
-        TextBlock::new()
-            .text(tr("桌面与启动"))
-            .font_size(20.0)
-            .automation_heading_level(windows_reactor::AutomationHeadingLevel::Level2)
-            .into(),
+        section("桌面与启动"),
         toggle(
             "随 Windows 启动",
             s.autostart,
@@ -149,11 +203,7 @@ fn general(view: &SettingsView, context: &mut ViewContext<SettingsComponent>) ->
                 }))
             }),
         ),
-        TextBlock::new()
-            .text(tr("外观"))
-            .font_size(20.0)
-            .automation_heading_level(windows_reactor::AutomationHeadingLevel::Level2)
-            .into(),
+        section("外观"),
         field_combo(
             "主题风格",
             &["Fluent", "Liquid Glass"],
@@ -248,11 +298,11 @@ fn general(view: &SettingsView, context: &mut ViewContext<SettingsComponent>) ->
         })
         .or_else(|| custom_tint.map(|_| TINT_PALETTE.len() + 1))
         .unwrap_or(0);
-    rows.push(
+    rows.push(row(
+        "图标着色",
         ComboBox::new()
-            .width(320.0)
-            .horizontal_alignment(windows_reactor::HorizontalAlignment::Left)
-            .header(tr("图标着色"))
+            .width(ROW_CONTROL_WIDTH)
+            .automation_name(tr("图标着色"))
             .items_source(tint_items)
             .selected_index(Some(tint_index))
             .is_enabled(enabled)
@@ -267,22 +317,17 @@ fn general(view: &SettingsView, context: &mut ViewContext<SettingsComponent>) ->
                 Message::IconTint(rgb)
             }))
             .into(),
-    );
-    rows.push(TextBlock::new().text(tr("图标着色强度")).into());
-    rows.push(
-        Slider::new()
-            .minimum(0.0)
-            .maximum(1.0)
-            .value(f64::from(s.icons.tint_strength))
-            .is_enabled(enabled && s.icons.tint_rgb.is_some())
-            .on_value_changed(
-                context.callback(|value| {
-                    Message::Setting(SettingChange::IconTintStrength(value as f32))
-                }),
-            )
-            .into(),
-    );
+    ));
     rows.extend([
+        // Strength only means something while a tint colour is chosen.
+        slider_row(
+            "图标着色强度",
+            (0.0, 1.0, f64::from(s.icons.tint_strength)),
+            enabled && s.icons.tint_rgb.is_some(),
+            context.callback(|value| {
+                Message::Setting(SettingChange::IconTintStrength(value as f32))
+            }),
+        ),
         toggle(
             "图标融入背景（Chameleon）",
             s.icons.chameleon,
@@ -290,19 +335,21 @@ fn general(view: &SettingsView, context: &mut ViewContext<SettingsComponent>) ->
             context,
             SettingChange::Chameleon,
         ),
-        toggle(
-            "卷起的栅栏悬停时自动展开",
-            s.roll_up.hover_peek,
-            enabled,
-            context,
-            SettingChange::HoverPeek,
-        ),
+        section("栅栏行为"),
+        // Click-to-expand replaces hover expansion, so the hover switch is moot while it is on.
         toggle(
             "卷起的栅栏需点击标题才展开",
             s.roll_up.click_to_expand,
             enabled,
             context,
             SettingChange::ClickToExpand,
+        ),
+        toggle(
+            "卷起的栅栏悬停时自动展开",
+            s.roll_up.hover_peek,
+            enabled && !s.roll_up.click_to_expand,
+            context,
+            SettingChange::HoverPeek,
         ),
         toggle(
             "鼠标悬停时才显示标题栏",
@@ -325,6 +372,8 @@ fn general(view: &SettingsView, context: &mut ViewContext<SettingsComponent>) ->
             context,
             SettingChange::SnappingEnabled,
         ),
+        section("Peek 浮现栅栏"),
+        note("单击托盘图标或按快捷键，把所有栅栏浮到当前窗口之上；再按一次、按 Esc 或点击空白处返回。"),
         toggle(
             "启用 Peek 浮现栅栏",
             s.peek.enabled,
@@ -340,7 +389,7 @@ fn general(view: &SettingsView, context: &mut ViewContext<SettingsComponent>) ->
                 pecofence_core::PeekHotkey::WinSpace => 1,
                 pecofence_core::PeekHotkey::WinShiftSpace => 2,
             },
-            enabled,
+            enabled && s.peek.enabled,
             context.callback(|index: Option<usize>| {
                 Message::Setting(SettingChange::PeekHotkey(match index.unwrap_or(0) {
                     1 => pecofence_core::PeekHotkey::WinSpace,
@@ -352,29 +401,22 @@ fn general(view: &SettingsView, context: &mut ViewContext<SettingsComponent>) ->
         toggle(
             "Peek 时压暗背景",
             s.peek.dim,
-            enabled,
+            enabled && s.peek.enabled,
             context,
             SettingChange::PeekDim,
         ),
     ]);
-    StackPanel::new().spacing(10.0).children(rows).into()
+    StackPanel::new().spacing(8.0).children(rows).into()
 }
 
 fn widgets(view: &SettingsView, context: &mut ViewContext<SettingsComponent>) -> View {
     let s = &view.settings;
     let enabled = view.writable;
     StackPanel::new()
-        .spacing(10.0)
+        .spacing(8.0)
         .children(vec![
-            TextBlock::new()
-                .text(tr("小组件外观"))
-                .font_size(20.0)
-                .automation_heading_level(windows_reactor::AutomationHeadingLevel::Level2)
-                .into(),
-            TextBlock::new()
-                .text(tr("适用于便笺、待办、日历、时钟和图表。"))
-                .text_wrapping(windows_reactor::TextWrapping::Wrap)
-                .into(),
+            section("小组件外观"),
+            note("适用于便笺、待办、日历、时钟和图表。"),
             field_combo(
                 "小组件纸张",
                 &["跟随壁纸", "浅色纸张", "柔和纸张", "深色纸张"],
@@ -394,28 +436,15 @@ fn widgets(view: &SettingsView, context: &mut ViewContext<SettingsComponent>) ->
                     }))
                 }),
             ),
-            TextBlock::new()
-                .text(format!(
-                    "{} · {:.0}%",
-                    tr("纸张亮度"),
-                    s.widget_paper_brightness * 100.0
-                ))
-                .into(),
-            Slider::new()
-                .minimum(0.6)
-                .maximum(1.0)
-                .value(f64::from(s.widget_paper_brightness))
-                .is_enabled(enabled)
-                .on_value_changed(context.callback(|value| {
+            slider_row(
+                "纸张亮度",
+                (0.6, 1.0, f64::from(s.widget_paper_brightness)),
+                enabled,
+                context.callback(|value| {
                     Message::Setting(SettingChange::WidgetPaperBrightness(value as f32))
-                }))
-                .into(),
-            TextBlock::new()
-                .text(tr(
-                    "跟随壁纸会根据所在显示器的壁纸亮度自动选择纸色。高对比度模式使用系统颜色。",
-                ))
-                .text_wrapping(windows_reactor::TextWrapping::Wrap)
-                .into(),
+                }),
+            ),
+            note("跟随壁纸会根据所在显示器的壁纸亮度自动选择纸色。高对比度模式使用系统颜色。"),
         ])
         .into()
 }
@@ -442,15 +471,17 @@ fn field_combo(
     enabled: bool,
     callback: windows_reactor::Callback<Option<usize>>,
 ) -> View {
-    ComboBox::new()
-        .width(320.0)
-        .horizontal_alignment(windows_reactor::HorizontalAlignment::Left)
-        .header(tr(label))
-        .items_source(choices.iter().map(|choice| tr(choice)))
-        .selected_index(Some(selected))
-        .is_enabled(enabled)
-        .on_selection_changed(callback)
-        .into()
+    row(
+        label,
+        ComboBox::new()
+            .width(ROW_CONTROL_WIDTH)
+            .automation_name(tr(label))
+            .items_source(choices.iter().map(|choice| tr(choice)))
+            .selected_index(Some(selected))
+            .is_enabled(enabled)
+            .on_selection_changed(callback)
+            .into(),
+    )
 }
 
 fn language_index(language: pecofence_core::i18n::Language) -> usize {
@@ -588,13 +619,7 @@ fn content(
             .text_wrapping(windows_reactor::TextWrapping::Wrap)
             .into(),
     );
-    rows.push(
-        TextBlock::new()
-            .text(tr("内容选项"))
-            .font_size(20.0)
-            .automation_heading_level(windows_reactor::AutomationHeadingLevel::Level2)
-            .into(),
-    );
+    rows.push(section("内容选项"));
     let icon_sizes = ["32", "48", "64", "96"];
     rows.push(field_combo(
         "图标大小",
@@ -651,13 +676,7 @@ fn content(
         container: item.container_id,
     };
     if let Some(portal) = &item.portal {
-        rows.push(
-            TextBlock::new()
-                .text(tr("文件夹门户"))
-                .font_size(20.0)
-                .automation_heading_level(windows_reactor::AutomationHeadingLevel::Level2)
-                .into(),
-        );
+        rows.push(section("文件夹门户"));
         rows.push(container_toggle(
             "门户内双击打开子文件夹",
             portal.navigate,
@@ -675,32 +694,32 @@ fn content(
             context,
         ));
     }
-    rows.push(
-        TextBlock::new()
-            .text(tr("整个窗口（包括所有标签页）"))
-            .font_size(20.0)
-            .automation_heading_level(windows_reactor::AutomationHeadingLevel::Level2)
+    rows.push(section("整个窗口（包括所有标签页）"));
+    rows.push(row(
+        "不透明度",
+        StackPanel::new()
+            .orientation(windows_reactor::Orientation::Horizontal)
+            .spacing(8.0)
+            .children((
+                NumberBox::new()
+                    .width(120.0)
+                    .automation_name(tr("不透明度"))
+                    .minimum(0.1)
+                    .maximum(2.0)
+                    .value(Some(f64::from(item.opacity.unwrap_or(1.0))))
+                    .is_enabled(view.writable)
+                    .on_value_changed(
+                        context.callback(move |value: Option<f64>| Message::Opacity(key, value)),
+                    ),
+                Button::new()
+                    .content(tr("恢复默认不透明度"))
+                    .is_enabled(view.writable)
+                    .on_click(
+                        context.message(Message::Container(key, ContainerChange::Opacity(None))),
+                    ),
+            ))
             .into(),
-    );
-    rows.push(
-        NumberBox::new()
-            .header(tr("不透明度"))
-            .minimum(0.1)
-            .maximum(2.0)
-            .value(Some(f64::from(item.opacity.unwrap_or(1.0))))
-            .is_enabled(view.writable)
-            .on_value_changed(
-                context.callback(move |value: Option<f64>| Message::Opacity(key, value)),
-            )
-            .into(),
-    );
-    rows.push(
-        Button::new()
-            .content(tr("恢复默认不透明度"))
-            .is_enabled(view.writable)
-            .on_click(context.message(Message::Container(key, ContainerChange::Opacity(None))))
-            .into(),
-    );
+    ));
     let mut tint_items = vec![tr("无")];
     tint_items.extend(TINT_PALETTE.iter().map(|(name, _)| tr(name)));
     let current_tint = item.tint;
@@ -720,11 +739,11 @@ fn content(
                 0
             }
         });
-    rows.push(
+    rows.push(row(
+        "窗口色调",
         ComboBox::new()
-            .width(320.0)
-            .horizontal_alignment(windows_reactor::HorizontalAlignment::Left)
-            .header(tr("窗口色调"))
+            .width(ROW_CONTROL_WIDTH)
+            .automation_name(tr("窗口色调"))
             .items_source(tint_items)
             .selected_index(Some(tint_index))
             .is_enabled(view.writable)
@@ -737,7 +756,7 @@ fn content(
                 Message::Container(key, ContainerChange::Tint(tint))
             }))
             .into(),
-    );
+    ));
     let title_color_index = match item.title_color {
         TitleColor::Theme => Some(0),
         TitleColor::Tint => Some(1),
@@ -745,11 +764,11 @@ fn content(
         TitleColor::Black => Some(3),
         TitleColor::Custom(_) => None,
     };
-    rows.push(
+    rows.push(row(
+        "标题颜色",
         ComboBox::new()
-            .width(320.0)
-            .horizontal_alignment(windows_reactor::HorizontalAlignment::Left)
-            .header(tr("标题颜色"))
+            .width(ROW_CONTROL_WIDTH)
+            .automation_name(tr("标题颜色"))
             .items_source([tr("跟随主题"), tr("跟随色调"), tr("白色"), tr("黑色")])
             .selected_index(title_color_index)
             .is_enabled(view.writable)
@@ -765,7 +784,7 @@ fn content(
                 )
             }))
             .into(),
-    );
+    ));
     let custom_rgb = component
         .title_color_drafts
         .get(&key)
@@ -885,11 +904,7 @@ fn layout(
     context: &mut ViewContext<SettingsComponent>,
 ) -> View {
     let mut rows = vec![
-        TextBlock::new()
-            .text(tr("布局快照"))
-            .font_size(20.0)
-            .automation_heading_level(windows_reactor::AutomationHeadingLevel::Level2)
-            .into(),
+        section("布局快照"),
         TextBox::new(component.snapshot_name.clone())
             .header(tr("快照名称（可选）"))
             .is_enabled(view.writable)
@@ -907,8 +922,7 @@ fn layout(
             .into(),
     ];
     use pecofence_core::default_template::DefaultPresetOperation;
-    let mut defaults = vec![TextBlock::new().text(tr("默认布局与小组件")).font_size(20.0)
-        .automation_heading_level(windows_reactor::AutomationHeadingLevel::Level2).into(),
+    let mut defaults = vec![section("默认布局与小组件"),
         TextBlock::new().text(tr("左侧放置时钟、日历、便笺和待办，右侧整理文件；空间不足时使用标签组。恢复前自动保存快照，不清空内容。"))
             .text_wrapping(windows_reactor::TextWrapping::Wrap).into()];
     for (label, operation) in [
@@ -975,13 +989,7 @@ fn layout(
             }))
             .into(),
     );
-    rows.push(
-        TextBlock::new()
-            .text(tr("多显示器"))
-            .font_size(20.0)
-            .automation_heading_level(windows_reactor::AutomationHeadingLevel::Level2)
-            .into(),
-    );
+    rows.push(section("多显示器"));
     if view.monitors.len() < 2 {
         rows.push(
             TextBlock::new()
@@ -1034,11 +1042,7 @@ fn layout(
         );
     }
     rows.extend([
-        TextBlock::new()
-            .text(tr("配置与恢复"))
-            .font_size(20.0)
-            .automation_heading_level(windows_reactor::AutomationHeadingLevel::Level2)
-            .into(),
+        section("配置与恢复"),
         Button::new()
             .content(tr("导出配置…"))
             .on_click(context.message(Message::RunAction(Action::ExportConfig)))
@@ -1195,11 +1199,7 @@ fn about(
         );
     }
     rows.extend([
-        TextBlock::new()
-            .text(tr("许可与归属信息"))
-            .font_size(20.0)
-            .automation_heading_level(windows_reactor::AutomationHeadingLevel::Level2)
-            .into(),
+        section("许可与归属信息"),
         TextBlock::new()
             .text(tr(
                 "PecoFence 是独立发行的桌面整理工具。第三方组件与许可信息随安装包提供。",

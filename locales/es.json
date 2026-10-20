@@ -647,5 +647,8 @@
   "跟随壁纸会根据所在显示器的壁纸亮度自动选择纸色。高对比度模式使用系统颜色。": "El modo automático elige el papel según el brillo del fondo de pantalla del monitor del widget. El alto contraste usa colores del sistema.",
   "用 %1 打开": "Abrir con %1",
   "用 {0} 打开(&O)": "&Abrir con {0}",
-  "“{0}”无法打开这些文件。": "«{0}» no puede abrir estos archivos."
+  "“{0}”无法打开这些文件。": "«{0}» no puede abrir estos archivos.",
+  "栅栏行为": "Comportamiento de los grupos",
+  "Peek 浮现栅栏": "Peek",
+  "单击托盘图标或按快捷键，把所有栅栏浮到当前窗口之上；再按一次、按 Esc 或点击空白处返回。": "Haz clic en el icono de la bandeja o pulsa el atajo para mostrar todos los grupos sobre la ventana actual. Vuelve a hacer clic o a pulsarlo, pulsa Esc o haz clic en un área vacía para volver."
 }

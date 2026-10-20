@@ -215,6 +215,11 @@ pub struct App {
     peek_class: WindowClass,
     /// Dimmer windows while a Peek is active.
     peek: Option<PeekOverlay>,
+    /// When the last Peek began to end, and when the tray icon last acted: a click on the icon
+    /// that itself ended the Peek (focus left for the taskbar) must not start a new one, and a
+    /// double click or the shell's doubled Enter counts once.
+    peek_ended_at: Option<Instant>,
+    tray_activated_at: Option<Instant>,
     /// The desktop folder could not be read at the last sync (removable / network drive).
     desktop_unavailable: bool,
     /// Last run of the rules that depend on the clock ("闲置天数"); see `housekeeping`.
@@ -441,20 +446,20 @@ impl App {
                         }
                         WM_APP_TRAY => {
                             let ev = tray::decode_tray_message(wparam, lparam);
-                            if ev.event == tray::TRAY_EVENT_CONTEXTMENU
-                                || ev.event == tray::TRAY_EVENT_SELECT
-                                || ev.event == tray::TRAY_EVENT_KEYSELECT
-                            {
+                            // Right click / Shift+F10 open the menu; a left click or Enter /
+                            // Space on the focused icon runs the primary action (Peek).
+                            if ev.event == tray::TRAY_EVENT_CONTEXTMENU {
                                 if let Ok(mut guard) = cell.try_borrow_mut()
                                     && let Some(app) = guard.as_mut()
                                 {
                                     app.show_tray_menu(ev.x, ev.y);
                                 }
-                            } else if ev.event == tray::TRAY_EVENT_LBUTTONDBLCLK
+                            } else if (ev.event == tray::TRAY_EVENT_SELECT
+                                || ev.event == tray::TRAY_EVENT_KEYSELECT)
                                 && let Ok(mut guard) = cell.try_borrow_mut()
                                 && let Some(app) = guard.as_mut()
                             {
-                                app.toggle_all_fences();
+                                app.tray_activate(ev.x, ev.y);
                             }
                             Some(0)
                         }
@@ -988,6 +993,8 @@ impl App {
             },
             peek_class,
             peek: None,
+            peek_ended_at: None,
+            tray_activated_at: None,
             dying: Vec::new(),
             test: None,
             peek_hotkey: None,

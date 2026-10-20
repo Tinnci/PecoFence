@@ -111,6 +111,44 @@ impl App {
         }
     }
 
+    /// The tray icon's primary action (left click, or Enter / Space on the focused icon):
+    /// hidden fences come back; otherwise Peek starts or ends. With Peek turned off in
+    /// Settings the menu opens instead, so the click is never a dead end.
+    pub(super) fn tray_activate(&mut self, x: i32, y: i32) {
+        let now = Instant::now();
+        let window =
+            Duration::from_millis(pecofence_platform::rawinput::double_click_time_ms().into());
+        let recent = |at: Option<Instant>| at.is_some_and(|t| now.duration_since(t) < window);
+        if recent(self.tray_activated_at) {
+            // The second click of a double click, or the doubled NIN_KEYSELECT for Enter.
+            return;
+        }
+        self.tray_activated_at = Some(now);
+        if self
+            .anchor
+            .borrow()
+            .as_ref()
+            .is_some_and(|a| a.fences_hidden())
+        {
+            self.toggle_all_fences();
+            return;
+        }
+        if !self.state.config.settings.peek.enabled {
+            self.show_tray_menu(x, y);
+            return;
+        }
+        if self.peek.is_some() {
+            // Also while fading out: this click ends the Peek, never reopens it.
+            self.end_peek();
+            return;
+        }
+        if recent(self.peek_ended_at) {
+            // Pressing the icon activated the taskbar, which already ended the Peek.
+            return;
+        }
+        self.toggle_peek();
+    }
+
     /// Peek: fences float above everything (over a dimmer) until ended.
     pub(super) fn toggle_peek(&mut self) {
         if let Some(p) = self.peek.as_mut() {
@@ -178,6 +216,7 @@ impl App {
         if p.is_closing() {
             return;
         }
+        self.peek_ended_at = Some(now);
         if !self.ctx.motion.enabled() {
             self.end_peek_now();
             return;
@@ -195,6 +234,7 @@ impl App {
         if self.peek.is_none() {
             return;
         }
+        self.peek_ended_at = Some(Instant::now());
         self.ctx.behavior.floating.set(false);
         for window in self.fences.values() {
             window.redraw();

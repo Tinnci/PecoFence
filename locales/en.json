@@ -661,5 +661,8 @@
   "删除：{0}": "Delete: {0}",
   "用 %1 打开": "Open with %1",
   "用 {0} 打开(&O)": "&Open with {0}",
-  "“{0}”无法打开这些文件。": "“{0}” can’t open these files."
+  "“{0}”无法打开这些文件。": "“{0}” can’t open these files.",
+  "栅栏行为": "Fence behavior",
+  "Peek 浮现栅栏": "Peek",
+  "单击托盘图标或按快捷键，把所有栅栏浮到当前窗口之上；再按一次、按 Esc 或点击空白处返回。": "Click the tray icon or press the shortcut to bring every fence above the current window. Click or press it again, press Esc, or click an empty area to return."
 }

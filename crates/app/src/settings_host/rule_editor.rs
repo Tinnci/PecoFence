@@ -450,13 +450,7 @@ pub(super) fn view(
             )
             .into(),
     );
-    rows.push(
-        TextBlock::new()
-            .text(tr("规则列表"))
-            .font_size(20.0)
-            .automation_heading_level(windows_reactor::AutomationHeadingLevel::Level2)
-            .into(),
-    );
+    rows.push(super::pages::section("规则列表"));
     rows.push(
         StackPanel::new()
             .spacing(8.0)
