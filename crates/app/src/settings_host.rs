@@ -1858,6 +1858,10 @@ fn mark_confirmed(action: Action) -> Action {
             path,
             confirmed: true,
         },
+        Action::ApplyDefaultPreset { operation, .. } => Action::ApplyDefaultPreset {
+            operation,
+            confirmed: true,
+        },
         Action::NewWorkspace { .. } => Action::NewWorkspace { confirmed: true },
         Action::AcceptRecovery { .. } => Action::AcceptRecovery { confirmed: true },
         Action::ImportConfig { .. } => Action::ImportConfig { confirmed: true },
@@ -1867,6 +1871,17 @@ fn mark_confirmed(action: Action) -> Action {
 
 fn action_confirmation_text(action: &Action) -> String {
     match action {
+        Action::ApplyDefaultPreset { operation, .. } => match operation {
+            pecofence_core::default_template::DefaultPresetOperation::RestoreLayout => tr(
+                "恢复默认组件的排布；空间不足时合并为标签组。便笺、待办和文件归属保持不变，操作前保存快照。是否继续？",
+            ),
+            pecofence_core::default_template::DefaultPresetOperation::AddMissingWidgets => tr(
+                "只补齐缺失的时钟、日历、便笺和待办。已有组件与内容保持不变，操作前保存快照。是否继续？",
+            ),
+            pecofence_core::default_template::DefaultPresetOperation::RestoreAppearance => tr(
+                "恢复主题、小组件纸张和窗口外观。布局、内容和启动设置保持不变，操作前保存快照。是否继续？",
+            ),
+        },
         Action::RestoreSnapshot { .. } => tr("恢复快照将替换当前布局，是否继续？"),
         Action::DeleteSnapshot { .. } => tr("删除此快照后无法从设置中恢复。是否继续？"),
         Action::RestoreBackup { .. } => {

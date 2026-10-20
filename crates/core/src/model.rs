@@ -92,6 +92,40 @@ pub struct Snapshot {
     pub name: String,
     pub ts: i64,
     pub layouts: Vec<Layout>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub appearance: Option<WorkspaceAppearance>,
+}
+
+/// The appearance subset only; restoring it never changes startup, rules or desktop paths.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkspaceAppearance {
+    pub backdrop: Backdrop,
+    pub theme: ThemeSetting,
+    pub theme_style: ThemeStyle,
+    pub widget_paper_style: WidgetPaperStyle,
+    pub widget_paper_brightness: f32,
+    pub icons: IconSettings,
+}
+impl WorkspaceAppearance {
+    pub fn capture(settings: &Settings) -> Self {
+        Self {
+            backdrop: settings.backdrop,
+            theme: settings.theme,
+            theme_style: settings.theme_style,
+            widget_paper_style: settings.widget_paper_style,
+            widget_paper_brightness: settings.widget_paper_brightness,
+            icons: settings.icons.clone(),
+        }
+    }
+    pub fn apply(&self, settings: &mut Settings) {
+        settings.backdrop = self.backdrop;
+        settings.theme = self.theme;
+        settings.theme_style = self.theme_style;
+        settings.widget_paper_style = self.widget_paper_style;
+        settings.widget_paper_brightness = self.widget_paper_brightness;
+        settings.icons = self.icons.clone();
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -354,6 +388,8 @@ impl Container {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ContentInstance {
     pub id: ContentId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_role: Option<crate::default_template::DefaultRole>,
     pub title: String,
     pub view: FenceView,
     pub content: ContentSpec,
@@ -385,6 +421,7 @@ impl ContentInstance {
     pub fn collection(title: &str, inbox: bool) -> Self {
         Self {
             id: ContentId::new(),
+            default_role: None,
             title: title.into(),
             view: FenceView::default(),
             content: ContentSpec::FileCollection {
@@ -396,6 +433,7 @@ impl ContentInstance {
     pub fn portal(title: &str, root: &str) -> Self {
         Self {
             id: ContentId::new(),
+            default_role: None,
             title: title.into(),
             view: FenceView::default(),
             content: ContentSpec::FolderPortal {
@@ -410,6 +448,7 @@ impl ContentInstance {
     pub fn panel(title: &str, panel: PanelSpec) -> Self {
         Self {
             id: ContentId::new(),
+            default_role: None,
             title: title.into(),
             view: FenceView::default(),
             content: ContentSpec::Panel { panel },
@@ -810,7 +849,13 @@ impl Layout {
         let mut members = HashSet::new();
         let mut panels = HashSet::new();
         let mut inboxes = 0;
+        let mut roles = HashSet::new();
         for c in &self.contents {
+            if let Some(role) = c.default_role
+                && !roles.insert(role)
+            {
+                return Err("duplicate default role".into());
+            }
             if c.id.0.is_nil() || !identities.insert(c.id.0) || !contents.insert(c.id) {
                 return Err("duplicate or nil content identity".into());
             }
@@ -888,6 +933,9 @@ pub(crate) fn validate_geometry(g: &NormGeometry) -> Result<(), String> {
     Ok(())
 }
 pub(crate) fn validate_content(c: &ContentInstance) -> Result<(), String> {
+    if c.default_role.is_some_and(|role| !role.accepts(&c.content)) {
+        return Err("default role does not match content provider".into());
+    }
     if let Some(widths) = c.view.column_widths
         && widths
             .iter()
@@ -943,6 +991,11 @@ impl Config {
         for snapshot in &self.snapshots {
             if snapshot.id.is_nil() || !snapshots.insert(snapshot.id) {
                 return Err("duplicate or nil snapshot identity".into());
+            }
+            if let Some(appearance) = &snapshot.appearance {
+                let mut validation = Config::default();
+                appearance.apply(&mut validation.settings);
+                validation.validate()?;
             }
             // Saved memberships may refer to files removed from the current item table.
             self.validate_layouts(&snapshot.layouts, false)?;

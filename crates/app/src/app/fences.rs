@@ -445,6 +445,9 @@ impl App {
     /// The grid a widget window snaps to: its provider's span rules and one fence icon
     /// cell at the widget's icon size and the live label line height (text scaling).
     pub(super) fn widget_grid(&self, id: ContainerId) -> Option<crate::fence_window::WidgetGrid> {
+        if self.state.container(id)?.tabs.len() != 1 {
+            return None;
+        }
         let shown = self.state.window_content(id)?;
         let pecofence_core::FenceContentSpec::Panel { panel } = &shown.content else {
             return None;
@@ -464,12 +467,28 @@ impl App {
 
     /// Loading and tab switching preserve geometry, but must still update the live
     /// resize rules and presentation (and clear them when a file tab becomes active).
+    fn grouped_grid_widget(&self, id: ContainerId) -> bool {
+        self.state.container(id).is_some_and(|c| c.tabs.len() > 1)
+            && self
+                .state
+                .window_content(id)
+                .is_some_and(|shown| match &shown.content {
+                    pecofence_core::FenceContentSpec::Panel { panel } => {
+                        pecofence_plugin_widgets::grid::span_rules(&panel.provider).is_some()
+                    }
+                    _ => false,
+                })
+    }
+
     fn configure_widget_grid(&self, id: ContainerId) {
         let grid = self.widget_grid(id);
         let Some(w) = self.fences.get(&id) else {
             return;
         };
         w.set_widget_grid(grid);
+        if grid.is_none() && self.grouped_grid_widget(id) {
+            w.set_widget_presentation(pecofence_plugin_api::Presentation::Compact);
+        }
         if let Some(grid) = grid {
             let scale = monitors::dpi_for_window(w.hwnd()).max(96) as f32 / 96.0;
             let rect = w.rect();
@@ -499,6 +518,9 @@ impl App {
         };
         w.set_widget_grid(grid);
         let Some(grid) = grid else {
+            if self.grouped_grid_widget(id) {
+                w.set_widget_presentation(pecofence_plugin_api::Presentation::Compact);
+            }
             return;
         };
         let text_scale = self.ctx.behavior.text_scale.get();

@@ -300,17 +300,41 @@ impl RuleChange {
 )]
 pub enum Action {
     ApplyRules,
-    AddTemplate { template: String },
+    ApplyDefaultPreset {
+        operation: crate::default_template::DefaultPresetOperation,
+        confirmed: bool,
+    },
+    AddTemplate {
+        template: String,
+    },
     OpenConfigFolder,
-    SaveSnapshot { name: String },
-    RestoreSnapshot { id: Uuid },
-    DeleteSnapshot { id: Uuid },
-    SwapMonitors { first: String, second: String },
+    SaveSnapshot {
+        name: String,
+    },
+    RestoreSnapshot {
+        id: Uuid,
+    },
+    DeleteSnapshot {
+        id: Uuid,
+    },
+    SwapMonitors {
+        first: String,
+        second: String,
+    },
     ExportConfig,
-    NewWorkspace { confirmed: bool },
-    AcceptRecovery { confirmed: bool },
-    ImportConfig { confirmed: bool },
-    RestoreBackup { path: PathBuf, confirmed: bool },
+    NewWorkspace {
+        confirmed: bool,
+    },
+    AcceptRecovery {
+        confirmed: bool,
+    },
+    ImportConfig {
+        confirmed: bool,
+    },
+    RestoreBackup {
+        path: PathBuf,
+        confirmed: bool,
+    },
     RepairIcons,
     HideDesktopIcons,
     RetrySave,
@@ -335,7 +359,8 @@ impl Action {
             Self::AddTemplate { template } if Template::parse(template).is_none() => {
                 Err("unknown template".into())
             }
-            Self::NewWorkspace { confirmed }
+            Self::ApplyDefaultPreset { confirmed, .. }
+            | Self::NewWorkspace { confirmed }
             | Self::AcceptRecovery { confirmed }
             | Self::ImportConfig { confirmed }
             | Self::RestoreBackup { confirmed, .. }

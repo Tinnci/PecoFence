@@ -1057,6 +1057,12 @@ impl App {
         }
         // Initial desktop sync + windows.
         if app.state.save_allowed {
+            if app.state.first_run {
+                app.state.reflow_initial_defaults(
+                    app.ctx.behavior.text_scale.get(),
+                    app.ctx.chrome.label_line_h(),
+                );
+            }
             app.sync_desktop_if_available("startup");
             app.sync_fence_windows();
         }

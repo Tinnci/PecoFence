@@ -906,6 +906,32 @@ fn layout(
             })))
             .into(),
     ];
+    use pecofence_core::default_template::DefaultPresetOperation;
+    let mut defaults = vec![TextBlock::new().text(tr("默认布局与小组件")).font_size(20.0)
+        .automation_heading_level(windows_reactor::AutomationHeadingLevel::Level2).into(),
+        TextBlock::new().text(tr("左侧放置时钟、日历、便笺和待办，右侧整理文件；空间不足时使用标签组。恢复前自动保存快照，不清空内容。"))
+            .text_wrapping(windows_reactor::TextWrapping::Wrap).into()];
+    for (label, operation) in [
+        ("恢复默认排布", DefaultPresetOperation::RestoreLayout),
+        ("补齐默认组件", DefaultPresetOperation::AddMissingWidgets),
+        ("恢复默认外观", DefaultPresetOperation::RestoreAppearance),
+    ] {
+        defaults.push(
+            Button::new()
+                .content(tr(label))
+                .automation_name(tr(label))
+                .is_enabled(view.writable)
+                .on_click(
+                    context.message(Message::AskAction(Action::ApplyDefaultPreset {
+                        operation,
+                        confirmed: false,
+                    })),
+                )
+                .into(),
+        );
+    }
+    defaults.extend(rows);
+    rows = defaults;
     if view.snapshots.is_empty() {
         rows.push(TextBlock::new().text(tr("尚无布局快照。")).into());
     }
@@ -926,12 +952,20 @@ fn layout(
                         )),
                         Button::new()
                             .content(tr("恢复"))
+                            .automation_name(pecofence_core::i18n::format(
+                                "恢复：{0}",
+                                std::slice::from_ref(&snapshot.name),
+                            ))
                             .is_enabled(view.writable)
                             .on_click(
                                 context.message(Message::AskAction(Action::RestoreSnapshot { id })),
                             ),
                         Button::new()
                             .content(tr("删除"))
+                            .automation_name(pecofence_core::i18n::format(
+                                "删除：{0}",
+                                std::slice::from_ref(&snapshot.name),
+                            ))
                             .is_enabled(view.writable)
                             .on_click(
                                 context.message(Message::AskAction(Action::DeleteSnapshot { id })),

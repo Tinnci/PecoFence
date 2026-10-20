@@ -15,6 +15,8 @@ use pecofence_platform::shell::{self, DesktopEntry, EntryOrigin};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
+mod defaults;
+
 const ORPHAN_GC_SECS: i64 = 7 * 24 * 3600;
 
 pub struct AppState {
@@ -232,6 +234,7 @@ impl AppState {
             name,
             ts: pecofence_core::now_unix(),
             layouts: self.config.layouts.clone(),
+            appearance: None,
         };
         let id = snap.id;
         self.config.snapshots.push(snap);
@@ -253,7 +256,34 @@ impl AppState {
         // History can outlive catalog GC. Restore the layout, not references to records
         // that no longer exist in the active document.
         let mut layouts = snap.layouts;
+        let mut live_panels: HashMap<_, _> = self
+            .config
+            .layouts
+            .iter()
+            .flat_map(|l| &l.contents)
+            .filter_map(|content| match &content.content {
+                ContentSpec::Panel { panel } => {
+                    Some(((panel.instance_id, panel.provider.clone()), panel.clone()))
+                }
+                _ => None,
+            })
+            .collect();
+        if let Some(active) = self.config.layouts.get(self.layout) {
+            for content in &active.contents {
+                if let ContentSpec::Panel { panel } = &content.content {
+                    live_panels.insert((panel.instance_id, panel.provider.clone()), panel.clone());
+                }
+            }
+        }
         for layout in &mut layouts {
+            for content in &mut layout.contents {
+                if let ContentSpec::Panel { panel } = &mut content.content
+                    && let Some(live) =
+                        live_panels.get(&(panel.instance_id, panel.provider.clone()))
+                {
+                    *panel = live.clone();
+                }
+            }
             for content in &mut layout.contents {
                 if let ContentSpec::FileCollection { items, .. } = &mut content.content {
                     items.retain(|r| self.config.items.contains_key(&r.item_id));
@@ -262,10 +292,24 @@ impl AppState {
         }
         let mut candidate = self.config.clone();
         candidate.layouts = layouts.clone();
+        if let Some(appearance) = &snap.appearance {
+            appearance.apply(&mut candidate.settings);
+        }
         if candidate.validate().is_err() {
             return false;
         }
-        self.save_snapshot(backup_name);
+        let backup = self.save_snapshot(backup_name);
+        if snap.appearance.is_some() {
+            self.config
+                .snapshots
+                .iter_mut()
+                .find(|s| s.id == backup)
+                .unwrap()
+                .appearance = Some(pecofence_core::WorkspaceAppearance::capture(
+                &self.config.settings,
+            ));
+        }
+        self.config.settings = candidate.settings;
         self.apply_snapshot_layouts(layouts);
         true
     }
@@ -431,84 +475,9 @@ impl AppState {
         self.mark_dirty();
     }
 
-    /// Stardock-style first-run layout: right column 程序 / 文件夹 / 文件与文档 / 桌面(inbox).
+    /// The same versioned template is used by first run and explicit restoration.
     fn default_fences(&mut self) -> (Vec<Container>, Vec<ContentInstance>) {
-        let work = self
-            .work_areas
-            .iter()
-            .find(|w| w.device_path.ends_with("DISPLAY1") || true)
-            .cloned()
-            .unwrap_or(WorkArea {
-                device_path: "primary".into(),
-                left: 0,
-                top: 0,
-                right: 1920,
-                bottom: 1040,
-                dpi: 96,
-                mon_left: 0,
-                mon_top: 0,
-                mon_right: 1920,
-                mon_bottom: 1040,
-            });
-        let ww = work.width_dip();
-        let wh = work.height_dip();
-        // Exactly three icon columns at the default icon size, so the column snap applied by
-        // sync_fence_windows is a no-op and the right edge stays `gap` inside the work area.
-        let icon = self.config.settings.icon_size;
-        let col_w = crate::layout::GridMetrics::for_icon_size(
-            icon,
-            pecofence_core::FenceView::default().label_lines,
-        )
-        .width_for_columns(3);
-        let gap = 16.0f32;
-        let x = ww - gap - col_w;
-        let heights = [240.0f32, 200.0, 240.0];
-        let titles = [
-            pecofence_core::i18n::text("程序"),
-            pecofence_core::i18n::text("文件夹"),
-            pecofence_core::i18n::text("文件与文档"),
-        ];
-        let mut y = gap;
-        let mut layout = Layout {
-            fingerprint: Vec::new(),
-            containers: Vec::new(),
-            contents: Vec::new(),
-        };
-        let mut ids = Vec::new();
-        for (title, h) in titles.iter().zip(heights) {
-            let h = h.min((wh - gap * 2.0) / 4.0).max(120.0);
-            let geo = geometry::normalize(
-                PxRect {
-                    left: work.left + (x * work.scale()) as i32,
-                    top: work.top + (y * work.scale()) as i32,
-                    right: work.left + ((x + col_w) * work.scale()) as i32,
-                    bottom: work.top + ((y + h) * work.scale()) as i32,
-                },
-                &work,
-            );
-            let mut f = ContentInstance::collection(title, false);
-            f.view.icon_size = icon;
-            ids.push(f.id);
-            layout.containers.push(Container::new(f.id, geo));
-            layout.contents.push(f);
-            y += h + gap;
-        }
-        let inbox_h = (wh - gap - y).max(160.0);
-        let inbox_geo = geometry::normalize(
-            PxRect {
-                left: work.left + (x * work.scale()) as i32,
-                top: work.top + (y * work.scale()) as i32,
-                right: work.left + ((x + col_w) * work.scale()) as i32,
-                bottom: work.top + ((y + inbox_h) * work.scale()) as i32,
-            },
-            &work,
-        );
-        let mut inbox = ContentInstance::collection(pecofence_core::i18n::text("桌面"), true);
-        inbox.view.icon_size = icon;
-        layout.containers.push(Container::new(inbox.id, inbox_geo));
-        layout.contents.push(inbox);
-        self.config.rules = RuleSet::default_presets(ids[0], ids[1], ids[2]);
-        (layout.containers, layout.contents)
+        self.build_default_fences()
     }
 
     pub fn fences(&self) -> Vec<Fence> {
@@ -2004,7 +1973,7 @@ mod tests {
     use super::*;
     use pecofence_core::geometry::WorkArea;
 
-    fn test_state() -> AppState {
+    pub(super) fn test_state() -> AppState {
         let work = WorkArea {
             device_path: "test".into(),
             left: 0,
@@ -2307,7 +2276,7 @@ mod tests {
             assert!(!dir.exists());
             state.reset_workspace().unwrap();
             assert!(state.save_allowed);
-            assert_eq!(state.fences().len(), 4);
+            assert_eq!(state.fences().len(), 8);
             assert!(state.config.validate().is_ok());
         }
         let dir =

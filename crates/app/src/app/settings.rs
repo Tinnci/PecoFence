@@ -36,6 +36,9 @@ impl App {
                 name: pecofence_core::i18n::format("{0}前", &[what.to_string()]),
                 ts: pecofence_core::now_unix(),
                 layouts: self.state.config.layouts.clone(),
+                appearance: Some(pecofence_core::WorkspaceAppearance::capture(
+                    &self.state.config.settings,
+                )),
             });
             while cfg.snapshots.len() > pecofence_core::MAX_SNAPSHOTS {
                 cfg.snapshots.remove(0);
@@ -67,6 +70,17 @@ impl App {
         // tint, layouts) needs these regardless.
         self.sync_peek_hotkey();
         self.apply_icon_variant();
+        self.refresh_visuals(true);
+        self.push_settings_state();
+    }
+
+    /// Layout/appearance edits do not re-run routing or rewrite startup integrations.
+    fn reconcile_layout_presentation(&mut self, old_settings: pecofence_core::Settings) {
+        self.end_peek_now();
+        let new_settings = self.state.config.settings.clone();
+        self.apply_settings_from(old_settings, new_settings, false);
+        self.relayout_from_state();
+        self.refresh_portals();
         self.refresh_visuals(true);
         self.push_settings_state();
     }
@@ -383,6 +397,20 @@ impl App {
             SettingsCommand::Action { action } => {
                 action.validate().map_err(Rejection::Invalid)?;
                 match action {
+                    Action::ApplyDefaultPreset { operation, .. } => {
+                        let old = self.state.config.settings.clone();
+                        self.state
+                            .apply_default_preset(
+                                operation,
+                                self.ctx.behavior.text_scale.get(),
+                                self.ctx.chrome.label_line_h(),
+                            )
+                            .map_err(Rejection::Invalid)?;
+                        self.reconcile_layout_presentation(old);
+                        self.settings_commit(pecofence_core::i18n::text(
+                            "已应用默认模板，原有内容已保留。",
+                        ));
+                    }
                     Action::RetrySave => self.request_save(),
                     Action::CancelClose => {
                         if !matches!(
@@ -424,15 +452,14 @@ impl App {
                         self.settings_commit(pecofence_core::i18n::text("已保存快照"));
                     }
                     Action::RestoreSnapshot { id } => {
+                        let old_settings = self.state.config.settings.clone();
                         if !self
                             .state
                             .restore_snapshot_with_backup(id, pecofence_core::i18n::text("恢复前"))
                         {
                             return Err(Rejection::Invalid("snapshot not found".into()));
                         }
-                        self.end_peek_now();
-                        self.relayout_from_state();
-                        self.refresh_portals();
+                        self.reconcile_layout_presentation(old_settings);
                         self.settings_commit(pecofence_core::i18n::text("已恢复快照"));
                     }
                     Action::DeleteSnapshot { id } => {
@@ -462,6 +489,10 @@ impl App {
                     Action::NewWorkspace { .. } => {
                         let old = self.state.config.settings.clone();
                         self.state.reset_workspace().map_err(Rejection::Invalid)?;
+                        self.state.reflow_initial_defaults(
+                            self.ctx.behavior.text_scale.get(),
+                            self.ctx.chrome.label_line_h(),
+                        );
                         self.reconcile_adopted_workspace(old);
                         self.settings_commit(pecofence_core::i18n::text("已保存新工作区。"));
                     }

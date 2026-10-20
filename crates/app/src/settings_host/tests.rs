@@ -1063,3 +1063,51 @@ fn live_self_contained_pages_close_and_reopen_without_desktop_side_effects() {
             .all(|command| matches!(command, Command::SettingsClosed { .. }))
     );
 }
+
+#[test]
+fn default_template_actions_require_confirmation_and_preserve_typed_operation() {
+    use pecofence_core::default_template::DefaultPresetOperation::*;
+    for operation in [RestoreLayout, AddMissingWidgets, RestoreAppearance] {
+        let mut ui = connected();
+        let action = Action::ApplyDefaultPreset {
+            operation,
+            confirmed: false,
+        };
+        assert!(action.validate().is_err());
+        assert!(!action.permitted_read_only());
+        ui.ask_confirmation(SettingsCommand::Action { action });
+        let token = ui.confirm_action.as_ref().unwrap().token;
+        assert!(ui.queue.drain().is_empty());
+        ui.finish_confirmation(token, ContentDialogResult::Primary);
+        let request = sent(&ui);
+        assert_eq!(
+            request.command,
+            SettingsCommand::Action {
+                action: Action::ApplyDefaultPreset {
+                    operation,
+                    confirmed: true
+                }
+            }
+        );
+    }
+}
+
+#[test]
+fn layout_page_exposes_each_default_template_operation() {
+    let input = input();
+    let mut host = ComponentHost::mount(
+        RecordingAdapter::new(),
+        [component::<SettingsComponent>("settings", input.clone())],
+    )
+    .unwrap();
+    let sender = input.shared.sender.borrow().as_ref().unwrap().clone();
+    assert!(sender.send(Message::HostUpdate(Uuid::new_v4(), Box::new(projection()))));
+    assert!(sender.send(Message::Navigate(Page::Layout)));
+    host.drain(100).unwrap();
+    for label in ["恢复默认排布", "补齐默认组件", "恢复默认外观"] {
+        let expected = tr(label);
+        assert!(host.runtime().graph().objects().any(|object|host.runtime().graph().properties(object).is_some_and(|props|
+            props.iter().any(|p|p.id==windows_reactor::PropertyId::AutomationName && matches!(&p.value,windows_reactor::PropertyValue::String(text) if text.as_ref()==expected)))));
+    }
+    assert!(input.queue.drain().is_empty());
+}
