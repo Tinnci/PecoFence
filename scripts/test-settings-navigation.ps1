@@ -5,6 +5,8 @@ param(
 
 # Uses an isolated workspace and the real WinUI title-bar button. No user installation input.
 $ErrorActionPreference = 'Stop'
+# Settings pages in the navigation pane (Page::all in settings_host.rs).
+$PageCount = 6
 if (-not $Binary) { $Binary = Join-Path $PSScriptRoot '..\target\x86_64-pc-windows-msvc\debug\pecofence.exe' }
 $source = (Resolve-Path $Binary).ProviderPath
 $stage = Join-Path $env:TEMP ('pecofence-navigation-' + [guid]::NewGuid().ToString('N'))
@@ -75,7 +77,7 @@ function ResizeSettings([int]$Width) {
 }
 function SelectPage([int]$Index) {
   $items = @(Elements | Where-Object { $_.Current.ClassName -like '*NavigationViewItem*' })
-  if ($items.Count -lt 5) {
+  if ($items.Count -lt $PageCount) {
     Write-Output ((Elements | ForEach-Object { $_.Current.ClassName } | Group-Object | Select-Object Name, Count) | ConvertTo-Json)
     throw 'Native navigation items were not found'
   }
@@ -138,7 +140,7 @@ try {
     }
     Start-Sleep -Milliseconds 450
     AssertPane $open "toggle burst $round"
-    SelectPage ($round % 5)
+    SelectPage ($round % $PageCount)
     AssertPane $open "page switch $round"
   }
   if ($open) { $hamburger.Invoke() }

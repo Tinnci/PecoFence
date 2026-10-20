@@ -77,7 +77,7 @@ visual checks and real switch-persistence tests.
 
 Run `scripts/test-settings-navigation.ps1 -Binary <pecofence.exe>` on Windows for
 the pane regression. It uses a separate workspace, invokes the real native
-hamburger, switches through the first five of the six pages, resizes through compact/minimal/expanded
+hamburger, switches all six pages, resizes through compact/minimal/expanded
 widths, and checks the content gutter using DPI-adjusted UI Automation bounds.
 
 Guidance: [toggle switches](https://learn.microsoft.com/en-us/windows/apps/design/controls/toggles),
