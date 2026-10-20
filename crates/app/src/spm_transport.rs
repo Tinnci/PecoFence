@@ -21,6 +21,27 @@ use tokio::task::JoinHandle;
 pub(crate) const MAX_OPERATIONS: usize = 64;
 const OPERATION_TIMEOUT: Duration = Duration::from_secs(15);
 
+/// Keep retrying independently of diagnostics: report the first/changed error,
+/// then summarize a persistent outage at most once every five minutes.
+#[derive(Default)]
+struct ConnectFailureLog {
+    last: Option<(String, Instant)>,
+    suppressed: u64,
+}
+
+impl ConnectFailureLog {
+    fn record(&mut self, error: String, now: Instant) -> Option<u64> {
+        if self.last.as_ref().is_some_and(|(previous, at)| {
+            previous == &error && now.duration_since(*at) < Duration::from_secs(300)
+        }) {
+            self.suppressed = self.suppressed.saturating_add(1);
+            return None;
+        }
+        self.last = Some((error, now));
+        Some(std::mem::take(&mut self.suppressed))
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum ConnectionState {
@@ -200,11 +221,13 @@ pub async fn run(
     };
     tracing::info!(endpoint = %endpoint_for_log, "transport.run");
     let mut delay = Duration::from_millis(500);
+    let mut failures = ConnectFailureLog::default();
     actor.set_state(ConnectionState::Connecting);
     while !cancel.is_cancelled() {
         let pipe = tokio::net::windows::named_pipe::ClientOptions::new().open(&actor.endpoint);
         match pipe {
             Ok(pipe) => {
+                failures = ConnectFailureLog::default();
                 match actor.connected(pipe, &cancel).await {
                     Ok(()) if cancel.is_cancelled() => break,
                     Ok(()) | Err(()) => {
@@ -215,7 +238,9 @@ pub async fn run(
                 delay = Duration::from_millis(500);
             }
             Err(error) => {
-                tracing::warn!(%error, endpoint = %endpoint_for_log, "transport.connect_failed");
+                if let Some(suppressed) = failures.record(error.to_string(), Instant::now()) {
+                    tracing::warn!(%error, suppressed, endpoint = %endpoint_for_log, "transport.connect_failed");
+                }
                 actor.set_state(if actor.daemon_session.is_some() {
                     ConnectionState::Reconnecting
                 } else {
@@ -269,7 +294,10 @@ impl Actor {
     }
 
     fn set_state(&self, state: ConnectionState) {
-        self.connection_state.store(state as u8, Ordering::Release);
+        let previous = self.connection_state.swap(state as u8, Ordering::AcqRel);
+        if previous != state as u8 {
+            tracing::info!(?state, endpoint = %self.endpoint, "transport.connection_state");
+        }
     }
 
     fn reset_remote(&mut self) {
@@ -864,6 +892,40 @@ pub async fn probe_current() -> std::io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn connection_failure_reports_changes_summarizes_outages_and_resets_after_recovery() {
+        let now = Instant::now();
+        let mut log = ConnectFailureLog::default();
+        assert_eq!(log.record("missing pipe".into(), now), Some(0));
+        for seconds in 1..300 {
+            assert_eq!(
+                log.record("missing pipe".into(), now + Duration::from_secs(seconds)),
+                None
+            );
+        }
+        assert_eq!(
+            log.record("missing pipe".into(), now + Duration::from_secs(300)),
+            Some(299)
+        );
+        assert_eq!(
+            log.record("access denied".into(), now + Duration::from_secs(301)),
+            Some(0)
+        );
+        assert_eq!(
+            log.record("access denied".into(), now + Duration::from_secs(302)),
+            None
+        );
+        assert_eq!(
+            log.record("missing pipe".into(), now + Duration::from_secs(303)),
+            Some(1)
+        );
+        log = ConnectFailureLog::default();
+        assert_eq!(
+            log.record("missing pipe".into(), now + Duration::from_secs(304)),
+            Some(0)
+        );
+    }
     use spm_contracts::{DeliveryScopeId, DetailLevel, ProjectId, SubscribeResponse, ViewKind};
 
     fn query() -> ProjectQuery {

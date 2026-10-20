@@ -116,3 +116,13 @@ A public build/test result never establishes that the private backend was
 migrated, published or tested live. See [DEVELOPMENT.md](DEVELOPMENT.md),
 [DEPENDENCIES.md](DEPENDENCIES.md) and [RELEASING.md](RELEASING.md) for the
 public workflow and release gates.
+
+## Windows daemon availability and diagnostics (2026-10-20)
+
+A missing `spmd` process is an installation/startup fault, not a rendering failure. A saved deployment PID is only historical metadata: inspect the actual executable path and use the installed Windows daemon's `--probe` against the matching instance. Keep the original explicit database path; do not initialize a replacement database to make a probe pass.
+
+`scripts/start-spm-daemon.ps1` is a background launcher for a separately installed daemon. It requires an existing executable/database and the trusted executable SHA-256, creates one timestamped stdout/stderr log pair, and waits for the child. It can be invoked by an owned current-user login entry with a hidden Windows launcher; it does not register startup entries or infer a database itself. Launch from the Windows shell or a persistent Windows host, rather than relying on the lifetime of a WSL command. An existing startup entry must be inspected before replacement. Current-user startup is sufficient; a denied scheduled-task registration does not justify requesting elevated rights.
+
+Transport retries continue with their existing backoff. The first or changed connection error is logged immediately; unchanged errors are summarized at most every five minutes with a suppressed count. Opening a connection resets suppression. State transitions are logged separately so recovery is visible. This diagnostic policy does not replace starting the daemon and does not treat an open pipe as a successful protocol handshake.
+
+Live repair on 2026-10-20 found no daemon process or login entry and thousands of repeated missing-pipe warnings. Restoring the installed daemon with its existing database stopped new warnings; protocol Hello succeeded. The login entry was configured, but a future Windows logon has not been exercised by this repair. Native transport tests cover suppression, changed errors and reset along with existing correlation/cancellation/recovery behavior; logs remain private and are not bundled in the repository.
