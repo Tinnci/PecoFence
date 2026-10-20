@@ -158,12 +158,14 @@ pub enum Backdrop<'a> {
     MicaLike(BackdropCrop<'a>),
     /// A pre-blurred acrylic crop of the wallpaper plus the DPI scale (for 1:1 grain tiling).
     Glass(BackdropCrop<'a>, f32),
-    /// GPU-resident wallpaper and geometry-only displacement map.
+    /// GPU-resident wallpaper under a material shader: Liquid Glass, or paper when the
+    /// theme is paper (`seed` then varies its fibres per window).
     GpuGlass {
         material: &'a RefCell<crate::gpu_glass::GpuGlass>,
         wallpaper: &'a Rc<Vec<crate::MonitorBackdrop>>,
         rect: [i32; 4],
         scale: f32,
+        seed: f32,
     },
     /// DWM paints the material (system Acrylic); only a light tint layer is drawn here.
     SystemMaterial,
@@ -1237,7 +1239,17 @@ impl FenceChrome {
                 wallpaper,
                 rect,
                 scale,
+                seed,
             } => {
+                let surface = if theme.paper {
+                    crate::gpu_glass::Surface::Paper {
+                        color: theme.paper_rgb(),
+                        translucency: theme.paper_translucency(),
+                        seed,
+                    }
+                } else {
+                    crate::gpu_glass::Surface::Glass
+                };
                 let result = material.borrow_mut().draw(
                     session,
                     &mut bitmaps.glass_wallpaper,
@@ -1247,23 +1259,26 @@ impl FenceChrome {
                     radius,
                     opacity,
                     state.hover,
+                    surface,
                 );
                 if let Err(error) = result {
                     if windows_canvas::is_device_lost(error.code()) {
                         return Err(error);
                     }
-                    let fallback = if theme.text_primary.r > 0.5 {
+                    let fallback = if theme.paper {
+                        theme.solid_fill
+                    } else if theme.text_primary.r > 0.5 {
                         Theme::dark().solid_fill
                     } else {
                         Theme::light().solid_fill
                     };
                     let fill = session.create_solid_brush(fallback)?;
                     session.fill_rounded_rect(&RoundedRect::uniform(outer, radius), &fill);
-                } else {
+                } else if !theme.paper {
                     let mut c = theme.glass_layer_fill;
                     c.a *= opacity.min(1.0);
                     let layer = session.create_solid_brush(c)?;
-                    session.fill_rect(&outer, &layer);
+                    session.fill_rounded_rect(&RoundedRect::uniform(outer, radius), &layer);
                 }
             }
             Backdrop::MicaLike(crop) if crop.image.width > 0 && crop.image.height > 0 => {
@@ -1272,7 +1287,7 @@ impl FenceChrome {
                 let mut c = theme.layer_fill;
                 c.a *= opacity.min(1.0);
                 let layer = session.create_solid_brush(c)?;
-                session.fill_rect(&outer, &layer);
+                session.fill_rounded_rect(&RoundedRect::uniform(outer, radius), &layer);
             }
             Backdrop::Glass(crop, scale) if crop.image.width > 0 && crop.image.height > 0 => {
                 let bitmap = if theme.liquid_glass {
@@ -1300,7 +1315,7 @@ impl FenceChrome {
                 let mut c = theme.glass_layer_fill;
                 c.a *= opacity.min(1.0);
                 let layer = session.create_solid_brush(c)?;
-                session.fill_rect(&outer, &layer);
+                session.fill_rounded_rect(&RoundedRect::uniform(outer, radius), &layer);
                 // Acrylic grain: tile the noise texture at exactly one texel per device pixel.
                 if !theme.liquid_glass {
                     let tile = crate::backdrop::noise_tile();
@@ -1340,10 +1355,12 @@ impl FenceChrome {
 
         // A quiet, directional reflection gives sampled materials depth without adding a
         // header band. It is static at rest; existing title hover tweens gently lift the edge.
-        let sampled_material = matches!(
-            backdrop,
-            Backdrop::Glass(..) | Backdrop::MicaLike(..) | Backdrop::GpuGlass { .. }
-        );
+        // Paper takes neither the glass sheen nor the lit glass rim: a plain ink hairline.
+        let sampled_material = !theme.paper
+            && matches!(
+                backdrop,
+                Backdrop::Glass(..) | Backdrop::MicaLike(..) | Backdrop::GpuGlass { .. }
+            );
         if sampled_material && !theme.liquid_glass {
             let sheen = session.create_linear_gradient(
                 Vector2::new(0.0, 0.0),
@@ -1383,20 +1400,23 @@ impl FenceChrome {
             }
         }
 
-        // A single 1 px rim, lit from the upper left and snapped to device pixels at every DPI.
+        // A single 1 px rim snapped to device pixels at every DPI. Fluent lights it from above,
+        // like Windows 11's elevation border: both top corners match, then it falls off to
+        // the bottom colour within the corner radius band.
         let rim_rect = px.ring(outer, radius);
         if sampled_material && theme.liquid_glass {
             crate::liquid_glass::draw_reflection(
                 session, theme, scale, width, height, pill_a, opacity,
             )?;
         } else if sampled_material {
+            let band = ((radius * 2.0 + 8.0) / height.max(1.0)).clamp(0.05, 0.5);
             let rim = session.create_linear_gradient(
                 Vector2::new(0.0, 0.0),
-                Vector2::new(width * 0.65, height.max(1.0)),
+                Vector2::new(0.0, height.max(1.0)),
                 &[
                     GradientStop::new(0.0, with_alpha(theme.glass_rim_top, 1.0 + 0.2 * pill_a)),
                     GradientStop::new(
-                        0.55,
+                        band,
                         lerp(theme.glass_rim_top, theme.glass_rim_bottom, 0.72),
                     ),
                     GradientStop::new(1.0, theme.glass_rim_bottom),
@@ -2468,6 +2488,7 @@ mod tests {
                                     wallpaper: &wallpaper,
                                     rect: [0, 0, 320, 180],
                                     scale: dpi as f32 / 96.0,
+                                    seed: 0.0,
                                 },
                                 "文件 Archives",
                                 Some("中文 details"),

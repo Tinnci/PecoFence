@@ -206,14 +206,18 @@ fn general(view: &SettingsView, context: &mut ViewContext<SettingsComponent>) ->
         section("外观"),
         field_combo(
             "主题风格",
-            &["Fluent", "Liquid Glass"],
-            usize::from(s.theme_style == pecofence_core::ThemeStyle::LiquidGlass),
+            &["Fluent", "Liquid Glass", "纸张"],
+            match s.theme_style {
+                pecofence_core::ThemeStyle::Fluent => 0,
+                pecofence_core::ThemeStyle::LiquidGlass => 1,
+                pecofence_core::ThemeStyle::Paper => 2,
+            },
             enabled,
             context.callback(|index| {
-                Message::Setting(SettingChange::ThemeStyle(if index == Some(1) {
-                    pecofence_core::ThemeStyle::LiquidGlass
-                } else {
-                    pecofence_core::ThemeStyle::Fluent
+                Message::Setting(SettingChange::ThemeStyle(match index {
+                    Some(1) => pecofence_core::ThemeStyle::LiquidGlass,
+                    Some(2) => pecofence_core::ThemeStyle::Paper,
+                    _ => pecofence_core::ThemeStyle::Fluent,
                 }))
             }),
         ),

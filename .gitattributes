@@ -12,6 +12,10 @@
 *.css text eol=lf
 *.js text eol=lf
 *.html text eol=lf
+*.hlsl text eol=lf
+*.fnv text eol=lf
+# Compiled shader bytecode, rebuilt by scripts/compile-shaders.sh.
+*.cso binary
 third_party/winappsdk/app.manifest text eol=lf
 third_party/winappsdk/runtime.txt text eol=lf
 # Keep upstream CRLF and blank lines byte-exact; the runtime tests verify its hash.

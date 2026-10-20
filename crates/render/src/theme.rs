@@ -16,6 +16,8 @@ pub struct Theme {
     pub mode: ThemeMode,
     pub high_contrast: bool,
     pub liquid_glass: bool,
+    /// Matte paper material (`with_paper`): opaque-looking sheet, fixed ink colours.
+    pub paper: bool,
     /// Fence body fill when no wallpaper backdrop is available (SolidBackgroundFillColorBase).
     pub solid_fill: ColorF,
     /// Extra translucent layer drawn over the Mica-like backdrop (LayerFillColorDefault).
@@ -62,8 +64,9 @@ pub struct Theme {
     pub focus_inner: ColorF,
     /// The opaque accent the selection tokens derive from (tray icon, settings page brand).
     pub accent: ColorF,
-    /// Window corner radius in DIPs: Fluent uses 4, Liquid Glass uses a 24 DIP
-    /// compositor clip shared by the lens and shadow.
+    /// Window corner radius in DIPs: Fluent uses Windows 11's 8 DIP window rounding (DWM
+    /// `Round`), high contrast 4 (`RoundSmall`), and Liquid Glass a 24 DIP outline shared by
+    /// the lens, compositor clip and shadow.
     pub corner_radius: f32,
     /// Title bar height in DIPs.
     pub title_height: f32,
@@ -75,6 +78,7 @@ impl Theme {
             mode: ThemeMode::Dark,
             high_contrast: false,
             liquid_glass: false,
+            paper: false,
             solid_fill: ColorF::from_rgba8(0x1B, 0x25, 0x2C, 0xF2),
             layer_fill: ColorF::from_rgba8(0x31, 0x40, 0x48, 0x4D),
             glass_layer_fill: ColorF::from_rgba8(0xFF, 0xFF, 0xFF, 0x09),
@@ -98,7 +102,7 @@ impl Theme {
             focus_outer: ColorF::from_rgba8(0xFF, 0xFF, 0xFF, 0xFF),
             focus_inner: ColorF::from_rgba8(0x00, 0x00, 0x00, 0xB3),
             accent: ColorF::from_rgba8(0x60, 0xCD, 0xFF, 0xFF),
-            corner_radius: 4.0,
+            corner_radius: 8.0,
             title_height: 36.0,
         }
     }
@@ -108,6 +112,7 @@ impl Theme {
             mode: ThemeMode::Light,
             high_contrast: false,
             liquid_glass: false,
+            paper: false,
             solid_fill: ColorF::from_rgba8(0xF4, 0xF7, 0xF8, 0xF2),
             layer_fill: ColorF::from_rgba8(0xFF, 0xFF, 0xFF, 0x80),
             glass_layer_fill: ColorF::from_rgba8(0xFF, 0xFF, 0xFF, 0x40),
@@ -131,7 +136,7 @@ impl Theme {
             focus_outer: ColorF::from_rgba8(0x00, 0x00, 0x00, 0xE4),
             focus_inner: ColorF::from_rgba8(0xFF, 0xFF, 0xFF, 0xB3),
             accent: ColorF::from_rgba8(0x00, 0x5F, 0xB8, 0xFF),
-            corner_radius: 4.0,
+            corner_radius: 8.0,
             title_height: 36.0,
         }
     }
@@ -144,7 +149,8 @@ impl Theme {
     }
 
     pub const fn acrylic_tint(&self) -> crate::backdrop::MicaTint {
-        if self.liquid_glass {
+        // The GPU materials blur on their own: keep their wallpaper sharp and untinted.
+        if self.liquid_glass || self.paper {
             return match self.mode {
                 ThemeMode::Dark => crate::backdrop::MicaTint::LIQUID_DARK,
                 ThemeMode::Light => crate::backdrop::MicaTint::LIQUID_LIGHT,
@@ -231,6 +237,62 @@ impl Theme {
             }
         }
         self
+    }
+
+    /// Matte paper: the widgets' paper palette as a fence material. Ink colours are fixed
+    /// (the sheet is nearly opaque), corners use Windows 11's 8 DIP window rounding, and
+    /// hover feedback is a soft ink wash instead of a glass pill.
+    pub const fn with_paper(mut self) -> Self {
+        if self.high_contrast {
+            return self;
+        }
+        self.liquid_glass = false;
+        self.paper = true;
+        self.corner_radius = 8.0;
+        self.title_fill = ColorF::from_rgba8(0, 0, 0, 0);
+        self.divider = ColorF::from_rgba8(0, 0, 0, 0);
+        match self.mode {
+            ThemeMode::Dark => {
+                self.solid_fill = ColorF::from_rgba8(0x26, 0x24, 0x21, 0xFF);
+                self.stroke = ColorF::from_rgba8(0xED, 0xE6, 0xDA, 0x1C);
+                self.text_primary = ColorF::from_rgba8(0xEF, 0xE9, 0xDE, 0xFF);
+                self.text_secondary = ColorF::from_rgba8(0xEF, 0xE9, 0xDE, 0xB8);
+                self.text_tertiary = ColorF::from_rgba8(0xEF, 0xE9, 0xDE, 0x80);
+                self.control_strong = ColorF::from_rgba8(0xEF, 0xE9, 0xDE, 0x8B);
+                self.subtle_hover = ColorF::from_rgba8(0xEF, 0xE9, 0xDE, 0x12);
+                self.subtle_pressed = ColorF::from_rgba8(0xEF, 0xE9, 0xDE, 0x0B);
+                self.tab_active_fill = ColorF::from_rgba8(0xEF, 0xE9, 0xDE, 0x1E);
+                self.selection_fill_inactive = ColorF::from_rgba8(0xEF, 0xE9, 0xDE, 0x1C);
+                self.selection_stroke_inactive = ColorF::from_rgba8(0xEF, 0xE9, 0xDE, 0x2E);
+            }
+            ThemeMode::Light => {
+                self.solid_fill = ColorF::from_rgba8(0xF6, 0xF1, 0xE7, 0xFF);
+                self.stroke = ColorF::from_rgba8(0x2B, 0x27, 0x22, 0x24);
+                self.text_primary = ColorF::from_rgba8(0x2B, 0x27, 0x22, 0xFF);
+                self.text_secondary = ColorF::from_rgba8(0x68, 0x5F, 0x55, 0xFF);
+                self.text_tertiary = ColorF::from_rgba8(0x9A, 0x8F, 0x80, 0xFF);
+                self.control_strong = ColorF::from_rgba8(0x68, 0x5F, 0x55, 0xC0);
+                self.subtle_hover = ColorF::from_rgba8(0x2B, 0x27, 0x22, 0x0E);
+                self.subtle_pressed = ColorF::from_rgba8(0x2B, 0x27, 0x22, 0x08);
+                self.tab_active_fill = ColorF::from_rgba8(0xFF, 0xFF, 0xFF, 0x8C);
+                self.selection_fill_inactive = ColorF::from_rgba8(0x2B, 0x27, 0x22, 0x14);
+                self.selection_stroke_inactive = ColorF::from_rgba8(0x2B, 0x27, 0x22, 0x24);
+            }
+        }
+        self
+    }
+
+    /// The paper colour the sheet shader is given (0..1, the solid fill without alpha).
+    pub const fn paper_rgb(&self) -> [f32; 3] {
+        [self.solid_fill.r, self.solid_fill.g, self.solid_fill.b]
+    }
+
+    /// How much of the blurred wallpaper reads through the sheet.
+    pub const fn paper_translucency(&self) -> f32 {
+        match self.mode {
+            ThemeMode::Dark => 0.06,
+            ThemeMode::Light => 0.08,
+        }
     }
 
     /// Pick readable text from a sparse luminance sample without recolouring the lens.
@@ -441,6 +503,30 @@ mod tests {
             assert_eq!(glass.corner_radius, 24.0);
             assert_eq!(glass.title_height, base.title_height);
             assert!(!base.liquid_glass);
+        }
+    }
+
+    #[test]
+    fn fluent_uses_windows_11_window_rounding_and_contrast_stays_tight() {
+        for mode in [ThemeMode::Light, ThemeMode::Dark] {
+            assert_eq!(Theme::for_mode(mode).corner_radius, 8.0);
+            let contrast = Theme::for_mode(mode).with_contrast_colors([0; 3], [255; 3]);
+            assert_eq!(contrast.corner_radius, 4.0);
+            assert_eq!(contrast.with_liquid_glass().corner_radius, 4.0);
+            let paper = Theme::for_mode(mode).with_paper();
+            assert!(paper.paper && !paper.liquid_glass);
+            assert_eq!(paper.corner_radius, 8.0);
+            assert_eq!(paper.solid_fill.a, 1.0);
+            assert_eq!(paper.acrylic_tint().blur_sigma_dip, 0.0);
+            assert!(
+                !contrast.with_paper().paper,
+                "high contrast keeps system colours"
+            );
+            // Ink stays readable on the sheet in both modes.
+            let luminance = |c: ColorF| 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+            let ink = luminance(paper.text_primary);
+            let sheet = luminance(paper.solid_fill);
+            assert!((ink - sheet).abs() > 0.6, "{mode:?}: {ink} vs {sheet}");
         }
     }
 

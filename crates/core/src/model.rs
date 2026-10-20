@@ -234,6 +234,8 @@ pub enum ThemeStyle {
     #[default]
     Fluent,
     LiquidGlass,
+    /// Matte paper: procedural fibres and grain, the wallpaper faintly showing through.
+    Paper,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

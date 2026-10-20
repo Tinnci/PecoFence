@@ -10,9 +10,11 @@ pub(super) fn theme_for(
     accent: Option<&systheme::AccentPalette>,
 ) -> Theme {
     let mut theme = Theme::for_mode(mode);
-    if style == pecofence_core::ThemeStyle::LiquidGlass {
-        theme = theme.with_liquid_glass();
-    }
+    theme = match style {
+        pecofence_core::ThemeStyle::Fluent => theme,
+        pecofence_core::ThemeStyle::LiquidGlass => theme.with_liquid_glass(),
+        pecofence_core::ThemeStyle::Paper => theme.with_paper(),
+    };
     if let Some(colors) = systheme::contrast_colors() {
         return theme.with_contrast_colors(colors.window, colors.window_text);
     }
@@ -136,7 +138,7 @@ fn build_backdrops(
             .map(|i| i.dpi)
             .unwrap_or(96)
             .max(96);
-        let mut tint = if theme.liquid_glass {
+        let mut tint = if theme.liquid_glass || theme.paper {
             theme.acrylic_tint()
         } else {
             tuned_tint(theme.acrylic_tint())
@@ -250,10 +252,11 @@ pub(super) fn shadow_style_for(theme: &Theme) -> ShadowStyle {
         ThemeMode::Dark => ShadowStyle::DARK,
         ThemeMode::Light => ShadowStyle::LIGHT,
     };
+    // The casting shape follows the window outline in every style.
+    shadow.radius = theme.corner_radius;
     if theme.liquid_glass {
         shadow.sigma = 12.0;
         shadow.offset_y = 5.0;
-        shadow.radius = theme.corner_radius;
     }
     shadow
 }

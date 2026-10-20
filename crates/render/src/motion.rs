@@ -289,7 +289,19 @@ impl Motion {
 
     /// Clip the entire fence, including scrolling content. Reuse its geometry on resize.
     /// Coordinates are physical composition pixels, not DIPs.
-    pub fn clip_rounded(&self, v: &Visual, width: f32, height: f32, radius: f32) -> Result<()> {
+    ///
+    /// The fence draws its own antialiased outline. A clip exactly on that outline would
+    /// antialias the same pixels a second time, and the two coverages multiply into a thin,
+    /// dim edge along the corner arcs. Callers pass `outset` (1 px) so the clip only cuts
+    /// transparent pixels and the outline keeps one clean edge.
+    pub fn clip_rounded(
+        &self,
+        v: &Visual,
+        width: f32,
+        height: f32,
+        radius: f32,
+        outset: f32,
+    ) -> Result<()> {
         let visual = raw_visual(v)?;
         let existing = visual
             .Clip()
@@ -305,8 +317,12 @@ impl Motion {
                 g
             }
         };
-        let radius = radius.min(width.min(height) * 0.5).max(0.0);
-        geometry.SetSize(Vector2::new(width, height))?;
+        let radius = radius.min(width.min(height) * 0.5).max(0.0) + outset.max(0.0);
+        geometry.SetOffset(Vector2::new(-outset.max(0.0), -outset.max(0.0)))?;
+        geometry.SetSize(Vector2::new(
+            width + 2.0 * outset.max(0.0),
+            height + 2.0 * outset.max(0.0),
+        ))?;
         geometry.SetCornerRadius(Vector2::new(radius, radius))
     }
 

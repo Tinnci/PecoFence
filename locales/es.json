@@ -650,5 +650,6 @@
   "“{0}”无法打开这些文件。": "«{0}» no puede abrir estos archivos.",
   "栅栏行为": "Comportamiento de los grupos",
   "Peek 浮现栅栏": "Peek",
-  "单击托盘图标或按快捷键，把所有栅栏浮到当前窗口之上；再按一次、按 Esc 或点击空白处返回。": "Haz clic en el icono de la bandeja o pulsa el atajo para mostrar todos los grupos sobre la ventana actual. Vuelve a hacer clic o a pulsarlo, pulsa Esc o haz clic en un área vacía para volver."
+  "单击托盘图标或按快捷键，把所有栅栏浮到当前窗口之上；再按一次、按 Esc 或点击空白处返回。": "Haz clic en el icono de la bandeja o pulsa el atajo para mostrar todos los grupos sobre la ventana actual. Vuelve a hacer clic o a pulsarlo, pulsa Esc o haz clic en un área vacía para volver.",
+  "纸张": "Papel"
 }

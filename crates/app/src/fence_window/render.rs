@@ -12,6 +12,27 @@ fn portal_empty_text(health: &pecofence_core::portal::PortalHealth) -> &'static 
 }
 
 #[cfg(test)]
+mod window_shape_tests {
+    use super::corner_preference;
+    use pecofence_platform::dwm::CornerPreference;
+    use pecofence_render::{Theme, ThemeMode};
+
+    #[test]
+    fn dwm_rounding_matches_the_drawn_radius() {
+        for mode in [ThemeMode::Light, ThemeMode::Dark] {
+            let fluent = Theme::for_mode(mode);
+            assert_eq!(corner_preference(&fluent), CornerPreference::Round);
+            let contrast = fluent.with_contrast_colors([0; 3], [255; 3]);
+            assert_eq!(corner_preference(&contrast), CornerPreference::RoundSmall);
+            assert_eq!(
+                corner_preference(&fluent.with_liquid_glass()),
+                CornerPreference::DoNotRound
+            );
+        }
+    }
+}
+
+#[cfg(test)]
 mod portal_presentation_tests {
     use super::portal_empty_text;
     use pecofence_core::portal::{PortalHealth, ReadFailure};
@@ -93,21 +114,37 @@ pub(super) fn apply_system_backdrop(hwnd: HWND, mode: BackdropMode, dark: bool) 
     let _ = dwm::set_immersive_dark_mode(hwnd, dark);
 }
 
-pub(super) fn apply_window_shape(hwnd: HWND, liquid_glass: bool) {
-    let _ = dwm::set_nonclient_rendering(hwnd, !liquid_glass);
-    let _ = dwm::set_corner_preference(
-        hwnd,
-        if liquid_glass {
-            dwm::CornerPreference::DoNotRound
-        } else {
-            dwm::CornerPreference::RoundSmall
-        },
-    );
+/// DWM rounds Fluent windows at the theme's radius (Round = 8 DIP, RoundSmall = 4 DIP), so
+/// the drawn rim and shadow meet its outline. Liquid Glass draws its own 24 DIP outline.
+pub(super) fn apply_window_shape(hwnd: HWND, theme: &Theme) {
+    let _ = dwm::set_nonclient_rendering(hwnd, !theme.liquid_glass);
+    let _ = dwm::set_corner_preference(hwnd, corner_preference(theme));
+}
+
+pub(super) fn corner_preference(theme: &Theme) -> dwm::CornerPreference {
+    if theme.liquid_glass {
+        dwm::CornerPreference::DoNotRound
+    } else if theme.corner_radius >= 8.0 {
+        dwm::CornerPreference::Round
+    } else {
+        dwm::CornerPreference::RoundSmall
+    }
 }
 
 impl FenceViewState {
+    /// Liquid Glass and Paper render on the GPU from the shared wallpaper at the exact
+    /// window rectangle; Fluent draws a CPU acrylic crop.
+    pub(super) fn gpu_material(&self) -> bool {
+        self.theme.liquid_glass || self.theme.paper
+    }
+
+    /// Per-window paper fibre variation, stable across restarts.
+    fn paper_seed(&self) -> f32 {
+        (self.fence_id.as_u128() % 997) as f32
+    }
+
     pub(super) fn material_opacity(&self) -> f32 {
-        if self.behavior.floating.get() && self.theme.liquid_glass {
+        if self.behavior.floating.get() && self.gpu_material() {
             self.opacity.max(1.0)
         } else {
             self.opacity
@@ -319,7 +356,7 @@ impl FenceViewState {
         });
         let wallpaper = self.backdrops.for_mode(self.backdrop_mode()).clone();
         let backdrop = match (self.backdrop_mode(), crop) {
-            (BackdropMode::Acrylic, _) if self.theme.liquid_glass && !wallpaper.is_empty() => {
+            (BackdropMode::Acrylic, _) if self.gpu_material() && !wallpaper.is_empty() => {
                 let (x, y, w, h) = self.backdrop_rect.unwrap_or_else(|| {
                     let r = window::window_rect(self.hwnd);
                     (r.left, r.top, r.right - r.left, r.bottom - r.top)
@@ -329,6 +366,7 @@ impl FenceViewState {
                     wallpaper: &wallpaper,
                     rect: [x, y, w, h],
                     scale: self.scale(),
+                    seed: self.paper_seed(),
                 }
             }
             (BackdropMode::Acrylic, Some(crop)) => Backdrop::Glass(crop, self.scale()),
@@ -483,7 +521,7 @@ impl FenceViewState {
         let mut h = r.bottom - r.top;
         // Liquid Glass's displacement field is rebuilt by the GPU renderer only on
         // size/DPI changes; position changes retain every uploaded image.
-        if !self.theme.liquid_glass
+        if !self.gpu_material()
             && let Some(target) = self.height_target_px()
         {
             h = h.max(target);
@@ -491,7 +529,7 @@ impl FenceViewState {
         if self.backdrop_crop.is_some()
             && let Some((l, t, cw, ch)) = self.backdrop_rect
             && (l, t, cw) == (r.left, r.top, w)
-            && (ch == h || (!self.theme.liquid_glass && self.height_animating() && ch >= h))
+            && (ch == h || (!self.gpu_material() && self.height_animating() && ch >= h))
         {
             // Same rect, or a collapse / shrink whose crop (cut for the taller start) still
             // covers the visible band: the surface clips it.
@@ -506,7 +544,7 @@ impl FenceViewState {
             .iter()
             .find(|b| cx >= b.left && cx < b.left + b.width && cy >= b.top && cy < b.top + b.height)
             .or(set.first());
-        self.backdrop_crop = if self.theme.liquid_glass && !set.is_empty() {
+        self.backdrop_crop = if self.gpu_material() && !set.is_empty() {
             Some(pecofence_render::liquid_glass::foreground_sample(
                 set,
                 [r.left, r.top, w, h],
@@ -516,7 +554,7 @@ impl FenceViewState {
         };
         self.backdrop_rect = Some(want);
         // The uploaded bitmap belongs to the old crop.
-        if !self.theme.liquid_glass {
+        if !self.gpu_material() {
             self.bitmaps.borrow_mut().remove(&self.backdrop_key);
         }
         true
@@ -550,6 +588,8 @@ impl FenceViewState {
     }
 
     /// The clip must follow every height-animation frame even while content stays frozen.
+    /// It sits 1 px outside the plate: the chrome draws the antialiased outline itself, and
+    /// a second antialiasing pass on the same pixels would thin the corner arcs.
     pub(super) fn update_shape_clip(&self, w: i32, h: i32) -> Result<()> {
         if self.theme.liquid_glass {
             self.motion.clip_rounded(
@@ -557,6 +597,7 @@ impl FenceViewState {
                 w as f32,
                 h as f32,
                 self.theme.corner_radius * self.scale(),
+                1.0,
             )?;
         } else {
             self.motion.clear_clip(&self.root)?;
@@ -1088,6 +1129,7 @@ impl FenceViewState {
                 wallpaper: &wallpaper,
                 rect: [r.0, r.1, r.2, r.3],
                 scale,
+                seed: self.paper_seed(),
             })
         } else {
             None

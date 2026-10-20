@@ -87,7 +87,7 @@ impl FenceWindow {
             )
             .create(handler)?;
         let hwnd = window.hwnd();
-        apply_window_shape(hwnd, ctx.theme.borrow().liquid_glass);
+        apply_window_shape(hwnd, &ctx.theme.borrow());
         let _ = dwm::set_border_color_none(hwnd);
         let _ = dwm::set_excluded_from_peek(hwnd, true);
         let _ = dwm::set_transitions_disabled(hwnd, true);
@@ -1412,7 +1412,7 @@ impl FenceWindow {
 
     pub fn set_theme(&self, theme: Theme, backdrops: Rc<BackdropSets>, shadow: ShadowStyle) {
         let hwnd = self.hwnd();
-        apply_window_shape(hwnd, theme.liquid_glass);
+        apply_window_shape(hwnd, &theme);
         let mode = self
             .view
             .borrow()

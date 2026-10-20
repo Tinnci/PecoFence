@@ -20,5 +20,9 @@ bezier_easing = "0.3"
 pecofence-platform = { path = "../platform" }
 tracing = { workspace = true }
 
+[[example]]
+name = "fence_material_preview"
+path = "examples/fence_material_preview.rs"
+
 [lints]
 workspace = true
