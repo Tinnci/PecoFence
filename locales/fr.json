@@ -651,5 +651,20 @@
   "栅栏行为": "Comportement des groupes",
   "Peek 浮现栅栏": "Peek",
   "单击托盘图标或按快捷键，把所有栅栏浮到当前窗口之上；再按一次、按 Esc 或点击空白处返回。": "Cliquez sur l’icône de la zone de notification ou appuyez sur le raccourci pour afficher tous les groupes au-dessus de la fenêtre actuelle. Cliquez ou appuyez à nouveau, appuyez sur Échap ou cliquez sur une zone vide pour revenir.",
-  "纸张": "Papier"
+  "纸张": "Papier",
+  "时钟": "Horloge",
+  "默认布局与小组件": "Disposition et widgets par défaut",
+  "恢复默认排布": "Rétablir la disposition par défaut",
+  "补齐默认组件": "Ajouter les widgets par défaut manquants",
+  "恢复默认外观": "Rétablir l’apparence par défaut",
+  "恢复默认排布前": "Avant le rétablissement de la disposition par défaut",
+  "补齐默认组件前": "Avant l’ajout des widgets par défaut manquants",
+  "恢复默认外观前": "Avant le rétablissement de l’apparence par défaut",
+  "已应用默认模板，原有内容已保留。": "Modèle par défaut appliqué. Le contenu existant a été conservé.",
+  "左侧放置时钟、日历、便笺和待办，右侧整理文件；空间不足时使用标签组。恢复前自动保存快照，不清空内容。": "Placer l’horloge, le calendrier, les notes et les tâches à gauche, et les fichiers à droite. Utiliser des onglets si l’espace manque. Un instantané est enregistré avant les modifications ; le contenu est conservé.",
+  "恢复默认组件的排布；空间不足时合并为标签组。便笺、待办和文件归属保持不变，操作前保存快照。是否继续？": "Rétablir la disposition par défaut, avec des onglets si l’espace manque. Les notes, tâches et affectations de fichiers sont conservées. Un instantané sera enregistré au préalable. Continuer ?",
+  "只补齐缺失的时钟、日历、便笺和待办。已有组件与内容保持不变，操作前保存快照。是否继续？": "Ajouter uniquement les widgets horloge, calendrier, notes et tâches manquants. Les widgets et contenus existants sont conservés. Un instantané sera enregistré au préalable. Continuer ?",
+  "恢复主题、小组件纸张和窗口外观。布局、内容和启动设置保持不变，操作前保存快照。是否继续？": "Rétablir le thème, le papier des widgets et l’apparence des fenêtres. La disposition, le contenu et les paramètres de démarrage sont conservés. Un instantané sera enregistré au préalable. Continuer ?",
+  "恢复：{0}": "Restaurer : {0}",
+  "删除：{0}": "Supprimer : {0}"
 }

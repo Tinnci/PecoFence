@@ -651,5 +651,20 @@
   "栅栏行为": "Bereichsverhalten",
   "Peek 浮现栅栏": "Peek",
   "单击托盘图标或按快捷键，把所有栅栏浮到当前窗口之上；再按一次、按 Esc 或点击空白处返回。": "Klicken Sie auf das Infobereichssymbol oder drücken Sie die Tastenkombination, um alle Bereiche über das aktuelle Fenster zu holen. Erneut klicken bzw. drücken, Esc drücken oder auf eine leere Stelle klicken, um zurückzukehren.",
-  "纸张": "Papier"
+  "纸张": "Papier",
+  "时钟": "Uhr",
+  "默认布局与小组件": "Standardlayout und Widgets",
+  "恢复默认排布": "Standardanordnung wiederherstellen",
+  "补齐默认组件": "Fehlende Standardwidgets hinzufügen",
+  "恢复默认外观": "Standarddarstellung wiederherstellen",
+  "恢复默认排布前": "Vor Wiederherstellung der Standardanordnung",
+  "补齐默认组件前": "Vor Hinzufügen fehlender Standardwidgets",
+  "恢复默认外观前": "Vor Wiederherstellung der Standarddarstellung",
+  "已应用默认模板，原有内容已保留。": "Standardvorlage angewendet. Vorhandene Inhalte wurden beibehalten.",
+  "左侧放置时钟、日历、便笺和待办，右侧整理文件；空间不足时使用标签组。恢复前自动保存快照，不清空内容。": "Uhr, Kalender, Notizen und Aufgaben links, Dateigruppen rechts anordnen. Bei wenig Platz werden Tabs verwendet. Vor Änderungen wird ein Schnappschuss gespeichert; Inhalte bleiben erhalten.",
+  "恢复默认组件的排布；空间不足时合并为标签组。便笺、待办和文件归属保持不变，操作前保存快照。是否继续？": "Standardanordnung wiederherstellen; bei wenig Platz werden Tabs verwendet. Notizen, Aufgaben und Dateizuordnungen bleiben erhalten. Zuerst wird ein Schnappschuss gespeichert. Fortfahren?",
+  "只补齐缺失的时钟、日历、便笺和待办。已有组件与内容保持不变，操作前保存快照。是否继续？": "Nur fehlende Uhr-, Kalender-, Notiz- und Aufgabenwidgets hinzufügen. Vorhandene Widgets und Inhalte bleiben erhalten. Zuerst wird ein Schnappschuss gespeichert. Fortfahren?",
+  "恢复主题、小组件纸张和窗口外观。布局、内容和启动设置保持不变，操作前保存快照。是否继续？": "Design, Widgetpapier und Fensterdarstellung wiederherstellen. Anordnung, Inhalte und Starteinstellungen bleiben erhalten. Zuerst wird ein Schnappschuss gespeichert. Fortfahren?",
+  "恢复：{0}": "Wiederherstellen: {0}",
+  "删除：{0}": "Löschen: {0}"
 }
