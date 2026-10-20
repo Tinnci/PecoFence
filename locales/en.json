@@ -658,5 +658,8 @@
   "只补齐缺失的时钟、日历、便笺和待办。已有组件与内容保持不变，操作前保存快照。是否继续？": "Add only missing clock, calendar, note and task widgets. Existing widgets and content are preserved, and a snapshot is saved first. Continue?",
   "恢复主题、小组件纸张和窗口外观。布局、内容和启动设置保持不变，操作前保存快照。是否继续？": "Restore the theme, widget paper and window appearance. Arrangement, content and startup settings are preserved, and a snapshot is saved first. Continue?",
   "恢复：{0}": "Restore: {0}",
-  "删除：{0}": "Delete: {0}"
+  "删除：{0}": "Delete: {0}",
+  "用 %1 打开": "Open with %1",
+  "用 {0} 打开(&O)": "&Open with {0}",
+  "“{0}”无法打开这些文件。": "“{0}” can’t open these files."
 }

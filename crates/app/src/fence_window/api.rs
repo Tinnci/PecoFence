@@ -218,6 +218,7 @@ impl FenceWindow {
             ole_drag_press: (0, 0),
             marquee: None,
             drop_item: None,
+            drop_launch: false,
             drop_insert: None,
             scroll_drag: None,
             page_repeat: None,

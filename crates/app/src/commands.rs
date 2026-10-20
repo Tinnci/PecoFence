@@ -68,6 +68,13 @@ pub enum Command {
     /// A hover-peeked fence was double-clicked: keep it expanded.
     CommitExpanded(ContainerId),
     LaunchItem(ItemId),
+    /// Files were dropped on a program (or a shortcut to one) and handed to the shell to open
+    /// with it; `opened` is false when the shell declined them or failed to start it.
+    LaunchDrop {
+        item: ItemId,
+        name: String,
+        opened: bool,
+    },
     /// Move `items` into `to` (internal drag or menu).
     MoveItems {
         items: Vec<ItemId>,

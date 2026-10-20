@@ -840,6 +840,47 @@ impl DropTargetHelper {
     }
 }
 
+/// Hands a finished drop to the shell's own drop target for the item at `target` — the code
+/// path Explorer runs when files are dropped on a program or a shortcut to one: the shell's
+/// executable drop handler starts the program with the dropped files as arguments, honouring
+/// the shortcut's arguments, start-in folder, "run as administrator" flag and link tracking.
+///
+/// Only Copy and Link are offered to the shell, so a source can never be told to delete its
+/// files after a Move it did not perform. Returns the effect the shell reports (`None` when it
+/// declined the data). Runs the shell's handler synchronously on this thread, which may pump
+/// messages: the caller must hold no `RefCell` borrow.
+pub fn delegate_drop(
+    target: &Path,
+    data: &IDataObject,
+    key_state: u32,
+    pt: DragPoint,
+    allowed: u32,
+) -> Result<DropEffect> {
+    let offered = allowed & (DROPEFFECT_COPY as u32 | DROPEFFECT_LINK as u32);
+    if offered == 0 {
+        return Ok(DropEffect::None);
+    }
+    let w = to_wide(&target.to_string_lossy());
+    let p = POINTL { x: pt.x, y: pt.y };
+    // The right-button menu, if any, has already been answered by us.
+    let keys = key_state & !MK_RBUTTON;
+    // SAFETY: the string outlives the call; the data object and the bound target are valid
+    // COM interfaces for the duration of these calls; effects are plain in/out u32s.
+    unsafe {
+        let item: IShellItem = SHCreateItemFromParsingName(PCWSTR(w.as_ptr()), None)?;
+        let shell_target: IDropTarget = item.BindToHandler(None, &BHID_SFUIObject)?;
+        let mut effect = offered;
+        shell_target.DragEnter(data, keys, p, &mut effect).ok()?;
+        if effect & offered == 0 {
+            let _ = shell_target.DragLeave();
+            return Ok(DropEffect::None);
+        }
+        let mut effect = offered;
+        shell_target.Drop(data, keys, p, &mut effect).ok()?;
+        Ok(DropEffect::from_raw(effect & offered))
+    }
+}
+
 #[cfg(test)]
 mod effect_tests {
     use super::*;

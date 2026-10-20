@@ -26,6 +26,8 @@ pub(super) struct DropSpot {
     pub(super) tab: Option<usize>,
     /// A folder item (files go into the folder).
     pub(super) folder: Option<usize>,
+    /// A program, or a shortcut to one: dropped files open with it (Explorer's semantics).
+    pub(super) launch: Option<usize>,
     /// Insertion index for reordering an internal drag inside its own 手动 fence.
     pub(super) insert: Option<usize>,
     /// An internal drag over its own fence — its own tab pill, or a content area that cannot
@@ -40,6 +42,7 @@ struct DropCommitIdentity {
     active: ContentId,
     tab: Option<ContentId>,
     folder: Option<(ItemId, PathBuf)>,
+    launch: Option<(ItemId, PathBuf)>,
     insertion: Option<(usize, Vec<ItemId>)>,
     self_drop: bool,
 }
@@ -88,6 +91,95 @@ pub(super) fn folder_effect(folder: Option<&Path>, key_state: u32, allowed: u32)
         dragdrop::resolve(DropEffect::Move, allowed)
     } else {
         effect_for(key_state, allowed)
+    }
+}
+
+/// Extensions the shell's executable drop handler starts with the dropped files as arguments.
+const LAUNCH_EXTENSIONS: [&str; 4] = ["exe", "com", "bat", "cmd"];
+
+/// A file-system path (not a shell namespace or URL target) to a program.
+fn is_program_path(path: &str) -> bool {
+    if path.starts_with("::") || path.contains("://") {
+        return false;
+    }
+    Path::new(path)
+        .extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| LAUNCH_EXTENSIONS.iter().any(|x| e.eq_ignore_ascii_case(x)))
+}
+
+/// Whether files dropped on an item open with it, as on the Windows desktop: a program, or a
+/// `.lnk` whose stored target is one. A shortcut to a folder never qualifies (Explorer would
+/// move the files into its target) and neither does an Internet Shortcut. The target is not
+/// checked for existence: the shell's link tracking may still resolve it, and if not the shell
+/// declines the drop. `shortcut_target` reads the raw stored target (environment variables
+/// unexpanded, which leaves the extension intact).
+pub(super) fn opens_dropped_files(
+    path: &Path,
+    is_folder: bool,
+    shortcut_target: impl FnOnce() -> Option<String>,
+) -> bool {
+    if is_folder || pecofence_platform::shell::is_namespace_path(path) {
+        return false;
+    }
+    if path
+        .extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("lnk"))
+    {
+        return shortcut_target().is_some_and(|t| is_program_path(&t));
+    }
+    is_program_path(&path.to_string_lossy())
+}
+
+thread_local! {
+    /// `opens_dropped_files` by (path, mtime): DragOver runs at mouse rate and a `.lnk` has to
+    /// be loaded to know its target. A rewritten shortcut gets a new mtime.
+    static LAUNCH_TARGETS: RefCell<HashMap<(PathBuf, i64), bool>> = RefCell::new(HashMap::new());
+}
+
+fn cached_opens_dropped_files(it: &ItemView) -> bool {
+    const LIMIT: usize = 512;
+    let key = (it.path.clone(), it.mtime);
+    if let Some(hit) = LAUNCH_TARGETS.with(|c| c.borrow().get(&key).copied()) {
+        return hit;
+    }
+    let value = opens_dropped_files(&it.path, it.is_folder, || {
+        pecofence_platform::shell::shortcut_target(&it.path)
+    });
+    LAUNCH_TARGETS.with(|c| {
+        let mut c = c.borrow_mut();
+        if c.len() >= LIMIT {
+            c.clear();
+        }
+        c.insert(key, value);
+    });
+    value
+}
+
+/// The effect to report over a program target: it opens the files and never takes them, so
+/// Copy (or Link, when that is all the source offers) — never a Move the source would follow
+/// by deleting its originals.
+pub(super) fn launch_effect(allowed: u32) -> DropEffect {
+    dragdrop::resolve(DropEffect::Copy, allowed & !DropEffect::Move.to_raw())
+}
+
+/// The drag-image badge over a program target: "用 <程序> 打开" (Explorer's "Open with").
+pub(super) fn launch_description(
+    effect: DropEffect,
+    name: String,
+) -> (DropImage, &'static str, String) {
+    match effect {
+        DropEffect::None => (DropImage::Invalid, "", String::new()),
+        DropEffect::Link => (
+            DropImage::Link,
+            pecofence_core::i18n::text("用 %1 打开"),
+            name,
+        ),
+        _ => (
+            DropImage::Copy,
+            pecofence_core::i18n::text("用 %1 打开"),
+            name,
+        ),
     }
 }
 
@@ -175,6 +267,29 @@ pub(super) fn right_drag_menu(
         CMD_RDRAG_LINK => DropEffect::Link,
         _ => DropEffect::None,
     }
+}
+
+pub(super) const CMD_RDRAG_OPEN: u32 = 5;
+
+/// The right-button-drag menu over a program: 用 <程序> 打开 (bold default) / 取消. Runs a menu
+/// loop **with no borrow held**; true when the user chose to open.
+pub(super) fn open_with_menu(owner: HWND, pt: DragPoint, name: &str) -> bool {
+    let menu = PopupMenu::new();
+    menu.item(
+        CMD_RDRAG_OPEN,
+        &pecofence_core::i18n::format("用 {0} 打开(&O)", &[name.to_string()]),
+        false,
+        false,
+    );
+    menu.separator();
+    menu.item(
+        CMD_RDRAG_CANCEL,
+        pecofence_core::i18n::text("取消"),
+        false,
+        false,
+    );
+    menu.default_item(CMD_RDRAG_OPEN);
+    menu.show_classic_context(owner, pt.x, pt.y) == CMD_RDRAG_OPEN
 }
 
 /// Drops paths that already live in `folder`, are `folder` itself or contain it (a folder can
@@ -321,6 +436,16 @@ impl FenceDropHandler {
         INTERNAL_DRAG.with(|d| d.borrow().clone())
     }
 
+    /// The target a drop at `pt` would hit now, for re-checking it after callbacks that can
+    /// pump messages; `None` when the window is hidden, retired or busy.
+    fn current_identity(&self, pt: DragPoint, files: bool) -> Option<DropCommitIdentity> {
+        let guard = self.view.try_borrow().ok()?;
+        let v = guard.as_ref()?;
+        (v.plugin_panel.is_none() && v.drop_input_available(pt)).then(|| {
+            v.drop_commit_identity(v.drop_spot_with(pt.x, pt.y, Self::internal().as_ref(), files))
+        })
+    }
+
     /// Resolves the target under `pt`, updates the highlights and returns the effect to report
     /// (plus the badge text for it). `allowed` is the source's effect mask.
     pub(super) fn feedback(&self, pt: Option<DragPoint>, key_state: u32, allowed: u32) -> Feedback {
@@ -357,10 +482,19 @@ impl FenceDropHandler {
             };
         };
         let internal = Self::internal();
+        v.drop_launch = self.kind == DropKind::Files;
         let spot = v.drop_spot_at(pt.x, pt.y, internal.as_ref());
         v.apply_drop_feedback(Some(spot));
         v.update_drag_dwell(self.behavior.hover_peek.get());
         v.update_drag_scroll(pt);
+        if let Some(it) = spot.launch.and_then(|i| v.items.get(i)) {
+            let effect = launch_effect(allowed);
+            return Feedback {
+                effect,
+                description: Some(launch_description(effect, it.name.clone())),
+                hwnd: v.hwnd,
+            };
+        }
         let effect = match self.kind {
             DropKind::None => DropEffect::None,
             // A browser usually offers COPY|LINK: Link when it may, else the best it allows.
@@ -515,18 +649,23 @@ impl DropHandler for FenceDropHandler {
         self.over_stats.report("drop");
         let drop_started = Instant::now();
         let kind = std::mem::replace(&mut self.kind, DropKind::None);
+        let files = kind == DropKind::Files;
         let internal = Self::internal();
         // Resolve the target and clear the highlights under one borrow.
         let resolved = self.view.try_borrow_mut().ok().and_then(|mut g| {
             g.as_mut()
                 .filter(|v| v.drop_input_available(pt) && v.plugin_panel.is_none())
                 .map(|v| {
-                    let spot = v.drop_spot_at(pt.x, pt.y, internal.as_ref());
+                    let spot = v.drop_spot_with(pt.x, pt.y, internal.as_ref(), files);
                     let tab_fence = spot.tab.and_then(|i| v.tabs.get(i)).map(|t| t.id);
                     let folder = spot
                         .folder
                         .and_then(|i| v.items.get(i))
                         .map(|it| it.path.clone());
+                    let launch = spot
+                        .launch
+                        .and_then(|i| v.items.get(i))
+                        .map(|it| (it.id, it.path.clone(), it.name.clone()));
                     v.drag_scroll = None;
                     if v.snap_scroll() {
                         let _ = v.redraw_content();
@@ -539,6 +678,7 @@ impl DropHandler for FenceDropHandler {
                         folder,
                         v.hwnd,
                         v.drop_commit_identity(spot),
+                        launch,
                     )
                 })
         });
@@ -557,9 +697,41 @@ impl DropHandler for FenceDropHandler {
             }
         };
         let expected = resolved.as_ref().map(|value| value.5.clone());
+        if let Some((_, _, _, _, hwnd, _, Some((item, target, name)))) = resolved.clone() {
+            // Files dropped on a program open with it; they are never imported instead (the
+            // gesture asked for "open", not for a move into this fence).
+            let mut effect = launch_effect(allowed);
+            // Starting the program can take a moment: the drag image goes down first.
+            drop_image(effect);
+            if effect != DropEffect::None && right && !open_with_menu(hwnd, pt, &name) {
+                effect = DropEffect::None;
+            }
+            // The menu and the data object can pump messages: open only for the same target.
+            if effect != DropEffect::None && self.current_identity(pt, files) != expected {
+                effect = DropEffect::None;
+            }
+            if effect != DropEffect::None {
+                effect = dragdrop::delegate_drop(&target, data, key_state, pt, allowed)
+                    .unwrap_or_else(|e| {
+                        tracing::warn!(program = %target.display(), error = %e, "drop on program failed");
+                        DropEffect::None
+                    });
+                self.queue.push(Command::LaunchDrop {
+                    item,
+                    name,
+                    opened: effect != DropEffect::None,
+                });
+            }
+            tracing::info!(
+                ?effect,
+                ms = drop_started.elapsed().as_secs_f32() * 1000.0,
+                "drop on program"
+            );
+            return effect;
+        }
         let mut pending = None;
         let effect = 'resolve: {
-            let Some((spot, active, tab_fence, folder, hwnd, _)) = resolved else {
+            let Some((spot, active, tab_fence, folder, hwnd, _, _)) = resolved else {
                 break 'resolve DropEffect::None;
             };
             let to = tab_fence.unwrap_or(active);
@@ -676,13 +848,7 @@ impl DropHandler for FenceDropHandler {
             pending,
             effect,
             expected.as_ref(),
-            || {
-                let guard = self.view.try_borrow().ok()?;
-                let v = guard.as_ref()?;
-                (v.plugin_panel.is_none() && v.drop_input_available(pt)).then(|| {
-                    v.drop_commit_identity(v.drop_spot_at(pt.x, pt.y, Self::internal().as_ref()))
-                })
-            },
+            || self.current_identity(pt, files),
             &self.queue,
         );
         drop_image(effect);
@@ -717,6 +883,10 @@ impl FenceViewState {
             tab: spot.tab.and_then(|i| self.tabs.get(i)).map(|tab| tab.id),
             folder: spot
                 .folder
+                .and_then(|i| self.items.get(i))
+                .map(|item| (item.id, item.path.clone())),
+            launch: spot
+                .launch
                 .and_then(|i| self.items.get(i))
                 .map(|item| (item.id, item.path.clone())),
             insertion: spot
@@ -778,12 +948,36 @@ impl FenceViewState {
         (target && !exclude.contains(&it.id)).then_some(i)
     }
 
+    /// A program or a shortcut to one under a client-pixel point that is not one of `exclude`:
+    /// files dropped on it open with it.
+    pub(super) fn launch_drop_target(
+        &self,
+        x_px: i32,
+        y_px: i32,
+        exclude: &[ItemId],
+    ) -> Option<usize> {
+        let i = self.hit_item(x_px, y_px)?;
+        let it = self.items.get(i)?;
+        (!exclude.contains(&it.id) && cached_opens_dropped_files(it)).then_some(i)
+    }
+
     /// Resolves what a drag at screen point (sx, sy) targets in this window.
     pub(super) fn drop_spot_at(
         &self,
         sx: i32,
         sy: i32,
         internal: Option<&InternalDrag>,
+    ) -> DropSpot {
+        self.drop_spot_with(sx, sy, internal, self.drop_launch)
+    }
+
+    /// `drop_spot_at` with programs as targets or not (`launch`: the drag carries files).
+    pub(super) fn drop_spot_with(
+        &self,
+        sx: i32,
+        sy: i32,
+        internal: Option<&InternalDrag>,
+        launch: bool,
     ) -> DropSpot {
         let r = window::window_rect(self.hwnd);
         let (cx, cy) = (sx - r.left, sy - r.top);
@@ -807,6 +1001,14 @@ impl FenceViewState {
         spot.folder = self.folder_drop_target(cx, cy, exclude);
         if spot.folder.is_some() {
             return spot;
+        }
+        // Items dragged within their own fence keep reordering over a program icon (a
+        // 程序 fence is all shortcuts); from anywhere else the program opens them.
+        if launch && internal.is_none_or(|d| d.from != self.active) {
+            spot.launch = self.launch_drop_target(cx, cy, exclude);
+            if spot.launch.is_some() {
+                return spot;
+            }
         }
         if let Some(d) = internal
             && d.from == self.active
@@ -835,11 +1037,18 @@ impl FenceViewState {
         let (tab, folder, insert, wash) = match spot {
             Some(s) => (
                 s.tab,
-                s.folder,
+                s.folder.or(s.launch),
                 s.insert,
-                s.tab.is_none() && s.folder.is_none() && s.insert.is_none() && !s.self_drop,
+                s.tab.is_none()
+                    && s.folder.is_none()
+                    && s.launch.is_none()
+                    && s.insert.is_none()
+                    && !s.self_drop,
             ),
-            None => (None, None, None, false),
+            None => {
+                self.drop_launch = false;
+                (None, None, None, false)
+            }
         };
         let now = Instant::now();
         let chrome_changed = self.drop_tab != tab;
@@ -1161,6 +1370,71 @@ impl FenceViewState {
 }
 
 #[cfg(test)]
+mod launch_tests {
+    use super::*;
+
+    fn opens(path: &str, is_folder: bool, target: Option<&str>) -> bool {
+        opens_dropped_files(Path::new(path), is_folder, || target.map(str::to_string))
+    }
+
+    #[test]
+    fn programs_and_shortcuts_to_programs_open_dropped_files() {
+        assert!(opens(r"C:\Tools\app.exe", false, None));
+        assert!(opens(r"C:\Tools\RUN.CMD", false, None));
+        assert!(opens(
+            r"C:\Users\u\Desktop\Notepad.lnk",
+            false,
+            Some(r"%windir%\system32\notepad.exe")
+        ));
+        assert!(opens(
+            r"C:\Users\u\Desktop\Tool.LNK",
+            false,
+            Some(r"\\server\share\tool.exe")
+        ));
+    }
+
+    #[test]
+    fn documents_folders_and_namespace_targets_do_not() {
+        assert!(!opens(r"C:\Docs\report.pdf", false, None));
+        assert!(
+            !opens(r"C:\Tools\app.exe", true, None),
+            "a folder named *.exe"
+        );
+        assert!(!opens(
+            r"C:\Desktop\Report.lnk",
+            false,
+            Some(r"C:\Docs\report.docx")
+        ));
+        assert!(!opens(
+            r"C:\Desktop\Projects.lnk",
+            false,
+            Some(r"D:\Projects")
+        ));
+        assert!(!opens(r"C:\Desktop\Broken.lnk", false, None));
+        assert!(!opens(
+            r"C:\Desktop\Shell.lnk",
+            false,
+            Some("::{20D04FE0-3AEA-1069-A2D8-08002B30309D}")
+        ));
+        assert!(!opens(r"C:\Desktop\Site.url", false, None));
+        assert!(!opens(
+            r"C:\Desktop\Odd.lnk",
+            false,
+            Some("https://example.com/a.exe")
+        ));
+    }
+
+    #[test]
+    fn a_program_target_never_reports_move() {
+        let (copy, link) = (DropEffect::Copy.to_raw(), DropEffect::Link.to_raw());
+        assert_eq!(launch_effect(dragdrop::ALL_EFFECTS), DropEffect::Copy);
+        assert_eq!(launch_effect(link), DropEffect::Link);
+        assert_eq!(launch_effect(copy | link), DropEffect::Copy);
+        assert_eq!(launch_effect(DropEffect::Move.to_raw()), DropEffect::None);
+    }
+}
+
+#[cfg(test)]
 mod identity_tests {
     use super::*;
 
@@ -1171,6 +1445,7 @@ mod identity_tests {
             active: ContentId::from_u128(1),
             tab: None,
             folder: Some((ItemId::from_u128(2), PathBuf::from(r"C:\Folder"))),
+            launch: None,
             insertion: None,
             self_drop: false,
         };

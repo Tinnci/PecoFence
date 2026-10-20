@@ -497,22 +497,39 @@ impl App {
             return;
         };
         match shell::shell_execute(&path, None, None) {
-            Ok(()) => {
-                self.state.note_opened(item);
-                // A fence sorted by open count reorders; persist lazily with the next save.
-                let sorted: Vec<FenceId> = self
-                    .state
-                    .fences()
-                    .iter()
-                    .filter(|f| f.view.sort == SortMode::OpenCount && f.contains_item(item))
-                    .map(|f| f.id)
-                    .collect();
-                for f in sorted {
-                    self.refresh_fence(f);
-                }
-                self.schedule_save();
-            }
+            Ok(()) => self.note_launched(item),
             Err(e) => tracing::warn!(path = %path.display(), error = %e, "launch failed"),
+        }
+    }
+
+    /// Counts an open of `item`: a fence sorted by open count reorders; persisted lazily with
+    /// the next save.
+    fn note_launched(&mut self, item: ItemId) {
+        self.state.note_opened(item);
+        let sorted: Vec<FenceId> = self
+            .state
+            .fences()
+            .iter()
+            .filter(|f| f.view.sort == SortMode::OpenCount && f.contains_item(item))
+            .map(|f| f.id)
+            .collect();
+        for f in sorted {
+            self.refresh_fence(f);
+        }
+        self.schedule_save();
+    }
+
+    /// Files dropped on a program were handed to the shell. Opening counts like a double-click;
+    /// a refusal is reported, since nothing else happened to the files.
+    pub(super) fn launch_drop_finished(&mut self, item: ItemId, name: &str, opened: bool) {
+        if opened {
+            self.note_launched(item);
+        } else if let Some(t) = &self.tray {
+            t.show_info(
+                "PecoFence",
+                &pecofence_core::i18n::format("“{0}”无法打开这些文件。", &[name.to_string()]),
+                true,
+            );
         }
     }
 

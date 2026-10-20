@@ -1354,6 +1354,9 @@ impl App {
                 self.apply_auto_height(fence);
             }
             Command::LaunchItem(item) => self.launch(item),
+            Command::LaunchDrop { item, name, opened } => {
+                self.launch_drop_finished(item, &name, opened)
+            }
             Command::MoveItems { items, to } => self.move_items(&items, to),
             Command::ReorderItems {
                 fence,

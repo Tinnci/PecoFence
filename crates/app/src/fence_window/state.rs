@@ -190,8 +190,12 @@ pub struct FenceViewState {
     /// for the image, see `render_drag_image`).
     pub(super) ole_drag_press: (i32, i32),
     pub(super) marquee: Option<MarqueeState>,
-    /// Folder item highlighted as the drop target of a running drag.
+    /// Folder item (or program / shortcut that opens dropped files) highlighted as the drop
+    /// target of a running drag.
     pub(super) drop_item: Option<usize>,
+    /// The drag hovering this window carries files, so programs and shortcuts to programs are
+    /// drop targets that open them (set per DragEnter / DragOver, cleared when it leaves).
+    pub(super) drop_launch: bool,
     /// Insertion caret index while an internal drag reorders this fence.
     pub(super) drop_insert: Option<usize>,
     pub(super) scroll_drag: Option<ScrollDrag>,

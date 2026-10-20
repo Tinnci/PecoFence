@@ -644,5 +644,8 @@
   "纸张亮度": "Brilho do papel",
   "小组件外观": "Aparência dos widgets",
   "适用于便笺、待办、日历、时钟和图表。": "Aplica-se a notas, tarefas, calendários, relógios e diagramas.",
-  "跟随壁纸会根据所在显示器的壁纸亮度自动选择纸色。高对比度模式使用系统颜色。": "O modo automático escolhe o papel conforme o brilho do papel de parede do monitor do widget. O alto contraste usa as cores do sistema."
+  "跟随壁纸会根据所在显示器的壁纸亮度自动选择纸色。高对比度模式使用系统颜色。": "O modo automático escolhe o papel conforme o brilho do papel de parede do monitor do widget. O alto contraste usa as cores do sistema.",
+  "用 %1 打开": "Abrir com %1",
+  "用 {0} 打开(&O)": "&Abrir com {0}",
+  "“{0}”无法打开这些文件。": "“{0}” não consegue abrir estes arquivos."
 }
