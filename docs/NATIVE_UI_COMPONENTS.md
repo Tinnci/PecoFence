@@ -6,7 +6,7 @@ feedback; desktop fences keep their existing composition and activation model.
 
 | Component | PecoFence use |
 | --- | --- |
-| `NavigationView`, `TitleBar` | Adaptive navigation across the five Settings pages, native window controls and title-bar hamburger. |
+| `NavigationView`, `TitleBar` | Adaptive navigation across the six Settings pages, native window controls and title-bar hamburger. |
 | `ToggleSwitch` | Immediate general, window, portal and automatic-routing settings. Labelled themed cards preserve accessible names and read-only state. |
 | `CheckBox` | Multi-select conditions and rule drafts that require an explicit Apply action. |
 | `ComboBox`, `NumberBox`, `Slider` | Choices, opacity and tint strength; aligned field widths and native keyboard input. |
@@ -40,9 +40,35 @@ no-activation desktop behavior, blur-save, Esc cancellation and multiline
 Ctrl+Enter contract. Likewise, the emergency save-failure dialog remains usable
 outside a Settings XAML root. Do not remove these behaviors merely for styling.
 
+## Settings layout
+
+The helpers in [pages.rs](../crates/app/src/settings_host/pages.rs) keep pages consistent:
+
+- **Sections.** `section()` starts a group with a level-2 heading. Group by task
+  (desktop and startup, appearance, fence behavior, Peek), not by control type. Use
+  `note()` for one explanatory line under a heading, and only when the behavior is not
+  obvious from the labels.
+- **Rows.** An immediate setting is a `row()`: the label on the left, the control on
+  the right, in a themed card, like Windows Settings' `SettingsCard`. `switch()`,
+  `field_combo()` and `slider_row()` build on it and give the control the label as its
+  UI Automation name. Controls in rows share one width.
+- **Forms stay forms.** Text entry, rule drafts and other edits that need an explicit
+  Apply keep header-above fields and buttons; do not force them into rows.
+- **Disable moot settings.** When one setting makes another meaningless, show the
+  dependent one disabled, not hidden, so its value and place stay visible: hover
+  expansion while click-to-expand is on, the Peek shortcut and dimming while Peek is
+  off, tint strength without a tint color. The read-only state (`view.writable`)
+  disables everything.
+
+Microsoft's [guidelines for app settings](https://learn.microsoft.com/en-us/windows/apps/design/app-settings/guidelines-for-app-settings)
+are the reference: apply simple changes immediately, group related settings under
+clear headings, keep labels short and ship sensible defaults. They suggest radio
+buttons for short exclusive lists; PecoFence uses combo boxes in rows to keep pages
+compact.
+
 ## Verification
 
-`settings_host::tests` covers all five pages, typed switch commands, read-only
+`settings_host::tests` covers all six pages, typed switch commands, read-only
 state, error/progress feedback and retention of dirty inputs. Its opt-in native
 tour exercises all pages, ten languages, three adaptive navigation widths,
 light/dark windows, dialog cancellation and repeated reopening with the staged
@@ -51,7 +77,7 @@ visual checks and real switch-persistence tests.
 
 Run `scripts/test-settings-navigation.ps1 -Binary <pecofence.exe>` on Windows for
 the pane regression. It uses a separate workspace, invokes the real native
-hamburger, switches all five pages, resizes through compact/minimal/expanded
+hamburger, switches through the first five of the six pages, resizes through compact/minimal/expanded
 widths, and checks the content gutter using DPI-adjusted UI Automation bounds.
 
 Guidance: [toggle switches](https://learn.microsoft.com/en-us/windows/apps/design/controls/toggles),
