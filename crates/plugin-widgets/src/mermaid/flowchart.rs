@@ -428,6 +428,9 @@ const NODE_MAX_W: f32 = 220.0;
 const EDGE_LABEL_MAX_W: f32 = 160.0;
 /// Subgraph border padding per nesting level, and the title strip above members.
 const CLUSTER_PAD: f32 = 8.0;
+/// Least room per link end along a node side, and between turn tracks in a gap.
+const PORT_GAP: f32 = 8.0;
+const TRACK_GAP: f32 = 8.0;
 pub(crate) const CLUSTER_TITLE: f32 = 18.0;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -445,10 +448,60 @@ pub(crate) struct FlowLayout {
     pub(crate) boxes: Vec<Box2>,
     pub(crate) labels: Vec<String>,
     pub(crate) edges: Vec<PlacedEdge>,
-    /// One border per subgraph; `None` when it would enclose outside nodes or labels.
+    /// One border per subgraph; `None` only for a subgraph without nodes.
     pub(crate) clusters: Vec<Option<Box2>>,
     pub(crate) width: f32,
     pub(crate) height: f32,
+}
+
+/// Reorders one gap's turns `(from, to, link, step)` so a link leaving cross `c` turns
+/// before any link arriving near `c`; otherwise the two would run along each other
+/// between their tracks. Kahn's algorithm keeps the given (non-crossing) order where
+/// it can; two links that swap crosses form a cycle and keep it as is.
+fn order_turns(list: &mut Vec<(f32, f32, usize, usize)>) {
+    let n = list.len();
+    let mut after: Vec<Vec<usize>> = vec![Vec::new(); n];
+    let mut waiting = vec![0usize; n];
+    for a in 0..n {
+        for b in 0..n {
+            if a != b && (list[a].0 - list[b].1).abs() < TRACK_GAP {
+                after[a].push(b);
+                waiting[b] += 1;
+            }
+        }
+    }
+    let mut done = vec![false; n];
+    let mut out = Vec::with_capacity(n);
+    while out.len() < n {
+        let next = (0..n)
+            .find(|&i| !done[i] && waiting[i] == 0)
+            .or_else(|| (0..n).find(|&i| !done[i]))
+            .unwrap();
+        done[next] = true;
+        out.push(list[next]);
+        for &b in &after[next] {
+            waiting[b] = waiting[b].saturating_sub(1);
+        }
+    }
+    *list = out;
+}
+
+/// Lexicographic order of (subgraph key, kind, id) paths; see `layout_flowchart`.
+fn by_path(a: &[(f32, u8, usize)], b: &[(f32, u8, usize)]) -> std::cmp::Ordering {
+    a.iter()
+        .zip(b)
+        .map(|(x, y)| x.0.total_cmp(&y.0).then(x.1.cmp(&y.1)).then(x.2.cmp(&y.2)))
+        .find(|o| o.is_ne())
+        .unwrap_or_else(|| a.len().cmp(&b.len()))
+}
+
+/// One container's layout in its own cross coordinates: its child subgraphs' left
+/// edges, its own vertices' left edges, and the cross extent of both.
+struct Packed {
+    groups: Vec<(usize, f32)>,
+    vertices: Vec<(usize, f32)>,
+    lo: f32,
+    hi: f32,
 }
 
 fn node_size(measure: &dyn TextMeasure, label: &str, shape: Shape) -> (f32, f32) {
@@ -627,14 +680,50 @@ pub(crate) fn layout_flowchart(chart: &Flowchart, measure: &dyn TextMeasure) -> 
     };
     reindex(&layers, &mut position);
     let count = layers.len();
-    // Members of one top-level subgraph stay contiguous within each layer.
-    let top = |mut k: usize| {
-        while let Some(parent) = chart.clusters[k].parent {
-            k = parent;
+    // Each vertex's chain of subgraphs, outermost first: a node's own, and for the
+    // virtual vertices of a link the innermost subgraph holding both of its ends, so a
+    // link between subgraphs never routes (or puts its label) inside either of them.
+    let path_of = |cluster: Option<usize>| {
+        let mut path = Vec::new();
+        let mut k = cluster;
+        while let Some(c) = k {
+            path.push(c);
+            k = chart.clusters[c].parent;
         }
-        k
+        path.reverse();
+        path
     };
-    let group = |v: usize| chart.nodes.get(v).and_then(|node| node.cluster).map(top);
+    let mut paths: Vec<Vec<usize>> = (0..n).map(|v| path_of(chart.nodes[v].cluster)).collect();
+    for (edge, chain) in chart.edges.iter().zip(&chains) {
+        let (a, b) = (
+            path_of(chart.nodes[edge.from].cluster),
+            path_of(chart.nodes[edge.to].cluster),
+        );
+        let common: Vec<usize> = a
+            .iter()
+            .zip(&b)
+            .take_while(|(x, y)| x == y)
+            .map(|(x, _)| *x)
+            .collect();
+        for _ in 1..chain.len().saturating_sub(1) {
+            paths.push(common.clone());
+        }
+    }
+    debug_assert_eq!(paths.len(), vertices);
+    let clusters = chart.clusters.len();
+    // A subgraph's order key is the mean position of everything inside it, the same in
+    // every layer: subgraphs keep one order across layers and stay contiguous.
+    let group_keys = |position: &[f32]| {
+        let mut sum = vec![(0f32, 0f32); clusters];
+        for (v, path) in paths.iter().enumerate() {
+            for &k in path {
+                sum[k] = (sum[k].0 + position[v], sum[k].1 + 1.0);
+            }
+        }
+        sum.into_iter()
+            .map(|(s, c)| if c > 0.0 { s / c } else { 0.0 })
+            .collect::<Vec<f32>>()
+    };
     for sweep in 0..6 {
         let order: Vec<usize> = if sweep % 2 == 0 {
             (1..count).collect()
@@ -643,7 +732,9 @@ pub(crate) fn layout_flowchart(chart: &Flowchart, measure: &dyn TextMeasure) -> 
         };
         for l in order {
             let adjacent = if sweep % 2 == 0 { l - 1 } else { l + 1 };
-            let mut keyed: Vec<(f32, usize)> = layers[l]
+            let groups = group_keys(&position);
+            // Sort by (subgraph key, …, own barycenter), outermost subgraph first.
+            let mut keyed: Vec<(Vec<(f32, u8, usize)>, usize)> = layers[l]
                 .iter()
                 .map(|&v| {
                     let near: Vec<f32> = neighbours[v]
@@ -651,36 +742,79 @@ pub(crate) fn layout_flowchart(chart: &Flowchart, measure: &dyn TextMeasure) -> 
                         .filter(|&&w| layer_of[w] == adjacent)
                         .map(|&w| position[w])
                         .collect();
-                    let key = if near.is_empty() {
+                    let own = if near.is_empty() {
                         position[v]
                     } else {
                         near.iter().sum::<f32>() / near.len() as f32
                     };
+                    let key = paths[v]
+                        .iter()
+                        .map(|&k| (groups[k], 0, k))
+                        .chain([(own, 1, v)])
+                        .collect();
                     (key, v)
                 })
                 .collect();
-            let mut mean = vec![(0f32, 0f32); chart.clusters.len()];
-            for &(key, v) in &keyed {
-                if let Some(g) = group(v) {
-                    mean[g] = (mean[g].0 + key, mean[g].1 + 1.0);
-                }
-            }
-            let sort_key = |&(key, v): &(f32, usize)| match group(v) {
-                Some(g) => (mean[g].0 / mean[g].1, g, key),
-                None => (key, usize::MAX, key),
-            };
-            keyed.sort_by(|a, b| {
-                let (a, b) = (sort_key(a), sort_key(b));
-                a.0.total_cmp(&b.0)
-                    .then(a.1.cmp(&b.1))
-                    .then(a.2.total_cmp(&b.2))
-            });
+            keyed.sort_by(|(a, _), (b, _)| by_path(a, b));
             layers[l] = keyed.into_iter().map(|(_, v)| v).collect();
             reindex(&layers, &mut position);
         }
     }
+    // The sweeps' keys drift as positions change, so layers sorted early may order two
+    // subgraphs differently from layers sorted late. One last pass with fixed keys
+    // gives every layer the same subgraph order, keeping each layer's order otherwise.
+    let groups = group_keys(&position);
+    let sort_pos = position.clone();
+    for layer in &mut layers {
+        let mut keyed: Vec<(Vec<(f32, u8, usize)>, usize)> = layer
+            .iter()
+            .map(|&v| {
+                let key = paths[v]
+                    .iter()
+                    .map(|&k| (groups[k], 0, k))
+                    .chain([(sort_pos[v], 1, v)])
+                    .collect();
+                (key, v)
+            })
+            .collect();
+        keyed.sort_by(|(a, _), (b, _)| by_path(a, b));
+        *layer = keyed.into_iter().map(|(_, v)| v).collect();
+    }
+    reindex(&layers, &mut position);
     // Coordinates in a frame where `main` runs along the layers and `cross` across.
     let horizontal = chart.direction.horizontal();
+    let flip = matches!(chart.direction, Direction::RightLeft | Direction::BottomTop);
+    // Capacity: every end on a node side gets at least PORT_GAP of it, so many links
+    // never crowd into one point; the node grows across the flow to make room.
+    let mut side_count = vec![[0usize; 2]; n];
+    for chain in &chains {
+        side_count[chain[0]][1] += 1;
+        if chain.len() > 1 {
+            side_count[chain[chain.len() - 1]][0] += 1;
+        }
+    }
+    for (v, counts) in side_count.iter().enumerate() {
+        let k = counts[0].max(counts[1]);
+        if k < 2 {
+            continue;
+        }
+        let need = (k + 1) as f32 * PORT_GAP;
+        let (w, h) = sizes[v];
+        let (ms, cs) = if horizontal { (w, h) } else { (h, w) };
+        // Mirrors the port margins below: what is left of the side after them.
+        let cs = match chart.nodes[v].shape {
+            Shape::Rect => cs.max(need + 12.0),
+            Shape::Round => cs.max(need + 24.0),
+            Shape::Stadium if !horizontal => cs.max(need + ms),
+            Shape::Diamond => cs.max(need * 2.0),
+            _ => cs.max(need / 0.6),
+        };
+        sizes[v] = match chart.nodes[v].shape {
+            Shape::Circle => (cs.max(ms), cs.max(ms)),
+            _ if horizontal => (w, cs),
+            _ => (cs, h),
+        };
+    }
     let frame = |(w, h): (f32, f32)| if horizontal { (w, h) } else { (h, w) };
     let main_size = |v: usize| frame(sizes[v]).0;
     let cross_size = |v: usize| frame(sizes[v]).1;
@@ -688,73 +822,190 @@ pub(crate) fn layout_flowchart(chart: &Flowchart, measure: &dyn TextMeasure) -> 
         .iter()
         .map(|layer| layer.iter().map(|&v| main_size(v)).fold(0.0, f32::max))
         .collect();
-    let mut start = vec![0f32; count];
-    let mut cursor = 0.0;
-    for l in 0..count {
-        if l > 0 {
-            cursor += if odd[l] || odd[l - 1] {
-                RANK_GAP / 2.0
-            } else {
-                RANK_GAP
-            };
+    // Subgraphs are containers: each holds one cross interval through all its layers
+    // and lays its own members out inside, so a border can never take in outside
+    // content. Packed bottom-up (a subgraph opens after its parent, so children have
+    // larger indices), then placed top-down. Horizontal flows put the title strip on
+    // the cross side; vertical ones above the first layer (see `head`).
+    let mut present = vec![false; clusters];
+    for path in &paths {
+        for &k in path {
+            present[k] = true;
         }
-        start[l] = cursor;
-        cursor += extent[l];
     }
-    let main_total = cursor;
-    // Neighbours from different subgraphs leave room for a border (and its title).
-    let title = if horizontal { CLUSTER_TITLE } else { 0.0 };
-    let gap = |a: usize, b: usize| {
-        if group(a) == group(b) {
-            NODE_GAP
+    let title_cross = if horizontal { CLUSTER_TITLE } else { 0.0 };
+    // The layers each subgraph spans; it keeps its interval in all of them, including
+    // layers where only outside links pass through.
+    let mut span = vec![(usize::MAX, 0usize); clusters];
+    for (v, path) in paths.iter().enumerate() {
+        for &k in path {
+            span[k] = (span[k].0.min(layer_of[v]), span[k].1.max(layer_of[v]));
+        }
+    }
+    // What a vertex is inside `container`: itself (Ok) or one of its child subgraphs.
+    let item = |v: usize, container: Option<usize>| -> Option<Result<usize, usize>> {
+        let path = &paths[v];
+        let depth = match container {
+            None => 0,
+            Some(c) => path.iter().position(|&k| k == c)? + 1,
+        };
+        Some(path.get(depth).map_or(Ok(v), |&g| Err(g)))
+    };
+    let run = |free: &[Result<usize, usize>]| {
+        free.iter()
+            .map(|it| it.map_or(0.0, cross_size))
+            .sum::<f32>()
+            + NODE_GAP * free.len().saturating_sub(1) as f32
+    };
+    let pack = |container: Option<usize>, width: &[f32]| -> Packed {
+        let mut children: Vec<usize> = (0..clusters)
+            .filter(|&k| present[k] && chart.clusters[k].parent == container)
+            .collect();
+        children.sort_by(|&a, &b| groups[a].total_cmp(&groups[b]).then(a.cmp(&b)));
+        // Each layer's items in order; a child spanning the layer without a vertex in
+        // it goes where its key sorts, as the final ordering pass would put it.
+        let key = |it: &Result<usize, usize>| match *it {
+            Ok(v) => (sort_pos[v], 1, v),
+            Err(g) => (groups[g], 0, g),
+        };
+        let sequences: Vec<Vec<Result<usize, usize>>> = layers
+            .iter()
+            .enumerate()
+            .map(|(l, layer)| {
+                let mut seq: Vec<Result<usize, usize>> = Vec::new();
+                for it in layer.iter().filter_map(|&v| item(v, container)) {
+                    if it.is_ok() || seq.last() != Some(&it) {
+                        seq.push(it);
+                    }
+                }
+                for &g in &children {
+                    if (span[g].0..=span[g].1).contains(&l) && !seq.contains(&Err(g)) {
+                        let k = key(&Err(g));
+                        let at = seq
+                            .iter()
+                            .position(|it| by_path(&[key(it)], &[k]).is_gt())
+                            .unwrap_or(seq.len());
+                        seq.insert(at, Err(g));
+                    }
+                }
+                seq
+            })
+            .collect();
+        // Each child sits right of the one before it, with room in every layer for the
+        // free vertices that layer orders between them.
+        let mut left = vec![0f32; clusters];
+        let mut previous: Option<f32> = None;
+        for &g in &children {
+            let mut x = previous.map_or(0.0, |end| end + NODE_GAP);
+            for seq in &sequences {
+                let Some(at) = seq.iter().position(|it| *it == Err(g)) else {
+                    continue;
+                };
+                if let Some(p) = seq[..at].iter().rposition(Result::is_err) {
+                    let (before, free) = (seq[p].unwrap_err(), &seq[p + 1..at]);
+                    let need = if free.is_empty() {
+                        NODE_GAP
+                    } else {
+                        run(free) + 2.0 * NODE_GAP
+                    };
+                    x = x.max(left[before] + width[before] + need);
+                }
+            }
+            left[g] = x;
+            previous = Some(x + width[g]);
+        }
+        let (mut lo, mut hi) = children.iter().fold((f32::MAX, f32::MIN), |(lo, hi), &g| {
+            (lo.min(left[g]), hi.max(left[g] + width[g]))
+        });
+        // Layers without a child centre on the children (or on 0), as a plain graph's do.
+        let reference = if children.is_empty() {
+            0.0
         } else {
-            NODE_GAP + 2.0 * CLUSTER_PAD + title
+            (lo + hi) / 2.0
+        };
+        let mut placed = Vec::new();
+        for seq in &sequences {
+            let (mut i, mut before) = (0, None::<usize>);
+            loop {
+                let end = seq[i..]
+                    .iter()
+                    .position(Result::is_err)
+                    .map_or(seq.len(), |p| i + p);
+                let free = &seq[i..end];
+                if !free.is_empty() {
+                    let w = run(free);
+                    let after = seq.get(end).map(|it| it.unwrap_err());
+                    let mut c = match (before, after) {
+                        (Some(p), Some(g)) => (left[p] + width[p] + left[g] - w) / 2.0,
+                        (None, Some(g)) => left[g] - NODE_GAP - w,
+                        (Some(p), None) => left[p] + width[p] + NODE_GAP,
+                        (None, None) => reference - w / 2.0,
+                    };
+                    for v in free.iter().filter_map(|it| it.ok()) {
+                        placed.push((v, c));
+                        (lo, hi) = (lo.min(c), hi.max(c + cross_size(v)));
+                        c += cross_size(v) + NODE_GAP;
+                    }
+                }
+                if end >= seq.len() {
+                    break;
+                }
+                before = Some(seq[end].unwrap_err());
+                i = end + 1;
+            }
+        }
+        if lo > hi {
+            (lo, hi) = (0.0, 0.0);
+        }
+        Packed {
+            groups: children.iter().map(|&g| (g, left[g])).collect(),
+            vertices: placed,
+            lo,
+            hi,
         }
     };
-    let mut corner = vec![(0f32, 0f32); vertices];
-    for (l, layer) in layers.iter().enumerate() {
-        let total: f32 = layer.iter().map(|&v| cross_size(v)).sum::<f32>()
-            + layer.windows(2).map(|p| gap(p[0], p[1])).sum::<f32>();
-        let mut along = -total / 2.0;
-        for (i, &v) in layer.iter().enumerate() {
-            corner[v] = (start[l] + (extent[l] - main_size(v)) / 2.0, along);
-            along += cross_size(v) + layer.get(i + 1).map_or(0.0, |&w| gap(v, w));
-        }
+    let mut width = vec![0f32; clusters];
+    let mut packs: Vec<Option<Packed>> = (0..clusters).map(|_| None).collect();
+    for k in (0..clusters).rev().filter(|&k| present[k]) {
+        let packed = pack(Some(k), &width);
+        width[k] = packed.hi - packed.lo + 2.0 * CLUSTER_PAD + title_cross;
+        packs[k] = Some(packed);
     }
-    // Back from the frame to x/y, mirrored for right-to-left and bottom-to-top.
-    let flip = matches!(chart.direction, Direction::RightLeft | Direction::BottomTop);
-    let point = |(m, c): (f32, f32)| {
-        let m = if flip { main_total - m } else { m };
-        if horizontal { (m, c) } else { (c, m) }
-    };
-    let place = |v: usize| {
-        let (m, c) = corner[v];
-        let (x, y) = point((if flip { m + main_size(v) } else { m }, c));
-        Box2 {
-            x,
-            y,
-            w: sizes[v].0,
-            h: sizes[v].1,
+    let root = pack(None, &width);
+    let mut cross_at = vec![0f32; vertices];
+    let mut interval = vec![(0f32, 0f32); clusters];
+    let mut adopt = |packed: &Packed, offset: f32, interval: &mut Vec<(f32, f32)>| {
+        for &(v, c) in &packed.vertices {
+            cross_at[v] = c + offset;
+        }
+        for &(g, c) in &packed.groups {
+            interval[g] = (c + offset, c + offset + width[g]);
         }
     };
-    let mut boxes: Vec<Box2> = (0..n).map(place).collect();
-    let centre = |v: usize| corner[v].1 + cross_size(v) / 2.0;
+    adopt(&root, 0.0, &mut interval);
+    for k in (0..clusters).filter(|&k| present[k]) {
+        let packed = packs[k].as_ref().unwrap();
+        let offset = interval[k].0 + CLUSTER_PAD + title_cross - packed.lo;
+        adopt(packed, offset, &mut interval);
+    }
+    let centre_of = |cross_at: &[f32], v: usize| cross_at[v] + cross_size(v) / 2.0;
     // Ports (Pele's aim of separate ends): the ends on one side of a node spread
     // along it, ordered by where their links head so they do not cross. Side 0 faces
-    // the lower layers, side 1 the higher; a self-loop takes the first out-port.
+    // the lower layers, side 1 the higher; a self-loop takes the first out-port. Here
+    // each port is (inset from its side, cross); the side's position follows below.
     let mut ends: Vec<[Vec<(f32, usize)>; 2]> = vec![[Vec::new(), Vec::new()]; n];
     for (i, chain) in chains.iter().enumerate() {
         let (lo, hi, last) = (chain[0], chain[chain.len() - 1], chain.len() - 1);
         if last == 0 {
             ends[lo][1].push((f32::MIN, i));
         } else {
-            ends[lo][1].push((centre(chain[1]), i));
-            ends[hi][0].push((centre(chain[last - 1]), i));
+            ends[lo][1].push((centre_of(&cross_at, chain[1]), i));
+            ends[hi][0].push((centre_of(&cross_at, chain[last - 1]), i));
         }
     }
     let mut port = vec![[(0f32, 0f32); 2]; chains.len()];
     for (v, sides) in ends.iter_mut().enumerate() {
-        let ((m, c0), ms, cs) = (corner[v], main_size(v), cross_size(v));
+        let (c0, ms, cs) = (cross_at[v], main_size(v), cross_size(v));
         let shape = chart.nodes[v].shape;
         let margin = match shape {
             Shape::Rect => 6.0,
@@ -777,10 +1028,184 @@ pub(crate) fn layout_flowchart(chart: &Flowchart, measure: &dyn TextMeasure) -> 
                     Shape::Stadium if horizontal => r - (r * r - d * d).max(0.0).sqrt(),
                     _ => 0.0,
                 };
-                port[i][side] = (if side == 0 { m + inset } else { m + ms - inset }, c);
+                port[i][side] = (inset, c);
             }
         }
     }
+    // Two links that swap places between adjacent layers at nearly the same crosses
+    // would run along each other for a track's length, whichever turns first. Nudge
+    // one of their virtual vertices a track apart; same-layer neighbours sit NODE_GAP
+    // away, so it keeps clear of them, and it stays inside its own subgraph borders
+    // and out of others. Ends on a node use their port's cross.
+    for l in 1..count {
+        let layer_of = &layer_of;
+        let at = |cross_at: &[f32], i: usize, k: usize| {
+            let chain = &chains[i];
+            match k {
+                0 => port[i][1].1,
+                _ if k + 1 == chain.len() => port[i][0].1,
+                _ => centre_of(cross_at, chain[k]),
+            }
+        };
+        let segments: Vec<(usize, usize)> = chains
+            .iter()
+            .enumerate()
+            .flat_map(|(i, chain)| {
+                (0..chain.len().saturating_sub(1))
+                    .filter(move |&k| layer_of[chain[k]] + 1 == l && layer_of[chain[k + 1]] == l)
+                    .map(move |k| (i, k))
+            })
+            .collect();
+        for (a, &(i, k)) in segments.iter().enumerate() {
+            for &(j, m) in &segments[a + 1..] {
+                let near = |p: (usize, usize), q: (usize, usize)| {
+                    (at(&cross_at, p.0, p.1) - at(&cross_at, q.0, q.1)).abs() < TRACK_GAP
+                };
+                if !(near((i, k), (j, m + 1)) && near((j, m), (i, k + 1))) {
+                    continue;
+                }
+                let options = [
+                    ((j, m + 1), (i, k)),
+                    ((i, k + 1), (j, m)),
+                    ((i, k), (j, m + 1)),
+                    ((j, m), (i, k + 1)),
+                ];
+                for ((ci, ck), partner) in options {
+                    let v = chains[ci][ck];
+                    if v < n {
+                        continue;
+                    }
+                    let away = if at(&cross_at, ci, ck) >= at(&cross_at, partner.0, partner.1) {
+                        1.0
+                    } else {
+                        -1.0
+                    };
+                    let fits = |c: f32| {
+                        let clear = layers[layer_of[v]].iter().filter(|&&x| x != v).all(|&x| {
+                            c + cross_size(v) + NODE_GAP / 2.0 <= cross_at[x]
+                                || cross_at[x] + cross_size(x) + NODE_GAP / 2.0 <= c
+                        });
+                        let inside = paths[v].last().is_none_or(|&g| {
+                            interval[g].0 + CLUSTER_PAD / 2.0 + title_cross <= c
+                                && c + cross_size(v) <= interval[g].1 - CLUSTER_PAD / 2.0
+                        });
+                        let outside = (0..clusters)
+                            .filter(|&g| present[g] && !paths[v].contains(&g))
+                            .all(|g| {
+                                !(span[g].0..=span[g].1).contains(&layer_of[v])
+                                    || c + cross_size(v) + CLUSTER_PAD / 2.0 <= interval[g].0
+                                    || interval[g].1 + CLUSTER_PAD / 2.0 <= c
+                            });
+                        clear && inside && outside
+                    };
+                    let moved = [away, -away]
+                        .into_iter()
+                        .map(|d| cross_at[v] + d * TRACK_GAP)
+                        .find(|&c| fits(c));
+                    if let Some(c) = moved {
+                        cross_at[v] = c;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    let centre = |v: usize| cross_at[v] + cross_size(v) / 2.0;
+    // Turns per gap, from the cross positions alone: each needs a track of its own.
+    let mut turn_count = vec![0usize; count];
+    for (i, chain) in chains.iter().enumerate().filter(|(_, c)| c.len() > 1) {
+        let mut before = port[i][1].1;
+        for (k, &v) in chain.iter().enumerate().skip(1) {
+            let c = if k + 1 == chain.len() {
+                port[i][0].1
+            } else {
+                centre(v)
+            };
+            if (before - c).abs() >= 0.5 {
+                turn_count[layer_of[v]] += 1;
+                before = c;
+            }
+        }
+    }
+    // Room a border needs along `main` before its first layer (`head`) and after its
+    // last (`tail`): padding per nesting level, and the title strip on top when the
+    // layers run vertically (after the last layer when they run upwards).
+    let title = if horizontal { 0.0 } else { CLUSTER_TITLE };
+    let (title_head, title_tail) = if flip { (0.0, title) } else { (title, 0.0) };
+    let (mut head, mut tail) = (vec![0f32; clusters], vec![0f32; clusters]);
+    for k in (0..clusters).rev().filter(|&k| present[k]) {
+        head[k] += CLUSTER_PAD + title_head;
+        tail[k] += CLUSTER_PAD + title_tail;
+        if let Some(p) = chart.clusters[k].parent {
+            if span[k].0 == span[p].0 {
+                head[p] = head[p].max(head[k]);
+            }
+            if span[k].1 == span[p].1 {
+                tail[p] = tail[p].max(tail[k]);
+            }
+        }
+    }
+    // Gaps grow to hold their tracks (TRACK_GAP apart) between the borders that end
+    // before them and start after them; tracks use only the free middle (`region`).
+    let mut start = vec![0f32; count];
+    let mut region = vec![(0f32, 0f32); count];
+    let mut cursor = 0.0;
+    for l in 0..count {
+        if l > 0 {
+            let edge_room = |at: &dyn Fn(usize) -> bool, room: &[f32]| {
+                (0..clusters)
+                    .filter(|&k| present[k] && at(k))
+                    .map(|k| room[k])
+                    .fold(0.0, f32::max)
+            };
+            let before = edge_room(&|k| span[k].1 == l - 1, &tail);
+            let after = edge_room(&|k| span[k].0 == l, &head);
+            let base = if odd[l] || odd[l - 1] {
+                RANK_GAP / 2.0
+            } else {
+                RANK_GAP
+            };
+            let tracks = (turn_count[l] + 1) as f32 * TRACK_GAP;
+            let gap = base.max(before + tracks + after);
+            region[l] = (cursor + before, cursor + gap - after);
+            cursor += gap;
+        }
+        start[l] = cursor;
+        cursor += extent[l];
+    }
+    let main_total = cursor;
+    let mut corner = vec![(0f32, 0f32); vertices];
+    for (l, layer) in layers.iter().enumerate() {
+        for &v in layer {
+            corner[v] = (start[l] + (extent[l] - main_size(v)) / 2.0, cross_at[v]);
+        }
+    }
+    for (i, chain) in chains.iter().enumerate() {
+        for (side, v) in [(0, chain[chain.len() - 1]), (1, chain[0])] {
+            let (m, inset) = (corner[v].0, port[i][side].0);
+            port[i][side].0 = if side == 0 {
+                m + inset
+            } else {
+                m + main_size(v) - inset
+            };
+        }
+    }
+    // Back from the frame to x/y, mirrored for right-to-left and bottom-to-top.
+    let point = |(m, c): (f32, f32)| {
+        let m = if flip { main_total - m } else { m };
+        if horizontal { (m, c) } else { (c, m) }
+    };
+    let place = |v: usize| {
+        let (m, c) = corner[v];
+        let (x, y) = point((if flip { m + main_size(v) } else { m }, c));
+        Box2 {
+            x,
+            y,
+            w: sizes[v].0,
+            h: sizes[v].1,
+        }
+    };
+    let mut boxes: Vec<Box2> = (0..n).map(place).collect();
     // Waypoints low end to high end as (entry, exit, cross); a change of cross
     // before layer `l` asks for a track in the gap ahead of it.
     let mut ways: Vec<Vec<(f32, f32, f32)>> = Vec::with_capacity(chains.len());
@@ -818,7 +1243,8 @@ pub(crate) fn layout_flowchart(chart: &Flowchart, measure: &dyn TextMeasure) -> 
             let (a, b) = (key(a), key(b));
             a.0.cmp(&b.0).then(a.1.total_cmp(&b.1)).then(a.2.cmp(&b.2))
         });
-        let (g0, g1) = (start[l - 1] + extent[l - 1], start[l]);
+        order_turns(list);
+        let (g0, g1) = region[l];
         let k = list.len() as f32;
         for (j, &(_, _, i, step)) in list.iter().enumerate() {
             turn_at[i][step] = g0 + (g1 - g0) * (j as f32 + 1.0) / (k + 1.0);
@@ -886,7 +1312,23 @@ pub(crate) fn layout_flowchart(chart: &Flowchart, measure: &dyn TextMeasure) -> 
             }
         })
         .collect();
-    let mut clusters = cluster_boxes(chart, &boxes, &edges);
+    // Borders follow the containers: their cross interval through their layers.
+    let mut clusters: Vec<Option<Box2>> = (0..clusters)
+        .map(|k| {
+            present[k].then(|| {
+                let (a, b) = span[k];
+                let (m0, m1) = (start[a] - head[k], start[b] + extent[b] + tail[k]);
+                let (c0, c1) = interval[k];
+                let ((x0, y0), (x1, y1)) = (point((m0, c0)), point((m1, c1)));
+                Box2 {
+                    x: x0.min(x1),
+                    y: y0.min(y1),
+                    w: (x1 - x0).abs(),
+                    h: (y1 - y0).abs(),
+                }
+            })
+        })
+        .collect();
     // Shift everything to the origin; self-loops may poke past the node boxes.
     let (mut x0, mut y0, mut x1, mut y1) = (f32::MAX, f32::MAX, f32::MIN, f32::MIN);
     let corners = boxes
@@ -919,72 +1361,6 @@ pub(crate) fn layout_flowchart(chart: &Flowchart, measure: &dyn TextMeasure) -> 
         width: x1 - x0,
         height: y1 - y0,
     }
-}
-
-/// Subgraph borders around their members (nested ones inside their parents), with a
-/// title strip on top. A border that would take in an outside node, an outside
-/// link's label or an unrelated border is left out rather than drawn misleadingly.
-fn cluster_boxes(chart: &Flowchart, boxes: &[Box2], edges: &[PlacedEdge]) -> Vec<Option<Box2>> {
-    let count = chart.clusters.len();
-    let within = |mut cluster: Option<usize>, k: usize| {
-        while let Some(c) = cluster {
-            if c == k {
-                return true;
-            }
-            cluster = chart.clusters[c].parent;
-        }
-        false
-    };
-    let mut depth = vec![0f32; count];
-    for k in (0..count).rev() {
-        if let Some(parent) = chart.clusters[k].parent {
-            depth[parent] = depth[parent].max(depth[k] + 1.0);
-        }
-    }
-    let mut out: Vec<Option<Box2>> = Vec::with_capacity(count);
-    for (k, &depth) in depth.iter().enumerate() {
-        let inside = |v: usize| within(chart.nodes[v].cluster, k);
-        let members = (0..boxes.len()).filter(|&v| inside(v)).map(|v| boxes[v]);
-        let Some((x0, y0, x1, y1)) = members.fold(None, |acc: Option<(f32, f32, f32, f32)>, b| {
-            let (x0, y0, x1, y1) = acc.unwrap_or((b.x, b.y, b.x + b.w, b.y + b.h));
-            Some((
-                x0.min(b.x),
-                y0.min(b.y),
-                x1.max(b.x + b.w),
-                y1.max(b.y + b.h),
-            ))
-        }) else {
-            out.push(None);
-            continue;
-        };
-        let (pad, head) = (
-            CLUSTER_PAD * (1.0 + depth),
-            (CLUSTER_PAD + CLUSTER_TITLE) * (1.0 + depth),
-        );
-        let border = Box2 {
-            x: x0 - pad,
-            y: y0 - head,
-            w: x1 - x0 + 2.0 * pad,
-            h: y1 - y0 + pad + head,
-        };
-        let hits = |b: &Box2| {
-            border.x < b.x + b.w
-                && b.x < border.x + border.w
-                && border.y < b.y + b.h
-                && b.y < border.y + border.h
-        };
-        let foreign_node = (0..boxes.len()).any(|v| !inside(v) && hits(&boxes[v]));
-        let foreign_label = chart.edges.iter().zip(edges).any(|(edge, placed)| {
-            !(inside(edge.from) && inside(edge.to))
-                && placed.label.as_ref().is_some_and(|l| hits(&l.1))
-        });
-        let unrelated = out
-            .iter()
-            .enumerate()
-            .any(|(j, other)| !within(Some(k), j) && other.as_ref().is_some_and(hits));
-        out.push((!foreign_node && !foreign_label && !unrelated).then_some(border));
-    }
-    out
 }
 
 /// Drop repeated points and the middle of straight runs.
@@ -1068,6 +1444,23 @@ mod tests {
                 && run(span(p[0].1, p[1].1), span(q[0].1, q[1].1)))
     }
 
+    /// Distance between two parallel axis-aligned segments whose spans overlap by more
+    /// than a touch; `None` when they are not parallel or do not overlap.
+    fn parallel_distance(p: &[(f32, f32)], q: &[(f32, f32)]) -> Option<f32> {
+        let overlap = |a0: f32, a1: f32, b0: f32, b1: f32| {
+            a0.max(a1).min(b0.max(b1)) - a0.min(a1).max(b0.min(b1)) > 0.5
+        };
+        let level = |s: &[(f32, f32)]| (s[0].1 - s[1].1).abs() < 0.01;
+        let upright = |s: &[(f32, f32)]| (s[0].0 - s[1].0).abs() < 0.01;
+        if level(p) && level(q) && overlap(p[0].0, p[1].0, q[0].0, q[1].0) {
+            Some((p[0].1 - q[0].1).abs())
+        } else if upright(p) && upright(q) && overlap(p[0].1, p[1].1, q[0].1, q[1].1) {
+            Some((p[0].0 - q[0].0).abs())
+        } else {
+            None
+        }
+    }
+
     /// Pele-style layout invariants that every flowchart must satisfy.
     fn check_invariants(source: &str) {
         let (chart, layout) = layout(source);
@@ -1149,7 +1542,10 @@ mod tests {
             for (i, a) in ends.iter().enumerate() {
                 for b in &ends[i + 1..] {
                     let apart = (a.0 - b.0).abs().max((a.1 - b.1).abs());
-                    assert!(apart >= 3.0, "{source}: ends {a:?} {b:?} share node {v}");
+                    assert!(
+                        apart >= PORT_GAP - 0.01,
+                        "{source}: ends {a:?} {b:?} crowd node {v}"
+                    );
                 }
             }
         }
@@ -1162,8 +1558,62 @@ mod tests {
                 }
             }
         }
+        // Parallel stretches of different links stay at least half a track apart.
+        for (i, a) in layout.edges.iter().enumerate() {
+            for b in &layout.edges[i + 1..] {
+                for p in a.points.windows(2) {
+                    for q in b.points.windows(2) {
+                        assert!(
+                            parallel_distance(p, q).is_none_or(|d| d >= TRACK_GAP / 2.0 - 0.01),
+                            "{source}: {p:?} runs close to {q:?}"
+                        );
+                    }
+                }
+            }
+        }
         for (k, border) in layout.clusters.iter().enumerate() {
+            let populated = chart.nodes.iter().any(|node| {
+                let mut cluster = node.cluster;
+                while cluster.is_some_and(|c| c != k) {
+                    cluster = chart.clusters[cluster.unwrap()].parent;
+                }
+                cluster.is_some()
+            });
+            assert_eq!(border.is_some(), populated, "{source}: border {k}");
             let Some(border) = border else { continue };
+            for (j, other) in layout.clusters.iter().enumerate() {
+                let Some(other) = other else { continue };
+                let nested = |inner: usize, outer: usize| {
+                    let mut c = Some(inner);
+                    while c.is_some_and(|c| c != outer) {
+                        c = chart.clusters[c.unwrap()].parent;
+                    }
+                    c.is_some()
+                };
+                if j != k && !nested(j, k) && !nested(k, j) {
+                    assert!(
+                        !overlaps(*border, *other),
+                        "{source}: borders {k} and {j} overlap"
+                    );
+                }
+            }
+            for (edge, placed) in chart.edges.iter().zip(&layout.edges) {
+                let inside = |v: usize| {
+                    let mut c = chart.nodes[v].cluster;
+                    while c.is_some_and(|c| c != k) {
+                        c = chart.clusters[c.unwrap()].parent;
+                    }
+                    c.is_some()
+                };
+                if let (Some((_, label)), false) =
+                    (&placed.label, inside(edge.from) && inside(edge.to))
+                {
+                    assert!(
+                        !overlaps(*border, *label),
+                        "{source}: border {k} takes in label {label:?}"
+                    );
+                }
+            }
             for (node, b) in chart.nodes.iter().zip(boxes) {
                 let mut cluster = node.cluster;
                 while cluster.is_some_and(|c| c != k) {
@@ -1205,6 +1655,73 @@ mod tests {
             source += &format!("n{a}[节点 {a}] -->{label} n{b}[Node {b} with a long name]\n");
         }
         source
+    }
+
+    /// `tangle`, with its nodes declared inside a few (sometimes nested) subgraphs.
+    fn clustered_tangle(nodes: usize, edges: usize, seed: u32, direction: &str) -> String {
+        let mut state = seed ^ 0x9e37_79b9;
+        let mut next = |bound: usize| {
+            state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+            (state >> 8) as usize % bound
+        };
+        let mut source = format!("flowchart {direction}\n");
+        let groups = 2 + next(3);
+        for g in 0..groups {
+            source += &format!("subgraph s{g} [组 {g}]\n");
+            for v in (0..nodes).filter(|v| v % (groups + 1) == g) {
+                source += &format!("  n{v}[节点 {v}]\n");
+            }
+            if next(2) == 0 {
+                source += &format!("  subgraph s{g}x [内层 {g}]\n");
+                let v = (g + groups + 1) % nodes;
+                source +=
+                    &format!("    m{g}[Inner {g}] --> m{g}b[Inner {g}b]\n  end\n  n{v} --> m{g}\n");
+            }
+            source += "end\n";
+        }
+        source += &tangle(nodes, edges, seed).replacen("flowchart TD\n", "", 1);
+        source
+    }
+
+    #[test]
+    fn subgraphs_always_keep_their_borders_and_exclude_outsiders() {
+        check_invariants(SUBGRAPHS);
+        for seed in 1..9 {
+            for direction in ["LR", "RL", "TB", "BT"] {
+                check_invariants(&clustered_tangle(18, 28, seed, direction));
+            }
+        }
+        // The case that used to lose its border: an outside node whose rank sits inside
+        // a subgraph's span is placed beside the container, not within it.
+        let source = "flowchart TD\nsubgraph g [组]\n  A --> B --> C\nend\nX --> Y\nA --> Y --> C";
+        check_invariants(source);
+        let (_, layout) = layout(source);
+        assert!(layout.clusters[0].is_some());
+    }
+
+    #[test]
+    fn ports_and_tracks_grow_with_the_number_of_links() {
+        for n in [3, 6, 9, 12, 20] {
+            for direction in ["LR", "RL", "TB", "BT"] {
+                let mut fan = format!("flowchart {direction}\n");
+                for i in 0..n {
+                    fan += &format!(" A --> B{i}\n C{i} --> D\n");
+                }
+                check_invariants(&fan);
+            }
+        }
+        // Nine links out of a plain box: the box grows across the flow to fit them.
+        let source: String = std::iter::once("flowchart LR\n".to_string())
+            .chain((0..9).map(|i| format!(" A --> B{i}\n")))
+            .collect();
+        let (_, layout) = layout(&source);
+        let mut ends: Vec<f32> = layout.edges.iter().map(|e| e.points[0].1).collect();
+        ends.sort_by(f32::total_cmp);
+        assert!(
+            ends.windows(2).all(|w| w[1] - w[0] >= PORT_GAP - 0.01),
+            "{ends:?}"
+        );
+        assert!(layout.boxes[0].h >= 10.0 * PORT_GAP + 12.0);
     }
 
     #[test]
