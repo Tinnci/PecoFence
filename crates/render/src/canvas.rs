@@ -136,15 +136,45 @@ enum CachedFormat {
     Bundled(pecofence_platform::fonts::PrivateTextFormat),
 }
 
+/// A shaped text layout, from either kind of [`CachedFormat`].
+#[cfg(windows)]
+enum CachedLayout {
+    System(windows_canvas::TextLayout),
+    Bundled(pecofence_platform::fonts::PrivateTextLayout),
+}
+
+#[cfg(windows)]
+impl CachedLayout {
+    fn set_max_size(&self, width: f32, height: f32) {
+        match self {
+            Self::System(layout) => layout.set_max_size(width, height),
+            Self::Bundled(layout) => layout.set_max_size(width, height),
+        }
+    }
+}
+
+#[cfg(windows)]
+type FormatKey = (FontRole, u32, u16, pecofence_plugin_api::TextAlign);
+
+/// Style, box width (bits) and text: the width decides the line breaks.
+#[cfg(windows)]
+type LayoutKey = (FormatKey, u32, String);
+
+/// Layouts kept per generation; see [`TextFormatCache::layout`].
+#[cfg(windows)]
+const LAYOUTS_PER_GENERATION: usize = 256;
+
 /// Bounded, per-panel DirectWrite formats shared across full paints and pointer
 /// feedback. TextFormat is device-independent; DPI is not part of the key.
+///
+/// Shaped layouts are cached too, so text that is measured and then drawn, or drawn on
+/// every frame, is shaped once, and drawing uses exactly the line breaks measuring saw.
 #[cfg(windows)]
 #[derive(Default)]
 pub struct TextFormatCache {
-    formats: std::collections::HashMap<
-        (FontRole, u32, u16, pecofence_plugin_api::TextAlign),
-        CachedFormat,
-    >,
+    formats: std::collections::HashMap<FormatKey, CachedFormat>,
+    layouts: std::collections::HashMap<LayoutKey, CachedLayout>,
+    older: std::collections::HashMap<LayoutKey, CachedLayout>,
 }
 
 #[cfg(windows)]
@@ -152,19 +182,52 @@ impl TextFormatCache {
     /// DirectWrite size of `text` wrapped at `width`; needs no drawing session, so the
     /// host's render service measures plugin text with it too.
     pub fn measure(&mut self, text: &TextSpec, width: f32) -> Result<TextMetrics> {
-        let (width, height) = match self.get(text)? {
-            CachedFormat::System(format) => {
-                let layout =
-                    windows_canvas::TextLayout::new(&text.text, format, width.max(1.0), 10_000.0)
-                        .map_err(|error| Error::Backend(error.to_string()))?;
+        let width = width.max(1.0);
+        let layout = self.layout(text, width)?;
+        layout.set_max_size(width, 10_000.0);
+        let (width, height) = match layout {
+            CachedLayout::System(layout) => {
                 let metrics = layout.metrics();
                 (metrics.width_including_trailing_whitespace, metrics.height)
             }
-            CachedFormat::Bundled(format) => format
-                .measure(&text.text, width.max(1.0), 10_000.0)
+            CachedLayout::Bundled(layout) => layout
+                .size()
                 .map_err(|error| Error::Backend(error.to_string()))?,
         };
         Ok(TextMetrics { width, height })
+    }
+
+    /// The shaped layout of `text` in a box `width` wide (its height is the caller's to
+    /// set). Two generations bound memory without an LRU list: a hit in the older one
+    /// moves back to the newer, and when the newer fills up the older is dropped, so text
+    /// drawn every frame stays shaped while one-off strings age out.
+    fn layout(&mut self, text: &TextSpec, width: f32) -> Result<&CachedLayout> {
+        let key = (
+            (text.font, text.size_dip.to_bits(), text.weight, text.align),
+            width.to_bits(),
+            text.text.clone(),
+        );
+        if !self.layouts.contains_key(&key) {
+            let layout = match self.older.remove(&key) {
+                Some(layout) => layout,
+                None => match self.get(text)? {
+                    CachedFormat::System(format) => CachedLayout::System(
+                        windows_canvas::TextLayout::new(&text.text, format, width, 10_000.0)
+                            .map_err(|error| Error::Backend(error.to_string()))?,
+                    ),
+                    CachedFormat::Bundled(format) => CachedLayout::Bundled(
+                        format
+                            .layout(&text.text, width, 10_000.0)
+                            .map_err(|error| Error::Backend(error.to_string()))?,
+                    ),
+                },
+            };
+            if self.layouts.len() >= LAYOUTS_PER_GENERATION {
+                self.older = std::mem::take(&mut self.layouts);
+            }
+            self.layouts.insert(key.clone(), layout);
+        }
+        Ok(&self.layouts[&key])
     }
 
     fn get(&mut self, text: &TextSpec) -> Result<&CachedFormat> {
@@ -305,11 +368,11 @@ impl<'a> Direct2dCanvas<'a> {
         }
     }
 
-    fn text_format(&mut self, text: &TextSpec) -> Result<&CachedFormat> {
+    /// The panel's shared cache when the host lent one, else this canvas's own.
+    fn text_cache(&mut self) -> &mut TextFormatCache {
         self.shared_formats
             .as_deref_mut()
             .unwrap_or(&mut self.formats)
-            .get(text)
     }
 
     fn brush(&self, rgba: [f32; 4]) -> Result<windows_canvas::Brush> {
@@ -419,22 +482,20 @@ impl Canvas for Direct2dCanvas<'_> {
         }
         let brush = self.brush(rgba)?;
         let session = self.session;
-        match self.text_format(text)? {
-            CachedFormat::System(format) => session.draw_text(
-                &text.text,
-                format,
-                &windows_canvas::Rect::from_xywh(rect.x, rect.y, rect.w, rect.h),
+        // The same shaped layout measuring used: same line breaks, no re-shaping. Sized
+        // to the destination like DrawText would, so vertical alignment is unchanged.
+        let layout = self.text_cache().layout(text, rect.w.max(1.0))?;
+        layout.set_max_size(rect.w.max(1.0), rect.h.max(1.0));
+        match layout {
+            CachedLayout::System(layout) => session.draw_text_layout(
+                windows_canvas::Vector2::new(rect.x, rect.y),
+                layout,
                 &brush,
             ),
-            CachedFormat::Bundled(format) => {
+            CachedLayout::Bundled(layout) => {
                 use windows_canvas::Paint;
-                format
-                    .draw(
-                        session.raw(),
-                        &text.text,
-                        [rect.x, rect.y, rect.x + rect.w, rect.y + rect.h],
-                        brush.as_raw_brush(),
-                    )
+                layout
+                    .draw(session.raw(), [rect.x, rect.y], brush.as_raw_brush())
                     .map_err(|error| Error::Backend(error.to_string()))?;
             }
         }
@@ -463,10 +524,7 @@ impl Canvas for Direct2dCanvas<'_> {
     }
 
     fn measure_text(&mut self, text: &TextSpec, width: f32) -> Result<TextMetrics> {
-        self.shared_formats
-            .as_deref_mut()
-            .unwrap_or(&mut self.formats)
-            .measure(text, width)
+        self.text_cache().measure(text, width)
     }
 
     fn push_clip(&mut self, rect: RectDip) -> Result<()> {

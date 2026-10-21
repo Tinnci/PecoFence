@@ -7,6 +7,11 @@ autoexamples = false
 
 [dependencies]
 pecofence-plugin-api = { path = "../plugin-api" }
+# Test-only rasterizer (feature `raster`); never part of the app build.
+tiny-skia = { version = "=0.11.4", default-features = false, features = ["std", "simd", "png-format"], optional = true }
+
+[features]
+raster = ["dep:tiny-skia"]
 
 [target.'cfg(windows)'.dependencies]
 pecofence-core = { path = "../core" }
@@ -23,6 +28,10 @@ tracing = { workspace = true }
 [[example]]
 name = "fence_material_preview"
 path = "examples/fence_material_preview.rs"
+
+[[example]]
+name = "canvas_redraw_bench"
+path = "examples/canvas_redraw_bench.rs"
 
 [lints]
 workspace = true

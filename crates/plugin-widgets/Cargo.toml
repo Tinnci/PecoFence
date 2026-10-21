@@ -12,7 +12,7 @@ serde.workspace = true
 serde_json.workspace = true
 
 [dev-dependencies]
-pecofence-render = { path = "../render" }
+pecofence-render = { path = "../render", features = ["raster"] }
 
 [lints]
 workspace = true

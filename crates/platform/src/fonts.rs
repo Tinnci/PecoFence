@@ -14,6 +14,7 @@ use crate::bindings::{
     DWRITE_TEXT_METRICS, DWRITE_TRIMMING, DWRITE_TRIMMING_GRANULARITY_CHARACTER,
     DWRITE_WORD_WRAPPING_NO_WRAP, DWriteCreateFactory, ID2D1Brush, ID2D1RenderTarget,
     IDWriteFactory5, IDWriteFontCollection, IDWriteFontCollection1, IDWriteTextFormat,
+    IDWriteTextLayout,
 };
 use crate::wide::to_wide;
 use std::os::windows::ffi::OsStrExt;
@@ -327,6 +328,67 @@ impl PrivateTextFormat {
         }
         Ok((metrics.widthIncludingTrailingWhitespace, metrics.height))
     }
+
+    /// Shapes `text` once in a `max_width` × `max_height` box. The layout can be measured
+    /// and then drawn, so both see the same line breaks.
+    pub fn layout(&self, text: &str, max_width: f32, max_height: f32) -> Result<PrivateTextLayout> {
+        let wide: Vec<u16> = text.encode_utf16().collect();
+        // SAFETY: `wide` and the format outlive the call.
+        let raw = unsafe {
+            self.factory
+                .CreateTextLayout(&wide, &self.raw, max_width, max_height)?
+        };
+        Ok(PrivateTextLayout { raw })
+    }
+}
+
+/// A shaped `IDWriteTextLayout` over a [`PrivateTextFormat`].
+#[derive(Clone)]
+pub struct PrivateTextLayout {
+    raw: IDWriteTextLayout,
+}
+
+impl PrivateTextLayout {
+    /// (width including trailing whitespace, height) in DIPs.
+    pub fn size(&self) -> Result<(f32, f32)> {
+        let mut metrics = DWRITE_TEXT_METRICS::default();
+        // SAFETY: `metrics` is a valid out-pointer.
+        unsafe { self.raw.GetMetrics(&mut metrics).ok()? };
+        Ok((metrics.widthIncludingTrailingWhitespace, metrics.height))
+    }
+
+    /// Resizes the layout box. Unchanged width keeps the line breaks; height only moves
+    /// vertically aligned text.
+    pub fn set_max_size(&self, max_width: f32, max_height: f32) {
+        // SAFETY: plain setters on a live layout.
+        unsafe {
+            let _ = self.raw.SetMaxWidth(max_width);
+            let _ = self.raw.SetMaxHeight(max_height);
+        }
+    }
+
+    /// Draws the layout with its box's top-left at `origin` on `target` (any
+    /// `ID2D1RenderTarget`-derived interface) with `brush`. Matches windows-canvas
+    /// `draw_text_layout`.
+    pub fn draw(
+        &self,
+        target: &impl Interface,
+        origin: [f32; 2],
+        brush: &impl Interface,
+    ) -> Result<()> {
+        let target: ID2D1RenderTarget = target.cast()?;
+        let brush: ID2D1Brush = brush.cast()?;
+        // SAFETY: the caller is inside BeginDraw/EndDraw on `target`.
+        unsafe {
+            target.DrawTextLayout(
+                windows_numerics::Vector2::new(origin[0], origin[1]),
+                &self.raw,
+                &brush,
+                D2D1_DRAW_TEXT_OPTIONS_NONE,
+            );
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -414,6 +476,34 @@ mod tests {
             assert!(width.is_finite() && width > 0.0);
             assert!(height.is_finite() && height > 0.0);
         }
+    }
+
+    #[test]
+    fn a_reused_layout_measures_like_a_fresh_one_and_reflows_when_narrowed() {
+        let fonts = PrivateFonts::from_files(&font_files()).unwrap();
+        let format = fonts
+            .text_format(
+                "Noto Sans SC",
+                14.0,
+                400,
+                "zh-cn",
+                PrivateTextAlignment::TopLeading,
+            )
+            .unwrap();
+        let text = "流程图节点 Node label 中文";
+        let layout = format.layout(text, 1000.0, 1000.0).unwrap();
+        assert_eq!(
+            layout.size().unwrap(),
+            format.measure(text, 1000.0, 1000.0).unwrap()
+        );
+        let (one_line_width, one_line) = layout.size().unwrap();
+        layout.set_max_size(one_line_width / 2.0, 1000.0);
+        let (width, wrapped) = layout.size().unwrap();
+        assert!(
+            width <= one_line_width / 2.0 + 0.5,
+            "{width} vs {one_line_width}"
+        );
+        assert!(wrapped > one_line * 1.5, "narrowing wraps onto more lines");
     }
 
     /// Whether DirectWrite's system collection resolves `family` by name.

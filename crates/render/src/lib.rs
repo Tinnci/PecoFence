@@ -5,6 +5,8 @@
 //! fences' data model — it draws what the app tells it to.
 
 pub mod canvas;
+#[cfg(feature = "raster")]
+pub mod raster;
 
 #[cfg(windows)]
 #[allow(

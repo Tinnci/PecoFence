@@ -1186,6 +1186,41 @@ mod tests {
         frame.finish(&mut design::LayoutTracker::default()).unwrap()
     }
 
+    /// Pixel snapshots of whole diagrams (estimated text widths, fixed date), rasterized
+    /// without Windows. Text is drawn as placeholder bars. `UPDATE_SNAPSHOTS=1` accepts a
+    /// deliberate change; review the PNGs under `tests/snapshots/` before committing.
+    #[test]
+    fn diagram_snapshots_hold_their_layout() {
+        let cases = [
+            (
+                "flowchart-labels",
+                "flowchart LR\n A[开始] --> B{检查通过?}\n B -->|是| C[发布 release build]\n B -->|否| D[修复]\n D --> B\n",
+            ),
+            (
+                "flowchart-subgraph",
+                "flowchart TD\n subgraph 构建\n  A[编译] --> B[单元测试]\n end\n B --> C[打包]\n C -.-> D((完成))\n A ==> C\n",
+            ),
+            (
+                "gantt",
+                "gantt\n title 版本计划\n dateFormat YYYY-MM-DD\n section 开发\n SYS 开发 :sys, 2026-10-19, 18d\n VND 开发 :vnd, 2026-10-19, 3w\n section 发布\n 集成 :crit, int, after sys vnd, 11d\n 发布 :milestone, after int, 0d\n",
+            ),
+        ];
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/snapshots");
+        for (name, source) in cases {
+            let scene = scene(source, 560.0, 400.0, true);
+            let mut canvas = pecofence_render::HeadlessCanvas::default();
+            scene.paint(&mut canvas).unwrap();
+            assert!(canvas.is_balanced());
+            let pixmap = pecofence_render::raster::rasterize(
+                canvas.commands(),
+                560,
+                400,
+                [1.0, 1.0, 1.0, 1.0],
+            );
+            pecofence_render::raster::assert_snapshot(&pixmap, &dir.join(format!("{name}.png")));
+        }
+    }
+
     #[test]
     fn template_flowchart_fits_the_stage_with_labelled_nodes_and_arrows() {
         let scene = scene(diagram_template(true), 560.0, 400.0, true);
