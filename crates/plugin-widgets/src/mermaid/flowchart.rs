@@ -721,44 +721,120 @@ pub(crate) fn layout_flowchart(chart: &Flowchart, measure: &dyn TextMeasure) -> 
     };
     let mut boxes: Vec<Box2> = (0..n).map(place).collect();
     let centre = |v: usize| corner[v].1 + cross_size(v) / 2.0;
+    // Ports (Pele's aim of separate ends): the ends on one side of a node spread
+    // along it, ordered by where their links head so they do not cross. Side 0 faces
+    // the lower layers, side 1 the higher; a self-loop takes the first out-port.
+    let mut ends: Vec<[Vec<(f32, usize)>; 2]> = vec![[Vec::new(), Vec::new()]; n];
+    for (i, chain) in chains.iter().enumerate() {
+        let (lo, hi, last) = (chain[0], chain[chain.len() - 1], chain.len() - 1);
+        if last == 0 {
+            ends[lo][1].push((f32::MIN, i));
+        } else {
+            ends[lo][1].push((centre(chain[1]), i));
+            ends[hi][0].push((centre(chain[last - 1]), i));
+        }
+    }
+    let mut port = vec![[(0f32, 0f32); 2]; chains.len()];
+    for (v, sides) in ends.iter_mut().enumerate() {
+        let ((m, c0), ms, cs) = (corner[v], main_size(v), cross_size(v));
+        let shape = chart.nodes[v].shape;
+        let margin = match shape {
+            Shape::Rect => 6.0,
+            Shape::Round => 12.0,
+            Shape::Stadium if !horizontal => ms / 2.0,
+            Shape::Diamond => cs * 0.25,
+            _ => cs * 0.2,
+        };
+        for (side, list) in sides.iter_mut().enumerate() {
+            list.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
+            let k = list.len() as f32;
+            for (j, &(_, i)) in list.iter().enumerate() {
+                let c = c0 + margin + (cs - 2.0 * margin) * (j as f32 + 1.0) / (k + 1.0);
+                // How far the outline sits inside the box at this offset.
+                let d = (c - c0 - cs / 2.0).abs();
+                let r = cs / 2.0;
+                let inset = match shape {
+                    Shape::Diamond => ms * d / cs,
+                    Shape::Circle => r - (r * r - d * d).max(0.0).sqrt(),
+                    Shape::Stadium if horizontal => r - (r * r - d * d).max(0.0).sqrt(),
+                    _ => 0.0,
+                };
+                port[i][side] = (if side == 0 { m + inset } else { m + ms - inset }, c);
+            }
+        }
+    }
+    // Waypoints low end to high end as (entry, exit, cross); a change of cross
+    // before layer `l` asks for a track in the gap ahead of it.
+    let mut ways: Vec<Vec<(f32, f32, f32)>> = Vec::with_capacity(chains.len());
+    let mut turns: Vec<Vec<(f32, f32, usize, usize)>> = vec![Vec::new(); count];
+    for (i, chain) in chains.iter().enumerate() {
+        let mut way: Vec<(f32, f32, f32)> = Vec::with_capacity(chain.len());
+        for (k, &v) in chain.iter().enumerate().filter(|_| chain.len() > 1) {
+            let l = layer_of[v];
+            let (entry, exit, mut c) = if k == 0 {
+                (0.0, port[i][1].0, port[i][1].1)
+            } else if k + 1 == chain.len() {
+                (port[i][0].0, 0.0, port[i][0].1)
+            } else {
+                (start[l], start[l] + extent[l], centre(v))
+            };
+            if let Some(&(_, _, before)) = way.last() {
+                if (before - c).abs() < 0.5 {
+                    c = before;
+                } else {
+                    turns[l].push((before, c, i, k));
+                }
+            }
+            way.push((entry, exit, c));
+        }
+        ways.push(way);
+    }
+    // Every turn in a gap gets its own track. Links heading to larger cross turn
+    // later the further up they start (and the reverse), so tracks do not cross.
+    let mut turn_at: Vec<Vec<f32>> = chains.iter().map(|c| vec![0.0; c.len()]).collect();
+    for (l, list) in turns.iter_mut().enumerate().skip(1) {
+        let key = |&(from, to, i, _): &(f32, f32, usize, usize)| {
+            (to > from, if to > from { -from } else { from }, i)
+        };
+        list.sort_by(|a, b| {
+            let (a, b) = (key(a), key(b));
+            a.0.cmp(&b.0).then(a.1.total_cmp(&b.1)).then(a.2.cmp(&b.2))
+        });
+        let (g0, g1) = (start[l - 1] + extent[l - 1], start[l]);
+        let k = list.len() as f32;
+        for (j, &(_, _, i, step)) in list.iter().enumerate() {
+            turn_at[i][step] = g0 + (g1 - g0) * (j as f32 + 1.0) / (k + 1.0);
+        }
+    }
     let mut edges: Vec<PlacedEdge> = chart
         .edges
         .iter()
         .zip(&chains)
         .zip(edge_labels)
-        .map(|((edge, chain), label)| {
+        .enumerate()
+        .map(|(i, ((edge, chain), label))| {
             let mut points: Vec<(f32, f32)> = Vec::new();
             let v = chain[0];
             let (m, c) = corner[v];
-            let exit = m + main_size(v);
             if edge.from == edge.to {
-                let (mid, middle) = (m + main_size(v) / 2.0, centre(v));
+                let ((px, pc), mid, out) =
+                    (port[i][1], m + main_size(v) / 2.0, m + main_size(v) + 6.0);
                 points = vec![
-                    (exit, middle),
-                    (exit + 14.0, middle),
-                    (exit + 14.0, c - 12.0),
+                    (px, pc),
+                    (out, pc),
+                    (out, c - 12.0),
                     (mid, c - 12.0),
                     (mid, c),
                 ];
             }
-            for (k, &v) in chain.iter().enumerate().filter(|_| edge.from != edge.to) {
-                let l = layer_of[v];
-                let mut c = centre(v);
-                let (entry, exit) = if v < n {
-                    (corner[v].0, corner[v].0 + main_size(v))
-                } else {
-                    (start[l], start[l] + extent[l])
-                };
+            for (k, &(entry, exit, c)) in ways[i].iter().enumerate() {
                 if let Some(&(_, before)) = points.last() {
-                    if (before - c).abs() >= 0.5 {
-                        let turn = (start[l - 1] + extent[l - 1] + start[l]) / 2.0;
-                        points.extend([(turn, before), (turn, c)]);
-                    } else {
-                        c = before;
+                    if before != c {
+                        points.extend([(turn_at[i][k], before), (turn_at[i][k], c)]);
                     }
                     points.push((entry, c));
                 }
-                if k + 1 < chain.len() {
+                if k + 1 < ways[i].len() {
                     points.push((exit, c));
                 }
             }
@@ -962,6 +1038,18 @@ mod tests {
             && inner.y <= segment.y + segment.h
     }
 
+    /// Two axis-aligned segments share a line and overlap by more than a touch.
+    fn collinear(p: &[(f32, f32)], q: &[(f32, f32)]) -> bool {
+        let span = |a: f32, b: f32| (a.min(b), a.max(b));
+        let run = |(a0, a1): (f32, f32), (b0, b1): (f32, f32)| a1.min(b1) - a0.max(b0) > 0.5;
+        let level = |a: f32, b: f32, c: f32, d: f32| {
+            (a - b).abs() < 0.01 && (c - d).abs() < 0.01 && (a - c).abs() < 0.01
+        };
+        (level(p[0].1, p[1].1, q[0].1, q[1].1) && run(span(p[0].0, p[1].0), span(q[0].0, q[1].0)))
+            || (level(p[0].0, p[1].0, q[0].0, q[1].0)
+                && run(span(p[0].1, p[1].1), span(q[0].1, q[1].1)))
+    }
+
     /// Pele-style layout invariants that every flowchart must satisfy.
     fn check_invariants(source: &str) {
         let (chart, layout) = layout(source);
@@ -973,14 +1061,20 @@ mod tests {
         }
         for (edge, placed) in chart.edges.iter().zip(&layout.edges) {
             assert!(placed.points.len() >= 2);
-            for pair in placed.points.windows(2) {
+            let last = placed.points.len() - 2;
+            for (s, pair) in placed.points.windows(2).enumerate() {
                 let (p, q) = (pair[0], pair[1]);
                 assert!(
                     p.0 == q.0 || p.1 == q.1,
                     "{source}: diagonal segment {p:?} {q:?}"
                 );
-                for b in boxes {
-                    assert!(!crosses(p, q, *b), "{source}: {p:?}-{q:?} crosses {b:?}");
+                for (v, b) in boxes.iter().enumerate() {
+                    // Ends on a diamond or circle start inside their own box.
+                    let own = (s == 0 && v == edge.from) || (s == last && v == edge.to);
+                    assert!(
+                        own || !crosses(p, q, *b),
+                        "{source}: {p:?}-{q:?} crosses {b:?}"
+                    );
                 }
             }
             if let (Some((_, label)), false) = (&placed.label, edge.from == edge.to) {
@@ -1019,6 +1113,36 @@ mod tests {
         }
         for b in boxes {
             assert!(b.x + b.w <= layout.width + 0.01 && b.y + b.h <= layout.height + 0.01);
+        }
+        // Pele's aims 1 and 4: distinct ends on a node never share a point, and no
+        // two links run along each other.
+        for v in 0..boxes.len() {
+            let ends: Vec<(f32, f32)> = chart
+                .edges
+                .iter()
+                .zip(&layout.edges)
+                .flat_map(|(e, p)| {
+                    let first = (e.from == v).then(|| p.points[0]);
+                    first
+                        .into_iter()
+                        .chain((e.to == v).then(|| *p.points.last().unwrap()))
+                })
+                .collect();
+            for (i, a) in ends.iter().enumerate() {
+                for b in &ends[i + 1..] {
+                    let apart = (a.0 - b.0).abs().max((a.1 - b.1).abs());
+                    assert!(apart >= 3.0, "{source}: ends {a:?} {b:?} share node {v}");
+                }
+            }
+        }
+        for (i, a) in layout.edges.iter().enumerate() {
+            for b in &layout.edges[i + 1..] {
+                for p in a.points.windows(2) {
+                    for q in b.points.windows(2) {
+                        assert!(!collinear(p, q), "{source}: {p:?} runs along {q:?}");
+                    }
+                }
+            }
         }
         for (k, border) in layout.clusters.iter().enumerate() {
             let Some(border) = border else { continue };
@@ -1074,7 +1198,15 @@ mod tests {
             "flowchart LR\nA & B & C --> D & E\nE --> A".to_string(),
             SUBGRAPHS.to_string(),
             SUBGRAPHS.replacen("flowchart LR", "flowchart TD", 1),
+            DIAMOND.to_string(),
+            MERGE.to_string(),
         ];
+        for base in [DIAMOND, MERGE] {
+            for direction in ["LR", "RL", "TB", "BT"] {
+                let header = base.lines().next().unwrap();
+                sources.push(base.replacen(header, &format!("flowchart {direction}"), 1));
+            }
+        }
         for direction in ["LR", "RL", "TB", "BT"] {
             sources.push(sources[1].replacen("graph TD", &format!("flowchart {direction}"), 1));
         }
@@ -1083,6 +1215,31 @@ mod tests {
         }
         for source in &sources {
             check_invariants(source);
+        }
+    }
+
+    /// Shared ends on a diamond's side, with a back link into the same side.
+    const DIAMOND: &str = "flowchart LR\n A[开始] --> B{检查通过?}\n B -->|是| C[发布 release build]\n B -->|否| D[修复]\n D --> B\n";
+    /// A short and a long link arriving at the same node from one layer apart.
+    const MERGE: &str = "flowchart TD\n subgraph 构建\n  A[编译] --> B[单元测试]\n end\n B --> C[打包]\n C -.-> D((完成))\n A ==> C\n";
+
+    #[test]
+    fn shared_sides_get_separate_ports_and_tracks() {
+        let (_, l) = layout(MERGE);
+        let c = l.boxes[2];
+        // B --> C and A ==> C arrive at separate points on C's top.
+        let [b_in, a_in] = [1, 3].map(|e| *l.edges[e].points.last().unwrap());
+        assert_eq!((b_in.1, a_in.1), (c.y, c.y));
+        assert!((b_in.0 - a_in.0).abs() >= 8.0);
+        let (_, l) = layout(DIAMOND);
+        let b = l.boxes[1];
+        // Three ends on the diamond's right vertex sit on its two slanted edges.
+        let e = &l.edges;
+        let right = [e[1].points[0], e[2].points[0], *e[3].points.last().unwrap()];
+        for p in &right {
+            let along = (p.0 - (b.x + b.w / 2.0)) / (b.w / 2.0)
+                + (p.1 - (b.y + b.h / 2.0)).abs() / (b.h / 2.0);
+            assert!((along - 1.0).abs() < 0.01, "{p:?} off the outline of {b:?}");
         }
     }
 
@@ -1165,8 +1322,10 @@ mod tests {
         assert!((mid(a) - (mid(s) + mid(v)) / 2.0).abs() < 0.5);
         assert!((mid(a) - mid(i)).abs() < 0.5);
         // Links leave the right edge and arrive at the left edge, turning in the gap.
+        // A's two ends spread along its right side, the upper one heading up.
         let first = &layout.edges[0];
-        assert_eq!(first.points[0], (a.x + a.w, mid(a)));
+        assert_eq!(first.points[0].0, a.x + a.w);
+        assert!(first.points[0].1 < mid(a) && mid(a) < layout.edges[1].points[0].1);
         assert_eq!(*first.points.last().unwrap(), (s.x, mid(s)));
         assert!(layout.width > 0.0 && layout.height > 0.0);
     }

@@ -41,6 +41,7 @@ const TODAY: u64 = 13 << 32;
 const CLUSTER: u64 = 14 << 32;
 const CLUSTER_OUTLINE: u64 = 15 << 32;
 const CLUSTER_TITLE: u64 = 16 << 32;
+const SECTION: u64 = 17 << 32;
 
 /// Starting point offered when a new diagram opens its editor.
 pub fn diagram_template(chinese: bool) -> &'static str {
@@ -908,10 +909,45 @@ fn draw_gantt(
             .align(TextAlign::Center),
         );
     }
-    let row_h = (track.h / chart.tasks.len().max(1) as f32).clamp(14.0, 32.0);
-    let bar_h = (row_h - 8.0).max(8.0);
+    // A section title takes its own row above the section's first task.
+    let (mut rows, mut row_of, mut sections) = (0usize, Vec::new(), Vec::new());
     for (i, task) in chart.tasks.iter().enumerate() {
-        let y = track.y + i as f32 * row_h;
+        if let Some(name) = &task.section
+            && (i == 0 || chart.tasks[i - 1].section != task.section)
+        {
+            sections.push((rows, name));
+            rows += 1;
+        }
+        row_of.push(rows);
+        rows += 1;
+    }
+    let row_h = (track.h / rows.max(1) as f32).clamp(14.0, 32.0);
+    let bar_h = (row_h - 8.0).max(8.0);
+    for (k, &(row, name)) in sections.iter().enumerate() {
+        let y = track.y + row as f32 * row_h;
+        if y + row_h > track.y + track.h + 0.5 {
+            break;
+        }
+        frame.add(
+            WidgetElement::text(
+                SECTION | k as u64,
+                RectDip {
+                    x: area.x,
+                    y,
+                    w: area.w,
+                    h: row_h,
+                },
+                name,
+                design::CAPTION,
+                600,
+                ink.secondary(),
+            )
+            .parent(STAGE)
+            .align(TextAlign::MiddleLeading),
+        );
+    }
+    for (i, task) in chart.tasks.iter().enumerate() {
+        let y = track.y + row_of[i] as f32 * row_h;
         if y + row_h > track.y + track.h + 0.5 {
             break;
         }
@@ -1220,6 +1256,17 @@ mod tests {
         assert!(bars[3].style.path.is_some());
         assert!(scene.nodes().iter().any(|n| n.id == TODAY));
         assert!(scene.nodes().iter().any(|n| n.text == "W43"));
+    }
+
+    #[test]
+    fn gantt_sections_get_their_own_title_rows() {
+        let source = "gantt\n title 版本计划\n dateFormat YYYY-MM-DD\n section 开发\n SYS 开发 :sys, 2026-10-19, 18d\n VND 开发 :vnd, 2026-10-19, 3w\n section 发布\n 集成 :crit, int, after sys vnd, 11d\n 发布 :milestone, after int, 0d\n";
+        let scene = scene(source, 560.0, 400.0, true);
+        let rect = |id: u64| scene.nodes().iter().find(|n| n.id == id).unwrap();
+        let (dev, release) = (rect(SECTION), rect(SECTION | 1));
+        assert_eq!((dev.text.as_str(), release.text.as_str()), ("开发", "发布"));
+        let task = |i: u64| rect(TASK_LABEL | i).rect.y;
+        assert!(dev.rect.y < task(0) && task(1) < release.rect.y && release.rect.y < task(2));
     }
 
     #[test]
