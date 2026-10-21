@@ -111,7 +111,7 @@ en el idioma que elijas. Los iconos del escritorio de Windows se restauran al sa
   texto, los diez idiomas a DPI de 100%/150%/200% y un equipo limpio siguen siendo pruebas obligatorias
   de aceptación. Aún hay que inspeccionar el paquete, imports y procesos para confirmar el Runtime
   autocontenido de Windows App SDK y la ausencia de WebView2. Full Windows CI aplica un límite de EXE
-  de 6,5 MiB (6.815.744 bytes); la medición final de la versión está pendiente. No se afirma una mejora
+  de 7 MiB (7.340.032 bytes); la medición final de la versión está pendiente. No se afirma una mejora
   de inicio ni de memoria.
 - Mantén `pecofence-watchdog.exe` junto a la aplicación para recuperar los iconos del escritorio.
 - La configuración se guarda en `%APPDATA%\PecoFence\workspace.v2.json`. Inicia con `--portable`

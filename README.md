@@ -113,7 +113,7 @@ in your selected language. Windows desktop icons are restored when you exit.
   so users do not need a separate Windows App SDK runtime installation. This runtime
   increases deployment and resource cost. The Windows SDK mentioned for source builds
   is a development toolchain, not the packaged runtime. Full Windows CI enforces a
-  6.5 MiB (6,815,744-byte) executable cap; final release measurements are pending.
+  7 MiB (7,340,032-byte) executable cap; final release measurements are pending.
   No startup or memory improvement is claimed.
 - Keep `pecofence-watchdog.exe` beside the app for desktop-icon recovery.
 - Configuration lives in `%APPDATA%\PecoFence\workspace.v2.json`. Launch with
@@ -168,6 +168,8 @@ release-acceptance requirements.
 The optional video project in `extras/` is independent of the app build.
 
 [Release instructions](docs/RELEASING.md) · [Source layout](docs/DEVELOPMENT.md#architecture)
+
+[Local storage, recovery and versioning](docs/STORAGE_AND_VERSIONING.md)
 
 </details>
 

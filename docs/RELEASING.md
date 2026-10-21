@@ -20,8 +20,8 @@ and [scripts/build-and-verify.ps1](../scripts/build-and-verify.ps1):
    runtime beside debug outputs, and compile/run the locked workspace tests.
 5. Compile `pecofence` and `pecofence-watchdog` once with `build-desktop.ps1`,
    stage the same audited runtime beside release outputs, and record source,
-   toolchain, executable and runtime fingerprints. The 6.5 MiB
-   (`6,815,744` byte) gate applies only to `pecofence.exe`; runtime/package costs
+   toolchain, executable and runtime fingerprints. The 7 MiB
+   (`7,340,032` byte) gate applies only to `pecofence.exe`; runtime/package costs
    are bounded and reported separately. Then package those exact binaries/runtime
    with `make-portable.ps1 -SkipBuild`. All Cargo dependency resolution uses `--locked`.
 

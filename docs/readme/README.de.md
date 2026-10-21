@@ -110,7 +110,7 @@ in der gewählten Sprache angelegt. Beim Beenden erscheinen die Windows-Desktops
   noch Release-Abnahme. Tastatur, UI Automation/Narrator, hoher Kontrast, Textskalierung, alle zehn Sprachen
   bei 100%/150%/200% DPI und ein sauberes System sind weiterhin erforderliche Release-Prüfungen. Paket,
   Imports und Prozesse müssen noch auf die selbstenthaltende Windows App SDK Runtime und das Fehlen von
-  WebView2-Komponenten geprüft werden. Full Windows CI setzt ein EXE-Limit von 6,5 MiB (6.815.744 Byte);
+  WebView2-Komponenten geprüft werden. Full Windows CI setzt ein EXE-Limit von 7 MiB (7.340.032 Byte);
   die abschließende Release-Messung steht aus. Verbesserungen bei Startzeit oder Speicher werden nicht behauptet.
 - Lassen Sie `pecofence-watchdog.exe` zur Wiederherstellung der Desktopsymbole neben der App liegen.
 - Die Konfiguration liegt in `%APPDATA%\PecoFence\workspace.v2.json`. Mit `--portable` gestartet,

@@ -51,7 +51,7 @@ to keep `target/` smaller. Debug assertions and overflow checks remain enabled;
 the tradeoffs are less detailed debugger/backtrace information and slower rebuilds.
 Release builds retain line-table symbols for crash diagnosis. Only `pecofence-core`
 uses size optimization for model/protocol code; renderer/platform/application keep
-performance optimization. The `pecofence.exe` gate is 6.5 MiB (6,815,744 bytes);
+performance optimization. The `pecofence.exe` gate is 7 MiB (7,340,032 bytes);
 the 59,158,503-byte SDK runtime inventory is measured and bounded separately.
 
 For a debugger session, temporarily set `CARGO_PROFILE_DEV_DEBUG=2` (or

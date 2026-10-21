@@ -2,7 +2,7 @@
 
 桌面功能按当前源代码描述；「怎么用」一列写的是默认操作方式；凡带「设置」的目标入口在托盘菜单 → 设置… 里，凡带「栅栏菜单」的是在栅栏标题栏或空白处右键，「栅栏选项」是栅栏菜单 → 栅栏选项…（即 设置 → 栅栏 页，逐个栅栏调整外观 / 布局 / 行为），「项目菜单」是在图标上右键。
 
-Settings 已由 Reactor 承载原生 WinUI 3 控件，实现五个任务页和十三种规则条件表单。报告的 headless 测试与包含关闭/重开的合成 WinUI 测试通过；这不等于功能对等或产品验收。类型化 `SettingsView`、`Request`/`Receipt` 与 `DocumentStamp` 继续进入应用 session，沿用现有验证、保存、恢复与冲突用例，不新增通用服务框架。选定发行方式是自包含 Windows App SDK Runtime 2.5.1，不要求普通用户另行安装该运行时；Windows SDK 是开发工具，不是发行时运行库。WebView2 runtime、loader、helper 和 UI payload 不应进入发行包，最终包/import/process 与干净系统检查仍待完成。此方向增加部署和资源成本；Full Windows CI 执行 6.5 MiB（6,815,744 bytes）EXE 上限，最终发行测量待补，不声称启动或内存改善。功能对等、键盘/UI Automation/Narrator、高对比度、文字缩放、全部十种语言在 100%/150%/200% DPI 以及干净系统验收都是必须项，尚未宣称通过。详见[验证门槛](VERIFICATION_GATES.md)。
+Settings 已由 Reactor 承载原生 WinUI 3 控件，实现五个任务页和十三种规则条件表单。报告的 headless 测试与包含关闭/重开的合成 WinUI 测试通过；这不等于功能对等或产品验收。类型化 `SettingsView`、`Request`/`Receipt` 与 `DocumentStamp` 继续进入应用 session，沿用现有验证、保存、恢复与冲突用例，不新增通用服务框架。选定发行方式是自包含 Windows App SDK Runtime 2.5.1，不要求普通用户另行安装该运行时；Windows SDK 是开发工具，不是发行时运行库。WebView2 runtime、loader、helper 和 UI payload 不应进入发行包，最终包/import/process 与干净系统检查仍待完成。此方向增加部署和资源成本；Full Windows CI 执行 7 MiB（7,340,032 bytes）EXE 上限，最终发行测量待补，不声称启动或内存改善。功能对等、键盘/UI Automation/Narrator、高对比度、文字缩放、全部十种语言在 100%/150%/200% DPI 以及干净系统验收都是必须项，尚未宣称通过。详见[验证门槛](VERIFICATION_GATES.md)。
 
 ## 1. 栅栏基础
 

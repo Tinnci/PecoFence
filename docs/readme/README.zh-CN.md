@@ -105,7 +105,7 @@ https://github.com/user-attachments/assets/6320cf28-a791-4720-9659-b4575df021a0
   这不等于功能对等或发行验收。键盘、UI Automation/Narrator、高对比度、文字缩放、全部十种语言在
   100%/150%/200% DPI 以及干净系统检查仍是必需的发行验收工作。发行包、导入和进程检查还需确认
   自包含 Windows App SDK Runtime 及 WebView2 组件缺失。Full Windows CI 的 EXE 上限为
-  6.5 MiB（6,815,744 字节）；最终发行测量待补，不声称启动或内存有所改善。
+  7 MiB（7,340,032 字节）；最终发行测量待补，不声称启动或内存有所改善。
 - 为便于恢复桌面图标，请将 `pecofence-watchdog.exe` 与主程序放在一起。
 - 配置保存在 `%APPDATA%\PecoFence\workspace.v2.json`。
   用 `--portable` 启动，可改为保存在程序旁的 `config` 文件夹。

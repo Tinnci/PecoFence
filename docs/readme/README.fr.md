@@ -112,7 +112,7 @@ et Bureau dans la langue de votre choix. Les icônes du Bureau Windows réappara
   mise à l’échelle du texte, les dix langues à 100 %/150 %/200 % DPI et système vierge restent des
   vérifications obligatoires d’acceptation. Le paquet, les imports et les processus doivent encore être
   inspectés pour confirmer le Runtime Windows App SDK autonome et l’absence de WebView2. Full Windows CI
-  impose une limite EXE de 6,5 Mio (6 815 744 octets) ; la mesure finale de la version est en attente.
+  impose une limite EXE de 7 Mio (7 340 032 octets) ; la mesure finale de la version est en attente.
   Aucune amélioration de démarrage ou de mémoire n’est revendiquée.
 - Conservez `pecofence-watchdog.exe` à côté de l’application pour restaurer les icônes du Bureau.
 - La configuration est enregistrée dans `%APPDATA%\PecoFence\workspace.v2.json`. Lancez l’application

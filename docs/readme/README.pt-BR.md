@@ -112,7 +112,7 @@ a aparecer quando você sai.
   texto, os dez idiomas em DPI de 100%/150%/200% e um sistema limpo continuam obrigatórios para
   aceitação. Ainda é preciso inspecionar o pacote, imports e processos para confirmar o Runtime
   autocontido do Windows App SDK e a ausência do WebView2. Full Windows CI aplica o limite de EXE
-  de 6,5 MiB (6.815.744 bytes); a medição final da versão está pendente. Não se afirma melhoria na
+  de 7 MiB (7.340.032 bytes); a medição final da versão está pendente. Não se afirma melhoria na
   inicialização nem na memória.
 - Mantenha `pecofence-watchdog.exe` ao lado do aplicativo para recuperar os ícones da área de trabalho.
 - A configuração fica em `%APPDATA%\PecoFence\workspace.v2.json`. Inicie com

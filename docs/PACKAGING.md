@@ -52,7 +52,7 @@ manifest declares `windowsAppSdkSelfContained: true` and
 WebView-named files/imports are rejected. Earlier builds used Microsoft's
 `Microsoft.Web.WebView2` loader; its history is in [third_party/README.md](../third_party/README.md).
 
-The 6.5 MiB (`6,815,744` byte) executable gate applies only to
+The 7 MiB (`7,340,032` byte) executable gate applies only to
 `pecofence.exe`; the runtime is measured and inventoried separately. ZIP safety
 bounds are 128 MiB compressed, 160 MiB uncompressed and 512 entries. These are
 defensive parser limits, not a promised download-size or runtime-size budget.

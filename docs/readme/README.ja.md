@@ -107,7 +107,7 @@ https://github.com/user-attachments/assets/6320cf28-a791-4720-9659-b4575df021a0
   キーボード、UI Automation/Narrator、高コントラスト、テキスト拡大、全 10 言語の 100%/150%/200% DPI、
   クリーン環境の確認はリリース受け入れに必須です。最終パッケージ、import、プロセスを調べ、
   自己完結型 Windows App SDK Runtime と WebView2 コンポーネントの有無を確認する必要があります。
-  Full Windows CI の EXE 上限は 6.5 MiB（6,815,744 バイト）です。最終測定は未記録で、起動やメモリの改善は主張しません。
+  Full Windows CI の EXE 上限は 7 MiB（7,340,032 バイト）です。最終測定は未記録で、起動やメモリの改善は主張しません。
 - デスクトップアイコンの復元に使う `pecofence-watchdog.exe` はアプリと同じフォルダーに置いてください。
 - 設定は `%APPDATA%\PecoFence\workspace.v2.json` に保存されます。`--portable` を付けて起動すると、
   実行ファイルの隣にある `config` フォルダーに保存されます。

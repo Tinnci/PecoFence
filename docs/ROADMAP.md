@@ -101,7 +101,7 @@ Reactor 主 STA `Reactor::run_with` 拥有现有 `App`、桌面和托盘；打�
 发行方向为自包含 Windows App SDK Runtime 2.5.1，不携带 WebView2 payload；正确自包含的
 发行包不要求普通用户另行安装 Windows App SDK Runtime。Windows SDK 是开发工具链，不是
 随包运行时。App SDK 会增加部署/资源成本，不声称启动、内存或整体体积优化。Full Windows CI
-执行 **6.5 MiB（6,815,744 bytes）EXE 上限**；最终发布测量待补。运行时精确清单、发行包、
+执行 **7 MiB（7,340,032 bytes）EXE 上限**；最终发布测量待补。运行时精确清单、发行包、
 imports、进程树和干净 Windows 的最终验收仍待完成。分层门槛、旧门槛的调整和当前证据边界见
 [VERIFICATION_GATES.md](VERIFICATION_GATES.md)。
 
@@ -114,7 +114,7 @@ imports、进程树和干净 Windows 的最终验收仍待完成。分层门槛�
 | 键盘、焦点顺序、UI Automation、Narrator | 待真实 Windows 验收；不阻塞每个 commit | Windows 版本、读屏软件、步骤与结果 |
 | 100%/150%/200% DPI、文字缩放、高对比度、长译文布局 | 待真实 Windows 验收；需求保留，不作为每个 commit 的手动 gate | 覆盖全部十种语言，记录裁切/可达性结果 |
 | 自包含 Windows App SDK 2.5.1 且无 WebView2 payload | 本机抽样 tour 加载 18 个 app-local SDK DLL，未观察到浏览器模块/子进程；不是完整清单或包验收 | 核验确切运行时清单、PE imports、动态加载、完整进程树、发行包，并在干净系统实际完成设置任务 |
-| EXE 大小/启动/资源测量 | Full Windows CI 的 EXE 上限为 6.5 MiB（6,815,744 bytes）；最终发布测量待补 | 记录可复现条件与实测；不声称启动、内存或整体性能改善 |
+| EXE 大小/启动/资源测量 | Full Windows CI 的 EXE 上限为 7 MiB（7,340,032 bytes）；最终发布测量待补 | 记录可复现条件与实测；不声称启动、内存或整体性能改善 |
 | 桌面核心可靠性、OS 集成和授权企业/SPM 闭环 | 尚非完成状态 | 按各自需求与可授权实机环境单独验证；不得由 Settings 替换推断完成 |
 
 ## 每次交付需附

@@ -108,7 +108,7 @@ https://github.com/user-attachments/assets/6320cf28-a791-4720-9659-b4575df021a0
   키보드, UI Automation/Narrator, 고대비, 텍스트 확대, 10개 언어 각각의 100%/150%/200% DPI와
   깨끗한 시스템 검증은 릴리스 승인에 필수입니다. 최종 패키지, import, 프로세스를 검사해 자체 포함
   Windows App SDK Runtime과 WebView2 구성 요소를 확인해야 합니다. Full Windows CI의 EXE 상한은
-  6.5 MiB(6,815,744바이트)입니다. 최종 측정은 미기록이며 시작/메모리 개선을 주장하지 않습니다.
+  7 MiB(7,340,032바이트)입니다. 최종 측정은 미기록이며 시작/메모리 개선을 주장하지 않습니다.
 - 바탕 화면 아이콘 복구를 위해 `pecofence-watchdog.exe`를 앱 옆에 두세요.
 - 설정은 `%APPDATA%\PecoFence\workspace.v2.json`에 저장됩니다. `--portable`로 실행하면
   실행 파일 옆의 `config` 폴더에 보관합니다.

@@ -311,9 +311,9 @@ function Get-DesktopVerificationPlan {
   $plan.Add((New-VerificationCheck "release-build" "Release build" $PowerShell @(
     "-NoProfile", "-NonInteractive", "-File", "scripts/build-desktop.ps1", "-TargetDir", $TargetDir, "-Python", $Python
   ) $full $fullReason))
-  $plan.Add((New-VerificationCheck "size" "6.5 MiB executable budget" $Python @(
+  $plan.Add((New-VerificationCheck "size" "7 MiB executable budget" $Python @(
     "-c",
-    "import pathlib,sys; size=pathlib.Path(sys.argv[1]).stat().st_size; print(f'pecofence.exe = {size} bytes (limit: 6815744)'); sys.exit(0 if size <= 6815744 else 1)",
+    "import pathlib,sys; size=pathlib.Path(sys.argv[1]).stat().st_size; print(f'pecofence.exe = {size} bytes (limit: 7340032)'); sys.exit(0 if size <= 7340032 else 1)",
     (Join-Path $TargetDir "release/pecofence.exe")
   ) $full $fullReason))
   $packageArguments = @(

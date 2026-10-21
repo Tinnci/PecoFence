@@ -64,7 +64,7 @@ require users to install Windows App SDK Runtime separately. The Windows SDK is 
 development/build toolchain and is distinct from the packaged Windows App SDK
 runtime. Do not add an unconditional `windows-reactor-setup` WebView2 helper.
 The App SDK runtime increases deployment and resource cost. Full Windows CI enforces
-the agreed 6.5 MiB (6,815,744-byte) executable cap. Final release size and any
+the agreed 7 MiB (7,340,032-byte) executable cap. Final release size and any
 startup/resource measurements remain pending; do not claim improvements from the
 native implementation or the EXE cap.
 
@@ -94,6 +94,6 @@ There is no planned production WebView fallback or parallel Settings ownership
 model. Core persistence, conflict, recovery and exit use cases remain
 application-owned. Record actual startup, idle-resource, shipped-dependency and
 executable-size measurements before making performance/size claims. The selected
-6.5 MiB CI ceiling does not establish a performance claim. Manual desktop
+7 MiB CI ceiling does not establish a performance claim. Manual desktop
 acceptance remains required before release, as defined in
 [VERIFICATION_GATES.md](../VERIFICATION_GATES.md).
