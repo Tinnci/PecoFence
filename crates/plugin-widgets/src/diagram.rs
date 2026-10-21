@@ -2,7 +2,8 @@
 //! result is crisp at any DPI, themed by the paper palette and readable by UIA.
 
 use super::mermaid::{
-    self, Diagram, Estimate, FlowLayout, Flowchart, Gantt, ParseError, Shape, Stroke, TextMeasure,
+    self, Diagnostic, Diagram, Estimate, FlowLayout, Flowchart, Gantt, Parsed, Severity, Shape,
+    Stroke, TextMeasure,
 };
 use super::{
     CAPSULE_HEIGHT, CONTENT_TOP, Colors, Control, FRAME_INTERVAL, HEADER_META, HeaderAction, Tween,
@@ -29,6 +30,7 @@ const EMPTY_HINT: u64 = 10;
 const BANNER: u64 = 11;
 const BANNER_TITLE: u64 = 12;
 const BANNER_LINE: u64 = 13;
+const CLIPPED: u64 = 14;
 const EDGE: u64 = 5 << 32;
 const ARROW: u64 = 6 << 32;
 const EDGE_LABEL: u64 = 7 << 32;
@@ -79,16 +81,22 @@ fn parse_config(config: &PanelConfig) -> Result<DiagramConfig> {
     Ok(value)
 }
 
+/// Smallest drawing scale, so 13 DIP node labels never draw below 9 DIP. Text and
+/// geometry share one scale; a chart that would need less is clipped instead.
+const MIN_SCALE: f32 = 0.7;
+
 /// Parsed source plus the layout derived from it, rebuilt only when the text changes.
 struct Rendered {
     diagram: Diagram,
+    /// Non-fatal problems from the same parse, shown in the banner over the drawing.
+    warnings: Vec<Diagnostic>,
     flow: Option<FlowLayout>,
     /// Gantt: width of the longest task name at the caption size.
     names_width: f32,
 }
 
 impl Rendered {
-    fn new(diagram: Diagram, measure: &dyn TextMeasure) -> Self {
+    fn new(Parsed { diagram, warnings }: Parsed, measure: &dyn TextMeasure) -> Self {
         let (flow, names_width) = match &diagram {
             Diagram::Flowchart(chart) => (Some(mermaid::layout_flowchart(chart, measure)), 0.0),
             Diagram::Gantt(chart) => (
@@ -102,6 +110,7 @@ impl Rendered {
         };
         Self {
             diagram,
+            warnings,
             flow,
             names_width,
         }
@@ -174,7 +183,7 @@ struct DiagramWidget {
     config: DiagramConfig,
     /// Last source that parsed; kept on screen (dimmed) while the text has an error.
     rendered: Option<Rendered>,
-    error: Option<ParseError>,
+    error: Option<Diagnostic>,
     undo: Option<String>,
     appear: Option<Tween>,
     chinese: bool,
@@ -231,9 +240,9 @@ impl DiagramWidget {
             self.error = None;
         } else {
             match mermaid::parse(&config.source) {
-                Ok(diagram) => {
+                Ok(parsed) => {
                     let measure = HostMeasure(&self.ctx.render);
-                    self.rendered = Some(Rendered::new(diagram, &measure));
+                    self.rendered = Some(Rendered::new(parsed, &measure));
                     self.error = None;
                 }
                 Err(error) => self.error = Some(error),
@@ -371,7 +380,7 @@ impl PanelInstance for DiagramWidget {
 struct View<'a> {
     empty: bool,
     rendered: Option<&'a Rendered>,
-    error: Option<&'a ParseError>,
+    error: Option<&'a Diagnostic>,
     can_undo: bool,
     /// Entrance progress after an edit, 0..=1.
     appear: f32,
@@ -507,18 +516,38 @@ fn build_diagram(frame: &mut WidgetFrame, view: &View, colors: Colors, chinese: 
             view.appear
         },
     );
-    let area = RectDip {
+    let mut area = RectDip {
         x: stage.x + 12.0,
         y: stage.y + 12.0,
         w: (stage.w - 24.0).max(0.0),
         h: (stage.h - 24.0).max(0.0),
     };
+    // Warnings take a banner below the drawing rather than covering it.
+    let warnings: Vec<&Diagnostic> = view
+        .rendered
+        .filter(|_| view.error.is_none())
+        .map(|r| {
+            r.warnings
+                .iter()
+                .filter(|w| w.severity == Severity::Warning)
+                .collect()
+        })
+        .unwrap_or_default();
+    let warning_banner = (!warnings.is_empty()).then(|| {
+        let h = BANNER_H.min(area.h);
+        area.h = (area.h - h - 8.0).max(0.0);
+        RectDip {
+            y: area.y + area.h + 8.0,
+            h,
+            ..area
+        }
+    });
     match view.rendered {
         Some(Rendered {
             diagram: Diagram::Flowchart(chart),
             flow: Some(layout),
             ..
-        }) => draw_flowchart(frame, chart, layout, area, ink),
+        }) => draw_flowchart(frame, chart, layout, area, ink, chinese),
         Some(Rendered {
             diagram: Diagram::Gantt(chart),
             names_width,
@@ -570,7 +599,15 @@ fn build_diagram(frame: &mut WidgetFrame, view: &View, colors: Colors, chinese: 
         _ => {}
     }
     if let Some(error) = view.error {
-        draw_error(frame, error, area, colors, chinese, view.rendered.is_some());
+        let h = BANNER_H.min(area.h);
+        let y = if view.rendered.is_some() {
+            area.y + area.h - h
+        } else {
+            area.y + (area.h - h) / 2.0
+        };
+        draw_banner(frame, error, 0, RectDip { y, h, ..area }, colors, chinese);
+    } else if let (Some(banner), Some(first)) = (warning_banner, warnings.first()) {
+        draw_banner(frame, first, warnings.len() - 1, banner, colors, chinese);
     }
 }
 
@@ -670,14 +707,18 @@ fn draw_flowchart(
     layout: &FlowLayout,
     area: RectDip,
     ink: Ink,
+    chinese: bool,
 ) {
     if chart.nodes.is_empty() || area.w <= 0.0 || area.h <= 0.0 {
         return;
     }
-    // Fit to the stage, never enlarging; very large charts clip at 40%.
+    // Fit to the stage, never enlarging and never below MIN_SCALE. Text and geometry
+    // use the same scale, so every label keeps the proportion of its reserved box.
     let scale = (area.w / layout.width.max(1.0))
         .min(area.h / layout.height.max(1.0))
-        .clamp(0.4, 1.0);
+        .clamp(MIN_SCALE, 1.0);
+    let clipped = layout.width * scale > area.w + 0.5 || layout.height * scale > area.h + 0.5;
+    let clip = Clip(area);
     let ox = area.x + ((area.w - layout.width * scale) / 2.0).max(0.0);
     let oy = area.y + ((area.h - layout.height * scale) / 2.0).max(0.0);
     let map = |(x, y): (f32, f32)| (ox + x * scale, oy + y * scale);
@@ -695,42 +736,45 @@ fn draw_flowchart(
     for (k, (cluster, border)) in chart.clusters.iter().zip(&layout.clusters).enumerate() {
         let Some(border) = border else { continue };
         let r = rect(*border);
+        let Some(visible) = clip.rect(r) else {
+            continue;
+        };
         let id = k as u64;
         frame.add(
-            WidgetElement::text(CLUSTER | id, r, "", design::CAPTION, 400, ink.text())
+            WidgetElement::text(CLUSTER | id, visible, "", design::CAPTION, 400, ink.text())
                 .parent(STAGE)
                 .role("group")
                 .fill(Some(ink.surface(paper::CARD)), 8.0 * scale),
         );
         frame.set_last_accessible_name(cluster.title.clone());
-        frame.add(
-            WidgetElement::line(
-                CLUSTER_OUTLINE | id,
-                r,
-                rounded_outline(r, 8.0 * scale),
-                true,
-                ink.line(paper::SHAPE_LINE, colors.secondary),
-                1.0,
-            )
-            .parent(STAGE),
+        clip.stroke(
+            frame,
+            CLUSTER_OUTLINE | id,
+            rounded_outline(r, 8.0 * scale),
+            true,
+            ink.line(paper::SHAPE_LINE, colors.secondary),
+            1.0,
         );
-        frame.add(
-            WidgetElement::text(
-                CLUSTER_TITLE | id,
-                RectDip {
-                    x: r.x + 8.0 * scale,
-                    y: r.y + 2.0 * scale,
-                    w: (r.w - 16.0 * scale).max(0.0),
-                    h: mermaid::CLUSTER_TITLE * scale,
-                },
-                &cluster.title,
-                (design::CAPTION * scale).max(9.0),
-                600,
-                ink.secondary(),
-            )
-            .parent(STAGE)
-            .align(TextAlign::MiddleLeading),
-        );
+        let title = RectDip {
+            x: r.x + 8.0 * scale,
+            y: r.y + 2.0 * scale,
+            w: (r.w - 16.0 * scale).max(0.0),
+            h: mermaid::CLUSTER_TITLE * scale,
+        };
+        if clip.holds(title) {
+            frame.add(
+                WidgetElement::text(
+                    CLUSTER_TITLE | id,
+                    title,
+                    &cluster.title,
+                    design::CAPTION * scale,
+                    600,
+                    ink.secondary(),
+                )
+                .parent(STAGE)
+                .align(TextAlign::MiddleLeading),
+            );
+        }
     }
     let link = ink.line(paper::LINK, colors.secondary);
     for (i, edge) in layout.edges.iter().enumerate() {
@@ -740,33 +784,22 @@ fn draw_flowchart(
             Stroke::Thick => (ink.text(), 2.5),
             Stroke::Dotted => (fade(link, 0.6), 1.0),
         };
-        frame.add(
-            WidgetElement::line(
-                EDGE | i as u64,
-                bounds(&points),
-                points.clone(),
-                false,
-                rgba,
-                width,
-            )
-            .parent(STAGE),
-        );
+        clip.stroke(frame, EDGE | i as u64, points.clone(), false, rgba, width);
         if edge.arrow && points.len() >= 2 {
             let tip = points[points.len() - 1];
-            let head = arrow_head(tip, points[points.len() - 2], 7.0 * scale.max(0.7));
-            frame.add(
-                WidgetElement::line(ARROW | i as u64, bounds(&head), head, true, rgba, width)
-                    .parent(STAGE),
-            );
+            let head = arrow_head(tip, points[points.len() - 2], 7.0 * scale);
+            clip.stroke(frame, ARROW | i as u64, head, true, rgba, width);
         }
-        if let Some((text, b)) = &edge.label {
+        if let Some((text, b)) = &edge.label
+            && clip.holds(rect(*b))
+        {
             let r = rect(*b);
             frame.add(
                 WidgetElement::text(
                     EDGE_LABEL | i as u64,
                     r,
                     text,
-                    (mermaid::EDGE_LABEL_SIZE * scale).max(9.0),
+                    mermaid::EDGE_LABEL_SIZE * scale,
                     400,
                     ink.secondary(),
                 )
@@ -778,6 +811,11 @@ fn draw_flowchart(
     }
     for (i, node) in chart.nodes.iter().enumerate() {
         let rect = rect(layout.boxes[i]);
+        let Some(visible) = clip.rect(rect) else {
+            continue;
+        };
+        // A node cut by the stage edge keeps its outline and name but not its text.
+        let whole = visible == rect;
         let radius = match node.shape {
             Shape::Rect => 6.0,
             Shape::Round => 12.0,
@@ -799,12 +837,13 @@ fn draw_flowchart(
             rounded_outline(rect, radius)
         };
         let fill = (node.shape != Shape::Diamond).then(|| ink.surface(paper::SHAPE));
+        let label = &layout.labels[i];
         frame.add(
             WidgetElement::text(
                 NODE | i as u64,
-                rect,
-                &layout.labels[i],
-                (mermaid::LABEL_SIZE * scale).max(9.0),
+                visible,
+                if whole { label.as_str() } else { "" },
+                mermaid::LABEL_SIZE * scale,
                 400,
                 ink.text(),
             )
@@ -812,17 +851,147 @@ fn draw_flowchart(
             .fill(fill, radius)
             .align(TextAlign::Center),
         );
-        frame.add(
-            WidgetElement::line(
-                NODE_OUTLINE | i as u64,
-                rect,
-                outline,
-                true,
-                ink.line(paper::SHAPE_LINE, colors.primary),
-                1.0,
-            )
-            .parent(STAGE),
+        frame.set_last_accessible_name(label.clone());
+        clip.stroke(
+            frame,
+            NODE_OUTLINE | i as u64,
+            outline,
+            true,
+            ink.line(paper::SHAPE_LINE, colors.primary),
+            1.0,
         );
+    }
+    if clipped {
+        let text = if chinese {
+            format!("图表过大 · 按 {:.0}% 显示，其余已裁剪", scale * 100.0)
+        } else {
+            format!(
+                "Too large to fit · shown at {:.0}%, the rest is clipped",
+                scale * 100.0
+            )
+        };
+        let w = (Estimate.line_width(&text, design::CAPTION) + 20.0).min(area.w);
+        frame.add(
+            WidgetElement::text(
+                CLIPPED,
+                RectDip {
+                    x: area.x + area.w - w,
+                    y: area.y + area.h - 24.0,
+                    w,
+                    h: 24.0,
+                },
+                text,
+                design::CAPTION,
+                600,
+                colors.paper_ink(paper::WARNING_INK),
+            )
+            .parent(STAGE)
+            .role("status")
+            .fill(Some(colors.tone_surface(paper::WARNING_WASH)), 12.0)
+            .align(TextAlign::Center),
+        );
+    }
+}
+
+/// The visible drawing area: shapes inside it draw whole, the rest is cut at its edge.
+#[derive(Clone, Copy)]
+struct Clip(RectDip);
+
+impl Clip {
+    fn holds(&self, r: RectDip) -> bool {
+        let a = self.0;
+        r.x >= a.x - 0.5
+            && r.y >= a.y - 0.5
+            && r.x + r.w <= a.x + a.w + 0.5
+            && r.y + r.h <= a.y + a.h + 0.5
+    }
+
+    /// The part of `r` inside the area, `r` itself when it fits.
+    fn rect(&self, r: RectDip) -> Option<RectDip> {
+        if self.holds(r) {
+            return Some(r);
+        }
+        let a = self.0;
+        let (x, y) = (r.x.max(a.x), r.y.max(a.y));
+        let (x1, y1) = ((r.x + r.w).min(a.x + a.w), (r.y + r.h).min(a.y + a.h));
+        (x1 > x && y1 > y).then_some(RectDip {
+            x,
+            y,
+            w: x1 - x,
+            h: y1 - y,
+        })
+    }
+
+    /// Liang–Barsky: the part of segment `p`–`q` inside the area.
+    fn segment(&self, p: (f32, f32), q: (f32, f32)) -> Option<((f32, f32), (f32, f32))> {
+        let a = self.0;
+        let (dx, dy) = (q.0 - p.0, q.1 - p.1);
+        let (mut t0, mut t1) = (0.0f32, 1.0f32);
+        for (step, room) in [
+            (-dx, p.0 - a.x),
+            (dx, a.x + a.w - p.0),
+            (-dy, p.1 - a.y),
+            (dy, a.y + a.h - p.1),
+        ] {
+            if step == 0.0 {
+                if room < 0.0 {
+                    return None;
+                }
+            } else if step < 0.0 {
+                t0 = t0.max(room / step);
+            } else {
+                t1 = t1.min(room / step);
+            }
+        }
+        (t0 <= t1).then(|| {
+            let at = |t: f32| (p.0 + dx * t, p.1 + dy * t);
+            (at(t0), at(t1))
+        })
+    }
+
+    /// Stroke a polyline, split into one path per run that stays inside the area.
+    fn stroke(
+        &self,
+        frame: &mut WidgetFrame,
+        id: u64,
+        mut points: Vec<(f32, f32)>,
+        closed: bool,
+        rgba: [f32; 4],
+        width: f32,
+    ) {
+        if points.iter().all(|&(x, y)| {
+            self.holds(RectDip {
+                x,
+                y,
+                w: 0.0,
+                h: 0.0,
+            })
+        }) {
+            let b = bounds(&points);
+            frame.add(WidgetElement::line(id, b, points, closed, rgba, width).parent(STAGE));
+            return;
+        }
+        if closed && let Some(&first) = points.first() {
+            points.push(first);
+        }
+        let mut runs: Vec<Vec<(f32, f32)>> = Vec::new();
+        let mut open = false;
+        for pair in points.windows(2) {
+            let Some((p, q)) = self.segment(pair[0], pair[1]) else {
+                open = false;
+                continue;
+            };
+            match runs.last_mut() {
+                Some(run) if open && p == pair[0] => run.push(q),
+                _ => runs.push(vec![p, q]),
+            }
+            open = q == pair[1];
+        }
+        for (k, run) in runs.into_iter().enumerate() {
+            let b = bounds(&run);
+            let id = id | (k as u64) << 16;
+            frame.add(WidgetElement::line(id, b, run, false, rgba, width).parent(STAGE));
+        }
     }
 }
 
@@ -1052,25 +1221,18 @@ fn draw_gantt(
     }
 }
 
-fn draw_error(
+/// Height of the banner that reports an error or the first warning.
+const BANNER_H: f32 = 76.0;
+
+/// A banner for one diagnostic (`more` further warnings are counted in its title).
+fn draw_banner(
     frame: &mut WidgetFrame,
-    error: &ParseError,
-    area: RectDip,
+    problem: &Diagnostic,
+    more: usize,
+    banner: RectDip,
     colors: Colors,
     chinese: bool,
-    has_previous: bool,
 ) {
-    let h = 76.0f32.min(area.h);
-    let banner = RectDip {
-        x: area.x,
-        y: if has_previous {
-            area.y + area.h - h
-        } else {
-            area.y + (area.h - h) / 2.0
-        },
-        w: area.w,
-        h,
-    };
     let (wash, warning) = if colors.high_contrast {
         (colors.subtle, colors.primary)
     } else {
@@ -1079,17 +1241,23 @@ fn draw_error(
             colors.paper_ink(paper::WARNING_INK),
         )
     };
+    let fatal = problem.severity == Severity::Error;
     frame.add(
         WidgetElement::text(BANNER, banner, "", design::BODY, 400, warning)
             .parent(STAGE)
-            .role("alert")
+            .role(if fatal { "alert" } else { "status" })
             .fill(Some(wash), design::CARD_RADIUS),
     );
-    let headline = match (error.line, chinese) {
-        (0, _) => error.message(chinese),
-        (line, true) => format!("第 {line} 行：{}", error.message(true)),
-        (line, false) => format!("Line {line}: {}", error.message(false)),
+    let mut headline = match (problem.line, chinese) {
+        (0, _) => problem.message(chinese),
+        (line, true) => format!("第 {line} 行：{}", problem.message(true)),
+        (line, false) => format!("Line {line}: {}", problem.message(false)),
     };
+    match (more, chinese) {
+        (0, _) => {}
+        (n, true) => headline.push_str(&format!("（另有 {n} 条提示）")),
+        (n, false) => headline.push_str(&format!(" (+{n} more)")),
+    }
     frame.set_last_accessible_name(headline.clone());
     frame.add(
         WidgetElement::text(
@@ -1108,7 +1276,7 @@ fn draw_error(
         .parent(BANNER)
         .align(TextAlign::MiddleLeading),
     );
-    if error.line > 0 {
+    if problem.line > 0 {
         frame.add(
             WidgetElement::text(
                 BANNER_LINE,
@@ -1118,7 +1286,7 @@ fn draw_error(
                     w: (banner.w - 28.0).max(0.0),
                     h: 22.0,
                 },
-                format!("{} │ {}", error.line, error.text),
+                format!("{} │ {}", problem.line, problem.text),
                 design::CAPTION,
                 400,
                 colors.secondary,
@@ -1203,6 +1371,14 @@ mod tests {
             (
                 "gantt",
                 "gantt\n title 版本计划\n dateFormat YYYY-MM-DD\n section 开发\n SYS 开发 :sys, 2026-10-19, 18d\n VND 开发 :vnd, 2026-10-19, 3w\n section 发布\n 集成 :crit, int, after sys vnd, 11d\n 发布 :milestone, after int, 0d\n",
+            ),
+            (
+                "gantt-warnings",
+                "gantt\n title 版本计划\n excludes weekends\n todayMarker off\n SYS 开发 :sys, 2026-10-19, 10d\n 集成 :crit, int, after sys, 5d\n 发布 :milestone, after int, 0d\n",
+            ),
+            (
+                "flowchart-clipped",
+                "flowchart LR\n A[需求] --> B[设计] --> C[开发] --> D[联调] --> E[测试] --> F[验证] --> G[发布] --> H[复盘]\n B -->|返工| A\n",
             ),
         ];
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/snapshots");
@@ -1398,6 +1574,139 @@ mod tests {
         }
         let inside = |r: RectDip| r.x > border.rect.x && r.x + r.w < border.rect.x + border.rect.w;
         assert_eq!(nodes.iter().filter(|n| inside(n.rect)).count(), 2);
+    }
+
+    const SCALED_SOURCES: [&str; 2] = [
+        "flowchart LR\n  A[需求] -->|评审通过| B\n  subgraph dev [开发阶段]\n    B[SYS] --> C[VND 开发与联调]\n  end\n  C --> D{发布?}\n  D -->|否| B\n",
+        "flowchart TD\n  A[Freeze scope] --> B[Build] & C[Vendor build] --> D[Integrate]\n  D -- verified --> E((Ship))\n",
+    ];
+
+    /// Text and geometry share one scale: at every stage size each label's font size
+    /// over its box height stays within 5% of the unscaled ratio, and never drops
+    /// below the readable minimum.
+    #[test]
+    fn labels_scale_with_their_boxes_at_every_stage_size() {
+        for source in SCALED_SOURCES {
+            let Diagram::Flowchart(chart) = mermaid::parse(source).unwrap().diagram else {
+                panic!("expected flowchart");
+            };
+            let layout = mermaid::layout_flowchart(&chart, &Estimate);
+            let label_boxes: Vec<_> = layout
+                .edges
+                .iter()
+                .map(|e| e.label.as_ref().map(|(_, b)| b.h))
+                .collect();
+            let mut checked = 0;
+            for w in (240..=960).step_by(60) {
+                for h in (180..=720).step_by(60) {
+                    let scene = scene(source, w as f32, h as f32, true);
+                    for node in scene.nodes().iter().filter(|n| !n.text.is_empty()) {
+                        let (block, index) = (node.id >> 32 << 32, (node.id & 0xffff) as usize);
+                        let expected = match block {
+                            NODE => mermaid::LABEL_SIZE / layout.boxes[index].h,
+                            EDGE_LABEL => mermaid::EDGE_LABEL_SIZE / label_boxes[index].unwrap(),
+                            CLUSTER_TITLE => design::CAPTION / mermaid::CLUSTER_TITLE,
+                            _ => continue,
+                        };
+                        let ratio = node.style.size / node.rect.h;
+                        assert!(
+                            (ratio / expected - 1.0).abs() <= 0.05,
+                            "{w}×{h} {:?}: {ratio} vs {expected}",
+                            node.text
+                        );
+                        assert!(node.style.size >= design::CAPTION * MIN_SCALE - 0.01);
+                        checked += 1;
+                    }
+                }
+            }
+            assert!(checked > 100);
+        }
+    }
+
+    #[test]
+    fn charts_too_large_for_the_stage_clip_at_the_minimum_scale() {
+        let source: String = std::iter::once("flowchart LR\n".to_string())
+            .chain((0..14).map(|i| format!("  N{i}[步骤 {i}] --> N{}[步骤 {}]\n", i + 1, i + 1)))
+            .collect();
+        let scene = scene(&source, 420.0, 300.0, false);
+        let stage = scene.nodes().iter().find(|n| n.id == STAGE).unwrap().rect;
+        let badge = scene.nodes().iter().find(|n| n.id == CLIPPED).unwrap();
+        assert_eq!(badge.role, "status");
+        assert!(badge.text.contains("70%"), "{}", badge.text);
+        let within = |x: f32, y: f32| {
+            x >= stage.x - 0.01
+                && y >= stage.y - 0.01
+                && x <= stage.x + stage.w + 0.01
+                && y <= stage.y + stage.h + 0.01
+        };
+        let mut nodes = 0;
+        for node in scene.nodes().iter().filter(|n| n.parent == Some(STAGE)) {
+            let r = node.rect;
+            if let Some(path) = &node.style.path {
+                assert!(
+                    path.points.iter().all(|p| within(p.x, p.y)),
+                    "{:x}",
+                    node.id
+                );
+            } else {
+                assert!(
+                    within(r.x, r.y) && within(r.x + r.w, r.y + r.h),
+                    "{:x}",
+                    node.id
+                );
+            }
+            if node.id >> 32 == NODE >> 32 {
+                nodes += 1;
+                assert!((node.style.size - mermaid::LABEL_SIZE * MIN_SCALE).abs() < 0.01);
+            }
+        }
+        // Some nodes are cut or hidden, but the visible ones keep their names.
+        assert!(nodes > 2 && nodes < 15);
+        assert!(scene.nodes().iter().any(|n| n.name == "步骤 0"));
+        // A chart that fits draws no badge.
+        assert!(
+            !scene_has(diagram_template(true), CLIPPED),
+            "template should fit"
+        );
+    }
+
+    fn scene_has(source: &str, id: u64) -> bool {
+        scene(source, 560.0, 400.0, true)
+            .nodes()
+            .iter()
+            .any(|n| n.id == id)
+    }
+
+    #[test]
+    fn warnings_show_in_a_banner_below_the_drawing() {
+        let source = "gantt\n dateFormat YYYY-MM-DD\n todayMarker off\n includes 2026-10-24\n axisFormat %m\n A :a, 2026-10-19, 5d\n B :after a, 2d\n";
+        let scene = scene(source, 560.0, 400.0, false);
+        let banner = scene.nodes().iter().find(|n| n.id == BANNER).unwrap();
+        assert_eq!(banner.role, "status");
+        assert_eq!(
+            banner.name,
+            "Line 3: todayMarker is not supported and was ignored; dates may differ from Mermaid (+1 more)"
+        );
+        let line = scene.nodes().iter().find(|n| n.id == BANNER_LINE).unwrap();
+        assert_eq!(line.text, "3 │ todayMarker off");
+        // The drawing stays at full strength and clear of the banner.
+        let bars: Vec<_> = scene
+            .nodes()
+            .iter()
+            .filter(|n| n.id >> 32 == TASK_BAR >> 32)
+            .collect();
+        assert_eq!(bars.len(), 2);
+        for bar in bars {
+            assert!(bar.rect.y + bar.rect.h <= banner.rect.y);
+            assert_eq!(bar.style.fill.map(|f| f[3]), Some(paper::BAR[3]));
+        }
+        let meta = scene.nodes().iter().find(|n| n.id == HEADER_META).unwrap();
+        assert!(!meta.text.contains("error"));
+        // Info-level notes alone (styling) draw no banner.
+        assert!(!scene_has(
+            "flowchart LR\n A --> B\n style A fill:#f00\n",
+            BANNER
+        ));
     }
 
     #[test]

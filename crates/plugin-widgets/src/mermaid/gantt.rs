@@ -1,8 +1,12 @@
 //! Gantt charts: `title`, `dateFormat YYYY-MM-DD`, sections and tasks with dates,
-//! `after` dependencies, durations and milestones. Drawn row by row, no layout pass.
+//! `after` dependencies, durations, milestones and `excludes` / `weekend` calendars.
+//! Drawn row by row, no layout pass.
 
-use super::{Diagram, ErrorKind, MAX_LABEL_CHARS, MAX_TASKS, ParseError, Source, error};
-use chrono::NaiveDate;
+use super::{
+    Diagnostic, Diagram, ErrorKind, MAX_LABEL_CHARS, MAX_TASKS, Severity, Source, decode_entities,
+    diagnostic, error,
+};
+use chrono::{Datelike, NaiveDate, Weekday};
 use std::collections::HashMap;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -48,48 +52,143 @@ fn parse_duration(text: &str) -> Option<i64> {
     (days.is_finite() && (0.0..=3650.0).contains(&days)).then(|| days.ceil() as i64)
 }
 
-pub(super) fn parse(source: &Source) -> Result<Diagram, ParseError> {
+/// Days `excludes` takes out of durations: weekends (Saturday and Sunday, or Friday
+/// and Saturday after `weekend friday`), named weekdays and single dates.
+struct Calendar {
+    weekend_from: Weekday,
+    weekends: bool,
+    /// Bit `n` closes the weekday `n` days from Monday.
+    weekdays: u8,
+    dates: Vec<NaiveDate>,
+}
+
+impl Calendar {
+    fn closes(&self, weekday: Weekday) -> bool {
+        (self.weekends && (weekday == self.weekend_from || weekday == self.weekend_from.succ()))
+            || self.weekdays & (1 << weekday.num_days_from_monday()) != 0
+    }
+
+    fn closed(&self, day: NaiveDate) -> bool {
+        self.closes(day.weekday()) || self.dates.contains(&day)
+    }
+
+    /// The first open day on or after `day`.
+    fn open_from(&self, mut day: NaiveDate) -> Option<NaiveDate> {
+        while self.closed(day) {
+            day = day.succ_opt()?;
+        }
+        Some(day)
+    }
+
+    /// Exclusive end of `days` open days from `start`, as Mermaid stretches a duration
+    /// over excluded days.
+    fn finish(&self, start: NaiveDate, days: i64) -> Option<NaiveDate> {
+        let (mut day, mut left) = (start, days);
+        while left > 0 {
+            left -= i64::from(!self.closed(day));
+            day = day.succ_opt()?;
+        }
+        Some(day)
+    }
+
+    /// Read the scheduling directives first: Mermaid applies them to every task,
+    /// wherever they appear.
+    fn read(source: &Source, warnings: &mut Vec<Diagnostic>) -> Self {
+        let mut calendar = Calendar {
+            weekend_from: Weekday::Sat,
+            weekends: false,
+            weekdays: 0,
+            dates: Vec::new(),
+        };
+        for &(number, line) in &source.lines[1..] {
+            let mut warn = |what: &str| {
+                let kind = ErrorKind::BadExclude(what.into());
+                warnings.push(diagnostic(number, kind, line, Severity::Warning));
+            };
+            match line.split_once(char::is_whitespace) {
+                Some(("excludes", value)) => {
+                    for token in value.split([' ', '\t', ',']).filter(|t| !t.is_empty()) {
+                        // chrono reads weekday names case-insensitively.
+                        if token.eq_ignore_ascii_case("weekends") {
+                            calendar.weekends = true;
+                        } else if let Ok(day) = token.parse::<Weekday>() {
+                            calendar.weekdays |= 1 << day.num_days_from_monday();
+                        } else if let Some(date) = parse_date(token) {
+                            calendar.dates.push(date);
+                        } else {
+                            warn(token);
+                        }
+                    }
+                }
+                Some(("weekend", value)) => match value.trim() {
+                    "friday" => calendar.weekend_from = Weekday::Fri,
+                    "saturday" => calendar.weekend_from = Weekday::Sat,
+                    other => warn(other),
+                },
+                _ => {}
+            }
+        }
+        if (0..7).all(|n| calendar.closes(Weekday::try_from(n).unwrap_or(Weekday::Mon))) {
+            warnings.push(diagnostic(
+                0,
+                ErrorKind::ExcludesEverything,
+                "",
+                Severity::Warning,
+            ));
+            calendar.weekends = false;
+            calendar.weekdays = 0;
+        }
+        calendar
+    }
+}
+
+pub(super) fn parse(
+    source: &Source,
+    warnings: &mut Vec<Diagnostic>,
+) -> Result<Diagram, Diagnostic> {
+    let calendar = Calendar::read(source, warnings);
     let mut title = source.title.clone();
     let mut section = None;
     let mut tasks: Vec<Task> = Vec::new();
+    // Where a task's successors may start: the next open day after a stretched
+    // duration; an explicit end date stands as written.
+    let mut ready: Vec<NaiveDate> = Vec::new();
     let mut ids: HashMap<String, usize> = HashMap::new();
     let mut default_start: Option<NaiveDate> = None;
     for &(number, line) in &source.lines[1..] {
         let fail = |kind| error(number, kind, line);
-        if let Some(value) = line.strip_prefix("title ") {
-            title = Some(value.trim().to_string());
-            continue;
-        }
-        if let Some(value) = line.strip_prefix("dateFormat ") {
-            if value.trim() != "YYYY-MM-DD" {
-                return Err(fail(ErrorKind::UnsupportedDateFormat));
+        let (keyword, value) = line.split_once(char::is_whitespace).unwrap_or((line, ""));
+        let mut note = |kind, severity| warnings.push(diagnostic(number, kind, line, severity));
+        match keyword {
+            "title" => {
+                title = Some(value.trim().to_string());
+                continue;
             }
-            continue;
-        }
-        if let Some(value) = line.strip_prefix("section ") {
-            section = Some(value.trim().to_string());
-            continue;
-        }
-        if [
-            "axisFormat",
-            "excludes",
-            "todayMarker",
-            "tickInterval",
-            "weekday",
-            "includes",
-            "inclusiveEndDates",
-            "topAxis",
-            "displayMode",
-        ]
-        .iter()
-        .any(|k| line.starts_with(k))
-        {
-            continue;
+            "dateFormat" => {
+                if value.trim() != "YYYY-MM-DD" {
+                    note(ErrorKind::UnsupportedDateFormat, Severity::Warning);
+                }
+                continue;
+            }
+            "section" => {
+                section = Some(value.trim().to_string());
+                continue;
+            }
+            "excludes" | "weekend" => continue,
+            "includes" | "todayMarker" | "tickInterval" | "weekday" | "inclusiveEndDates" => {
+                note(ErrorKind::Ignored(keyword.into()), Severity::Warning);
+                continue;
+            }
+            "axisFormat" | "topAxis" | "displayMode" => {
+                note(ErrorKind::IgnoredStyle(keyword.into()), Severity::Info);
+                continue;
+            }
+            _ => {}
         }
         let Some((name, meta)) = line.split_once(':') else {
             return Err(fail(ErrorKind::UnexpectedText));
         };
-        let name = name.trim();
+        let name = decode_entities(name.trim());
         if name.is_empty() {
             return Err(fail(ErrorKind::EmptyLabel));
         }
@@ -132,24 +231,28 @@ pub(super) fn parse(source: &Source) -> Result<Diagram, ParseError> {
                     let index = *ids
                         .get(other)
                         .ok_or_else(|| fail(ErrorKind::UnknownTask(other.into())))?;
-                    latest = latest.max(Some(tasks[index].end));
+                    latest = latest.max(Some(ready[index]));
                 }
                 latest.ok_or_else(|| fail(ErrorKind::BadDate))?
             }
             Some(text) => parse_date(text).ok_or_else(|| fail(ErrorKind::BadDate))?,
-            None => tasks
+            None => ready
                 .last()
-                .map(|t| t.end)
+                .copied()
                 .or(default_start)
                 .ok_or_else(|| fail(ErrorKind::BadDate))?,
         };
-        let end_date = if let Some(date) = parse_date(end) {
-            date
+        let (end_date, next) = if let Some(date) = parse_date(end) {
+            (date, date)
         } else {
             let days = parse_duration(end).ok_or_else(|| fail(ErrorKind::BadDuration))?;
-            start
-                .checked_add_signed(chrono::Duration::days(days))
-                .ok_or_else(|| fail(ErrorKind::BadDuration))?
+            let end = calendar
+                .finish(start, days)
+                .ok_or_else(|| fail(ErrorKind::BadDuration))?;
+            let next = calendar
+                .open_from(end)
+                .ok_or_else(|| fail(ErrorKind::BadDuration))?;
+            (end, next)
         };
         task.start = start;
         task.end = if task.milestone {
@@ -161,6 +264,11 @@ pub(super) fn parse(source: &Source) -> Result<Diagram, ParseError> {
         if let Some(id) = id {
             ids.insert(id.to_string(), tasks.len());
         }
+        ready.push(if task.milestone {
+            start
+        } else {
+            next.max(start)
+        });
         tasks.push(task);
     }
     Ok(Diagram::Gantt(Gantt { title, tasks }))

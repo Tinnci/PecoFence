@@ -3,8 +3,8 @@
 //! long links and link labels own a slot in the rank structure. No code is shared.
 
 use super::{
-    Box2, Diagram, ErrorKind, MAX_EDGES, MAX_LABEL_CHARS, MAX_NODES, ParseError, Source,
-    TextMeasure, error, text_width, unquote, wrap,
+    Box2, Diagnostic, Diagram, ErrorKind, MAX_EDGES, MAX_LABEL_CHARS, MAX_NODES, Severity, Source,
+    TextMeasure, decode_entities, diagnostic, error, statements, text_width, unquote, wrap,
 };
 use std::collections::HashMap;
 
@@ -134,8 +134,13 @@ const IGNORED_STATEMENTS: [&str; 6] = [
     "direction ",
 ];
 
-pub(super) fn parse(source: &Source) -> Result<Diagram, ParseError> {
-    let (header_line, header) = source.lines[0];
+pub(super) fn parse(
+    source: &Source,
+    warnings: &mut Vec<Diagnostic>,
+) -> Result<Diagram, Diagnostic> {
+    let (header_line, line) = source.lines[0];
+    // `graph TD; A --> B` may carry statements after the header.
+    let header = statements(line).first().copied().unwrap_or(line);
     let direction = match header.split_whitespace().nth(1).unwrap_or("TB") {
         "LR" => Direction::LeftRight,
         "RL" => Direction::RightLeft,
@@ -144,8 +149,8 @@ pub(super) fn parse(source: &Source) -> Result<Diagram, ParseError> {
         _ => return Err(error(header_line, ErrorKind::UnexpectedText, header)),
     };
     let mut builder = FlowBuilder::default();
-    for &(number, line) in &source.lines[1..] {
-        for statement in line.split(';').map(str::trim).filter(|s| !s.is_empty()) {
+    for (k, &(number, line)) in source.lines.iter().enumerate() {
+        for statement in statements(line).into_iter().skip(usize::from(k == 0)) {
             let result = if statement == "end" {
                 builder.open.pop();
                 Ok(())
@@ -154,7 +159,12 @@ pub(super) fn parse(source: &Source) -> Result<Diagram, ParseError> {
                 .filter(|h| h.is_empty() || h.starts_with(char::is_whitespace))
             {
                 builder.subgraph(header.trim())
-            } else if IGNORED_STATEMENTS.iter().any(|p| statement.starts_with(p)) {
+            } else if let Some(p) = IGNORED_STATEMENTS
+                .iter()
+                .find(|p| statement.starts_with(*p))
+            {
+                let kind = ErrorKind::IgnoredStyle(p.trim().into());
+                warnings.push(diagnostic(number, kind, line, Severity::Info));
                 Ok(())
             } else {
                 parse_statement(&mut builder, statement)
@@ -291,15 +301,7 @@ fn parse_node(builder: &mut FlowBuilder, cursor: &mut Cursor) -> Result<usize, E
     for (open, close, shape) in SHAPES {
         if cursor.eat(open) {
             let rest = cursor.rest();
-            let end = if let Some(quoted) = rest.strip_prefix('"') {
-                quoted
-                    .find('"')
-                    .map(|q| q + 2)
-                    .filter(|&q| rest[q..].starts_with(close))
-            } else {
-                rest.find(close)
-            }
-            .ok_or(ErrorKind::UnclosedLabel)?;
+            let end = label_end(rest, close).ok_or(ErrorKind::UnclosedLabel)?;
             let text = clean_label(&rest[..end]);
             cursor.at += end + close.len();
             label = Some((text, shape));
@@ -315,12 +317,28 @@ fn parse_node(builder: &mut FlowBuilder, cursor: &mut Cursor) -> Result<usize, E
     builder.node(id, label)
 }
 
+/// Where a label that `close` ends stops: after the closing quote when it is quoted,
+/// so the delimiter may appear inside the quotes.
+fn label_end(rest: &str, close: &str) -> Option<usize> {
+    match rest.strip_prefix('"') {
+        Some(quoted) => quoted
+            .find('"')
+            .map(|q| q + 2)
+            .filter(|&q| rest[q..].trim_start().starts_with(close))
+            .map(|q| q + rest[q..].len() - rest[q..].trim_start().len()),
+        None => rest.find(close),
+    }
+}
+
 fn clean_label(raw: &str) -> String {
     let text = unquote(raw.trim())
         .replace("<br/>", "\n")
         .replace("<br />", "\n")
         .replace("<br>", "\n");
-    text.chars().take(MAX_LABEL_CHARS).collect()
+    decode_entities(&text)
+        .chars()
+        .take(MAX_LABEL_CHARS)
+        .collect()
 }
 
 struct Link {
@@ -387,7 +405,7 @@ fn parse_link(cursor: &mut Cursor) -> Result<Link, ErrorKind> {
     cursor.skip_spaces();
     if cursor.eat("|") {
         let rest = cursor.rest();
-        let end = rest.find('|').ok_or(ErrorKind::UnclosedLabel)?;
+        let end = label_end(rest, "|").ok_or(ErrorKind::UnclosedLabel)?;
         label = Some(clean_label(&rest[..end]));
         cursor.at += end + 1;
     }
@@ -998,7 +1016,7 @@ mod tests {
     use super::*;
 
     fn flow(source: &str) -> Flowchart {
-        match parse(source).unwrap() {
+        match parse(source).unwrap().diagram {
             Diagram::Flowchart(chart) => chart,
             other => panic!("expected flowchart, got {other:?}"),
         }
