@@ -133,6 +133,7 @@ impl PanelManager {
                 Box::new(HostRender {
                     pending: render_invalidations.clone(),
                     notify_hwnd: notify_hwnd.0 as isize,
+                    formats: RefCell::default(),
                 }),
             )
             .expect("unique service");
@@ -718,13 +719,15 @@ impl PanelManager {
 struct HostRender {
     pending: Arc<Mutex<HashSet<MountKey>>>,
     notify_hwnd: isize,
+    /// DirectWrite formats for [`RenderService::measure`] (diagram labels).
+    formats: RefCell<pecofence_render::TextFormatCache>,
 }
 impl RenderService for HostRender {
     fn measure(&self, text: &TextSpec, width: f32) -> Result<TextMetrics> {
-        Ok(TextMetrics {
-            width: (text.text.chars().count() as f32 * text.size_dip * 0.55).min(width),
-            height: text.size_dip * 1.45,
-        })
+        self.formats
+            .try_borrow_mut()
+            .map_err(|_| Error::Backend("text measurement re-entered".into()))?
+            .measure(text, width)
     }
     fn invalidate(&self, mount: MountKey, _rect: Option<RectDip>) -> Result<()> {
         self.pending

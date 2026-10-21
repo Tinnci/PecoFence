@@ -149,6 +149,24 @@ pub struct TextFormatCache {
 
 #[cfg(windows)]
 impl TextFormatCache {
+    /// DirectWrite size of `text` wrapped at `width`; needs no drawing session, so the
+    /// host's render service measures plugin text with it too.
+    pub fn measure(&mut self, text: &TextSpec, width: f32) -> Result<TextMetrics> {
+        let (width, height) = match self.get(text)? {
+            CachedFormat::System(format) => {
+                let layout =
+                    windows_canvas::TextLayout::new(&text.text, format, width.max(1.0), 10_000.0)
+                        .map_err(|error| Error::Backend(error.to_string()))?;
+                let metrics = layout.metrics();
+                (metrics.width_including_trailing_whitespace, metrics.height)
+            }
+            CachedFormat::Bundled(format) => format
+                .measure(&text.text, width.max(1.0), 10_000.0)
+                .map_err(|error| Error::Backend(error.to_string()))?,
+        };
+        Ok(TextMetrics { width, height })
+    }
+
     fn get(&mut self, text: &TextSpec) -> Result<&CachedFormat> {
         let key = (text.font, text.size_dip.to_bits(), text.weight, text.align);
         if !self.formats.contains_key(&key) {
@@ -445,19 +463,10 @@ impl Canvas for Direct2dCanvas<'_> {
     }
 
     fn measure_text(&mut self, text: &TextSpec, width: f32) -> Result<TextMetrics> {
-        let (width, height) = match self.text_format(text)? {
-            CachedFormat::System(format) => {
-                let layout =
-                    windows_canvas::TextLayout::new(&text.text, format, width.max(1.0), 10_000.0)
-                        .map_err(|error| Error::Backend(error.to_string()))?;
-                let metrics = layout.metrics();
-                (metrics.width_including_trailing_whitespace, metrics.height)
-            }
-            CachedFormat::Bundled(format) => format
-                .measure(&text.text, width.max(1.0), 10_000.0)
-                .map_err(|error| Error::Backend(error.to_string()))?,
-        };
-        Ok(TextMetrics { width, height })
+        self.shared_formats
+            .as_deref_mut()
+            .unwrap_or(&mut self.formats)
+            .measure(text, width)
     }
 
     fn push_clip(&mut self, rect: RectDip) -> Result<()> {

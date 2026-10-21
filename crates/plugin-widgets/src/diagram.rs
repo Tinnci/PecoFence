@@ -1,7 +1,9 @@
 //! Diagram widget: Mermaid text drawn natively as scene nodes (Pele-style), so the
 //! result is crisp at any DPI, themed by the paper palette and readable by UIA.
 
-use super::mermaid::{self, Diagram, FlowLayout, Flowchart, Gantt, ParseError, Shape, Stroke};
+use super::mermaid::{
+    self, Diagram, Estimate, FlowLayout, Flowchart, Gantt, ParseError, Shape, Stroke, TextMeasure,
+};
 use super::{
     CAPSULE_HEIGHT, CONTENT_TOP, Colors, Control, FRAME_INTERVAL, HEADER_META, HeaderAction, Tween,
     WidgetElement, WidgetFrame, build_capsule, build_panel_header, fade, glyph, paper,
@@ -36,6 +38,9 @@ const AXIS_LABEL: u64 = 10 << 32;
 const TASK_LABEL: u64 = 11 << 32;
 const TASK_BAR: u64 = 12 << 32;
 const TODAY: u64 = 13 << 32;
+const CLUSTER: u64 = 14 << 32;
+const CLUSTER_OUTLINE: u64 = 15 << 32;
+const CLUSTER_TITLE: u64 = 16 << 32;
 
 /// Starting point offered when a new diagram opens its editor.
 pub fn diagram_template(chinese: bool) -> &'static str {
@@ -77,15 +82,47 @@ fn parse_config(config: &PanelConfig) -> Result<DiagramConfig> {
 struct Rendered {
     diagram: Diagram,
     flow: Option<FlowLayout>,
+    /// Gantt: width of the longest task name at the caption size.
+    names_width: f32,
 }
 
 impl Rendered {
-    fn new(diagram: Diagram) -> Self {
-        let flow = match &diagram {
-            Diagram::Flowchart(chart) => Some(mermaid::layout_flowchart(chart)),
-            Diagram::Gantt(_) => None,
+    fn new(diagram: Diagram, measure: &dyn TextMeasure) -> Self {
+        let (flow, names_width) = match &diagram {
+            Diagram::Flowchart(chart) => (Some(mermaid::layout_flowchart(chart, measure)), 0.0),
+            Diagram::Gantt(chart) => (
+                None,
+                chart
+                    .tasks
+                    .iter()
+                    .map(|t| measure.line_width(&t.name, design::CAPTION))
+                    .fold(0.0, f32::max),
+            ),
         };
-        Self { diagram, flow }
+        Self {
+            diagram,
+            flow,
+            names_width,
+        }
+    }
+}
+
+/// DirectWrite widths from the host's render service, in the paper body face the
+/// diagram draws with; the estimate stands in when the service is unavailable.
+struct HostMeasure<'a>(&'a Capability<dyn RenderService>);
+
+impl TextMeasure for HostMeasure<'_> {
+    fn line_width(&self, text: &str, size: f32) -> f32 {
+        let spec = TextSpec {
+            text: text.into(),
+            size_dip: size,
+            weight: 400,
+            font: FontRole::PaperBody,
+            align: TextAlign::TopLeading,
+        };
+        self.0
+            .with(|render| render.measure(&spec, 10_000.0))
+            .map_or_else(|_| Estimate.line_width(text, size), |m| m.width)
     }
 }
 
@@ -194,7 +231,8 @@ impl DiagramWidget {
         } else {
             match mermaid::parse(&config.source) {
                 Ok(diagram) => {
-                    self.rendered = Some(Rendered::new(diagram));
+                    let measure = HostMeasure(&self.ctx.render);
+                    self.rendered = Some(Rendered::new(diagram, &measure));
                     self.error = None;
                 }
                 Err(error) => self.error = Some(error),
@@ -478,11 +516,13 @@ fn build_diagram(frame: &mut WidgetFrame, view: &View, colors: Colors, chinese: 
         Some(Rendered {
             diagram: Diagram::Flowchart(chart),
             flow: Some(layout),
+            ..
         }) => draw_flowchart(frame, chart, layout, area, ink),
         Some(Rendered {
             diagram: Diagram::Gantt(chart),
+            names_width,
             ..
-        }) => draw_gantt(frame, chart, area, ink, view.today, chinese),
+        }) => draw_gantt(frame, chart, *names_width, area, ink, view.today, chinese),
         _ if view.error.is_none() => {
             let middle = area.y + area.h / 2.0;
             frame.add(
@@ -641,6 +681,56 @@ fn draw_flowchart(
     let oy = area.y + ((area.h - layout.height * scale) / 2.0).max(0.0);
     let map = |(x, y): (f32, f32)| (ox + x * scale, oy + y * scale);
     let colors = ink.colors;
+    let rect = |b: mermaid::Box2| {
+        let (x, y) = map((b.x, b.y));
+        RectDip {
+            x,
+            y,
+            w: b.w * scale,
+            h: b.h * scale,
+        }
+    };
+    // Subgraph borders, parents first so nested ones paint on top.
+    for (k, (cluster, border)) in chart.clusters.iter().zip(&layout.clusters).enumerate() {
+        let Some(border) = border else { continue };
+        let r = rect(*border);
+        let id = k as u64;
+        frame.add(
+            WidgetElement::text(CLUSTER | id, r, "", design::CAPTION, 400, ink.text())
+                .parent(STAGE)
+                .role("group")
+                .fill(Some(ink.surface(paper::CARD)), 8.0 * scale),
+        );
+        frame.set_last_accessible_name(cluster.title.clone());
+        frame.add(
+            WidgetElement::line(
+                CLUSTER_OUTLINE | id,
+                r,
+                rounded_outline(r, 8.0 * scale),
+                true,
+                ink.line(paper::SHAPE_LINE, colors.secondary),
+                1.0,
+            )
+            .parent(STAGE),
+        );
+        frame.add(
+            WidgetElement::text(
+                CLUSTER_TITLE | id,
+                RectDip {
+                    x: r.x + 8.0 * scale,
+                    y: r.y + 2.0 * scale,
+                    w: (r.w - 16.0 * scale).max(0.0),
+                    h: mermaid::CLUSTER_TITLE * scale,
+                },
+                &cluster.title,
+                (design::CAPTION * scale).max(9.0),
+                600,
+                ink.secondary(),
+            )
+            .parent(STAGE)
+            .align(TextAlign::MiddleLeading),
+        );
+    }
     let link = ink.line(paper::LINK, colors.secondary);
     for (i, edge) in layout.edges.iter().enumerate() {
         let points: Vec<(f32, f32)> = edge.points.iter().copied().map(map).collect();
@@ -649,10 +739,16 @@ fn draw_flowchart(
             Stroke::Thick => (ink.text(), 2.5),
             Stroke::Dotted => (fade(link, 0.6), 1.0),
         };
-        let rect = bounds(&points);
         frame.add(
-            WidgetElement::line(EDGE | i as u64, rect, points.clone(), false, rgba, width)
-                .parent(STAGE),
+            WidgetElement::line(
+                EDGE | i as u64,
+                bounds(&points),
+                points.clone(),
+                false,
+                rgba,
+                width,
+            )
+            .parent(STAGE),
         );
         if edge.arrow && points.len() >= 2 {
             let tip = points[points.len() - 1];
@@ -662,40 +758,25 @@ fn draw_flowchart(
                     .parent(STAGE),
             );
         }
-        if let Some((text, x, y)) = &edge.label {
-            let (x, y) = map((*x, *y));
-            let size = (design::CAPTION * scale).max(9.0);
-            let w = mermaid::text_width(text, size) + 10.0;
-            let h = size * 1.5;
+        if let Some((text, b)) = &edge.label {
+            let r = rect(*b);
             frame.add(
                 WidgetElement::text(
                     EDGE_LABEL | i as u64,
-                    RectDip {
-                        x: x - w / 2.0,
-                        y: y - h / 2.0,
-                        w,
-                        h,
-                    },
+                    r,
                     text,
-                    size,
+                    (mermaid::EDGE_LABEL_SIZE * scale).max(9.0),
                     400,
                     ink.secondary(),
                 )
                 .parent(STAGE)
-                .fill(Some(ink.surface(paper::STAGE)), h / 2.0)
+                .fill(Some(ink.surface(paper::STAGE)), r.h.min(r.w) / 2.0)
                 .align(TextAlign::Center),
             );
         }
     }
     for (i, node) in chart.nodes.iter().enumerate() {
-        let b = layout.boxes[i];
-        let (x, y) = map((b.x, b.y));
-        let rect = RectDip {
-            x,
-            y,
-            w: b.w * scale,
-            h: b.h * scale,
-        };
+        let rect = rect(layout.boxes[i]);
         let radius = match node.shape {
             Shape::Rect => 6.0,
             Shape::Round => 12.0,
@@ -721,7 +802,7 @@ fn draw_flowchart(
             WidgetElement::text(
                 NODE | i as u64,
                 rect,
-                &node.label,
+                &layout.labels[i],
                 (mermaid::LABEL_SIZE * scale).max(9.0),
                 400,
                 ink.text(),
@@ -747,6 +828,7 @@ fn draw_flowchart(
 fn draw_gantt(
     frame: &mut WidgetFrame,
     chart: &Gantt,
+    names_width: f32,
     area: RectDip,
     ink: Ink,
     today: NaiveDate,
@@ -773,13 +855,7 @@ fn draw_gantt(
     };
     let colors = ink.colors;
     let days = (end - start).num_days().max(1) as f32;
-    let label_w = chart
-        .tasks
-        .iter()
-        .map(|t| mermaid::text_width(&t.name, design::CAPTION))
-        .fold(0.0, f32::max)
-        .clamp(48.0, (area.w * 0.32).max(48.0))
-        + 8.0;
+    let label_w = names_width.clamp(48.0, (area.w * 0.32).max(48.0)) + 8.0;
     let track = RectDip {
         x: area.x + label_w,
         y: area.y + 22.0,
@@ -897,7 +973,7 @@ fn draw_gantt(
         } else {
             (ink.surface(paper::BAR), ink.text())
         };
-        let show_range = mermaid::text_width(&range, 11.0) + 14.0 <= w && bar_h >= 14.0;
+        let show_range = Estimate.line_width(&range, 11.0) + 14.0 <= w && bar_h >= 14.0;
         frame.add(
             WidgetElement::text(
                 TASK_BAR | i as u64,
@@ -1056,7 +1132,7 @@ mod tests {
             .as_ref()
             .and_then(|p| p.as_ref().ok())
             .cloned()
-            .map(Rendered::new);
+            .map(|diagram| Rendered::new(diagram, &Estimate));
         let error = parsed.and_then(|p| p.err());
         build_diagram(
             &mut frame,
@@ -1210,6 +1286,36 @@ mod tests {
                 pecofence_render::DrawCommand::StrokePath(p, _) if p == path
             )));
         }
+    }
+
+    #[test]
+    fn subgraph_borders_and_link_labels_reach_the_scene() {
+        let source = "flowchart LR\n  A[需求] -->|评审通过| B\n  subgraph dev [开发阶段]\n    B[SYS] --> C[VND]\n  end\n  C --> D[发布]\n";
+        let scene = scene(source, 560.0, 400.0, true);
+        let find = |id: u64| scene.nodes().iter().find(|n| n.id == id).unwrap();
+        let border = find(CLUSTER);
+        assert_eq!(
+            (border.role.as_str(), border.name.as_str()),
+            ("group", "开发阶段")
+        );
+        assert_eq!(find(CLUSTER_TITLE).text, "开发阶段");
+        assert!(find(CLUSTER_OUTLINE).style.path.is_some());
+        let label = find(EDGE_LABEL).rect;
+        let nodes: Vec<_> = scene
+            .nodes()
+            .iter()
+            .filter(|n| n.id >> 32 == NODE >> 32)
+            .collect();
+        for node in &nodes {
+            let r = node.rect;
+            let apart = label.x + label.w <= r.x
+                || r.x + r.w <= label.x
+                || label.y + label.h <= r.y
+                || r.y + r.h <= label.y;
+            assert!(apart, "label {label:?} overlaps {:?}", node.name);
+        }
+        let inside = |r: RectDip| r.x > border.rect.x && r.x + r.w < border.rect.x + border.rect.w;
+        assert_eq!(nodes.iter().filter(|n| inside(n.rect)).count(), 2);
     }
 
     #[test]
