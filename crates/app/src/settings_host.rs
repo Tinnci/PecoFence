@@ -385,7 +385,13 @@ struct SettingsComponent {
     page: Page,
     pane_open: bool,
     /// None uses adaptive defaults; a user close persists until the hamburger reopens it.
+    /// The user's hamburger choice for the inline (expanded) pane.
     pane_override: Option<bool>,
+    /// An overlay pane opened by hand in compact or minimal mode. Kept apart from
+    /// `pane_override`: WinUI closes an overlay on its own when the mode changes, so an
+    /// expanded-mode "open" must not carry into overlay modes (the next click then closed
+    /// a pane that was already shut).
+    overlay_open: bool,
     navigation_mode: NavigationViewDisplayMode,
     view: Option<SettingsView>,
     client: Option<Uuid>,
@@ -482,11 +488,21 @@ impl Component for SettingsComponent {
             }
             Message::TogglePane => {
                 self.pane_open = !self.pane_open;
-                self.pane_override = Some(self.pane_open);
+                if self.navigation_mode == NavigationViewDisplayMode::Expanded {
+                    self.pane_override = Some(self.pane_open);
+                } else {
+                    self.overlay_open = self.pane_open;
+                }
                 tracing::debug!(open = self.pane_open, mode = ?self.navigation_mode, "settings: pane toggle requested");
             }
             Message::PaneOpenChanged(open) => {
-                self.pane_open = open && self.pane_override != Some(false);
+                if self.navigation_mode == NavigationViewDisplayMode::Expanded {
+                    self.pane_open = open && self.pane_override != Some(false);
+                } else {
+                    // Light dismissal and auto-close of an overlay.
+                    self.pane_open = open;
+                    self.overlay_open = open;
+                }
                 tracing::debug!(observed_open = open, open = self.pane_open, requested = ?self.pane_override, mode = ?self.navigation_mode, "settings: native pane state observed");
             }
             Message::NavigationModeChanged(mode) => {
@@ -497,9 +513,12 @@ impl Component for SettingsComponent {
                 // or write IsPaneOpen in the middle of WinUI's own transition.
                 if self.navigation_mode != mode {
                     self.navigation_mode = mode;
-                    if self.pane_override.is_none() {
-                        self.pane_open = mode == NavigationViewDisplayMode::Expanded;
-                    }
+                    self.pane_open = if mode == NavigationViewDisplayMode::Expanded {
+                        self.overlay_open = false;
+                        self.pane_override.unwrap_or(true)
+                    } else {
+                        self.overlay_open
+                    };
                 }
                 tracing::debug!(
                     open = self.pane_open,
@@ -811,6 +830,7 @@ impl SettingsComponent {
             page: Page::General,
             pane_open: true,
             pane_override: None,
+            overlay_open: false,
             navigation_mode: NavigationViewDisplayMode::Expanded,
             view: None,
             client: None,
@@ -981,6 +1001,7 @@ impl SettingsComponent {
         self.notice = None;
         if self.navigation_mode != NavigationViewDisplayMode::Expanded {
             self.pane_open = false;
+            self.overlay_open = false;
         }
     }
 

@@ -662,6 +662,100 @@ fn native_titlebar_hamburger_controls_adaptive_navigation_without_resetting_draf
 }
 
 #[test]
+fn expanded_pane_choice_does_not_leak_into_overlay_modes() {
+    use windows_reactor::{
+        EventDispatch, EventId, EventPayload, ObjectId, ObjectType, PropertyId, PropertyValue,
+    };
+    let input = input();
+    let mut host = ComponentHost::mount(
+        RecordingAdapter::new(),
+        [component::<SettingsComponent>("settings", input.clone())],
+    )
+    .unwrap();
+    let sender = input.shared.sender.borrow().as_ref().unwrap().clone();
+    assert!(sender.send(Message::HostUpdate(Uuid::new_v4(), Box::new(projection()))));
+    host.drain(100).unwrap();
+    let title = host
+        .runtime()
+        .graph()
+        .window_title_bar()
+        .unwrap()
+        .unwrap()
+        .0;
+    let nav = host
+        .runtime()
+        .graph()
+        .objects()
+        .find(|object| host.runtime().graph().kind(*object) == Some(ObjectType::NavigationView))
+        .unwrap();
+    let open = |host: &ComponentHost<RecordingAdapter>| {
+        host.runtime()
+            .graph()
+            .properties(nav)
+            .unwrap()
+            .iter()
+            .find(|property| property.id == PropertyId::IsPaneOpen)
+            .unwrap()
+            .value
+            .clone()
+    };
+    let emit = |host: &mut ComponentHost<RecordingAdapter>, object: ObjectId, id, payload| {
+        let callback = host
+            .runtime()
+            .graph()
+            .events(object)
+            .unwrap()
+            .iter()
+            .find(|event| event.id == id)
+            .unwrap()
+            .value
+            .clone();
+        host.test_adapter_mut()
+            .queue_event(EventDispatch::new(object, id, callback, payload));
+        host.drain(100).unwrap();
+    };
+    let mode = |host: &mut ComponentHost<RecordingAdapter>, mode| {
+        emit(
+            host,
+            nav,
+            EventId::DisplayModeChanged,
+            EventPayload::NavigationViewDisplayMode(mode),
+        )
+    };
+    let toggle = |host: &mut ComponentHost<RecordingAdapter>| {
+        emit(
+            host,
+            title,
+            EventId::PaneToggleRequested,
+            EventPayload::Unit,
+        )
+    };
+    // Close and reopen the inline pane by hand: an explicit expanded-mode "open".
+    toggle(&mut host);
+    toggle(&mut host);
+    assert_eq!(open(&host), PropertyValue::Bool(true));
+    // Narrowing switches to an overlay, which WinUI closes without an event.
+    mode(&mut host, NavigationViewDisplayMode::Compact);
+    assert_eq!(
+        open(&host),
+        PropertyValue::Bool(false),
+        "the inline choice must not keep an overlay marked open"
+    );
+    toggle(&mut host);
+    assert_eq!(
+        open(&host),
+        PropertyValue::Bool(true),
+        "one hamburger click opens the overlay"
+    );
+    // Widening restores the inline choice; the overlay request ends with the overlay.
+    mode(&mut host, NavigationViewDisplayMode::Expanded);
+    assert_eq!(open(&host), PropertyValue::Bool(true));
+    mode(&mut host, NavigationViewDisplayMode::Compact);
+    assert_eq!(open(&host), PropertyValue::Bool(false));
+    assert!(input.queue.drain().is_empty());
+}
+
+#[test]
 fn headless_reactor_mounts_all_pages_and_full_rule_editor() {
     let input = input();
     let mut host = ComponentHost::mount(
