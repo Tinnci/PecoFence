@@ -109,21 +109,15 @@ class CiActionContractTests(unittest.TestCase):
             self.action_text,
         )
 
-    def test_quick_and_full_are_independent_and_full_keeps_portable_artifact(self):
-        quick = self.workflow_text.split("  quick:\n", 1)[1].split("  build:\n", 1)[0]
+    def test_single_full_job_keeps_portable_artifact_and_reports(self):
+        self.assertNotIn("verification-mode: Quick", self.workflow_text)
         build = self.workflow_text.split("  build:\n", 1)[1]
-        self.assertIn("verification-mode: Quick", quick)
         self.assertIn("verification-mode: Full", build)
-        self.assertNotIn("needs:", quick)
         self.assertNotIn("needs:", build)
         self.assertIn("name: pecofence-portable", build)
-        self.assertIn("if: always()", quick)
         self.assertIn("if: always()", build)
-        self.assertIn("target/source-verification.json", quick)
-        self.assertIn("target/verification.json", quick)
         self.assertIn("target/source-verification.json", build)
         self.assertIn("target/verification.json", build)
-
 
 if __name__ == "__main__":
     unittest.main()

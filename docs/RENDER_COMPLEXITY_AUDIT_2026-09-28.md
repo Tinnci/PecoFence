@@ -51,6 +51,6 @@ spmd 快照 ─→ pipe/JSON ─→ SPM snapshot ─→ 可见 PanelView
 
 ## 验收边界
 
-- 采用仓库已有的性能预算作初始门槛：1120×760 DIP、150% DPI、60 Hz 滚动绘制提交 p95 ≤ 8 ms；静止 60 秒平均 CPU ≤ 0.5%；其余预算见 `docs/NEXT_PHASE_ROADMAP_AND_PLANNING.md` §6.3。目标值不是当前成绩。
+- 采用仓库已有的性能预算作初始门槛：1120×760 DIP、150% DPI、60 Hz 滚动绘制提交 p95 ≤ 8 ms；静止 60 秒平均 CPU ≤ 0.5%；其余预算见旧实施规划 §6.3（已移出 `docs/`，见 Git 历史）。目标值不是当前成绩。
 - 新旧实现需在相同 Windows 硬件、系统版本、DPI、电源模式和预热状态下对比；同时核对视觉结果、点击命中、UIA 语义、设备丢失恢复和快速滚动后图标最终补齐。
 - WSL 可测纯排序/布局/快照构建，无法证明 Windows Direct2D/Composition、Explorer 锚定、shell 缩略图或 GPU 帧时间。[Windows Performance Toolkit](https://learn.microsoft.com/en-us/windows-hardware/test/wpt/)、[DirectX 应用分析](https://learn.microsoft.com/en-us/windows/win32/direct2d/profiling-directx-applications)
