@@ -61,7 +61,6 @@
   "按类型": "By type",
   "按修改日期": "By date modified",
   "按大小": "By size",
-  "按打开次数": "By open count",
   "倒序": "Reverse order",
   "按时间分组": "Group by date",
   "今天": "Today",
@@ -665,5 +664,11 @@
   "栅栏行为": "Fence behavior",
   "Peek 浮现栅栏": "Peek",
   "单击托盘图标或按快捷键，把所有栅栏浮到当前窗口之上；再按一次、按 Esc 或点击空白处返回。": "Click the tray icon or press the shortcut to bring every fence above the current window. Click or press it again, press Esc, or click an empty area to return.",
-  "纸张": "Paper"
+  "纸张": "Paper",
+  "按使用频率": "By frequent use",
+  "建议": "Suggestions",
+  "排序：{0}": "Sort: {0}",
+  "自动将 .{0} 文件放入“{1}”": "Always put .{0} files in “{1}”",
+  "将“{0}”移到“{1}”": "Move “{0}” to “{1}”",
+  "收集闲置的安装包和压缩包": "Gather idle installers and archives"
 }

@@ -6,7 +6,7 @@ Set-Location (Split-Path -Parent $PSScriptRoot)
 $captured = Join-Path $TargetDir "build-inputs.json"
 & $Python scripts/package_desktop.py capture --out $captured
 if ($LASTEXITCODE -ne 0) { throw "Cannot capture build inputs." }
-cargo build --locked --release -p pecofence -p pecofence-watchdog -p pecofence-shell-extension --target-dir $TargetDir
+cargo build --locked --release -p pecofence -p pecofence-watchdog -p pecofence-cli -p pecofence-shell-extension --target-dir $TargetDir
 if ($LASTEXITCODE -ne 0) { throw "Cargo desktop build failed." }
 & $Python scripts/stage-winappsdk-runtime.py stage --target-dir $TargetDir --profile release
 if ($LASTEXITCODE -ne 0) { throw "Pinned Windows App SDK runtime staging failed." }

@@ -19,7 +19,7 @@ from pathlib import Path, PurePosixPath
 import winappsdk_runtime as runtime
 
 ROOT = Path(__file__).resolve().parents[1]
-EXES = ("pecofence.exe", "pecofence-watchdog.exe")
+EXES = ("pecofence.exe", "pecofence-watchdog.exe", "pecofence-cli.exe")
 SHELL_DLL = "pecofence_shell_extension.dll"
 BINARIES = (*EXES, SHELL_DLL)
 # Warm-paper widget fonts load from `fonts/` beside pecofence.exe (subset OFL Noto CJK;

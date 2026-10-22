@@ -975,49 +975,7 @@ impl AppState {
                 .filter(|(_, it)| it.orphaned_since.is_none())
                 .collect()
         };
-        match fence.view.sort {
-            SortMode::Manual => items.sort_by_key(|(r, it)| {
-                (
-                    r.and_then(|r| r.manual_index).unwrap_or(u32::MAX),
-                    it.display_name.to_lowercase(),
-                )
-            }),
-            SortMode::Name => {
-                items.sort_by(|a, b| natural_cmp(&a.1.display_name, &b.1.display_name))
-            }
-            SortMode::Type => items.sort_by(|a, b| {
-                let ka = (
-                    !a.1.is_folder,
-                    ext_of_key(&a.1.key),
-                    a.1.display_name.to_lowercase(),
-                );
-                let kb = (
-                    !b.1.is_folder,
-                    ext_of_key(&b.1.key),
-                    b.1.display_name.to_lowercase(),
-                );
-                ka.cmp(&kb)
-            }),
-            SortMode::Date => items.sort_by_key(|(_, it)| std::cmp::Reverse(it.mtime)),
-            SortMode::Size => items.sort_by(|a, b| {
-                // Folders first (Explorer), then largest first, ties by name.
-                (!a.1.is_folder, std::cmp::Reverse(a.1.size))
-                    .cmp(&(!b.1.is_folder, std::cmp::Reverse(b.1.size)))
-                    .then_with(|| natural_cmp(&a.1.display_name, &b.1.display_name))
-            }),
-            SortMode::OpenCount => items.sort_by(|a, b| {
-                std::cmp::Reverse(a.1.open_count)
-                    .cmp(&std::cmp::Reverse(b.1.open_count))
-                    .then_with(|| natural_cmp(&a.1.display_name, &b.1.display_name))
-            }),
-        }
-        if fence.view.sort != SortMode::Manual {
-            // Explorer keeps the Recycle Bin and friends ahead of files whatever the order.
-            items.sort_by_key(|(_, it)| !it.is_namespace());
-        }
-        if fence.view.reverse {
-            items.reverse();
-        }
+        pecofence_core::order::order_items(&mut items, &fence.view, pecofence_core::now_unix());
         items.into_iter().map(|(_, it)| it).collect()
     }
 
@@ -1842,7 +1800,30 @@ impl AppState {
             return Err(existing);
         }
         let id = self.new_fence(&template.title(), rect).ok_or(None)?;
-        let rule = template.rule(id);
+        self.insert_rule(template.rule(id));
+        Ok(id)
+    }
+
+    /// A suggested rule (`pecofence_core::suggest`), ahead of the broader existing ones. False
+    /// when its fence is gone or an identical rule already fills it.
+    pub fn add_rule(&mut self, rule: pecofence_core::rules::Rule) -> bool {
+        let Target::Collection(target) = rule.target else {
+            return false;
+        };
+        let duplicate = self
+            .config
+            .rules
+            .list
+            .iter()
+            .any(|r| r.target == rule.target && r.all_of == rule.all_of);
+        if !self.save_allowed || duplicate || self.routable_fence(target).is_none() {
+            return false;
+        }
+        self.insert_rule(rule);
+        true
+    }
+
+    fn insert_rule(&mut self, rule: pecofence_core::rules::Rule) {
         // Idle-days rules must stay ahead of the type-only ones ("待清理" before "安装包"),
         // otherwise a plain type rule claims every installer first and the idle rule never fires.
         let at = if Self::has_idle_cond(&rule) {
@@ -1857,7 +1838,6 @@ impl AppState {
         };
         self.config.rules.list.insert(at, rule);
         self.mark_dirty();
-        Ok(id)
     }
 
     fn has_idle_cond(rule: &pecofence_core::rules::Rule) -> bool {
@@ -1901,48 +1881,6 @@ impl AppState {
         }
         self.mark_dirty();
         true
-    }
-}
-
-fn ext_of_key(key: &ItemKey) -> String {
-    key.as_path()
-        .and_then(|p| p.rsplit_once('.').map(|(_, e)| e.to_string()))
-        .unwrap_or_default()
-}
-
-/// Case-insensitive natural ordering (digits compared numerically), like Explorer.
-pub fn natural_cmp(a: &str, b: &str) -> std::cmp::Ordering {
-    let (a, b) = (a.to_lowercase(), b.to_lowercase());
-    let mut ai = a.chars().peekable();
-    let mut bi = b.chars().peekable();
-    loop {
-        match (ai.peek().copied(), bi.peek().copied()) {
-            (None, None) => return std::cmp::Ordering::Equal,
-            (None, _) => return std::cmp::Ordering::Less,
-            (_, None) => return std::cmp::Ordering::Greater,
-            (Some(ca), Some(cb)) if ca.is_ascii_digit() && cb.is_ascii_digit() => {
-                let mut na = 0u64;
-                while let Some(c) = ai.peek().copied().filter(|c| c.is_ascii_digit()) {
-                    na = na.saturating_mul(10).saturating_add(c as u64 - '0' as u64);
-                    ai.next();
-                }
-                let mut nb = 0u64;
-                while let Some(c) = bi.peek().copied().filter(|c| c.is_ascii_digit()) {
-                    nb = nb.saturating_mul(10).saturating_add(c as u64 - '0' as u64);
-                    bi.next();
-                }
-                if na != nb {
-                    return na.cmp(&nb);
-                }
-            }
-            (Some(ca), Some(cb)) => {
-                if ca != cb {
-                    return ca.cmp(&cb);
-                }
-                ai.next();
-                bi.next();
-            }
-        }
     }
 }
 

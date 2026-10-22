@@ -1,6 +1,6 @@
 ---
 name: pecofence
-description: "Build, verify and install PecoFence Windows desktop packages, and diagnose its workspace or SPM connection. Use the packaging CLI; the GUI is not a task-query API."
+description: "Build, verify and install PecoFence Windows desktop packages, inspect fences and organizing suggestions with the read-only pecofence-cli, and diagnose its workspace or SPM connection. The GUI is not a task-query API."
 ---
 
 # PecoFence desktop packages
@@ -18,6 +18,7 @@ Run those examples from the checkout with Python 3.11 or newer. `verify` reads t
 - `capture`/`record-build` write provenance; `portable` assembles a package; installation creates a new immutable version directory. Inspect child help before choosing paths and require clean source for release packaging.
 - `--json` emits a versioned success/error envelope; errors are on stderr. Usage errors exit 2 and operational failures exit 1. Fix verification failures before installing, rather than retrying with checks disabled.
 - Native `--shell-command new-note` and `--shell-command new-todo` request creation of a desktop component. Use them only for a requested creation, and verify the resulting component; dispatch is not proof of durable saving. They do not expose note/task querying.
+- `pecofence-cli` (next to `pecofence.exe`; `cargo run -p pecofence-cli --` in a checkout) is the read-only workspace query tool: `fences`, `suggest` (ranked organizing suggestions, each with its reason) and `order` (preview a fence's sort). Add `--json`. It never writes; present suggestions and let the user apply them from the fence menu (Suggestions). See `docs/SUGGESTIONS.md`.
 - Native `--validate-workspace <path>` validates a workspace; `--probe-spm` contacts the daemon. These are diagnostic entrypoints, not general task read/write APIs. Do not invent a TODO command or claim a packaging check tested GUI interactions.
 - For an authorized upgrade, use the recorded current installation, back up configuration after graceful exit, keep the old version for rollback, update owned startup/shortcut entries, then verify running path, hashes and configuration recovery. Preserve user layouts and TODO contents.
 - Workspace data and logs are private. Do not upload them or alter the SPM database merely to inspect desktop packaging.

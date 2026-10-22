@@ -13,6 +13,21 @@ install 预演仍读取并验证归档，但不创建目录、不解压、不启
 校验值必须来自可信渠道；不能把校验失败当成可自动重试的安装指令。
 验证：`python scripts/test-cli-guidance.py` 和 `python scripts/test-package-desktop.py`。
 
+## 工作区查询与整理建议：`pecofence-cli`
+
+只读控制台程序，随 `pecofence.exe` 一起发布；不写工作区、不连接正在运行的 PecoFence。
+
+```sh
+pecofence-cli fences --json
+pecofence-cli suggest --fence Desktop --kind move --json
+pecofence-cli order --fence Apps --by frequent --limit 10 --json
+```
+
+`suggest` 默认最多 10 条，`order` 默认最多 50 项；`meta.total`/`meta.truncated` 说明范围，`meta.savedAt` 表示结果对应的保存时间。
+信封与上面相同；工作区缺失或无法读取退出 1，参数错误、找不到栅栏或栅栏重名退出 2，并给出下一步。
+建议需由用户在栅栏菜单「建议」中应用；Agent 只呈现建议及其理由，不代为修改。规则、阈值与边界情况见 [整理建议](SUGGESTIONS.md)。
+验证：`cargo test -p pecofence-cli -p pecofence-core`。
+
 ## 共同设计标准
 
 描述说明适用场景和副作用；示例先行；默认结果有界且说明范围。错误必须给出可执行修正方向，

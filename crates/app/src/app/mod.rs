@@ -60,6 +60,7 @@ mod peek;
 mod persistence;
 mod portals;
 mod settings;
+mod suggestions;
 mod sync;
 mod tabs;
 #[cfg(test)]

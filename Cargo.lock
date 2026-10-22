@@ -371,6 +371,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "pecofence-cli"
+version = "0.0.6"
+dependencies = [
+ "pecofence-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "pecofence-core"
 version = "0.0.6"
 dependencies = [

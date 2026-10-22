@@ -86,6 +86,10 @@ const CMD_COL_SIZE: u32 = 423;
 const CMD_COL_RESET_WIDTHS: u32 = 424;
 const CMD_PORTAL_UP: u32 = 380;
 const CMD_PORTAL_HOME: u32 = 381;
+/// 「建议」 entries: base + index into `fence_suggestions`.
+const CMD_FENCE_SUGGEST_BASE: u32 = 390;
+const _: () =
+    assert!(CMD_FENCE_SUGGEST_BASE + suggestions::MAX_FENCE_SUGGESTIONS as u32 <= CMD_COL_NAME);
 /// "合并到 ▸ <host>" entries: base + index into `host_fences()`.
 const CMD_TAB_ATTACH_BASE: u32 = 2000;
 /// Options a widget adds to its window menu (`PanelInstance::menu_items`), by index.
@@ -497,6 +501,11 @@ impl App {
             return;
         };
         let locked = h.locked;
+        let suggestions = if f.content.is_files() {
+            self.fence_suggestions(fence)
+        } else {
+            Vec::new()
+        };
         let menu = PopupMenu::new();
         let rolled = self.fences.get(&host).is_some_and(|w| w.is_rolled());
         menu.item(
@@ -621,7 +630,7 @@ impl App {
                 )
                 .check_item(
                     CMD_FENCE_SORT_OPENED,
-                    pecofence_core::i18n::text("按打开次数"),
+                    pecofence_core::i18n::text("按使用频率"),
                     f.view.sort == SortMode::OpenCount,
                     false,
                 )
@@ -640,6 +649,18 @@ impl App {
                     false,
                 );
             menu.submenu(pecofence_core::i18n::text("排序方式"), sort_menu);
+            if !suggestions.is_empty() {
+                let suggest_menu = PopupMenu::new();
+                for (index, suggestion) in suggestions.iter().enumerate() {
+                    suggest_menu.item(
+                        CMD_FENCE_SUGGEST_BASE + index as u32,
+                        &self.suggestion_label(suggestion),
+                        false,
+                        false,
+                    );
+                }
+                menu.submenu(pecofence_core::i18n::text("建议"), suggest_menu);
+            }
             let new_menu = PopupMenu::new();
             new_menu
                 .item(
@@ -815,6 +836,14 @@ impl App {
                     pecofence_core::WidgetPaperStyle::Dark,
                 ][(id - CMD_PAPER_BASE) as usize];
                 self.apply_settings(settings);
+            }
+            id if (CMD_FENCE_SUGGEST_BASE
+                ..CMD_FENCE_SUGGEST_BASE + suggestions::MAX_FENCE_SUGGESTIONS as u32)
+                .contains(&id) =>
+            {
+                if let Some(suggestion) = suggestions.get((id - CMD_FENCE_SUGGEST_BASE) as usize) {
+                    self.apply_suggestion(suggestion);
+                }
             }
             id if (CMD_PANEL_ITEM_BASE..CMD_PANEL_ITEM_BASE + 1000).contains(&id) => {
                 if let Some(item) = panel_items.get((id - CMD_PANEL_ITEM_BASE) as usize) {

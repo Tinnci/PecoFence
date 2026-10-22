@@ -350,6 +350,30 @@ fn category_matches(cat: TypeCategory, facts: &ItemFacts) -> bool {
     }
 }
 
+/// The category an item is grouped under when a fence is sorted by type: the first of
+/// installers, folders, programs (with `.lnk`), web shortcuts, documents, images, music,
+/// video and archives that matches. `None` for everything else.
+pub fn category_of(file_name: &str, is_folder: bool) -> Option<TypeCategory> {
+    let facts = ItemFacts {
+        file_name: file_name.to_string(),
+        is_folder,
+        ..ItemFacts::default()
+    };
+    [
+        TypeCategory::Folders,
+        TypeCategory::Installers,
+        TypeCategory::Programs,
+        TypeCategory::Shortcuts,
+        TypeCategory::Documents,
+        TypeCategory::Images,
+        TypeCategory::Music,
+        TypeCategory::Video,
+        TypeCategory::Archives,
+    ]
+    .into_iter()
+    .find(|category| category_matches(*category, &facts))
+}
+
 fn str_op(op: StrOp, haystack: &str, needle: &str) -> bool {
     let h = haystack.to_lowercase();
     let n = needle.to_lowercase();

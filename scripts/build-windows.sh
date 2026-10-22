@@ -16,7 +16,7 @@ PROFILE="${1:-release}"
 if [ "$#" -gt 0 ]; then shift; fi
 PACKAGES=("$@")
 if [ "${#PACKAGES[@]}" -eq 0 ]; then
-  PACKAGES=(pecofence pecofence-watchdog pecofence-shell-extension)
+  PACKAGES=(pecofence pecofence-watchdog pecofence-cli pecofence-shell-extension)
 fi
 
 # Defense: an ambient CARGO_TARGET_DIR (e.g. the retired Windows user variable)

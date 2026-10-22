@@ -61,7 +61,6 @@
   "按类型": "Nach Typ",
   "按修改日期": "Nach Änderungsdatum",
   "按大小": "Nach Größe",
-  "按打开次数": "Nach Aufrufhäufigkeit",
   "倒序": "Umgekehrte Reihenfolge",
   "按时间分组": "Nach Datum gruppieren",
   "今天": "Heute",
@@ -666,5 +665,11 @@
   "只补齐缺失的时钟、日历、便笺和待办。已有组件与内容保持不变，操作前保存快照。是否继续？": "Nur fehlende Uhr-, Kalender-, Notiz- und Aufgabenwidgets hinzufügen. Vorhandene Widgets und Inhalte bleiben erhalten. Zuerst wird ein Schnappschuss gespeichert. Fortfahren?",
   "恢复主题、小组件纸张和窗口外观。布局、内容和启动设置保持不变，操作前保存快照。是否继续？": "Design, Widgetpapier und Fensterdarstellung wiederherstellen. Anordnung, Inhalte und Starteinstellungen bleiben erhalten. Zuerst wird ein Schnappschuss gespeichert. Fortfahren?",
   "恢复：{0}": "Wiederherstellen: {0}",
-  "删除：{0}": "Löschen: {0}"
+  "删除：{0}": "Löschen: {0}",
+  "按使用频率": "Nach Nutzungshäufigkeit",
+  "建议": "Vorschläge",
+  "排序：{0}": "Sortieren: {0}",
+  "自动将 .{0} 文件放入“{1}”": ".{0}-Dateien immer in „{1}“ ablegen",
+  "将“{0}”移到“{1}”": "„{0}“ nach „{1}“ verschieben",
+  "收集闲置的安装包和压缩包": "Ungenutzte Installer und Archive sammeln"
 }
