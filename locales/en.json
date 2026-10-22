@@ -670,5 +670,12 @@
   "排序：{0}": "Sort: {0}",
   "自动将 .{0} 文件放入“{1}”": "Always put .{0} files in “{1}”",
   "将“{0}”移到“{1}”": "Move “{0}” to “{1}”",
-  "收集闲置的安装包和压缩包": "Gather idle installers and archives"
+  "收集闲置的安装包和压缩包": "Gather idle installers and archives",
+  "立即保存": "Save now",
+  "最近备份：{0}": "Latest backup: {0}",
+  "{0} 个每日备份 · {1} 个布局快照": "{0} daily backups · {1} layout snapshots",
+  "保存快照后，可以随时回到当前的栅栏排布。": "Save a snapshot to return to the current fence arrangement at any time.",
+  "更早的备份（{0}）": "Older backups ({0})",
+  "配置文件": "Configuration file",
+  "补齐": "Add missing"
 }

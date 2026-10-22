@@ -1021,7 +1021,9 @@ impl SettingsComponent {
                     .automation_name(&text),
             ));
         }
-        if let Some(issue) = issue {
+        if self.page == Page::Layout && view.is_some() {
+            // The Layout page's storage card shows the state, the issue and its actions.
+        } else if let Some(issue) = issue {
             rows.push(keyed("problem", pages::notice(true, issue)));
         } else {
             rows.push(keyed(

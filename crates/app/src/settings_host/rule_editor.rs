@@ -391,12 +391,12 @@ pub(super) fn view(
     let mut rows =
         vec![
             TextBlock::new().text(tr("自动整理")).into(),
-            super::pages::switch(
+            View::from(super::pages::switch(
                 "有新项目时自动归类",
                 projected.rules.keep_updated,
                 enabled,
                 context.callback(Message::KeepUpdated),
-            ),
+            )),
             ComboBox::new()
                 .width(320.0)
                 .horizontal_alignment(windows_reactor::HorizontalAlignment::Left)
@@ -476,7 +476,7 @@ pub(super) fn view(
                                             .join(" AND "),
                                     )
                                     .text_wrapping(windows_reactor::TextWrapping::Wrap),
-                                super::pages::switch(
+                                View::from(super::pages::switch(
                                     "启用",
                                     rule.enabled,
                                     enabled,
@@ -484,7 +484,7 @@ pub(super) fn view(
                                         let id = rule.id;
                                         move |value| Message::RuleEnabled(id, value)
                                     }),
-                                ),
+                                )),
                                 StackPanel::new()
                                     .orientation(windows_reactor::Orientation::Horizontal)
                                     .spacing(4.0)

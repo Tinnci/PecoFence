@@ -44,14 +44,29 @@ outside a Settings XAML root. Do not remove these behaviors merely for styling.
 
 The helpers in [pages.rs](../crates/app/src/settings_host/pages.rs) keep pages consistent:
 
-- **Sections.** `section()` starts a group with a level-2 heading. Group by task
-  (desktop and startup, appearance, fence behavior, Peek), not by control type. Use
-  `note()` for one explanatory line under a heading, and only when the behavior is not
-  obvious from the labels.
-- **Rows.** An immediate setting is a `row()`: the label on the left, the control on
-  the right, in a themed card, like Windows Settings' `SettingsCard`. `switch()`,
-  `field_combo()` and `slider_row()` build on it and give the control the label as its
-  UI Automation name. Controls in rows share one width.
+- **Sections.** `section()` starts a group with a 16 px semibold level-2 heading.
+  Group by task (desktop and startup, appearance, fence behavior, Peek), not by
+  control type. Use `note()` for one line of secondary text under a heading, and only
+  when the behavior is not obvious from the labels.
+- **Rows and groups.** An immediate setting is a `Row`: an optional Segoe Fluent Icons
+  glyph (`glyph::*`), the label with an optional `description()`, and the control on
+  the right, like Windows Settings' `SettingsCard`. `switch()`, `field_combo()` and
+  `slider_row()` build rows and name the control after the label for UI Automation.
+  `group()` joins a section's rows into one connected list, borrowing the grouped lists
+  of Material 3 Expressive: 8 px outer corners at the ends, 3 px inner corners and a
+  2 px gap between rows. A lone row converts into a standalone card.
+- **Emphasis follows state.** A page whose main question is a status ("is my
+  workspace safe?") opens with a hero card instead of a plain status line. The Layout
+  page has one: a tonal icon container, the status as headline, supporting facts
+  (latest backup, backup and snapshot counts), and only the actions that fit the
+  state. That means *Save now* when dirty, *Retry saving* after a failure, *Cancel
+  exit wait* while closing, and the recovery choices in read-only mode, where the card
+  turns critical. The primary action uses the accent style. Destructive row actions
+  (*Delete*) use the subtle style.
+- **Button groups.** Related actions sit side by side in one row (export and import,
+  name and save snapshot, restore and delete), not stacked down the page.
+- **Long lists fold.** Show the three newest backups and put the rest in an
+  `Expander`. Show dates and names; keep full paths in tooltips and descriptions.
 - **Forms stay forms.** Text entry, rule drafts and other edits that need an explicit
   Apply keep header-above fields and buttons; do not force them into rows.
 - **Disable moot settings.** When one setting makes another meaningless, show the
@@ -59,6 +74,10 @@ The helpers in [pages.rs](../crates/app/src/settings_host/pages.rs) keep pages c
   expansion while click-to-expand is on, the Peek shortcut and dimming while Peek is
   off, tint strength without a tint color. The read-only state (`view.writable`)
   disables everything.
+
+Material 3 Expressive is borrowed only for hierarchy (hero status, connected groups,
+button groups, emphasis by state). Controls, colors and motion stay Fluent: WinUI
+controls and theme brushes only, so contrast themes and the system accent still apply.
 
 Microsoft's [guidelines for app settings](https://learn.microsoft.com/en-us/windows/apps/design/app-settings/guidelines-for-app-settings)
 are the reference: apply simple changes immediately, group related settings under

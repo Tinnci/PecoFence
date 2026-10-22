@@ -671,5 +671,12 @@
   "排序：{0}": "Ordenar: {0}",
   "自动将 .{0} 文件放入“{1}”": "Sempre colocar arquivos .{0} em “{1}”",
   "将“{0}”移到“{1}”": "Mover “{0}” para “{1}”",
-  "收集闲置的安装包和压缩包": "Reunir instaladores e arquivos compactados sem uso"
+  "收集闲置的安装包和压缩包": "Reunir instaladores e arquivos compactados sem uso",
+  "立即保存": "Salvar agora",
+  "最近备份：{0}": "Último backup: {0}",
+  "{0} 个每日备份 · {1} 个布局快照": "{0} backups diários · {1} instantâneos de layout",
+  "保存快照后，可以随时回到当前的栅栏排布。": "Salve um instantâneo para voltar a qualquer momento à disposição atual das cercas.",
+  "更早的备份（{0}）": "Backups mais antigos ({0})",
+  "配置文件": "Arquivo de configuração",
+  "补齐": "Completar"
 }
