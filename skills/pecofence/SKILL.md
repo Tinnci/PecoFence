@@ -1,25 +1,81 @@
 ---
 name: pecofence
-description: "Build, verify and install PecoFence Windows desktop packages, inspect fences and organizing suggestions with the read-only pecofence-cli, and diagnose its workspace or SPM connection. The GUI is not a task-query API."
+description: "Inspect and operate the PecoFence Windows desktop organizer with pecofence-cli: whether it is running, why it closed or crashed, closing it gracefully for a restart or upgrade, fence listings, sort previews and organizing suggestions. Also build, verify and install its packages with scripts/package_desktop.py. Start read-only; quit is the one command with a side effect."
 ---
 
-# PecoFence desktop packages
+# PecoFence
 
-PecoFence is a Windows GUI. Its agent-facing packaging tool is `scripts/package_desktop.py` in the PecoFence checkout. Locate the checkout using the local registry (`dev-cli list --json`) when available, or the user's selected repository.
+PecoFence is a Windows GUI. Agents use `pecofence-cli` for the app and its workspace, and
+`scripts/package_desktop.py` in the checkout for packages. Use neither tool to change notes,
+TODOs or fences.
+
+**Find the CLI.** It sits beside the running app's executable
+(`(Get-Process pecofence).Path`), or in the installation folder the user names. In a checkout,
+use `cargo run -p pecofence-cli --`. From WSL, call the `.exe` directly. `deployment.json` only
+records what was installed; the running process path is the truth.
 
 ```sh
-python3 scripts/package_desktop.py --help
-python3 scripts/package_desktop.py verify --archive release.zip --sha256 <trusted-sha256> --summary --json
-python3 scripts/package_desktop.py install --archive release.zip --sha256 <trusted-sha256> --destination versions --dry-run --json
+pecofence-cli --help
+pecofence-cli status --json
+pecofence-cli fences --json
+pecofence-cli suggest --limit 5 --json
 ```
 
-Run those examples from the checkout with Python 3.11 or newer. `verify` reads the archive; install dry-run also validates it, without extracting or launching executables. Use a trusted checksum; computing a checksum from an untrusted download does not authenticate it.
+| Command | Effect |
+| --- | --- |
+| `status`, `fences`, `suggest`, `order` | Read-only: the session record and the last saved workspace |
+| `quit [--wait S]` | Asks the app to save and exit, like the tray's Exit. Never forces. |
+| `package_desktop.py verify`, `install --dry-run` | Read-only archive checks |
+| `package_desktop.py capture`, `record-build`, `portable`, `install` | Write builds, packages or versions; check `--help` first |
 
-- `capture`/`record-build` write provenance; `portable` assembles a package; installation creates a new immutable version directory. Inspect child help before choosing paths and require clean source for release packaging.
-- `--json` emits a versioned success/error envelope; errors are on stderr. Usage errors exit 2 and operational failures exit 1. Fix verification failures before installing, rather than retrying with checks disabled.
-- Native `--shell-command new-note` and `--shell-command new-todo` request creation of a desktop component. Use them only for a requested creation, and verify the resulting component; dispatch is not proof of durable saving. They do not expose note/task querying.
-- `pecofence-cli` (next to `pecofence.exe`; `cargo run -p pecofence-cli --` in a checkout) is the read-only workspace query tool: `fences`, `suggest` (ranked organizing suggestions, each with its reason) and `order` (preview a fence's sort). Add `--json`. It never writes; present suggestions and let the user apply them from the fence menu (Suggestions). See `docs/SUGGESTIONS.md`.
-- `pecofence-cli status --json` reports whether the app is running, closing, exited (`normal`, `pumpFallback`, `discardedChanges`, `unclosed`) or crashed, plus watchdog, last save and log paths. `pecofence-cli quit --wait 60 --json` asks it to save and exit and never force-closes; use it (and check `exit: normal`) before replacing binaries instead of killing the process. Only run `quit` when the user asked to close or upgrade PecoFence. See `docs/LIFECYCLE.md`.
-- Native `--validate-workspace <path>` validates a workspace; `--probe-spm` contacts the daemon. These are diagnostic entrypoints, not general task read/write APIs. Do not invent a TODO command or claim a packaging check tested GUI interactions.
-- For an authorized upgrade, use the recorded current installation, back up configuration after graceful exit, keep the old version for rollback, update owned startup/shortcut entries, then verify running path, hashes and configuration recovery. Preserve user layouts and TODO contents.
-- Workspace data and logs are private. Do not upload them or alter the SPM database merely to inspect desktop packaging.
+## Tasks
+
+- **"Is it running?" or "why did it close?"** Run `status --json`.
+  - `state` is one of `running`, `closing`, `exited`, `crashed`, `endedUnexpectedly` or
+    `noRecord` (an app older than session records).
+  - For `exited`, read `exit`:
+    - `normal`: fine.
+    - `pumpFallback`: saved, then a late WinUI exit.
+    - `discardedChanges`: the user chose to drop unsaved changes.
+    - `unclosed`: Windows sign-out or a fatal UI error.
+  - For `crashed`, report `exitCodeHex` and point to `logs.previous`. Quote only the few log
+    lines that matter.
+  - A running app with `watchdog.alive: false` cannot record a crash. Say so.
+- **"Tidy my desktop."** Run `suggest --json` and present each `summary` with its `reason`.
+  The user applies a suggestion with a right-click on the fence → Suggestions (建议).
+  `order --fence <id> --by <mode>` previews an order. Never edit `workspace.v2.json`.
+- **Restart or upgrade.** Only when the user asked for it:
+  1. Run `quit --wait 60 --json` and require `exit: normal`, or `state: notRunning`.
+  2. Back up the configuration, keep the old version for rollback, then replace the binaries.
+  3. Start the app and confirm with `status` that it is `running` with the watchdog alive.
+  4. Verify hashes and preserve layouts and TODO contents.
+- **Packaging.** Run `package_desktop.py verify --archive <zip> --sha256 <trusted> --summary --json`,
+  then `install ... --dry-run`. Use Python 3.11 or newer, from the checkout.
+  - A checksum computed from an untrusted download authenticates nothing.
+  - Fix verification failures; don't retry with checks disabled.
+  - Release packaging requires clean source.
+
+## Output and errors
+
+`--json` prints one envelope: `{"schema_version":"1.0","ok":…,"data"|"error":…,"meta":…}`.
+Errors go to stderr with `code`, `message`, `retryable` and `suggested_action`. Exit codes are
+0 for success (empty results included), 1 for an operational failure and 2 for invalid
+arguments.
+
+- `FENCE_AMBIGUOUS`: retry with the id prefix from `fences`.
+- `WORKSPACE_UNAVAILABLE` / `WORKSPACE_INVALID`: pass `--workspace`. Backups are in
+  `workspace.v2.backups`.
+- `QUIT_TIMEOUT`: the app is still closing, usually because a save-failure dialog is waiting.
+  Tell the user to answer it. Do not kill the process; that loses unsaved changes.
+- Bounded lists report `meta.total` and `meta.truncated`. Raise `--limit` instead of assuming
+  the list is complete.
+
+## Boundaries
+
+- `--shell-command new-note|new-todo` creates a component. Use it only when asked, and verify
+  the result: dispatch is not proof that it saved.
+- `--validate-workspace` and `--probe-spm` are diagnostics, not data APIs. Do not invent
+  TODO or note commands.
+- Workspace data, session records and logs are private. Do not upload them, and do not alter
+  the SPM database to inspect packaging.
+- Details: `docs/LIFECYCLE.md`, `docs/SUGGESTIONS.md`, `docs/AGENT_CLI_GUIDANCE.md`.

@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 const HELP: &str = "\
-pecofence-cli — inspect a saved PecoFence workspace (read-only)
+pecofence-cli — inspect a saved PecoFence workspace and the running app (only quit has an effect)
 
 USAGE
   pecofence-cli fences  [OPTIONS]

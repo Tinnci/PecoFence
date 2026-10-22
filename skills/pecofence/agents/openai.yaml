@@ -1,4 +1,4 @@
 interface:
   display_name: "pecofence"
-  short_description: "Verify Windows desktop packages and preserve workspaces"
-  default_prompt: "Use $pecofence for the requested workflow, inspecting command help and effects first."
+  short_description: "Check, close and organize PecoFence; verify its packages"
+  default_prompt: "Use $pecofence for the requested workflow: start with read-only pecofence-cli status or help, and run quit or package writes only when asked."
