@@ -375,6 +375,7 @@ name = "pecofence-cli"
 version = "0.0.6"
 dependencies = [
  "pecofence-core",
+ "pecofence-shell-contract",
  "serde",
  "serde_json",
 ]

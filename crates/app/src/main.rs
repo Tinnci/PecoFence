@@ -10,6 +10,7 @@ mod fence_window;
 mod holiday_updates;
 mod icons;
 mod layout;
+mod lifecycle;
 mod modern_menu;
 mod peek;
 mod persistence;
@@ -79,10 +80,10 @@ fn parse_args() -> app::Args {
     }
 }
 
-/// Log file next to the config: `%LOCALAPPDATA%\PecoFence\pecofence.log` (truncated per run).
+/// Log file next to the config: `%LOCALAPPDATA%\PecoFence\pecofence.log`, started fresh per
+/// run; the previous run's log is kept as `pecofence.previous.log`.
 fn log_file_path() -> Option<std::path::PathBuf> {
-    let base = std::env::var_os("LOCALAPPDATA").map(std::path::PathBuf::from)?;
-    let dir = base.join("PecoFence");
+    let dir = lifecycle::local_dir()?;
     std::fs::create_dir_all(&dir).ok()?;
     // A second instance (PECOFENCE_INSTANCE) logs to its own file instead of truncating the
     // main one.
@@ -99,7 +100,11 @@ fn init_logging() {
     use tracing_subscriber::fmt::writer::MakeWriterExt;
     let filter = tracing_subscriber::EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
-    let file = log_file_path().and_then(|p| std::fs::File::create(p).ok());
+    let file = log_file_path().and_then(|path| {
+        // Keep the last run's log: after a crash or forced stop it is the only evidence.
+        let _ = std::fs::rename(&path, path.with_extension("previous.log"));
+        std::fs::File::create(path).ok()
+    });
     match file {
         Some(file) => {
             let file = std::sync::Mutex::new(file);
@@ -166,14 +171,6 @@ fn main() -> Result<()> {
                 )
             });
     }
-    init_logging();
-    install_panic_hook();
-    if let Some(dir) = log_file_path().and_then(|p| p.parent().map(|d| d.to_path_buf())) {
-        let instance =
-            pecofence_core::brand::var("PECOFENCE_INSTANCE").unwrap_or_else(|_| "main".into());
-        pecofence_platform::crashlog::install(dir, instance.trim());
-    }
-
     let args = parse_args();
     let instance_name = pecofence_core::brand::var("PECOFENCE_INSTANCE").ok();
     let main_instance = instance_name
@@ -226,12 +223,31 @@ fn main() -> Result<()> {
         tracing::warn!("a pre-rename instance is running; exit it before starting PecoFence");
         return Ok(());
     };
+    // Only the instance that holds the lock owns the log and the session record: a second
+    // launch (a Start-menu click while running) must not truncate or overwrite them.
+    init_logging();
+    install_panic_hook();
+    if let Some(dir) = lifecycle::local_dir() {
+        let instance =
+            pecofence_core::brand::var("PECOFENCE_INSTANCE").unwrap_or_else(|_| "main".into());
+        pecofence_platform::crashlog::install(dir, instance.trim());
+    }
+    let config_dir = args
+        .config_dir
+        .clone()
+        .unwrap_or_else(|| state::config_dir(args.portable));
+    lifecycle::start(&config_dir, &anchor::icon_marker_path());
 
     // Unlike run_component, run_with retains this lifetime with zero Settings
     // windows. WinUI pumps the native HWNDs, timers and posted command queue too.
-    windows_reactor::App::run_with(move |context| {
+    let result = windows_reactor::App::run_with(move |context| {
         let ole = OleGuard::init()?;
         let cell = app::App::create(args, context.clone())?;
         Ok(NativeLifetime { cell, _ole: ole })
-    })
+    });
+    if let Err(error) = &result {
+        tracing::error!(%error, "PecoFence ended with an error");
+    }
+    lifecycle::finish();
+    result
 }

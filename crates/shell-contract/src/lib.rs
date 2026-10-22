@@ -2,10 +2,22 @@
 
 pub const CONTROL_CLASS: &str = "PecoFence.Control";
 pub const CONTROL_TITLE_MAIN: &str = "PecoFence.Control.main";
+/// WM_APP + 14: asks the running app to save and exit, exactly like the tray's Exit. Posted to
+/// the control window (by `pecofence-cli quit` and the portable updater); never forces.
+pub const WM_APP_QUIT_REQUEST: u32 = 0x800e;
 /// WM_APP + 15; keep in sync with the control window's message range.
 pub const WM_APP_SHELL_COMMAND: u32 = 0x800f;
 /// WM_APP + 16; carries signed 32-bit screen coordinates in LPARAM.
 pub const WM_APP_SHELL_COMMAND_AT: u32 = 0x8010;
+
+/// The control window title of the main instance or of a named test instance
+/// (`PECOFENCE_INSTANCE`).
+pub fn control_title(instance: Option<&str>) -> String {
+    match instance.map(str::trim).filter(|name| !name.is_empty()) {
+        Some(name) => format!("PecoFence.Control.{name}"),
+        None => CONTROL_TITLE_MAIN.to_string(),
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]

@@ -57,7 +57,7 @@ impl SyncReport {
     }
 }
 
-fn config_dir(portable: bool) -> PathBuf {
+pub(crate) fn config_dir(portable: bool) -> PathBuf {
     if portable {
         let exe = std::env::current_exe().unwrap_or_default();
         return exe

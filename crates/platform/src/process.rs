@@ -19,6 +19,25 @@ pub fn wait_for_process_exit(pid: u32) {
     }
 }
 
+/// Blocks until `pid` exits and returns its exit code. `None` when the process could not be
+/// opened (already gone, or no access), so the caller cannot tell how it ended.
+pub fn wait_for_exit_code(pid: u32) -> Option<u32> {
+    const PROCESS_QUERY_LIMITED_INFORMATION: u32 = 0x1000;
+    windows_core::link!("kernel32.dll" "system" fn GetExitCodeProcess(process: HANDLE, code: *mut u32) -> windows_core::BOOL);
+    // SAFETY: plain FFI calls; the handle is closed afterwards.
+    unsafe {
+        let h = OpenProcess(SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
+        if h.0.is_null() {
+            return None;
+        }
+        let _ = WaitForSingleObject(h, INFINITE);
+        let mut code = 0u32;
+        let ok = GetExitCodeProcess(h, &mut code).as_bool();
+        let _ = CloseHandle(h);
+        ok.then_some(code)
+    }
+}
+
 pub fn current_pid() -> u32 {
     // SAFETY: plain FFI call.
     unsafe { GetCurrentProcessId() }

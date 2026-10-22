@@ -96,26 +96,32 @@ struct DesktopIcons {
     pending_attempts: u32,
 }
 
+/// The crash-recovery marker written while PecoFence hides the desktop icons; the watchdog
+/// restores the icons when the app dies with the marker present.
+pub fn icon_marker_path() -> PathBuf {
+    let base = std::env::var_os("LOCALAPPDATA")
+        .map(PathBuf::from)
+        .unwrap_or_else(std::env::temp_dir)
+        .join("PecoFence");
+    // A second (test) instance keeps its own marker so it never adopts the main one's.
+    let marker = match pecofence_core::brand::var("PECOFENCE_INSTANCE") {
+        Ok(n) if !n.trim().is_empty() => format!("icons-hidden.{}.marker", n.trim()),
+        _ => "icons-hidden.marker".to_string(),
+    };
+    let current = base.join(&marker);
+    let legacy = base
+        .with_file_name(pecofence_core::brand::LEGACY_DATA_DIR)
+        .join(&marker);
+    if !current.exists() && legacy.exists() {
+        legacy
+    } else {
+        current
+    }
+}
+
 impl DesktopIcons {
     fn new() -> Self {
-        let base = std::env::var_os("LOCALAPPDATA")
-            .map(PathBuf::from)
-            .unwrap_or_else(std::env::temp_dir)
-            .join("PecoFence");
-        // A second (test) instance keeps its own marker so it never adopts the main one's.
-        let marker = match pecofence_core::brand::var("PECOFENCE_INSTANCE") {
-            Ok(n) if !n.trim().is_empty() => format!("icons-hidden.{}.marker", n.trim()),
-            _ => "icons-hidden.marker".to_string(),
-        };
-        let current = base.join(&marker);
-        let legacy = base
-            .with_file_name(pecofence_core::brand::LEGACY_DATA_DIR)
-            .join(&marker);
-        let marker = if !current.exists() && legacy.exists() {
-            legacy
-        } else {
-            current
-        };
+        let marker = icon_marker_path();
         Self {
             we_hid_them: false,
             marker,
@@ -710,10 +716,9 @@ impl DesktopAnchor {
         if shell_icons::desktop_icons_hidden() {
             if self.icons.marker.exists() {
                 // Our previous run (and its watchdog) died without restoring: take ownership
-                // again so exit restores the icons and a fresh watchdog covers a crash.
+                // again so exit restores the icons; this session's watchdog covers a crash.
                 tracing::info!("desktop icons still hidden by our previous run; adopting");
                 self.icons.we_hid_them = true;
-                self.spawn_watchdog();
             } else {
                 tracing::info!("desktop icons already hidden by user/other tool; leaving as is");
             }
@@ -727,7 +732,6 @@ impl DesktopAnchor {
             Some(true) => {
                 self.icons.we_hid_them = true;
                 tracing::info!("desktop icons hidden (0x7402)");
-                self.spawn_watchdog();
                 true
             }
             other => {
@@ -761,25 +765,6 @@ impl DesktopAnchor {
     pub fn cancel_pending_hide(&mut self) {
         self.icons.pending = false;
         self.icons.pending_attempts = 0;
-    }
-
-    /// Starts `pecofence-watchdog.exe` (next to our exe) so a crash still restores the icons.
-    fn spawn_watchdog(&self) {
-        let Ok(exe) = std::env::current_exe() else {
-            return;
-        };
-        let Some(dir) = exe.parent() else { return };
-        let wd = dir.join("pecofence-watchdog.exe");
-        if !wd.exists() {
-            tracing::warn!(path = %wd.display(), "watchdog executable missing; no crash protection");
-            return;
-        }
-        let pid = pecofence_platform::process::current_pid().to_string();
-        let marker = self.icons.marker.to_string_lossy().to_string();
-        match pecofence_platform::process::spawn_detached(&wd.to_string_lossy(), &[&pid, &marker]) {
-            Ok(wpid) => tracing::info!(watchdog_pid = wpid, "watchdog started"),
-            Err(e) => tracing::warn!(error = %e, "watchdog spawn failed"),
-        }
     }
 
     /// Restores the icons if (and only if) we hid them. Also cancels a pending retry, so turning

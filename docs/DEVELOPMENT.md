@@ -136,7 +136,7 @@ the run and expects them to be unchanged.
 | `crates/platform` | Win32, shell, desktop integration and display-language detection |
 | `crates/render` | Direct2D/Composition drawing, motion and glass |
 | `crates/app` | Native windows, input, application state and Settings UI |
-| `crates/watchdog` | Restores desktop icons after an abnormal app exit |
+| `crates/watchdog` | Records a crash in the session record and restores desktop icons after an abnormal app exit ([LIFECYCLE.md](LIFECYCLE.md)) |
 | `crates/spm-contracts` | Public shared SPM wire contracts (0.1.0), not the private daemon |
 | `locales` | Shared native and settings messages |
 

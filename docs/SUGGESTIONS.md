@@ -93,7 +93,11 @@ unknown or ambiguous fence. Error codes are `INVALID_ARGUMENT`, `FENCE_NOT_FOUND
 - `--limit` out of range, `--kind` or `--by` misspelt, and options given to the wrong command.
 - A preview leaves the saved fence untouched.
 
-**Why read-only.** PecoFence owns the workspace while it runs and saves it transactionally.
+**Lifetime commands.** `status` and `quit` report and end the running app; see
+[LIFECYCLE.md](LIFECYCLE.md). `quit` is the only command with a side effect, and it only asks
+the app to save and exit, never forcing it.
+
+**Why the workspace stays read-only.** PecoFence owns the workspace while it runs and saves it transactionally.
 A second writer would race that save. Applying a suggestion from the command line would need a
 local request channel into the running app. That is a separate decision about which local
 processes may change the desktop, and it is not part of this tool.

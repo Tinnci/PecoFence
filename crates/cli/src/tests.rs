@@ -121,16 +121,24 @@ fn fixture(name: &str) -> (Fixture, Config) {
     (Fixture { dir }, config)
 }
 
+/// No processes: nothing alive, nothing to quit.
+fn quiet(var: Box<dyn Fn(&str) -> Option<String>>) -> Env {
+    Env {
+        var,
+        exe_dir: None,
+        alive: Box::new(|_, _| Some(false)),
+        request_quit: Box::new(|_| None),
+        wait_exit: Box::new(|_, _| Some(true)),
+    }
+}
+
 fn env_for(dir: Option<&Path>) -> Env {
     let workspace = dir.map(|d| d.display().to_string());
-    Env {
-        var: Box::new(move |name| {
-            (name == "PECOFENCE_WORKSPACE")
-                .then(|| workspace.clone())
-                .flatten()
-        }),
-        exe_dir: None,
-    }
+    quiet(Box::new(move |name| {
+        (name == "PECOFENCE_WORKSPACE")
+            .then(|| workspace.clone())
+            .flatten()
+    }))
 }
 
 fn cli(args: &str, env: &Env) -> (u8, String, String) {
@@ -315,10 +323,7 @@ fn missing_or_invalid_workspaces_exit_1_and_say_what_to_do() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 
-    let none = Env {
-        var: Box::new(|_| None),
-        exe_dir: None,
-    };
+    let none = quiet(Box::new(|_| None));
     let (code, _, err) = cli("fences", &none);
     assert_eq!(code, 1);
     assert!(err.contains("APPDATA"));
@@ -341,4 +346,184 @@ fn help_and_version_need_no_workspace() {
     let (code, out, _) = cli("-V", &env);
     assert_eq!(code, 0);
     assert!(out.starts_with("pecofence-cli "));
+}
+
+mod lifetime {
+    use super::*;
+    use pecofence_core::session::{self, ExitKind, Session, State};
+
+    struct Local {
+        root: PathBuf,
+    }
+
+    impl Drop for Local {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.root);
+        }
+    }
+
+    /// A fake %LOCALAPPDATA% with `record` stored as the session.
+    fn appdata(name: &str, record: Option<&Session>) -> Local {
+        let root =
+            std::env::temp_dir().join(format!("pecofence-cli-life-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("PecoFence")).unwrap();
+        if let Some(record) = record {
+            session::store(&session::path(&root.join("PecoFence"), None), record).unwrap();
+        }
+        Local { root }
+    }
+
+    fn record(state: State) -> Session {
+        let mut record = Session::running(
+            None,
+            4242,
+            Path::new(r"C:\PecoFence\pecofence.exe"),
+            Path::new(r"C:\missing\config"),
+            NOW - 3_700,
+        );
+        record.state = state;
+        record.watchdog_pid = Some(77);
+        record
+    }
+
+    fn env(local: &Local, alive: Option<bool>) -> Env {
+        let root = local.root.display().to_string();
+        let mut env = quiet(Box::new(move |name| {
+            (name == "LOCALAPPDATA").then(|| root.clone())
+        }));
+        env.alive = Box::new(move |_, _| alive);
+        env
+    }
+
+    fn status(env: &Env) -> Value {
+        let (code, out, err) = cli("status --json", env);
+        assert_eq!((code, err.as_str()), (0, ""));
+        envelope(&out)["data"].clone()
+    }
+
+    #[test]
+    fn status_reports_a_live_session_with_its_watchdog() {
+        let local = appdata("live", Some(&record(State::Running)));
+        let data = status(&env(&local, Some(true)));
+        assert_eq!(data["state"], "running");
+        assert_eq!(data["uptimeSeconds"], 3_700);
+        assert_eq!(data["watchdog"]["alive"], true);
+        assert!(data["exit"].is_null());
+        let (_, text, _) = cli("status", &env(&local, Some(true)));
+        assert!(text.starts_with("PecoFence is running (pid 4242"), "{text}");
+        assert!(
+            text.contains("up 1 h 1 min") && text.contains("watching"),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn an_open_record_without_its_process_ended_unexpectedly() {
+        let local = appdata("gone", Some(&record(State::Closing)));
+        let data = status(&env(&local, Some(false)));
+        assert_eq!(data["state"], "endedUnexpectedly");
+        assert!(data["uptimeSeconds"].is_null());
+        // Where processes cannot be checked, say so rather than guess.
+        assert_eq!(status(&env(&local, None))["state"], "unverified");
+    }
+
+    #[test]
+    fn closed_records_explain_how_the_app_ended() {
+        let mut exited = record(State::Exited);
+        exited.exit = Some(ExitKind::DiscardedChanges);
+        exited.unsaved = true;
+        exited.ended_at = Some(NOW - 120);
+        let local = appdata("exited", Some(&exited));
+        let data = status(&env(&local, Some(true)));
+        assert_eq!(
+            data["state"], "exited",
+            "a closed record never consults the process"
+        );
+        assert_eq!(data["exit"], "discardedChanges");
+        assert_eq!(data["unsaved"], true);
+        let (_, text, _) = cli("status", &env(&local, None));
+        assert!(
+            text.contains("exited 2 min ago") && text.contains("not saved"),
+            "{text}"
+        );
+
+        let mut crashed = record(State::Crashed);
+        crashed.exit_code = Some(0xC000_0005);
+        crashed.ended_at = Some(NOW - 5);
+        let local = appdata("crashed", Some(&crashed));
+        let data = status(&env(&local, None));
+        assert_eq!(data["state"], "crashed");
+        assert!(data["exit"].is_null(), "a crash has no exit kind");
+        assert_eq!(data["exitCodeHex"], "0xC0000005");
+    }
+
+    #[test]
+    fn missing_and_unreadable_records() {
+        let local = appdata("none", None);
+        assert_eq!(status(&env(&local, None))["state"], "noRecord");
+        std::fs::write(local.root.join("PecoFence").join("session.json"), "{").unwrap();
+        let (code, _, err) = cli("status --json", &env(&local, None));
+        assert_eq!(code, 1);
+        assert_eq!(envelope(&err)["error"]["code"], "SESSION_INVALID");
+        let (code, _, err) = cli("status", &quiet(Box::new(|_| None)));
+        assert_eq!(code, 1);
+        assert!(err.contains("LOCALAPPDATA"), "{err}");
+    }
+
+    #[test]
+    fn quit_is_idempotent_and_reports_how_the_app_exited() {
+        let local = appdata("quit", Some(&record(State::Running)));
+        let (code, out, _) = cli("quit --json", &env(&local, Some(true)));
+        assert_eq!(code, 0, "nothing running is already the goal");
+        assert_eq!(envelope(&out)["data"]["state"], "notRunning");
+
+        // The app answers the request by saving, recording its exit and ending.
+        let record_path = session::path(&local.root.join("PecoFence"), None);
+        let mut env = env(&local, Some(true));
+        env.request_quit = Box::new(move |title| {
+            assert_eq!(title, "PecoFence.Control.main");
+            let mut done = session::load(&record_path).unwrap();
+            done.state = State::Exited;
+            done.exit = Some(ExitKind::Normal);
+            session::store(&record_path, &done).unwrap();
+            Some(4242)
+        });
+        let (code, out, _) = cli("quit --json", &env);
+        assert_eq!(code, 0);
+        let v = envelope(&out);
+        assert_eq!(v["data"]["exit"], "normal");
+        assert_eq!(v["meta"]["forceKill"], false);
+
+        // Still closing (a save-failure dialog open): report, never force.
+        env.wait_exit = Box::new(|pid, millis| {
+            assert_eq!((pid, millis), (4242, 5_000));
+            Some(false)
+        });
+        let (code, _, err) = cli("quit --wait 5 --json", &env);
+        assert_eq!(code, 1);
+        let error = &envelope(&err)["error"];
+        assert_eq!(error["code"], "QUIT_TIMEOUT");
+        assert!(
+            error["suggested_action"]
+                .as_str()
+                .unwrap()
+                .contains("never force")
+        );
+    }
+
+    #[test]
+    fn lifetime_options_are_checked() {
+        let env = quiet(Box::new(|_| None));
+        for (args, needle) in [
+            ("quit --wait 999", "--wait must be"),
+            ("status --wait 3", "does not apply"),
+            ("fences --instance lab", "does not apply"),
+            ("status --workspace x", "does not apply"),
+        ] {
+            let (code, _, err) = cli(args, &env);
+            assert_eq!(code, 2, "{args}");
+            assert!(err.contains(needle), "{args}: {err}");
+        }
+    }
 }

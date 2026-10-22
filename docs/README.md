@@ -14,6 +14,7 @@
 - [Optional Microsoft Store packaging](STORE.md)
 - [Complete feature list, in Chinese](FEATURES.md)
 - [Organizing suggestions and the read-only `pecofence-cli`](SUGGESTIONS.md)
+- [Process lifecycle: closing, watchdog, `status` and `quit`](LIFECYCLE.md)
 - [README in other languages](readme/) — the root README is English; translations live in `docs/readme/`
 
 `ARCHITECTURE.md` is the target design, not a claim that the rewrite is complete.

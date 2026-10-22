@@ -37,7 +37,8 @@ pub const WM_APP_SHELL_CHANGED: u32 = msg::WM_APP + 12;
 pub const WM_APP_PLUGIN_EVENT: u32 = msg::WM_APP + 13;
 /// Re-enter normal Quit on the hidden control HWND after a managed upgrade or
 /// after committing an open panel editor through its provider commands.
-pub const WM_APP_UPDATE_QUIT: u32 = msg::WM_APP + 14;
+pub const WM_APP_UPDATE_QUIT: u32 = pecofence_shell_contract::WM_APP_QUIT_REQUEST;
+const _: () = assert!(WM_APP_UPDATE_QUIT == msg::WM_APP + 14);
 /// Fence-local wake for deferred plugin capture release; carries no input event.
 pub const WM_APP_PLUGIN_CAPTURE_RELEASE: u32 = msg::WM_APP + 15;
 

@@ -1,7 +1,9 @@
-//! pecofence-watchdog: waits for the main process to exit and, if it died without restoring the
-//! desktop icons (marker file still present), sends the "show desktop icons" toggle itself.
+//! pecofence-watchdog: waits for the main process to exit, then
+//! - completes its session record as crashed when the app did not record an exit, and
+//! - if it died without restoring the desktop icons (marker file still present), sends the
+//!   "show desktop icons" toggle itself.
 //!
-//! Usage: `pecofence-watchdog <parent-pid> <marker-path>`
+//! Usage: `pecofence-watchdog <parent-pid> <marker-path> [<session-record>]`
 
 #![windows_subsystem = "windows"]
 
@@ -16,9 +18,14 @@ fn main() {
     let Some(marker) = args.get(1).map(PathBuf::from) else {
         return;
     };
+    let record = args.get(2).map(PathBuf::from);
 
-    // Block until the parent exits (or fails to open → it is already gone).
-    process::wait_for_process_exit(pid);
+    // Block until the parent exits. `None`: it could not be opened (already gone), so how it
+    // ended is unknown and the record is left as it is.
+    let exit_code = process::wait_for_exit_code(pid);
+    if let (Some(record), Some(code)) = (record, exit_code) {
+        complete_record(&record, pid, code);
+    }
 
     if !marker.exists() {
         return; // clean shutdown restored the icons already
@@ -46,5 +53,16 @@ fn main() {
             let _ = std::fs::remove_file(&marker);
             return;
         }
+    }
+}
+
+/// Marks the record crashed when it still belongs to `pid` and records no exit. A clean exit
+/// already closed it; a newer instance has replaced it with its own pid.
+fn complete_record(path: &std::path::Path, pid: u32, code: u32) {
+    let Ok(mut record) = pecofence_core::session::load(path) else {
+        return;
+    };
+    if record.mark_crashed(pid, pecofence_core::now_unix(), Some(code)) {
+        let _ = pecofence_core::session::store(path, &record);
     }
 }

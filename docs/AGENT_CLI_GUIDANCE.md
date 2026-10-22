@@ -26,6 +26,7 @@ pecofence-cli order --fence Apps --by frequent --limit 10 --json
 `suggest` 默认最多 10 条，`order` 默认最多 50 项；`meta.total`/`meta.truncated` 说明范围，`meta.savedAt` 表示结果对应的保存时间。
 信封与上面相同；工作区缺失或无法读取退出 1，参数错误、找不到栅栏或栅栏重名退出 2，并给出下一步。
 建议需由用户在栅栏菜单「建议」中应用；Agent 只呈现建议及其理由，不代为修改。规则、阈值与边界情况见 [整理建议](SUGGESTIONS.md)。
+`status` 只读，报告运行/关闭中/退出方式/崩溃、看门狗与日志；`quit` 是唯一有副作用的命令：请求应用保存并退出，未运行时直接成功，超时返回 `QUIT_TIMEOUT` 且绝不强制结束。升级前先 `quit` 并确认 `exit: normal`。见 [进程生命周期](LIFECYCLE.md)。
 验证：`cargo test -p pecofence-cli -p pecofence-core`。
 
 ## 共同设计标准

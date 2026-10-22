@@ -489,6 +489,9 @@ impl App {
                                             tracing::warn!(
                                                 "exit.native_pump_fallback_after_committed_close"
                                             );
+                                            crate::lifecycle::note_exit(
+                                                pecofence_core::session::ExitKind::PumpFallback,
+                                            );
                                             window::post_quit(0);
                                         }
                                         Some(false) => {
@@ -733,12 +736,11 @@ impl App {
                 },
             )
         };
-        let control_title = pecofence_core::brand::var("PECOFENCE_INSTANCE")
-            .ok()
-            .map(|name| name.trim().to_string())
-            .filter(|name| !name.is_empty())
-            .map(|name| format!("PecoFence.Control.{name}"))
-            .unwrap_or_else(|| pecofence_shell_contract::CONTROL_TITLE_MAIN.to_string());
+        let control_title = pecofence_shell_contract::control_title(
+            pecofence_core::brand::var("PECOFENCE_INSTANCE")
+                .ok()
+                .as_deref(),
+        );
         let control = WindowBuilder::new(&control_class)
             .title(&control_title)
             .style(style::POPUP)
@@ -1754,6 +1756,7 @@ impl App {
                         return;
                     }
                     window::kill_timer(self.control.hwnd(), TIMER_SAVE);
+                    crate::lifecycle::set_closing(true);
                     self.persistence.begin_close();
                     self.push_settings_state();
                     self.pump_persistence();
@@ -1790,11 +1793,14 @@ impl App {
         window::kill_timer(self.control.hwnd(), TIMER_PORTALS);
         self.end_peek_now();
         // Normal Quit drained through its primary receipt. Forced OS termination cannot promise it.
-        if self.writer_busy_or_dirty() && self.persistence.closing() != Closing::Discarded {
+        let unsaved =
+            self.writer_busy_or_dirty() && self.persistence.closing() != Closing::Discarded;
+        if unsaved {
             tracing::warn!(
                 "shutdown with unresolved document persistence; forced termination is best effort"
             );
         }
+        crate::lifecycle::note_unsaved(unsaved || self.persistence.closing() == Closing::Discarded);
         self.writer.close();
         window::kill_timer(self.control.hwnd(), TIMER_PERSISTENCE);
         window::kill_timer(self.control.hwnd(), TIMER_EXIT);

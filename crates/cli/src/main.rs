@@ -1,7 +1,11 @@
 //! `pecofence-cli`: read-only inspection of a saved PecoFence workspace — its fences, the order
-//! a sort mode produces, and organizing suggestions. It never writes the workspace and never
-//! talks to the running app; suggestions are applied in PecoFence (fence menu → 建议).
-//! Design notes and use cases: `docs/SUGGESTIONS.md`.
+//! a sort mode produces, and organizing suggestions — plus the running app's lifetime: `status`
+//! reads its session record, and `quit` asks it to save and exit (the only command with a side
+//! effect; it never forces). It never writes the workspace; suggestions are applied in
+//! PecoFence (fence menu → 建议). See `docs/SUGGESTIONS.md` and `docs/LIFECYCLE.md`.
+
+mod lifecycle;
+mod process;
 
 use pecofence_core::suggest::{self, Suggestion, parse_sort, sort_key};
 use pecofence_core::{Config, ConfigStore, ContentInstance, ContentSpec, Item, ItemRef};
@@ -16,17 +20,25 @@ USAGE
   pecofence-cli fences  [OPTIONS]
   pecofence-cli suggest [--fence ID|TITLE] [--kind sort|rule|move|cleanup]... [--limit N] [OPTIONS]
   pecofence-cli order   --fence ID|TITLE [--by MODE] [--limit N] [OPTIONS]
+  pecofence-cli status  [--instance NAME] [--json]
+  pecofence-cli quit    [--wait SECONDS] [--instance NAME] [--json]
 
 COMMANDS
   fences    List fences with their kind, item count and sort mode.
   suggest   Ranked organizing suggestions, each with its reason (default limit 10).
   order     Preview a fence's item order under its current or another sort mode
             (MODE: manual, name, type, date, size, frequent; default limit 50).
+  status    Whether PecoFence is running, closing, exited (and how) or crashed; its watchdog,
+            last save and logs. Read-only.
+  quit      Ask the running app to save and exit, like the tray's Exit, and wait for it
+            (default 30 s, --wait 0 to return at once). Never force-closes; succeeds when
+            PecoFence is not running.
 
 OPTIONS
   --workspace PATH  workspace.v2.json, or the folder holding it. Default: $PECOFENCE_WORKSPACE,
                     then a portable config/ folder next to this program, then %APPDATA%\\PecoFence.
   --layout N        Monitor layout index (default 0; `fences` reports how many exist).
+  --instance NAME   A named test instance (PECOFENCE_INSTANCE) for status and quit.
   --json            One JSON envelope on stdout; errors as an envelope on stderr.
   -h, --help        This text.   -V, --version   Version.
 
@@ -34,10 +46,13 @@ EXAMPLES
   pecofence-cli suggest --json
   pecofence-cli suggest --fence Desktop --kind move
   pecofence-cli order --fence Apps --by frequent --limit 10
+  pecofence-cli status --json
+  pecofence-cli quit --wait 60
 
 Nothing here changes the workspace. Results reflect the last save; PecoFence saves shortly
 after each change. Apply a suggestion in PecoFence: right-click the fence → Suggestions.
-Exit codes: 0 success (also when empty), 1 workspace unreadable, 2 invalid arguments.";
+Exit codes: 0 success (also when empty, or quit with nothing running), 1 workspace or
+session record unreadable, or quit timed out, 2 invalid arguments.";
 
 const SCHEMA: &str = "1.0";
 const MAX_LIMIT: usize = 1000;
@@ -71,6 +86,8 @@ struct Options {
     kinds: Vec<String>,
     limit: Option<usize>,
     by: Option<String>,
+    instance: Option<String>,
+    wait: Option<u32>,
 }
 
 fn parse(args: &[String]) -> Result<Options, Failure> {
@@ -95,6 +112,19 @@ fn parse(args: &[String]) -> Result<Options, Failure> {
                 })?;
             }
             "--fence" => options.fence = Some(value(arg)?),
+            "--instance" => options.instance = Some(value(arg)?),
+            "--wait" => {
+                let raw = value(arg)?;
+                match raw.parse::<u32>() {
+                    Ok(n) if n <= lifecycle::MAX_WAIT => options.wait = Some(n),
+                    _ => {
+                        return Err(Failure::usage(format!(
+                            "--wait must be 0–{} seconds, got {raw:?}",
+                            lifecycle::MAX_WAIT
+                        )));
+                    }
+                }
+            }
             "--kind" => {
                 let kind = value(arg)?;
                 if !["sort", "rule", "move", "cleanup"].contains(&kind.as_str()) {
@@ -125,9 +155,9 @@ fn parse(args: &[String]) -> Result<Options, Failure> {
                 options.by = Some(by);
             }
             command if !command.starts_with('-') && options.command.is_empty() => {
-                if !["fences", "suggest", "order"].contains(&command) {
+                if !["fences", "suggest", "order", "status", "quit"].contains(&command) {
                     return Err(Failure::usage(format!(
-                        "unknown command {command:?}; use fences, suggest or order"
+                        "unknown command {command:?}; use fences, suggest, order, status or quit"
                     )));
                 }
                 options.command = command.into();
@@ -136,7 +166,9 @@ fn parse(args: &[String]) -> Result<Options, Failure> {
         }
     }
     if options.command.is_empty() {
-        return Err(Failure::usage("missing command: fences, suggest or order"));
+        return Err(Failure::usage(
+            "missing command: fences, suggest, order, status or quit",
+        ));
     }
     let only = |flag: &str, allowed: &[&str], set: bool| {
         if set && !allowed.contains(&options.command.as_str()) {
@@ -152,6 +184,17 @@ fn parse(args: &[String]) -> Result<Options, Failure> {
     only("--kind", &["suggest"], !options.kinds.is_empty())?;
     only("--limit", &["suggest", "order"], options.limit.is_some())?;
     only("--by", &["order"], options.by.is_some())?;
+    only(
+        "--instance",
+        &["status", "quit"],
+        options.instance.is_some(),
+    )?;
+    only("--wait", &["quit"], options.wait.is_some())?;
+    only(
+        "--workspace/--layout",
+        &["fences", "suggest", "order"],
+        options.workspace.is_some() || options.layout != 0,
+    )?;
     if options.command == "order" && options.fence.is_none() {
         return Err(Failure::usage(
             "order needs --fence ID|TITLE (see `pecofence-cli fences`)",
@@ -166,10 +209,30 @@ struct Located {
     source: &'static str,
 }
 
-/// Environment lookups, injectable for tests.
+/// Environment lookups and process calls, injectable for tests.
 struct Env {
     var: Box<dyn Fn(&str) -> Option<String>>,
     exe_dir: Option<PathBuf>,
+    /// `process::alive`: is this pid the process that started at this time?
+    alive: Box<dyn Fn(u32, i64) -> Option<bool>>,
+    /// `process::request_quit`: post the quit request; the owning pid.
+    request_quit: Box<dyn Fn(&str) -> Option<u32>>,
+    /// `process::wait_exit`.
+    wait_exit: Box<dyn Fn(u32, u32) -> Option<bool>>,
+}
+
+impl Env {
+    fn system() -> Self {
+        Self {
+            var: Box::new(|name| std::env::var(name).ok()),
+            exe_dir: std::env::current_exe()
+                .ok()
+                .and_then(|p| p.parent().map(Path::to_path_buf)),
+            alive: Box::new(process::alive),
+            request_quit: Box::new(process::request_quit),
+            wait_exit: Box::new(process::wait_exit),
+        }
+    }
 }
 
 fn locate(explicit: Option<&Path>, env: &Env) -> Result<Located, Failure> {
@@ -540,7 +603,12 @@ fn main_with(args: &[String], env: &Env, now: i64) -> (u8, String, String) {
     let result = parse(args).and_then(|options| match options.command.as_str() {
         "help" => Ok(format!("{HELP}\n")),
         "version" => Ok(format!("pecofence-cli {}\n", env!("CARGO_PKG_VERSION"))),
-        _ => run(&options, env, now).map(|output| {
+        command => match command {
+            "status" => lifecycle::status(&options, env, now),
+            "quit" => lifecycle::quit(&options, env),
+            _ => run(&options, env, now),
+        }
+        .map(|output| {
             if json {
                 let envelope = json!({
                     "schema_version": SCHEMA,
@@ -582,12 +650,7 @@ fn main_with(args: &[String], env: &Env, now: i64) -> (u8, String, String) {
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let env = Env {
-        var: Box::new(|name| std::env::var(name).ok()),
-        exe_dir: std::env::current_exe()
-            .ok()
-            .and_then(|p| p.parent().map(Path::to_path_buf)),
-    };
+    let env = Env::system();
     let (code, stdout, stderr) = main_with(&args, &env, pecofence_core::now_unix());
     print!("{stdout}");
     eprint!("{stderr}");

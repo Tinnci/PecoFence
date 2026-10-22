@@ -11,6 +11,7 @@ pub mod model;
 pub mod order;
 pub mod portal;
 pub mod rules;
+pub mod session;
 pub mod settings_protocol;
 pub mod suggest;
 pub mod workspace;

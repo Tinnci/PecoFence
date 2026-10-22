@@ -26,6 +26,7 @@ impl App {
         }
         window::kill_timer(self.control.hwnd(), TIMER_EXIT_WATCHDOG);
         self.persistence.keep_running();
+        crate::lifecycle::set_closing(false);
         self.sync_fence_windows();
         window::post_message(self.control.hwnd(), WM_APP_FS_CHANGED, 0, 0);
         self.push_settings_state();
@@ -126,6 +127,11 @@ impl App {
         if !self.persistence.finish_close() {
             return;
         }
+        crate::lifecycle::note_exit(if self.persistence.closing() == Closing::Discarded {
+            pecofence_core::session::ExitKind::DiscardedChanges
+        } else {
+            pecofence_core::session::ExitKind::Normal
+        });
         window::kill_timer(self.control.hwnd(), TIMER_PERSISTENCE);
         if let Some(anchor) = self.anchor.borrow_mut().as_mut() {
             anchor.restore_desktop_icons();
