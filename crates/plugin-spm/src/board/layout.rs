@@ -33,6 +33,7 @@ const META: f32 = 12.0;
 /// Something a control does. Actions index a per-layout table.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Target {
+    View(BoardView),
     Refresh,
     CopySummary,
     RestartDemo,
@@ -52,6 +53,14 @@ pub enum Target {
     SelectEvidence(String),
     RetryEvidence,
     RetryLoad,
+}
+
+/// Presentation state belongs to the panel instance, never BoardConfig.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum BoardView {
+    #[default]
+    Board,
+    Timeline,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -105,6 +114,7 @@ pub enum Mode {
 /// Everything layout reads. Built by the panel from its state.
 pub struct Input<'a> {
     pub board: Option<&'a BoardSnapshot>,
+    pub view: BoardView,
     pub previous_error: Option<&'a str>,
     pub loading_hint: Option<&'a str>,
     pub filter: &'a Filter,
@@ -449,13 +459,44 @@ pub fn build(input: &Input, viewport: RectDip, pal: &Palette, fit: &Fitter) -> L
     if let Some(ground) = pal.ground {
         b.fill("ground".into(), viewport, ground, 0.0);
     }
+    let header_h = if input.capsule { 0.0 } else { 38.0 };
+    if !input.capsule {
+        let mut x = PAD;
+        for (view, label) in [
+            (BoardView::Board, "Board"),
+            (BoardView::Timeline, "Timeline"),
+        ] {
+            x += b.button(
+                &format!("view:{view:?}"),
+                x,
+                4.0,
+                28.0,
+                None,
+                input.lang.t(label),
+                input.view == view,
+                Target::View(view),
+                160.0,
+            ) + 4.0;
+        }
+    }
+    let start = b.out.nodes.len();
+    let content = rect(viewport.x, viewport.y, viewport.w, viewport.h - header_h);
     if input.capsule {
         b.out.mode = Mode::Capsule;
         capsule(&mut b, input, viewport);
     } else if viewport.w < COMPACT_MAX_W || viewport.h < COMPACT_MAX_H {
-        compact(&mut b, input, viewport);
+        compact(&mut b, input, content);
     } else {
-        workspace(&mut b, input, viewport);
+        workspace(&mut b, input, content);
+    }
+    for node in &mut b.out.nodes[start..] {
+        node.rect.y += header_h;
+    }
+    if let Some(r) = &mut b.out.board {
+        r.y += header_h;
+    }
+    if let Some(r) = &mut b.out.detail {
+        r.y += header_h;
     }
     b.out
 }

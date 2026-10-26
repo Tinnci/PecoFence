@@ -14,7 +14,7 @@ pub mod palette;
 pub mod text;
 
 use crate::{decode_event, encode_request};
-use layout::{Draft, EvidenceView, Input, Layout, Mode, NavCard, Palette, Target};
+use layout::{BoardView, Draft, EvidenceView, Input, Layout, Mode, NavCard, Palette, Target};
 use model::{DisplayColumn, Filter, Tone};
 use pecofence_plugin_api::design::{ContentScale, LayoutTracker};
 use pecofence_plugin_api::scene::{NodeStyle, Scene, SceneNode};
@@ -170,6 +170,7 @@ pub struct BoardPanel {
     board: Option<BoardSnapshot>,
     cursor: BoardCursor,
     load_error: Option<String>,
+    view: BoardView,
     selected: Option<RecordId>,
     detail_open: bool,
     filter: Filter,
@@ -254,6 +255,7 @@ impl BoardPanel {
             board: None,
             cursor: BoardCursor::default(),
             load_error: None,
+            view: BoardView::default(),
             selected: None,
             detail_open: false,
             filter: Filter::default(),
@@ -653,6 +655,11 @@ impl BoardPanel {
     fn invoke(&mut self, target: Target, now: Instant) -> Result<PanelUpdate> {
         let lang = self.lang();
         match target {
+            Target::View(view) => {
+                self.view = view;
+                self.scroll = 0.0;
+                self.detail_open = false;
+            }
             Target::Refresh => self.refresh(now)?,
             Target::CopySummary => {
                 if let Some(board) = &self.board {
@@ -1157,6 +1164,7 @@ impl BoardPanel {
             let status = self.status.as_ref().map(|(s, t)| (s.as_str(), *t));
             let layout_input = Input {
                 board: self.board.as_ref(),
+                view: self.view,
                 previous_error: self.load_error.as_deref(),
                 loading_hint: waiting
                     .then(|| lang.t("Waiting for SPM. It has not sent a board yet.")),

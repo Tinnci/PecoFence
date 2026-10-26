@@ -45,6 +45,8 @@ impl Lang {
 }
 
 const ZH: &[(&str, &str)] = &[
+    ("Board", "看板"),
+    ("Timeline", "时间线"),
     ("To do", "待开始"),
     ("Develop", "开发"),
     ("Verify", "验证"),
