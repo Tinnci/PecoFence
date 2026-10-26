@@ -13,6 +13,7 @@ use std::time::Duration;
 /// Shared presentation primitives for every Direct2D fence content provider.
 pub mod design;
 pub mod file_geometry;
+pub mod paper;
 pub mod scene;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -603,6 +604,18 @@ impl TextInputStyle {
             placeholder: None,
         }
     }
+}
+
+/// Severity of the chrome status line, the same four levels as WinUI's
+/// `InfoBarSeverity`, so a Reactor host maps it one to one. The host picks the
+/// color and adds a glyph, so the meaning never rests on color alone.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ChromeSeverity {
+    #[default]
+    Informational,
+    Success,
+    Warning,
+    Error,
 }
 
 #[derive(Clone, Debug, PartialEq)]

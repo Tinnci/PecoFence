@@ -705,22 +705,16 @@ pub(crate) fn fade(color: [f32; 4], opacity: f32) -> [f32; 4] {
     ]
 }
 
-const fn srgb(r: u8, g: u8, b: u8) -> [f32; 4] {
-    [r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0, 1.0]
-}
+use pecofence_plugin_api::paper::srgb;
 
 /// Warm paper palette for the note, TODO and calendar widgets. Every text pair
 /// meets 4.5:1 on both the ground and the card; terracotta fills carry cream ink.
+/// The shared tones live in `pecofence_plugin_api::paper`; the rest are widget-only.
 pub(crate) mod paper {
     use super::srgb;
-    pub(crate) const GROUND: [f32; 4] = srgb(0xF6, 0xF1, 0xE7);
-    pub(crate) const CARD: [f32; 4] = srgb(0xEC, 0xE4, 0xD6);
-    pub(crate) const INK: [f32; 4] = srgb(0x2B, 0x27, 0x22);
-    pub(crate) const INK_SECONDARY: [f32; 4] = srgb(0x68, 0x5F, 0x55);
-    pub(crate) const INK_FAINT: [f32; 4] = srgb(0x9A, 0x8F, 0x80);
-    pub(crate) const TERRACOTTA: [f32; 4] = srgb(0xA9, 0x50, 0x2D);
-    pub(crate) const TERRACOTTA_INK: [f32; 4] = srgb(0x94, 0x45, 0x26);
-    pub(crate) const CREAM: [f32; 4] = srgb(0xFF, 0xF8, 0xEE);
+    pub(crate) use pecofence_plugin_api::paper::{CARD, CREAM, GROUND, TERRACOTTA};
+    #[cfg(test)]
+    pub(crate) use pecofence_plugin_api::paper::{INK, INK_SECONDARY, TERRACOTTA_INK};
     /// Diagram stage, a shade under the card, and the surfaces drawn on it.
     pub(crate) const STAGE: [f32; 4] = srgb(0xEF, 0xE8, 0xDB);
     pub(crate) const SHAPE: [f32; 4] = srgb(0xFF, 0xFC, 0xF6);

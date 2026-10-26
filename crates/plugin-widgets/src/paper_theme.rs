@@ -1,127 +1,21 @@
 //! Paper remains warm across brightness levels; readable ink is resolved after surfaces.
-use super::{Colors, paper, srgb};
-use pecofence_plugin_api::{PaperStyle, ThemeSnapshot};
-
-fn mix(a: [f32; 4], b: [f32; 4], t: f32) -> [f32; 4] {
-    std::array::from_fn(|i| a[i] + (b[i] - a[i]) * t)
-}
-fn luminance(c: [f32; 4]) -> f32 {
-    let linear = |v: f32| {
-        if v <= 0.04045 {
-            v / 12.92
-        } else {
-            ((v + 0.055) / 1.055).powf(2.4)
-        }
-    };
-    0.2126 * linear(c[0]) + 0.7152 * linear(c[1]) + 0.0722 * linear(c[2])
-}
-pub(super) fn contrast(a: [f32; 4], b: [f32; 4]) -> f32 {
-    let (a, b) = (luminance(a), luminance(b));
-    (a.max(b) + 0.05) / (a.min(b) + 0.05)
-}
-fn readable(ink: [f32; 4], ground: [f32; 4], card: [f32; 4], minimum: f32) -> [f32; 4] {
-    let black = srgb(0, 0, 0);
-    let white = srgb(255, 255, 255);
-    let score = |c| contrast(c, ground).min(contrast(c, card));
-    if score(ink) >= minimum {
-        return ink;
-    }
-    let target = if score(black) >= score(white) {
-        black
-    } else {
-        white
-    };
-    for step in 1..=100 {
-        let c = mix(ink, target, step as f32 / 100.0);
-        if score(c) >= minimum {
-            return c;
-        }
-    }
-    target
-}
+use super::{Colors, paper};
+use pecofence_plugin_api::ThemeSnapshot;
+pub(crate) use pecofence_plugin_api::paper::{contrast, readable};
+use pecofence_plugin_api::paper::{luminance, mix};
 
 pub(super) fn resolve(theme: Option<&ThemeSnapshot>) -> Colors {
-    let env = theme.map(|t| t.paper).unwrap_or_default();
-    let (ground, card) = match env.style {
-        PaperStyle::Light => (paper::GROUND, paper::CARD),
-        PaperStyle::Soft => (srgb(207, 197, 181), srgb(199, 188, 171)),
-        PaperStyle::Dark => (srgb(36, 34, 31), srgb(48, 45, 41)),
-        PaperStyle::Adaptive => {
-            let light = env
-                .wallpaper_luminance
-                .filter(|v| v.is_finite())
-                .unwrap_or_else(|| {
-                    if theme.is_some_and(|t| t.text_primary[0] > 0.6) {
-                        0.1
-                    } else {
-                        0.8
-                    }
-                })
-                .clamp(0.0, 1.0);
-            // Avoid bright panels on dark desktops; use a stable monitor-wide sample.
-            if light < 0.35 {
-                let t = (light / 0.35).powi(2);
-                (
-                    mix(srgb(36, 34, 31), srgb(92, 85, 75), t),
-                    mix(srgb(48, 45, 41), srgb(97, 90, 80), t),
-                )
-            } else if light < 0.65 {
-                (srgb(207, 197, 181), srgb(199, 188, 171))
-            } else {
-                (paper::GROUND, paper::CARD)
-            }
-        }
-    };
-    let brightness = if env.brightness.is_finite() {
-        env.brightness.clamp(0.6, 1.0)
-    } else {
-        1.0
-    };
-    let dim = |mut c: [f32; 4]| {
-        for v in &mut c[..3] {
-            *v *= brightness;
-        }
-        c
-    };
-    let ground = dim(ground);
-    let mut card = dim(card);
-    // Both surfaces must admit the same readable ink, even near the midtone crossover.
-    for _ in 0..8 {
-        let black = srgb(0, 0, 0);
-        let white = srgb(255, 255, 255);
-        if contrast(black, ground).min(contrast(black, card)) >= 4.5
-            || contrast(white, ground).min(contrast(white, card)) >= 4.5
-        {
-            break;
-        }
-        card = mix(card, ground, 0.5);
-    }
-    let dark = luminance(ground) < 0.18;
-    let primary = if dark { paper::CREAM } else { paper::INK };
-    let secondary = if dark {
-        srgb(199, 186, 169)
-    } else {
-        paper::INK_SECONDARY
-    };
-    let accent_ink = if dark {
-        srgb(234, 162, 127)
-    } else {
-        paper::TERRACOTTA_INK
-    };
+    let p = pecofence_plugin_api::paper::resolve(theme);
     Colors {
         high_contrast: false,
-        primary: readable(primary, ground, card, 4.5),
-        secondary: readable(secondary, ground, card, 4.5),
-        accent: paper::TERRACOTTA,
-        accent_ink: readable(accent_ink, ground, card, 4.5),
-        subtle: card,
+        primary: p.ink,
+        secondary: p.ink_secondary,
+        accent: p.accent,
+        accent_ink: p.accent_ink,
+        subtle: p.card,
         panel: paper::CREAM,
-        faint_ink: if env.style == PaperStyle::Light && brightness == 1.0 {
-            paper::INK_FAINT
-        } else {
-            readable(secondary, ground, card, 4.5)
-        },
-        ground: Some(ground),
+        faint_ink: p.ink_faint,
+        ground: Some(p.ground),
     }
 }
 impl Colors {
@@ -202,6 +96,8 @@ impl Colors {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pecofence_plugin_api::PaperStyle;
+    use pecofence_plugin_api::paper::srgb;
     #[test]
     fn native_input_boundary_checks_actual_surface_including_alpha_and_raw_swatches() {
         for style in [
