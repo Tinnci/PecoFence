@@ -1273,10 +1273,40 @@ impl FenceWindow {
     }
 }
 
+/// File-grid operations are available only while file content is mounted.
+pub struct FileWindow<'a>(&'a FenceWindow);
+/// Panel operations are available only while plugin content is mounted.
+pub struct PanelWindow<'a>(&'a FenceWindow);
+
 impl FenceWindow {
+    pub fn files(&self) -> Option<FileWindow<'_>> {
+        self.view
+            .borrow()
+            .as_ref()
+            .filter(|v| !v.is_panel)
+            .map(|_| FileWindow(self))
+    }
+    pub fn panel(&self) -> Option<PanelWindow<'_>> {
+        self.try_panel().ok().flatten()
+    }
+
+    /// A modal view borrow requires retrying rather than dropping an update.
+    pub(crate) fn try_panel(
+        &self,
+    ) -> std::result::Result<Option<PanelWindow<'_>>, std::cell::BorrowError> {
+        Ok(self
+            .view
+            .try_borrow()?
+            .as_ref()
+            .filter(|v| v.is_panel)
+            .map(|_| PanelWindow(self)))
+    }
+}
+
+impl FileWindow<'_> {
     /// Replaces the item list with layout motion (see `FenceViewState::replace_items`).
     pub fn set_items(&self, items: Vec<ItemView>) {
-        self.with_view(|v| {
+        self.0.with_view(|v| {
             // Selection / focus / hover ride along by item id (`remap_item_state`), so a sort,
             // a reorder drop, a rename or a watcher refresh keeps them on the same items while
             // the layout glide moves those items to their new cells.
@@ -1312,7 +1342,7 @@ impl FenceWindow {
         if old == new {
             return;
         }
-        self.with_view(|v| {
+        self.0.with_view(|v| {
             if let Some(item) = v.items.iter_mut().find(|it| it.id == old) {
                 item.id = new;
                 if let Some(motion) = v.item_motion.remove(&old) {
@@ -1332,7 +1362,7 @@ impl FenceWindow {
     /// place a popup on its final label rect (LVM_EDITLABEL ensures visibility before the
     /// edit opens).
     pub fn ensure_item_visible_now(&self, item: ItemId) {
-        self.with_view(|v| {
+        self.0.with_view(|v| {
             let Some(i) = v.items.iter().position(|it| it.id == item) else {
                 return;
             };
@@ -1348,7 +1378,7 @@ impl FenceWindow {
     }
     /// Items on the clipboard via 剪切: drawn at half alpha until the clipboard changes.
     pub fn set_cut_items(&self, cut: &HashSet<ItemId>) {
-        self.with_view(|v| {
+        self.0.with_view(|v| {
             if &v.cut != cut {
                 v.cut = cut.clone();
                 let _ = v.redraw_content();
@@ -1357,7 +1387,7 @@ impl FenceWindow {
     }
     /// Details columns shown (修改日期, 类型, 大小) for the fence being shown.
     pub fn set_columns_visible(&self, visible: [bool; 3]) {
-        self.with_view(|v| {
+        self.0.with_view(|v| {
             if v.columns_visible != visible {
                 v.columns_visible = visible;
                 if v.layout == ViewLayout::Details {
@@ -1369,7 +1399,7 @@ impl FenceWindow {
     /// Item whose inline rename edit is open (None = closed): its label stays folded under
     /// the edit box instead of unfolding to the full name.
     pub fn set_renaming(&self, item: Option<ItemId>) {
-        self.with_view(|v| {
+        self.0.with_view(|v| {
             if v.renaming != item {
                 v.renaming = item;
                 if let Some(item) = item
@@ -1389,7 +1419,7 @@ impl FenceWindow {
         });
     }
     pub fn set_icon_size(&self, size: u32) {
-        self.with_view(|v| {
+        self.0.with_view(|v| {
             v.icon_size = size;
             v.drop_icons_for_reload();
             v.snap_item_motion();
@@ -1398,7 +1428,7 @@ impl FenceWindow {
     }
     /// Details column widths (修改日期, 类型, 大小) for the fence being shown.
     pub fn set_column_widths(&self, widths: [f32; 3]) {
-        self.with_view(|v| {
+        self.0.with_view(|v| {
             if v.column_widths != widths && v.col_drag.is_none() {
                 v.column_widths = widths;
                 if v.layout == ViewLayout::Details {
@@ -1414,7 +1444,7 @@ impl FenceWindow {
         up_button: bool,
         navigate_folders: bool,
     ) {
-        self.with_view(|v| {
+        self.0.with_view(|v| {
             let deco = TitleDeco {
                 folder_icon,
                 up_button,
@@ -1444,7 +1474,7 @@ impl FenceWindow {
     }
     /// Whether the fence being shown is the desktop Inbox (chooses the empty-state text).
     pub fn set_is_inbox(&self, on: bool) {
-        self.with_view(|v| {
+        self.0.with_view(|v| {
             if v.is_inbox != on {
                 v.is_inbox = on;
                 if v.items.is_empty() {
@@ -1455,7 +1485,7 @@ impl FenceWindow {
     }
     /// Switches between the icon grid and the List / Details rows.
     pub fn set_layout(&self, layout: ViewLayout) {
-        self.with_view(|v| {
+        self.0.with_view(|v| {
             // Consumes the tab switch's pending offset either way (see `set_tabs`).
             let restore = v.scroll_restore.take();
             if v.layout == layout {
@@ -1476,7 +1506,7 @@ impl FenceWindow {
     }
     /// Current sort, shown by the details header (chevron on the active column).
     pub fn set_sort_indicator(&self, sort: SortMode, reverse: bool) {
-        self.with_view(|v| {
+        self.0.with_view(|v| {
             if v.sort != sort || v.sort_reverse != reverse {
                 v.sort = sort;
                 v.sort_reverse = reverse;
@@ -1489,7 +1519,7 @@ impl FenceWindow {
     /// "按时间分组": the items sit under 今天 / 昨天 / 本周 / 本月 / 更早 section headers, in
     /// every layout. Push it before `set_items` so the layout glide targets the new sections.
     pub fn set_group_by_date(&self, on: bool) {
-        self.with_view(|v| {
+        self.0.with_view(|v| {
             if v.group_by_date == on {
                 return;
             }
@@ -1500,7 +1530,7 @@ impl FenceWindow {
         });
     }
     pub fn set_spacing(&self, spacing: Spacing) {
-        self.with_view(|v| {
+        self.0.with_view(|v| {
             if v.spacing != spacing {
                 v.spacing = spacing;
                 for item in &mut v.items {
@@ -1513,10 +1543,10 @@ impl FenceWindow {
     }
 }
 
-impl FenceWindow {
+impl PanelWindow<'_> {
     /// One-row widgets show their capsule layout; taller ones the full layout.
     pub fn set_presentation(&self, presentation: pecofence_plugin_api::Presentation) {
-        self.with_view(|v| {
+        self.0.with_view(|v| {
             let Some(panel) = v.plugin_panel.as_mut() else {
                 return;
             };
@@ -1538,10 +1568,10 @@ impl FenceWindow {
         update: &pecofence_plugin_api::PanelUpdate,
     ) -> Option<bool> {
         let _capture_boundary = super::interaction::CaptureReleaseBoundary {
-            view: &self.view,
-            hwnd: self.hwnd(),
+            view: &self.0.view,
+            hwnd: self.0.hwnd(),
         };
-        let Ok(mut guard) = self.view.try_borrow_mut() else {
+        let Ok(mut guard) = self.0.view.try_borrow_mut() else {
             return None;
         };
         let Some(view) = guard.as_mut() else {
@@ -1569,26 +1599,5 @@ mod typography_geometry_tests {
         assert_eq!(text_change_height(140, 280, 60, false, true), 280);
         assert_eq!(text_change_height(140, 280, 60, true, true), 60);
         assert_eq!(text_change_height(40, 50, 60, false, false), 61);
-    }
-}
-
-impl FenceWindow {
-    pub fn files(&self) -> Option<&Self> {
-        self.view
-            .borrow()
-            .as_ref()
-            .filter(|v| !v.is_panel)
-            .map(|_| self)
-    }
-    pub fn panel(&self) -> Option<&Self> {
-        self.try_panel().ok().flatten()
-    }
-    pub(crate) fn try_panel(&self) -> std::result::Result<Option<&Self>, std::cell::BorrowError> {
-        Ok(self
-            .view
-            .try_borrow()?
-            .as_ref()
-            .filter(|v| v.is_panel)
-            .map(|_| self))
     }
 }
