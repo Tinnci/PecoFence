@@ -120,3 +120,11 @@ imports、进程树和干净 Windows 的最终验收仍待完成。分层门槛�
 ## 每次交付需附
 
 具体替换链路与已删除入口；测试命令和实际结果；未验证的 Windows/daemon 行为；来源/配置文件处理政策；若涉及协议，则列双方 SHA 和支持的精确组合。提交/发布与架构验收是不同动作。
+
+
+## Evidence-backed work board proposal
+
+The proposed board view extends the existing SPM integration as described in
+[EVIDENCE_BOARD_PROPOSAL.md](EVIDENCE_BOARD_PROPOSAL.md). This is a proposal,
+not an implemented provider or live backend endpoint; paired contract work
+must follow the SPM boundary and the typed-port direction above.
