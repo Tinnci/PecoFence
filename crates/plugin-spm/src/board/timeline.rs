@@ -206,6 +206,10 @@ pub(super) fn workspace(b: &mut Builder, input: &Input, viewport: RectDip) {
         );
         return;
     }
+    if viewport.w < COMPACT_MAX_W || viewport.h < COMPACT_MAX_H {
+        compact(b, input, viewport);
+        return;
+    }
     b.out.mode = Mode::Board;
     let mut x = PAD;
     for (zoom, text) in [
@@ -497,7 +501,11 @@ fn row(
         b,
         &format!("{key}:number"),
         rect(PAD + 4.0, y, 86.0, 25.0),
-        c.business_number.as_deref().unwrap_or(c.card_id.as_str()),
+        c.business_number
+            .as_deref()
+            .unwrap_or(c.card_id.as_str())
+            .strip_prefix("ORION-")
+            .unwrap_or(c.business_number.as_deref().unwrap_or("")),
     );
     label(
         b,
@@ -830,4 +838,229 @@ fn tooltip(b: &mut Builder, input: &Input, viewport: RectDip) {
         b.pal.primary,
         TextAlign::TopLeading,
     );
+}
+
+/// Fourteen calendar dates including today, ordered by the supplied due date.
+fn compact(b: &mut Builder, input: &Input, viewport: RectDip) {
+    let board = input.board.unwrap();
+    b.out.mode = Mode::Compact;
+    let today = input.now.date_naive();
+    let from = Utc.from_utc_datetime(&today.and_hms_opt(0, 0, 0).unwrap());
+    let range = Range { from, days: 13 };
+    let w = viewport.w - 2.0 * PAD;
+    let mut my = 2.0;
+    for m in &board.milestones {
+        let left = (m.at.date_naive() - today).num_days();
+        label(
+            b,
+            &format!("compact:milestone:{}", m.id),
+            rect(PAD, my, w, 22.0),
+            &format!(
+                "◆ {} {} · {} {}",
+                m.label,
+                date(m.at),
+                left,
+                b.lang.t("days")
+            ),
+            12.0,
+            b.pal.accent_ink,
+        );
+        my += 24.0;
+    }
+    if input.detail_open
+        && let Some(c) = input.selected.and_then(|id| model::find(board, id))
+    {
+        drawer(
+            b,
+            input,
+            c,
+            rect(PAD, my + 4.0, w, (viewport.h - my - 8.0).max(180.0)),
+        );
+        tooltip(b, input, viewport);
+        return;
+    }
+    label(
+        b,
+        "compact:range",
+        rect(PAD, my, w, 22.0),
+        &format!(
+            "{} {} – {} · {}",
+            b.lang.t("Today"),
+            date(from),
+            date(from + Duration::days(13)),
+            b.lang.t("14 days")
+        ),
+        12.0,
+        b.pal.secondary,
+    );
+    my += 26.0;
+    let area = rect(PAD, my, w, viewport.h - my - 8.0);
+    b.out.board = Some(area);
+    let mut cards = visible_cards(board, input.filter);
+    cards.retain(|c| c.card.stage.stage != BoardStage::Done);
+    cards.sort_by_key(|c| {
+        (
+            c.card.schedule.as_ref().map(|s| s.due),
+            c.card.card_id.as_str(),
+        )
+    });
+    let mut y = area.y - input.scroll;
+    let mut group = None;
+    b.clip = Some(area);
+    for info in cards {
+        let c = info.card;
+        let days = c
+            .schedule
+            .as_ref()
+            .map(|s| (s.due.date_naive() - today).num_days());
+        let g = match days {
+            Some(d) if d <= 1 => 0,
+            Some(d) if d <= 6 - i64::from(today.weekday().num_days_from_monday()) => 1,
+            Some(_) => 2,
+            None => 3,
+        };
+        if group != Some(g) {
+            let text = match g {
+                0 => "Overdue / tomorrow",
+                1 => "This week",
+                2 => "Later",
+                _ => "No schedule",
+            };
+            label(
+                b,
+                &format!("compact:group:{g}"),
+                rect(PAD, y, w, 24.0),
+                b.lang.t(text),
+                12.0,
+                if g == 0 {
+                    b.pal.danger
+                } else {
+                    b.pal.secondary
+                },
+            );
+            y += 26.0;
+            group = Some(g);
+        }
+        let key = format!("compact:tl:{}", c.card_id.as_str());
+        if input.selected == Some(&c.card_id) {
+            b.outline(
+                &format!("{key}:selected"),
+                rect(PAD, y, w, 88.0),
+                b.pal.accent,
+                1.5,
+                3.0,
+                b.pal.selected,
+            );
+        }
+        b.hit(
+            format!("{key}:hit"),
+            rect(PAD, y, w, 88.0),
+            "listitem",
+            format!(
+                "{} {} {}",
+                c.business_number.as_deref().unwrap_or(""),
+                c.title,
+                model::stage_label(c.stage.stage, b.lang)
+            ),
+            Target::Select(c.card_id.clone()),
+        );
+        b.out.nav.push(NavCard {
+            id: c.card_id.clone(),
+            column: 0,
+            lane: 0,
+            y: y - area.y + input.scroll,
+            h: 90.0,
+        });
+        number(
+            b,
+            &format!("{key}:number"),
+            rect(PAD + 4.0, y, 90.0, 24.0),
+            c.business_number.as_deref().unwrap_or(""),
+        );
+        label(
+            b,
+            &format!("{key}:title"),
+            rect(PAD + 98.0, y, w - 158.0, 24.0),
+            &c.title,
+            12.0,
+            b.pal.primary,
+        );
+        let left = days.map_or_else(|| "—".into(), |d| format!("{d} {}", b.lang.t("days")));
+        label(
+            b,
+            &format!("{key}:left"),
+            rect(PAD + w - 60.0, y, 60.0, 24.0),
+            &left,
+            12.0,
+            if days.is_some_and(|d| d <= 1) {
+                b.pal.danger
+            } else {
+                b.pal.primary
+            },
+        );
+        let who = c
+            .assignee()
+            .map_or(b.lang.t("Unassigned"), |a| a.person.display_name.as_str());
+        let status = info.signals.first().map_or_else(
+            || format!("▰ {}", model::stage_label(c.stage.stage, b.lang)),
+            |s| {
+                format!(
+                    "{} {}",
+                    if *s == Signal::Blocked { "⊘" } else { "!" },
+                    s.label(b.lang)
+                )
+            },
+        );
+        label(
+            b,
+            &format!("{key}:meta"),
+            rect(PAD + 4.0, y + 25.0, w - 8.0, 23.0),
+            &format!("{status} · {who}"),
+            12.0,
+            b.pal.secondary,
+        );
+        let track = rect(PAD + 8.0, y + 58.0, w - 24.0, 12.0);
+        b.fill(format!("{key}:track"), track, b.pal.skeleton, 2.0);
+        if let Some(s) = &c.schedule {
+            let x = range.x(s.due, track);
+            dashed_box(
+                b,
+                &format!("{key}:plan"),
+                rect(track.x, track.y, x - track.x, 12.0),
+                b.pal.secondary,
+            );
+            b.fill(
+                format!("{key}:due"),
+                rect(x, track.y - 3.0, 2.0, 18.0),
+                b.pal.primary,
+                0.0,
+            );
+            if let Some(base) = s.baseline_due.filter(|base| *base != s.due) {
+                dashed(
+                    b,
+                    &format!("{key}:baseline"),
+                    rect(range.x(base, track), track.y - 3.0, 1.0, 18.0),
+                    b.pal.secondary,
+                    true,
+                );
+            }
+            if !c.blockers.is_empty() {
+                blocked(
+                    b,
+                    &key,
+                    rect(track.x, track.y, (x - track.x).max(8.0), 12.0),
+                );
+            }
+        }
+        span(
+            b,
+            &format!("{key}:current"),
+            rect(track.x, track.y, 8.0, 12.0),
+            c.stage.stage,
+            model::stage_label(c.stage.stage, b.lang).into(),
+        );
+        y += 92.0;
+    }
+    b.out.board_content = y + input.scroll - area.y;
+    b.clip = None;
 }

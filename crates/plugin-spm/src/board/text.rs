@@ -46,6 +46,11 @@ impl Lang {
 
 const ZH: &[(&str, &str)] = &[
     ("Board", "看板"),
+    ("14 days", "14 天"),
+    ("Overdue / tomorrow", "已逾期或明天到期"),
+    ("This week", "本周"),
+    ("Later", "之后"),
+    ("No schedule", "无排期"),
     ("Week", "周"),
     ("Month", "月"),
     ("Quarter", "季"),
