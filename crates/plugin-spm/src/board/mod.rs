@@ -173,6 +173,7 @@ pub struct BoardPanel {
     view: BoardView,
     zoom: Zoom,
     evidence_open: bool,
+    reveal_after_layout: bool,
     selected: Option<RecordId>,
     detail_open: bool,
     filter: Filter,
@@ -261,6 +262,7 @@ impl BoardPanel {
             view: BoardView::default(),
             zoom: Zoom::default(),
             evidence_open: false,
+            reveal_after_layout: false,
             selected: None,
             detail_open: false,
             filter: Filter::default(),
@@ -440,6 +442,9 @@ impl BoardPanel {
         }
         self.selected = Some(id);
         self.detail_open |= open;
+        if self.view == BoardView::Timeline && self.detail_open {
+            self.reveal_after_layout = true;
+        }
         if self.detail_open {
             self.request_evidence(now, false)?;
         }
@@ -510,6 +515,7 @@ impl BoardPanel {
         self.evidence
             .retain(|(_, revision), _| *revision == board.revision);
         self.load_error = None;
+        self.preview_event = None;
         self.board = Some(board);
         self.board_since_refresh = true;
     }
@@ -681,6 +687,7 @@ impl BoardPanel {
                 self.request_evidence(now, false)?;
             }
             Target::ShowOnBoard => {
+                self.reveal_after_layout = true;
                 self.view = BoardView::Board;
                 self.detail_open = false;
                 self.evidence_open = false;
@@ -882,6 +889,7 @@ impl BoardPanel {
                 None
             }
             PanelKey::Escape => {
+                self.preview_event = None;
                 if self.detail_open {
                     self.detail_open = false;
                     self.evidence_open = false;
@@ -1281,6 +1289,19 @@ impl BoardPanel {
             } else {
                 Layout::default()
             };
+            if self.reveal_after_layout && visible {
+                self.reveal_after_layout = false;
+                if let (Some(id), Some(region)) = (&self.selected, layout.board) {
+                    if let Some(card) = layout.nav.iter().find(|n| &n.id == id) {
+                        if card.y < self.scroll {
+                            self.scroll = card.y.max(0.0);
+                        } else if card.y + card.h > self.scroll + region.h {
+                            self.scroll = (card.y + card.h - region.h + 8.0).max(0.0);
+                        }
+                    }
+                }
+                continue;
+            }
             let max_scroll = layout
                 .board
                 .map_or(0.0, |r| (layout.board_content - r.h).max(0.0));
