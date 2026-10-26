@@ -431,6 +431,33 @@ impl App {
                         bottom: y + h,
                     })));
                 }
+                ["new-ci-watch", x, y, w, h, source @ ..] => {
+                    let p = |s: &str| s.parse::<i32>().unwrap_or(0);
+                    let (x, y, w, h) = (p(x), p(y), p(w), p(h));
+                    let (version, mut config) = pecofence_plugin_spm::ci_watch::demo_config();
+                    if source == ["live"] {
+                        config["demo"] = serde_json::json!(false);
+                    }
+                    if self
+                        .state
+                        .new_panel_fence(
+                            "CI",
+                            RECT {
+                                left: x,
+                                top: y,
+                                right: x + w,
+                                bottom: y + h,
+                            },
+                            pecofence_plugin_spm::ci_watch::PROVIDER_ID,
+                            version,
+                            config,
+                        )
+                        .is_some()
+                    {
+                        self.resync_windows();
+                        self.schedule_save();
+                    }
+                }
                 ["new-board", x, y, w, h, source @ ..] => {
                     // The evidence board on its deterministic demo source, or with `live`
                     // on the SPM service (which has no board producer yet).

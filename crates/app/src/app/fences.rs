@@ -995,6 +995,47 @@ impl App {
         self.create_fence_at(rect);
     }
 
+    pub(super) fn new_spm_panel_near(
+        &mut self,
+        ci: bool,
+        x: i32,
+        y: i32,
+        near: Option<ContainerId>,
+    ) {
+        let (title, provider, (version, config), w, h) = if ci {
+            (
+                "CI 关注",
+                pecofence_plugin_spm::ci_watch::PROVIDER_ID,
+                pecofence_plugin_spm::ci_watch::live_config(),
+                480.0,
+                780.0,
+            )
+        } else {
+            (
+                "交付看板",
+                pecofence_plugin_spm::board::PROVIDER_ID,
+                pecofence_plugin_spm::board::demo_config(),
+                1120.0,
+                760.0,
+            )
+        };
+        let rect = self.place_new_fence_dip(w, h, x, y, near);
+        if self
+            .state
+            .new_panel_fence(
+                pecofence_core::i18n::text(title),
+                rect,
+                provider,
+                version,
+                config,
+            )
+            .is_some()
+        {
+            self.resync_windows();
+            self.schedule_save();
+        }
+    }
+
     pub(super) fn new_widget_near(
         &mut self,
         provider: &str,

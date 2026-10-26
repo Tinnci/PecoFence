@@ -678,5 +678,7 @@
   "更早的备份（{0}）": "Older backups ({0})",
   "配置文件": "Configuration file",
   "补齐": "Add missing",
-  "已关闭的栅栏": "Closed fences"
+  "已关闭的栅栏": "Closed fences",
+  "CI 关注": "CI watch",
+  "交付看板": "Delivery board"
 }

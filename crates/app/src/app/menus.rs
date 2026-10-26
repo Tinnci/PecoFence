@@ -4,7 +4,15 @@ use crate::commands::{DesktopCmd, FenceCmd, SettingsCmd};
 
 use super::*;
 
-fn new_widget_menu(clock: u32, calendar: u32, note: u32, todo: u32, diagram: u32) -> PopupMenu {
+fn new_widget_menu(
+    clock: u32,
+    calendar: u32,
+    note: u32,
+    todo: u32,
+    diagram: u32,
+    board: u32,
+    ci_watch: u32,
+) -> PopupMenu {
     let menu = PopupMenu::new();
     for (id, title) in [
         (note, "便笺"),
@@ -12,6 +20,8 @@ fn new_widget_menu(clock: u32, calendar: u32, note: u32, todo: u32, diagram: u32
         (diagram, "图表"),
         (clock, "数字时钟"),
         (calendar, "日历"),
+        (board, "交付看板"),
+        (ci_watch, "CI 关注"),
     ] {
         menu.item(id, pecofence_core::i18n::text(title), false, false);
     }
@@ -32,6 +42,8 @@ const CMD_NEW_CALENDAR: u32 = 12;
 const CMD_NEW_TODO: u32 = 13;
 const CMD_NEW_NOTE: u32 = 14;
 const CMD_NEW_DIAGRAM: u32 = 15;
+const CMD_NEW_BOARD: u32 = 16;
+const CMD_NEW_CI_WATCH: u32 = 17;
 const CMD_ITEM_OPEN: u32 = 100;
 const CMD_ITEM_LOCATION: u32 = 101;
 const CMD_ITEM_PROPERTIES: u32 = 102;
@@ -46,6 +58,8 @@ const CMD_FENCE_NEW_CALENDAR: u32 = 335;
 const CMD_FENCE_NEW_TODO: u32 = 336;
 const CMD_FENCE_NEW_NOTE: u32 = 337;
 const CMD_FENCE_NEW_DIAGRAM: u32 = 338;
+const CMD_FENCE_NEW_BOARD: u32 = 343;
+const CMD_FENCE_NEW_CI_WATCH: u32 = 344;
 const CMD_ITEM_MOVE_BASE: u32 = 200;
 const CMD_NEW_FENCE_HERE: u32 = 250;
 /// Command-id range handed to Explorer's `IContextMenu`.
@@ -143,6 +157,8 @@ impl App {
                 CMD_NEW_NOTE,
                 CMD_NEW_TODO,
                 CMD_NEW_DIAGRAM,
+                CMD_NEW_BOARD,
+                CMD_NEW_CI_WATCH,
             ),
         )
         .item(
@@ -218,6 +234,8 @@ impl App {
             CMD_NEW_FENCE => self
                 .queue
                 .push(Command::Fence(FenceCmd::NewFence { x, y: y - 300 })),
+            CMD_NEW_BOARD => self.new_spm_panel_near(false, x, y, None),
+            CMD_NEW_CI_WATCH => self.new_spm_panel_near(true, x, y, None),
             CMD_NEW_CLOCK => {
                 self.new_widget_near(pecofence_plugin_widgets::CLOCK_PROVIDER, x, y, None)
             }
@@ -718,6 +736,8 @@ impl App {
                 CMD_FENCE_NEW_NOTE,
                 CMD_FENCE_NEW_TODO,
                 CMD_FENCE_NEW_DIAGRAM,
+                CMD_FENCE_NEW_BOARD,
+                CMD_FENCE_NEW_CI_WATCH,
             ),
         );
         // Tabbed fences (Fences 6): split a tab out, move it along the strip, or merge this
@@ -927,6 +947,8 @@ impl App {
             }
             CMD_FENCE_NEW_FOLDER => self.create_desktop_item(fence, true),
             CMD_FENCE_NEW_TEXT => self.create_desktop_item(fence, false),
+            CMD_FENCE_NEW_BOARD => self.new_spm_panel_near(false, x, y, Some(host)),
+            CMD_FENCE_NEW_CI_WATCH => self.new_spm_panel_near(true, x, y, Some(host)),
             CMD_FENCE_NEW_CLOCK => {
                 self.new_widget_near(pecofence_plugin_widgets::CLOCK_PROVIDER, x, y, Some(host))
             }

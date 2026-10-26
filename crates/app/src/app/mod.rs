@@ -830,6 +830,10 @@ impl App {
             })?;
         panel_manager
             .borrow_mut()
+            .register_provider(Rc::new(pecofence_plugin_spm::ci_watch::CiWatchPlugin))
+            .expect("register CI watch provider");
+        panel_manager
+            .borrow_mut()
             .register_provider(Rc::new(pecofence_plugin_widgets::ClockPlugin))
             .map_err(|error| {
                 windows_core::Error::new(

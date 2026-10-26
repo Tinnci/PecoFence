@@ -679,5 +679,7 @@
   "更早的备份（{0}）": "Backups mais antigos ({0})",
   "配置文件": "Arquivo de configuração",
   "补齐": "Completar",
-  "已关闭的栅栏": "Cercas fechadas"
+  "已关闭的栅栏": "Cercas fechadas",
+  "CI 关注": "CI watch",
+  "交付看板": "Delivery board"
 }

@@ -679,5 +679,7 @@
   "更早的备份（{0}）": "Copias anteriores ({0})",
   "配置文件": "Archivo de configuración",
   "补齐": "Completar",
-  "已关闭的栅栏": "Vallas cerradas"
+  "已关闭的栅栏": "Vallas cerradas",
+  "CI 关注": "CI watch",
+  "交付看板": "Delivery board"
 }
