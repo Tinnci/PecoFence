@@ -4,6 +4,7 @@
 //! turns them into layout, hit-test, semantic, and paint data without depending on Win32.
 
 pub mod board;
+pub mod ci_watch;
 pub mod navigation;
 
 use pecofence_plugin_api::design::{self, ContentScale, LayoutTracker};

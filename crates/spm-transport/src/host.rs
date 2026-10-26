@@ -244,7 +244,10 @@ impl IpcService for PipeIpc {
             .map_err(|error| Error::Invalid(error.to_string()))?;
         if !matches!(
             &request,
-            spm_contracts::Request::Refresh(_)
+            spm_contracts::Request::GetCiWatch(_)
+                | spm_contracts::Request::UpdateCiWatchlist(_)
+                | spm_contracts::Request::SuggestCiWatch(_)
+                | spm_contracts::Request::Refresh(_)
                 | spm_contracts::Request::BuildBriefing(_)
                 | spm_contracts::Request::ResolveNavigation(_)
         ) {

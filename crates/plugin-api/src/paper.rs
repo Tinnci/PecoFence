@@ -22,6 +22,8 @@ pub const CREAM: [f32; 4] = srgb(0xFF, 0xF8, 0xEE);
 
 /// Status inks on paper as (light paper, dark paper), one per WinUI InfoBar severity.
 pub const SUCCESS: ([f32; 4], [f32; 4]) = (srgb(0x4E, 0x6B, 0x2E), srgb(0xA9, 0xC4, 0x7F));
+/// CI success ink, separate from the general InfoBar success role.
+pub const GOOD: ([f32; 4], [f32; 4]) = (srgb(0x3D, 0x6B, 0x4B), srgb(0x9C, 0xCB, 0x9F));
 pub const WARNING: ([f32; 4], [f32; 4]) = (srgb(0x7D, 0x5D, 0x0E), srgb(0xE5, 0xBC, 0x66));
 pub const ERROR: ([f32; 4], [f32; 4]) = (srgb(0x9E, 0x2F, 0x3B), srgb(0xF2, 0x95, 0x8A));
 

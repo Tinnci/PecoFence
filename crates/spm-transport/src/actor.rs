@@ -645,6 +645,9 @@ fn response_method(response: &Response) -> RpcMethod {
         Response::Ping(_) => RpcMethod::Ping,
         Response::QueryBoardPage(_) => RpcMethod::QueryBoardPage,
         Response::GetCardEvidence(_) => RpcMethod::GetCardEvidence,
+        Response::GetCiWatch(_) => RpcMethod::GetCiWatch,
+        Response::UpdateCiWatchlist(_) => RpcMethod::UpdateCiWatchlist,
+        Response::SuggestCiWatch(_) => RpcMethod::SuggestCiWatch,
     }
 }
 
