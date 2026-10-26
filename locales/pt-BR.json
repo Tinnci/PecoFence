@@ -678,5 +678,6 @@
   "保存快照后，可以随时回到当前的栅栏排布。": "Salve um instantâneo para voltar a qualquer momento à disposição atual das cercas.",
   "更早的备份（{0}）": "Backups mais antigos ({0})",
   "配置文件": "Arquivo de configuração",
-  "补齐": "Completar"
+  "补齐": "Completar",
+  "已关闭的栅栏": "Cercas fechadas"
 }

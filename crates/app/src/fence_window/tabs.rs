@@ -357,7 +357,7 @@ impl FenceViewState {
                 .iter()
                 .zip(&self.tabs)
                 .all(|((c, size, glass, _), t)| {
-                    *c == t.title && *size == t.title_size && *glass == self.theme.liquid_glass
+                    *c == t.title && *size == t.title_size && *glass == self.theme.is_liquid_glass()
                 });
         if !hit {
             let fresh: Vec<_> = self
@@ -369,7 +369,7 @@ impl FenceViewState {
                         .find(|(c, size, glass, _)| {
                             *c == t.title
                                 && *size == t.title_size
-                                && *glass == self.theme.liquid_glass
+                                && *glass == self.theme.is_liquid_glass()
                         })
                         .map_or_else(
                             || {
@@ -381,7 +381,12 @@ impl FenceViewState {
                             },
                             |(_, _, _, w)| *w,
                         );
-                    (t.title.clone(), t.title_size, self.theme.liquid_glass, w)
+                    (
+                        t.title.clone(),
+                        t.title_size,
+                        self.theme.is_liquid_glass(),
+                        w,
+                    )
                 })
                 .collect();
             *cache = fresh;

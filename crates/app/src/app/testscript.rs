@@ -56,8 +56,9 @@
 //! `<title>` matches the first fence whose title contains it. Commands run on the control
 //! window's timer between message-loop iterations, exactly like user-driven commands.
 
-use super::App;
 use crate::commands::Command;
+
+use super::App;
 use pecofence_core::ContentId;
 #[cfg(debug_assertions)]
 use pecofence_platform::window;
@@ -401,6 +402,35 @@ impl App {
                         bottom: y + h,
                     }));
                 }
+                ["new-board", x, y, w, h, source @ ..] => {
+                    // The evidence board on its deterministic demo source, or with `live`
+                    // on the SPM service (which has no board producer yet).
+                    let p = |s: &str| s.parse::<i32>().unwrap_or(0);
+                    let (x, y, w, h) = (p(x), p(y), p(w), p(h));
+                    let (version, mut config) = pecofence_plugin_spm::board::demo_config();
+                    if source == ["live"] {
+                        config["source"] = serde_json::json!("spm");
+                    }
+                    if self
+                        .state
+                        .new_panel_fence(
+                            "Board",
+                            RECT {
+                                left: x,
+                                top: y,
+                                right: x + w,
+                                bottom: y + h,
+                            },
+                            pecofence_plugin_spm::board::PROVIDER_ID,
+                            version,
+                            config,
+                        )
+                        .is_some()
+                    {
+                        self.resync_windows();
+                        self.schedule_save();
+                    }
+                }
                 ["new-note", x, y] => {
                     if let (Ok(x), Ok(y)) = (x.parse(), y.parse()) {
                         self.new_widget_near(pecofence_plugin_widgets::NOTE_PROVIDER, x, y, None);
@@ -637,6 +667,10 @@ impl App {
                         }
                         return;
                     }
+                }
+                #[cfg(debug_assertions)]
+                ["write-file", path] => {
+                    let _ = std::fs::write(path, b"");
                 }
                 ["exit-if-file", path] => {
                     if std::path::Path::new(path).is_file() {

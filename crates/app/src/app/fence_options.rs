@@ -112,7 +112,9 @@ impl App {
         if let Some(w) = self.window_for(fence)
             && w.active_fence() == fence
         {
-            w.set_spacing(spacing);
+            if let Some(view) = w.files() {
+                view.set_spacing(spacing);
+            };
         }
         self.apply_column_snap(host);
         self.apply_auto_height(host);

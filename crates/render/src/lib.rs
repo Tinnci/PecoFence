@@ -57,6 +57,8 @@ pub mod stack;
 pub mod text;
 #[cfg(windows)]
 pub mod theme;
+#[cfg(windows)]
+pub mod title_controls;
 
 #[cfg(windows)]
 pub use backdrop::{Image, MicaTint, MonitorBackdrop, WallpaperPosition};

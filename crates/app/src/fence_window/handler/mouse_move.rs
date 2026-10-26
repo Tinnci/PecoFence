@@ -1,5 +1,7 @@
 //! WM_MOUSEMOVE: marquee, scrollbar drag, remote and tab drags, item drag → OLE, column drag, pressed-button tracking, hover / tip / peek.
 
+use crate::commands::Command;
+
 use super::*;
 
 pub(super) fn on_mousemove(
@@ -332,7 +334,11 @@ pub(super) fn on_mousemove(
     if let Some(p) = v.pressed
         && matches!(
             p,
-            PressTarget::Up | PressTarget::Chevron | PressTarget::Header(_)
+            PressTarget::Up
+                | PressTarget::Chevron
+                | PressTarget::Command(_)
+                | PressTarget::Caption(_)
+                | PressTarget::Header(_)
         )
     {
         if p == PressTarget::Chevron {
@@ -365,6 +371,8 @@ pub(super) fn on_mousemove(
             match p {
                 PressTarget::Up => v.up_hovered = inside,
                 PressTarget::Chevron => v.chevron_hovered = inside,
+                PressTarget::Command(i) => v.command_hovered = inside.then_some(i),
+                PressTarget::Caption(b) => v.caption_hovered = inside.then_some(b),
                 PressTarget::Header(c) => v.header_hover = inside.then_some(c),
                 _ => {}
             }
@@ -375,13 +383,29 @@ pub(super) fn on_mousemove(
     // Title-row controls (chrome surface) and content hovers (content
     // surface) are resolved together so each surface is redrawn at most
     // once, and only when its own state changed.
-    let up = v.up_button_at(x, y);
-    let chev = v.chevron_at(x, y);
-    let tab = v.tab_at(x, y);
-    let chrome_changed = std::mem::replace(&mut v.up_hovered, up) != up
-        || std::mem::replace(&mut v.chevron_hovered, chev) != chev
-        || std::mem::replace(&mut v.tab_hover, tab) != tab;
-    let on_control = up || chev || tab.is_some();
+    use super::super::chrome_scene::ChromeTarget;
+    let target = v.title_control_at(x, y);
+    let up = target == Some(ChromeTarget::Up);
+    let chev = target == Some(ChromeTarget::Chevron);
+    let tab = match target {
+        Some(ChromeTarget::Tab(id)) => v.tabs.iter().position(|tab| tab.id == id),
+        _ => None,
+    };
+    let command = match target {
+        Some(ChromeTarget::Command(i)) => Some(i),
+        _ => None,
+    };
+    let caption = match target {
+        Some(ChromeTarget::Caption(button)) => Some(button),
+        _ => None,
+    };
+    // Evaluate every update: short-circuit OR leaves a previous control hovered.
+    let chrome_changed = (std::mem::replace(&mut v.up_hovered, up) != up)
+        | (std::mem::replace(&mut v.chevron_hovered, chev) != chev)
+        | (std::mem::replace(&mut v.tab_hover, tab) != tab)
+        | (std::mem::replace(&mut v.command_hovered, command) != command)
+        | (std::mem::replace(&mut v.caption_hovered, caption) != caption);
+    let on_control = target.is_some();
     // The divider's SizeWE cursor is set by WM_SETCURSOR before this message.
     let divider = v.divider_hit(x, y);
     // The scrollbar's hot zone wins over the item under it. Nothing

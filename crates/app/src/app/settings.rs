@@ -143,7 +143,7 @@ impl App {
         match SettingsHost::open(
             &self.reactor_context,
             self.theme_mode,
-            self.ctx.theme.borrow().liquid_glass,
+            self.ctx.theme.borrow().is_liquid_glass(),
             self.queue.clone(),
         ) {
             Ok(mut host) => {

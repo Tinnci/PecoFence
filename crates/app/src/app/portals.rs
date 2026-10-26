@@ -16,18 +16,20 @@ impl App {
             return;
         };
         let is_portal = f.kind == FenceKind::FolderPortal;
-        w.set_portal_deco(
-            is_portal.then(|| {
-                self.state
-                    .portals
-                    .snapshot(active)
-                    .map(|s| s.health.clone())
-                    .unwrap_or(pecofence_core::portal::PortalHealth::Loading)
-            }),
-            is_portal && !f.hide_title_icon,
-            is_portal && self.state.portal_navigated(active),
-            is_portal && f.portal_navigate,
-        );
+        if let Some(view) = w.files() {
+            view.set_portal_deco(
+                is_portal.then(|| {
+                    self.state
+                        .portals
+                        .snapshot(active)
+                        .map(|s| s.health.clone())
+                        .unwrap_or(pecofence_core::portal::PortalHealth::Loading)
+                }),
+                is_portal && !f.hide_title_icon,
+                is_portal && self.state.portal_navigated(active),
+                is_portal && f.portal_navigate,
+            );
+        };
         w.set_title(&self.state.display_title(&f));
     }
 

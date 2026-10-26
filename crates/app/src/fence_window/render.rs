@@ -117,12 +117,12 @@ pub(super) fn apply_system_backdrop(hwnd: HWND, mode: BackdropMode, dark: bool) 
 /// DWM rounds Fluent windows at the theme's radius (Round = 8 DIP, RoundSmall = 4 DIP), so
 /// the drawn rim and shadow meet its outline. Liquid Glass draws its own 24 DIP outline.
 pub(super) fn apply_window_shape(hwnd: HWND, theme: &Theme) {
-    let _ = dwm::set_nonclient_rendering(hwnd, !theme.liquid_glass);
+    let _ = dwm::set_nonclient_rendering(hwnd, !theme.is_liquid_glass());
     let _ = dwm::set_corner_preference(hwnd, corner_preference(theme));
 }
 
 pub(super) fn corner_preference(theme: &Theme) -> dwm::CornerPreference {
-    if theme.liquid_glass {
+    if theme.is_liquid_glass() {
         dwm::CornerPreference::DoNotRound
     } else if theme.corner_radius >= 8.0 {
         dwm::CornerPreference::Round
@@ -132,10 +132,80 @@ pub(super) fn corner_preference(theme: &Theme) -> dwm::CornerPreference {
 }
 
 impl FenceViewState {
+    /// The theme this fence draws with. A panel that publishes its own header
+    /// (`PanelChrome`) is shown like a Windows Settings window: title bar and content
+    /// are one matte paper sheet with no title fill or divider, whatever material the
+    /// other fences use. Everything else follows the app-wide style.
+    pub(super) fn sheet_theme(&self) -> Theme {
+        let base = self.base_theme;
+        let mut theme = match self.panel_chrome.as_ref() {
+            None => base,
+            Some(_) if base.is_high_contrast() => base,
+            Some(chrome) => match chrome.surface {
+                None => base.with_paper(),
+                // The panel's own ground decides light or dark paper (it follows the paper
+                // preference, which can differ from the app mode), and the sheet takes
+                // that exact colour.
+                Some(ground) => {
+                    let dark = pecofence_plugin_api::paper::luminance(ground) < 0.18;
+                    let mode = if dark {
+                        pecofence_render::ThemeMode::Dark
+                    } else {
+                        pecofence_render::ThemeMode::Light
+                    };
+                    let mut sheet = if mode == base.mode {
+                        base
+                    } else {
+                        let mut other = Theme::for_mode(mode);
+                        other.accent = base.accent;
+                        other.title_height = base.title_height;
+                        other
+                    }
+                    .with_paper();
+                    let byte = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
+                    sheet.solid_fill =
+                        ColorF::from_rgba8(byte(ground[0]), byte(ground[1]), byte(ground[2]), 0xFF);
+                    sheet
+                }
+            },
+        };
+        if self.frameless {
+            theme.title_height = 0.0;
+        }
+        theme
+    }
+
+    /// Title decorations as drawn: app-style fences (panel chrome) get Windows caption
+    /// buttons instead of the roll-up chevron.
+    pub(super) fn title_deco(&self) -> TitleDeco {
+        TitleDeco {
+            captions: self.panel_chrome.is_some() && !self.frameless,
+            ..self.deco
+        }
+    }
+
+    /// Re-derive the theme after the panel's chrome appeared or went away, and repaint.
+    pub(super) fn refresh_sheet(&mut self) {
+        let theme = self.sheet_theme();
+        if theme == self.theme {
+            return;
+        }
+        self.theme = theme;
+        apply_window_shape(self.hwnd, &self.theme);
+        if !self.theme.is_liquid_glass() {
+            self.gpu_glass.borrow_mut().reset();
+        }
+        self.glass_dark_text.set(None);
+        self.invalidate_backdrop();
+        let (w, h) = window::window_rect_size(self.hwnd);
+        let _ = self.layout_panels(w, h);
+        let _ = self.redraw();
+    }
+
     /// Liquid Glass and Paper render on the GPU from the shared wallpaper at the exact
     /// window rectangle; Fluent draws a CPU acrylic crop.
     pub(super) fn gpu_material(&self) -> bool {
-        self.theme.liquid_glass || self.theme.paper
+        self.theme.is_liquid_glass() || self.theme.is_paper()
     }
 
     /// Per-window paper fibre variation, stable across restarts.
@@ -153,11 +223,11 @@ impl FenceViewState {
 
     /// Adapt content to the clear plate instead of darkening the whole wallpaper.
     pub(super) fn material_foreground(&self) -> Theme {
-        if self.theme.liquid_glass && self.gpu_glass.borrow().failed() {
+        if self.theme.is_liquid_glass() && self.gpu_glass.borrow().failed() {
             return self.theme;
         }
         match &self.backdrop_crop {
-            Some(image) if self.theme.liquid_glass => {
+            Some(image) if self.theme.is_liquid_glass() => {
                 // The GPU renders a complete wallpaper-backed material, so floating
                 // fences do not expose application text through a transparent centre.
                 let theme = self.theme;
@@ -329,6 +399,12 @@ impl FenceViewState {
             chevron_pressed: self.pressed == Some(PressTarget::Chevron) && inside,
             count: f.value(&ChromeKey::Count, now),
             merge_hint: self.merge_t.value_at(now),
+            caption_hover: self.caption_hovered,
+            caption_pressed: match self.pressed {
+                Some(PressTarget::Caption(button)) if inside => Some(button),
+                _ => None,
+            },
+            maximized: self.maximized,
         }
     }
 
@@ -373,7 +449,54 @@ impl FenceViewState {
             _ => Backdrop::Solid,
         };
         let bitmaps = self.bitmaps.clone();
-        let title = self.title.clone();
+        // A panel that publishes its own header names the title row.
+        let title = self
+            .panel_chrome
+            .as_ref()
+            .filter(|c| !c.title.is_empty() && self.tabs.len() <= 1)
+            .map_or_else(|| self.title.clone(), |c| c.title.clone());
+        let commands: Vec<pecofence_render::fence_chrome::TitleCommandDraw> = self
+            .panel_chrome
+            .as_ref()
+            .map(|c| {
+                c.commands
+                    .iter()
+                    .enumerate()
+                    .map(
+                        |(i, command)| pecofence_render::fence_chrome::TitleCommandDraw {
+                            glyph: command.glyph,
+                            enabled: command.enabled,
+                            hover: (self.command_hovered == Some(i)) as u8 as f32,
+                            pressed: self.pressed == Some(PressTarget::Command(i))
+                                && self.press_inside,
+                        },
+                    )
+                    .collect()
+            })
+            .unwrap_or_default();
+        let command_labels: Vec<&str> = self
+            .panel_chrome
+            .as_ref()
+            .map(|c| {
+                c.commands
+                    .iter()
+                    .map(|command| command.label.as_str())
+                    .collect()
+            })
+            .unwrap_or_default();
+        let mut title_chrome = pecofence_render::fence_chrome::TitleChrome {
+            subtitle: self
+                .panel_chrome
+                .as_ref()
+                .map_or("", |c| c.subtitle.as_str()),
+            status: self
+                .panel_chrome
+                .as_ref()
+                .and_then(|c| c.status.as_ref())
+                .map(|s| (s.text.as_str(), s.severity)),
+            commands: &commands,
+            controls: &[],
+        };
         let rolled = self.roll_target();
         // A roll set / cancelled without the animation (reduced motion, retire, external
         // geometry) leaves the progress tween behind: rest it at the settled state.
@@ -410,7 +533,7 @@ impl FenceViewState {
         {
             self.pill_anim = None;
         }
-        let deco = self.deco;
+        let deco = self.title_deco();
         let style = self.style;
         let pressed_tab = match self.pressed {
             Some(PressTarget::Tab(t)) if self.press_inside => Some(t),
@@ -449,12 +572,17 @@ impl FenceViewState {
                 tabs: &tabs,
                 deco,
                 rolled,
+                commands: &command_labels,
+                maximized: self.maximized,
+                state,
+                command_states: &commands,
             })
             .with_clipped_captions(
                 tabs.iter()
                     .filter(|tab| !chrome.tab_title_fits(tab.title, tab.w, tab.title_size, &theme))
                     .map(|tab| ContentId::from_u128(tab.key)),
             );
+        title_chrome.controls = chrome_scene.controls();
         let ok = self
             .chrome_panel
             .draw_candidate(self.dpi, |session, wd, hd| {
@@ -476,6 +604,7 @@ impl FenceViewState {
                     deco,
                     state,
                     style,
+                    &title_chrome,
                 )
             })?;
         if ok {
@@ -591,7 +720,7 @@ impl FenceViewState {
     /// It sits 1 px outside the plate: the chrome draws the antialiased outline itself, and
     /// a second antialiasing pass on the same pixels would thin the corner arcs.
     pub(super) fn update_shape_clip(&self, w: i32, h: i32) -> Result<()> {
-        if self.theme.liquid_glass {
+        if self.theme.is_liquid_glass() {
             self.motion.clip_rounded(
                 &self.root,
                 w as f32,
@@ -1119,7 +1248,7 @@ impl FenceViewState {
         let chrome = self.chrome.clone();
         let bitmaps = self.bitmaps.clone();
         let wallpaper = self.backdrops.for_mode(self.backdrop_mode()).clone();
-        let backdrop = if self.theme.liquid_glass && !wallpaper.is_empty() {
+        let backdrop = if self.theme.is_liquid_glass() && !wallpaper.is_empty() {
             let r = self.backdrop_rect.unwrap_or_else(|| {
                 let r = window::window_rect(self.hwnd);
                 (r.left, r.top, r.right - r.left, r.bottom - r.top)

@@ -96,9 +96,6 @@ pub enum Command {
         fence: ContentId,
         mode: TransferMode,
     },
-    /// An OLE drag out of a fence ended with a Move/Copy performed by a foreign target: resync
-    /// the desktop right away instead of waiting for the watcher.
-    DragOutFinished,
     /// Folder portal: open a subfolder inside the portal / go one level up.
     PortalEnter {
         fence: ContentId,
@@ -213,27 +210,6 @@ pub enum Command {
         fence: ContentId,
         title: String,
     },
-    PanelConfigChanged {
-        key: InstanceKey,
-        bytes: Arc<[u8]>,
-    },
-    /// A panel changed its content in response to input; re-read its wake interval
-    /// so animations started by a click get their next frame.
-    PanelWakeChanged {
-        key: InstanceKey,
-    },
-    PanelTextRequested {
-        key: InstanceKey,
-        action: u64,
-        initial: String,
-        multiline: bool,
-        style: Option<pecofence_plugin_api::TextInputStyle>,
-    },
-    PanelTextCommit {
-        key: InstanceKey,
-        action: u64,
-        text: String,
-    },
     /// F2 / menu on a single selected item: open the inline rename popup.
     RenameItem {
         fence: ContentId,
@@ -255,8 +231,6 @@ pub enum Command {
         items: Vec<ItemId>,
         permanent: bool,
     },
-    /// A composition surface reported `DXGI_ERROR_DEVICE_REMOVED`: rebuild the render stack.
-    DeviceLost,
     DeleteFence(ContentId),
     NewFence {
         x: i32,
@@ -264,20 +238,6 @@ pub enum Command {
     },
     /// The user drew a marquee on the empty desktop: offer a fence with these screen bounds.
     NewFenceRect(RECT),
-    ToggleAllFences,
-    /// Peek hotkey: float all fences above the current windows (again = end).
-    TogglePeek,
-    EndPeek,
-    ApplyRulesNow,
-    OpenSettings,
-    /// One of the allowlisted Windows 11 Explorer menu actions.
-    ShellAction(ShellCommand),
-    /// Settings window on the 「栅栏」 page with this fence selected.
-    OpenOptionsForFence(ContentId),
-    RedrawAll,
-    Quit,
-    /// A retired fence window (deleted / merged) finished fading out: destroy it now.
-    FadeOutDone(HWND),
     /// The user clicked a fence: bring it above the other fences.
     RaiseFence(HWND),
     /// Details-view header click: sort by that column (again = reverse).
@@ -285,6 +245,35 @@ pub enum Command {
         fence: ContentId,
         sort: pecofence_core::SortMode,
     },
+    /// Title-bar caption buttons of a fence window.
+    CloseFence(pecofence_core::ContainerId),
+    ToggleMaximize(pecofence_core::ContainerId),
+
+    PanelConfigChanged {
+        key: InstanceKey,
+        bytes: Arc<[u8]>,
+    },
+    /// A panel changed its content in response to input; re-read its wake interval
+    /// so animations started by a click get their next frame.
+    PanelWakeChanged {
+        key: InstanceKey,
+    },
+    PanelTextRequested {
+        key: InstanceKey,
+        action: u64,
+        initial: String,
+        multiline: bool,
+        style: Option<pecofence_plugin_api::TextInputStyle>,
+    },
+    PanelTextCommit {
+        key: InstanceKey,
+        action: u64,
+        text: String,
+    },
+
+    OpenSettings,
+    /// Settings window on the 「栅栏」 page with this fence selected.
+    OpenOptionsForFence(ContentId),
     /// Message from one native Settings activation, not an HWND that can be reused.
     SettingsRequest {
         source: uuid::Uuid,
@@ -293,6 +282,23 @@ pub enum Command {
     SettingsClosed {
         source: uuid::Uuid,
     },
+
+    /// An OLE drag out of a fence ended with a Move/Copy performed by a foreign target: resync
+    /// the desktop right away instead of waiting for the watcher.
+    DragOutFinished,
+    /// A composition surface reported `DXGI_ERROR_DEVICE_REMOVED`: rebuild the render stack.
+    DeviceLost,
+    ToggleAllFences,
+    /// Peek hotkey: float all fences above the current windows (again = end).
+    TogglePeek,
+    EndPeek,
+    ApplyRulesNow,
+    /// One of the allowlisted Windows 11 Explorer menu actions.
+    ShellAction(ShellCommand),
+    RedrawAll,
+    Quit,
+    /// A retired fence window (deleted / merged) finished fading out: destroy it now.
+    FadeOutDone(HWND),
 }
 
 #[derive(Clone)]

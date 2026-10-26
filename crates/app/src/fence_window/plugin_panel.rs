@@ -547,10 +547,6 @@ impl FenceViewState {
         for command in update.commands {
             match command {
                 HostCommand::Invalidate => redraw_content = true,
-                HostCommand::SetChrome(chrome) => {
-                    self.title = chrome.title;
-                    redraw_chrome = true;
-                }
                 HostCommand::SetTitle(title) => {
                     if self.title != title {
                         self.title = title.clone();
@@ -566,6 +562,22 @@ impl FenceViewState {
                     }
                     relayout = true;
                     redraw_content = true;
+                }
+                HostCommand::SetChrome(chrome) => {
+                    if self.panel_chrome.as_ref() != Some(&chrome) {
+                        if self
+                            .command_hovered
+                            .is_some_and(|i| i >= chrome.commands.len())
+                        {
+                            self.command_hovered = None;
+                        }
+                        let first = self.panel_chrome.is_none();
+                        self.panel_chrome = Some(chrome);
+                        redraw_chrome = true;
+                        if first {
+                            self.refresh_sheet();
+                        }
+                    }
                 }
                 HostCommand::PersistConfig(bytes) => {
                     if let Some(panel) = &self.plugin_panel {
@@ -776,6 +788,38 @@ pub(super) fn handle_message(
             }
             None
         }
+        msg::WM_MOUSEWHEEL if !view.rolled_up => {
+            // Wheel coordinates are screen-relative; content DIPs start below the title.
+            let point = window::screen_to_client(
+                view.hwnd,
+                pecofence_platform::POINT {
+                    x: msg::lo_i16(lparam) as i32,
+                    y: msg::hi_i16(lparam) as i32,
+                },
+            );
+            let delta = msg::hi_u16(wparam) as u16 as i16 as f32;
+            let event = PanelEvent::Scroll {
+                x: point.x as f32 / scale,
+                y: (point.y - view.title_h_px()) as f32 / scale,
+                lines: -delta / 120.0 * 3.0,
+            };
+            forward_panel_event(view, event);
+            Some(0)
+        }
+        msg::WM_KEYDOWN
+            if !window::key_down(msg::VK_CONTROL)
+                && !window::key_down(0x12)
+                && !header_dragging
+                && let Some(key) =
+                    forwarded_key(wparam as u32, panel.interaction.focused.is_some()) =>
+        {
+            let event = PanelEvent::Key {
+                key,
+                shift: window::key_down(msg::VK_SHIFT),
+            };
+            forward_panel_event(view, event);
+            Some(0)
+        }
         msg::WM_KEYDOWN if !window::key_down(msg::VK_CONTROL) && !window::key_down(0x12) => {
             match wparam as u32 {
                 0x09 => {
@@ -852,6 +896,53 @@ pub(super) fn handle_message(
             None
         }
         _ => None,
+    }
+}
+
+/// Navigation keys go to the content unless a focused host control owns them
+/// (Enter/Space invoke it, Esc clears host focus first).
+fn forwarded_key(vk: u32, host_focus: bool) -> Option<pecofence_plugin_api::PanelKey> {
+    use pecofence_plugin_api::PanelKey;
+    Some(match vk {
+        0x25 => PanelKey::Left,
+        0x26 => PanelKey::Up,
+        0x27 => PanelKey::Right,
+        0x28 => PanelKey::Down,
+        0x21 => PanelKey::PageUp,
+        0x22 => PanelKey::PageDown,
+        0x24 => PanelKey::Home,
+        0x23 => PanelKey::End,
+        0x74 => PanelKey::Refresh,
+        0x0D if !host_focus => PanelKey::Enter,
+        0x1B if !host_focus => PanelKey::Escape,
+        _ => return None,
+    })
+}
+
+/// Run a command the panel published in its chrome (title-row button, UIA invoke).
+pub(super) fn invoke_chrome_command(view: &mut FenceViewState, index: usize) {
+    let Some(command) = view
+        .panel_chrome
+        .as_ref()
+        .and_then(|chrome| chrome.commands.get(index))
+        .filter(|command| command.enabled)
+    else {
+        return;
+    };
+    forward_panel_event(view, PanelEvent::Command { id: command.id });
+}
+
+fn forward_panel_event(view: &mut FenceViewState, event: PanelEvent) {
+    let Some(panel) = view.plugin_panel.as_ref() else {
+        return;
+    };
+    match panel.handle.event(event) {
+        Ok(update) => {
+            if let Err(error) = view.apply_plugin_update(update) {
+                tracing::warn!(%error, "panel input update failed");
+            }
+        }
+        Err(error) => tracing::warn!(%error, "panel input rejected"),
     }
 }
 

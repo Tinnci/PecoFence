@@ -1,5 +1,7 @@
 //! Popup menus (tray, item, fence, details header) and their command ids.
 
+use crate::commands::Command;
+
 use super::*;
 
 fn new_widget_menu(clock: u32, calendar: u32, note: u32, todo: u32, diagram: u32) -> PopupMenu {
@@ -95,6 +97,8 @@ const CMD_TAB_ATTACH_BASE: u32 = 2000;
 /// Options a widget adds to its window menu (`PanelInstance::menu_items`), by index.
 const CMD_PANEL_ITEM_BASE: u32 = 3000;
 const CMD_PAPER_BASE: u32 = 4000;
+/// Tray "Closed fences" entries, one per closed fence.
+const CMD_REOPEN_BASE: u32 = 5000;
 const _: () =
     assert!(CMD_PAPER_BASE >= CMD_PANEL_ITEM_BASE + 1000 && CMD_PAPER_BASE + 4 <= CMD_SHELL_FIRST);
 const _: () = assert!(
@@ -159,6 +163,15 @@ impl App {
             false,
             false,
         );
+        // Fences closed with their title-bar Close button come back from here.
+        let closed = self.state.closed_fences();
+        if !closed.is_empty() {
+            let reopen = PopupMenu::new();
+            for (i, (_, title)) in closed.iter().enumerate() {
+                reopen.item(CMD_REOPEN_BASE + i as u32, title, false, false);
+            }
+            menu.submenu(pecofence_core::i18n::text("已关闭的栅栏"), reopen);
+        }
         // Autostart and monitor swapping live on the settings page; the icon repair stays as
         // the rescue path when the desktop is left without icons.
         menu.separator()
@@ -229,6 +242,9 @@ impl App {
             }
             CMD_SETTINGS => self.queue.push(Command::OpenSettings),
             CMD_EXIT => self.queue.push(Command::Quit),
+            id if (CMD_REOPEN_BASE..CMD_REOPEN_BASE + closed.len() as u32).contains(&id) => {
+                self.reopen_fence(closed[(id - CMD_REOPEN_BASE) as usize].0);
+            }
             _ => {}
         }
     }
@@ -943,7 +959,9 @@ impl App {
                 if let Some(w) = self.window_for(fence)
                     && w.active_fence() == fence
                 {
-                    w.set_layout(layout);
+                    if let Some(view) = w.files() {
+                        view.set_layout(layout);
+                    };
                 }
                 self.apply_column_snap(host);
                 self.apply_auto_height(host);
@@ -1042,7 +1060,9 @@ impl App {
                 if let Some(w) = self.window_for(fence)
                     && w.active_fence() == fence
                 {
-                    w.set_columns_visible(vis);
+                    if let Some(view) = w.files() {
+                        view.set_columns_visible(vis);
+                    };
                 }
                 if let Some(host) = self.state.host_of(fence) {
                     self.apply_auto_height(host);
@@ -1055,7 +1075,9 @@ impl App {
                 if let Some(w) = self.window_for(fence)
                     && w.active_fence() == fence
                 {
-                    w.set_column_widths(widths);
+                    if let Some(view) = w.files() {
+                        view.set_column_widths(widths);
+                    };
                 }
                 self.schedule_save();
             }

@@ -16,7 +16,6 @@ pub struct Theme {
     pub mode: ThemeMode,
     pub high_contrast: bool,
     pub liquid_glass: bool,
-    /// Matte paper material (`with_paper`): opaque-looking sheet, fixed ink colours.
     pub paper: bool,
     /// Fence body fill when no wallpaper backdrop is available (SolidBackgroundFillColorBase).
     pub solid_fill: ColorF,
@@ -73,6 +72,16 @@ pub struct Theme {
 }
 
 impl Theme {
+    pub const fn is_high_contrast(&self) -> bool {
+        self.high_contrast
+    }
+    pub const fn is_liquid_glass(&self) -> bool {
+        self.liquid_glass
+    }
+    pub const fn is_paper(&self) -> bool {
+        self.paper
+    }
+
     pub const fn dark() -> Self {
         Self {
             mode: ThemeMode::Dark,
@@ -150,7 +159,7 @@ impl Theme {
 
     pub const fn acrylic_tint(&self) -> crate::backdrop::MicaTint {
         // The GPU materials blur on their own: keep their wallpaper sharp and untinted.
-        if self.liquid_glass || self.paper {
+        if self.is_liquid_glass() || self.is_paper() {
             return match self.mode {
                 ThemeMode::Dark => crate::backdrop::MicaTint::LIQUID_DARK,
                 ThemeMode::Light => crate::backdrop::MicaTint::LIQUID_LIGHT,
@@ -177,6 +186,7 @@ impl Theme {
         let fg = color(text);
         self.high_contrast = true;
         self.liquid_glass = false;
+        self.paper = false;
         self.solid_fill = bg;
         self.layer_fill = bg;
         self.glass_layer_fill = bg;
@@ -207,10 +217,11 @@ impl Theme {
     /// Liquid Glass-inspired chrome. Keep mode and accent independent of the material.
     /// The composition root clips to this radius, including content and height animations.
     pub const fn with_liquid_glass(mut self) -> Self {
-        if self.high_contrast {
+        if self.is_high_contrast() {
             return self;
         }
         self.liquid_glass = true;
+        self.paper = false;
         self.corner_radius = 24.0;
         self.glass_rim_top = ColorF::from_rgba8(0xFF, 0xFF, 0xFF, 0xCD);
         match self.mode {
@@ -243,7 +254,7 @@ impl Theme {
     /// (the sheet is nearly opaque), corners use Windows 11's 8 DIP window rounding, and
     /// hover feedback is a soft ink wash instead of a glass pill.
     pub const fn with_paper(mut self) -> Self {
-        if self.high_contrast {
+        if self.is_high_contrast() {
             return self;
         }
         self.liquid_glass = false;
@@ -304,7 +315,7 @@ impl Theme {
     /// Floating fences cover application content rather than wallpaper. A temporary
     /// neutral backing prevents document text showing through file names and details.
     pub fn with_floating_backing(mut self) -> Self {
-        if self.liquid_glass {
+        if self.is_liquid_glass() {
             self.glass_layer_fill = ColorF {
                 a: 0.94,
                 ..self.solid_fill
@@ -334,13 +345,27 @@ impl Theme {
     /// Hysteresis prevents the caption and all icon labels flashing black/white while a
     /// moving plate samples a background close to the contrast threshold.
     pub fn over_glass_with_previous_ink(
+        self,
+        image: &crate::Image,
+        opacity: f32,
+        tint: Option<ColorF>,
+        previous_dark_text: Option<bool>,
+    ) -> Self {
+        if self.liquid_glass {
+            self.sample_glass_ink(image, opacity, tint, previous_dark_text)
+        } else {
+            self
+        }
+    }
+
+    pub(crate) fn sample_glass_ink(
         mut self,
         image: &crate::Image,
         opacity: f32,
         tint: Option<ColorF>,
         previous_dark_text: Option<bool>,
     ) -> Self {
-        if !self.liquid_glass || image.bgra.is_empty() {
+        if image.bgra.is_empty() {
             return self;
         }
         let mut sum = 0.0;
@@ -398,7 +423,7 @@ impl Theme {
     /// system accent — WinUI `AccentFillColorDefault`: pass `AccentLight2` for the dark theme
     /// and `AccentDark1` for the light theme. The alphas stay as in the defaults.
     pub fn with_accent(mut self, rgb: [u8; 3]) -> Self {
-        if self.high_contrast {
+        if self.is_high_contrast() {
             return self;
         }
         let [r, g, b] = rgb;
@@ -458,8 +483,8 @@ mod tests {
             let base = Theme::dark()
                 .with_liquid_glass()
                 .with_contrast_colors(bg, fg);
-            assert!(base.high_contrast);
-            assert!(!base.liquid_glass);
+            assert!(base.is_high_contrast());
+            assert!(!base.is_liquid_glass());
             assert_eq!(base.solid_fill.a, 1.0);
             assert_eq!(base.text_primary.a, 1.0);
             assert_eq!(base.text_primary, base.text_secondary);
@@ -502,7 +527,7 @@ mod tests {
             assert!(glass.acrylic_tint().blur_sigma_dip < base.acrylic_tint().blur_sigma_dip);
             assert_eq!(glass.corner_radius, 24.0);
             assert_eq!(glass.title_height, base.title_height);
-            assert!(!base.liquid_glass);
+            assert!(!base.is_liquid_glass());
         }
     }
 
@@ -514,12 +539,12 @@ mod tests {
             assert_eq!(contrast.corner_radius, 4.0);
             assert_eq!(contrast.with_liquid_glass().corner_radius, 4.0);
             let paper = Theme::for_mode(mode).with_paper();
-            assert!(paper.paper && !paper.liquid_glass);
+            assert!(paper.is_paper() && !paper.is_liquid_glass());
             assert_eq!(paper.corner_radius, 8.0);
             assert_eq!(paper.solid_fill.a, 1.0);
             assert_eq!(paper.acrylic_tint().blur_sigma_dip, 0.0);
             assert!(
-                !contrast.with_paper().paper,
+                !contrast.with_paper().is_paper(),
                 "high contrast keeps system colours"
             );
             // Ink stays readable on the sheet in both modes.

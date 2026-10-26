@@ -66,7 +66,9 @@ pub(super) fn on_mouseleave(
         v.hide_tip();
         let chrome_changed = std::mem::take(&mut v.up_hovered)
             | std::mem::take(&mut v.chevron_hovered)
-            | v.tab_hover.take().is_some();
+            | v.tab_hover.take().is_some()
+            | v.command_hovered.take().is_some()
+            | v.caption_hovered.take().is_some();
         // Leaving the bar starts the 0.5 s contract delay, not an
         // instant collapse.
         v.set_scrollbar_pointer(None);
@@ -117,7 +119,7 @@ pub(super) fn on_lbuttondown(
         // anyway do so once below (one raster per click).
         let focus_cleared = std::mem::take(&mut v.focus_visible) && !v.rolled_up;
         // Up button / chevron: pressed look now, action on release inside.
-        if v.up_button_at(x, y) || v.chevron_at(x, y) {
+        if v.title_button_at(x, y).is_some() {
             // A press on the chevron is about to toggle the roll-up: a
             // pending hover-peek must not fire under it.
             window::kill_timer(hwnd, TIMER_PEEK_OPEN);
@@ -367,7 +369,9 @@ pub(super) fn on_lbuttonup(
                     v.end_scrollbar_press(),
                     // Not repainted here: folded into the single redraw
                     // below, after the capture is released.
-                    v.take_pressed(),
+                    // Mouse moves can be coalesced, or geometry can change between
+                    // the last move and release. Decide from this release point.
+                    v.take_pressed_at(x, y),
                 )
             }
             None => (None, false, None, None, false, None),
@@ -409,7 +413,14 @@ pub(super) fn on_lbuttonup(
         Some((PressTarget::Item(_) | PressTarget::Header(_), _)) => {
             need_content = true;
         }
-        Some((PressTarget::Tab(_) | PressTarget::Up | PressTarget::Chevron, _)) => {
+        Some((
+            PressTarget::Tab(_)
+            | PressTarget::Up
+            | PressTarget::Chevron
+            | PressTarget::Command(_)
+            | PressTarget::Caption(_),
+            _,
+        )) => {
             need_chrome = true;
         }
         None => {}
@@ -418,6 +429,20 @@ pub(super) fn on_lbuttonup(
     if let Some((p, true)) = press {
         match p {
             PressTarget::Up => queue.push(Command::PortalUp(v.active)),
+            PressTarget::Command(i) => super::super::plugin_panel::invoke_chrome_command(v, i),
+            PressTarget::Caption(button) => {
+                use pecofence_render::fence_chrome::CaptionButton;
+                v.caption_hovered = None;
+                match button {
+                    // A fence minimizes to its title strip (roll up), like the chevron.
+                    CaptionButton::Minimize if v.roll_anim.is_none() => {
+                        queue.push(Command::ToggleRollUp(fence_id))
+                    }
+                    CaptionButton::Minimize => {}
+                    CaptionButton::Maximize => queue.push(Command::ToggleMaximize(fence_id)),
+                    CaptionButton::Close => queue.push(Command::CloseFence(fence_id)),
+                }
+            }
             PressTarget::Header(col) => queue.push(Command::SortColumn {
                 fence: v.active,
                 sort: column_sort(col),

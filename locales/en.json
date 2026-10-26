@@ -677,5 +677,6 @@
   "保存快照后，可以随时回到当前的栅栏排布。": "Save a snapshot to return to the current fence arrangement at any time.",
   "更早的备份（{0}）": "Older backups ({0})",
   "配置文件": "Configuration file",
-  "补齐": "Add missing"
+  "补齐": "Add missing",
+  "已关闭的栅栏": "Closed fences"
 }

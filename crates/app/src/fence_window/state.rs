@@ -10,24 +10,9 @@ pub struct WidgetGrid {
 }
 
 pub struct FenceViewState {
-    #[allow(dead_code)]
-    pub fence_id: ContainerId,
-    pub title: String,
-    pub(super) accessibility: pecofence_platform::accessibility::Publisher,
-    pub(super) plugin_panel: Option<super::plugin_panel::PluginPanelContent>,
-    /// Window-owned native effect; outlives any mounted panel or pending frame.
-    pub(super) input_capture_release: Rc<Cell<bool>>,
-    pub rolled_up: bool,
-    pub is_inbox: bool,
-    /// Expanded window height in physical pixels (restored when un-rolling).
-    pub expanded_h_px: i32,
-    pub icon_size: u32,
-    pub label_lines: u8,
-    pub items: Vec<ItemView>,
+    pub(super) title: String,
     /// Contents shown in the title row. One entry = plain title.
     pub(super) tabs: Vec<TabView>,
-    /// The mounted content instance; independent of the window/container identity.
-    pub(super) active: ContentId,
     pub(super) tab_hover: Option<usize>,
     pub(super) tab_drag: Option<TabDrag>,
     /// Tab pills sliding to their slots after a reorder (drag past a neighbour, 左移 / 右移,
@@ -43,17 +28,8 @@ pub struct FenceViewState {
     pub(super) tab_natural_w: RefCell<Vec<(String, u8, bool, f32)>>,
     /// Tab head under an OLE drag (highlighted like a folder drop target; not the hover).
     pub(super) drop_tab: Option<usize>,
-    /// Drag dwell timer: the rolled-fence unroll is armed.
-    pub(super) drag_peek_armed: bool,
-    /// A right button press cancelled a drag: swallow the WM_RBUTTONUP that follows.
-    pub(super) rbutton_swallow: bool,
-    /// Item whose inline rename edit is open: its label stays folded under the edit box.
-    pub(super) renaming: Option<ItemId>,
     /// The fence-title rename popup is open (a hover peek stays expanded under it).
     pub(super) title_renaming: bool,
-    /// The anchor item's unfolded label, cached by (item, cell width, name) so a content redraw
-    /// (hover fade, scroll glide, marquee) does not lay the text out again.
-    pub(super) unfold_cache: Option<UnfoldCache>,
     /// A tab was just torn off; the App will hand us the new window to drag.
     pub(super) detach_pending: bool,
     pub(super) detach_cancelled: bool,
@@ -62,6 +38,14 @@ pub struct FenceViewState {
     pub(super) deco: TitleDeco,
     pub(super) up_hovered: bool,
     pub(super) chevron_hovered: bool,
+    /// Header published by the hosted panel (`HostCommand::SetChrome`), drawn in the title row.
+    pub(super) panel_chrome: Option<pecofence_plugin_api::PanelChrome>,
+    /// Panel command under the pointer, by index in `panel_chrome.commands`.
+    pub(super) command_hovered: Option<usize>,
+    /// Caption button under the pointer (app-style fences).
+    pub(super) caption_hovered: Option<pecofence_render::fence_chrome::CaptionButton>,
+    /// The fence fills its work area (caption Maximize); the button shows Restore.
+    pub(super) maximized: bool,
     /// Control the mouse button is held on, and whether the pointer is still over it (Win32
     /// button semantics: the pressed fill hides when you drag off and returns when you come
     /// back; release outside cancels).
@@ -70,6 +54,77 @@ pub struct FenceViewState {
     /// Client point of the press (a chevron press dragged past the threshold becomes a title
     /// drag, so the right end of the title row still moves the fence).
     pub(super) press_origin: (i32, i32),
+    pub(super) chrome_fades: Fades<ChromeKey>,
+    /// Drag-to-merge title highlight: logical state and its alpha (83 ms in, 167 ms out).
+    pub(super) merge_hint: bool,
+    pub(super) merge_t: Tween,
+    pub(super) chrome_busy: bool,
+    pub(super) title_hover: bool,
+    pub(super) chrome_scene: Option<super::chrome_scene::ChromeScene>,
+    /// Active-tab pill gliding to the newly selected tab: (x, w) in DIPs, 167 ms decelerate.
+    pub(super) pill_anim: Option<(Tween, Tween)>,
+
+    pub(super) is_panel: bool,
+    pub(super) plugin_panel: Option<super::plugin_panel::PluginPanelContent>,
+    /// Window-owned native effect; outlives any mounted panel or pending frame.
+    pub(super) input_capture_release: Rc<Cell<bool>>,
+
+    pub(super) rolled_up: bool,
+    /// Expanded window height in physical pixels (restored when un-rolling).
+    pub(super) expanded_h_px: i32,
+    /// Drag dwell timer: the rolled-fence unroll is armed.
+    pub(super) drag_peek_armed: bool,
+    /// Frameless widget grab handle: fades in while the pointer is over the window.
+    pub(super) grab_alpha: Tween,
+    pub(super) grab_busy: bool,
+    /// A rolled title was pressed with click-to-expand on; released without dragging = expand.
+    pub(super) click_pending: Option<(i32, i32)>,
+    /// The last title click expanded the fence (click-to-expand); a WM_NCLBUTTONDBLCLK that
+    /// completes it must not roll the fence back up.
+    pub(super) suppress_dblclk: bool,
+    pub(super) roll_anim: Option<RollAnim>,
+    /// Roll progress 0 (expanded) ..= 1 (rolled), phase-locked with the roll's height tween
+    /// (same duration and curve): the chevron rotates with it instead of flipping at the end.
+    pub(super) roll_t: Tween,
+    /// Auto-height settle (250 ms point-to-point): the bottom edge glides to the fitting
+    /// height. Separate from `roll_anim` so it never blocks hover-peek or the chevron.
+    pub(super) height_anim: Option<Tween>,
+    /// Whole-window fade in progress and its generation (see `VisFade`).
+    pub(super) vis_fade: Option<VisFade>,
+    pub(super) vis_gen: usize,
+    pub(super) vis_deadline: Option<Instant>,
+    /// `FenceWindow::retire` was called: the window is fading out for good and lives only in
+    /// `App::dying`. Nothing may show it again, and every hide must end in `FadeOutDone`.
+    pub(super) retired: bool,
+    /// Outgoing content panels of tab switches, still fading out under the new panel (a
+    /// second switch mid-swap hands off from the current opacity instead of snapping, so more
+    /// than one can be in flight); all parked in `spares` when `WM_APP_TAB_SWAP_DONE` arrives
+    /// with the newest generation. At most two spares are kept.
+    pub(super) outgoing: Vec<Panel>,
+    pub(super) spares: Vec<Panel>,
+    pub(super) swap_gen: usize,
+    pub(super) swap_deadline: Option<Instant>,
+    /// When the shadow bitmap was last uploaded (throttle for interactive resizing).
+    pub(super) shadow_uploaded: Option<Instant>,
+    /// Constant alpha of the shadow window (0..=1), a client tween mirroring the root's
+    /// whole-window fade: a layered HWND has no compositor property, so `tick` re-issues the
+    /// cached shadow bitmap with the sampled alpha each frame while `shadow_fading`.
+    pub(super) shadow_alpha: Tween,
+    pub(super) shadow_fading: bool,
+    /// Temporarily expanded by hovering a rolled fence (state stays "rolled" for persistence).
+    pub(super) peeking: bool,
+
+    pub(super) is_inbox: bool,
+    pub(super) icon_size: u32,
+    pub(super) label_lines: u8,
+    pub(super) items: Vec<ItemView>,
+    /// A right button press cancelled a drag: swallow the WM_RBUTTONUP that follows.
+    pub(super) rbutton_swallow: bool,
+    /// Item whose inline rename edit is open: its label stays folded under the edit box.
+    pub(super) renaming: Option<ItemId>,
+    /// The anchor item's unfolded label, cached by (item, cell width, name) so a content redraw
+    /// (hover fade, scroll glide, marquee) does not lay the text out again.
+    pub(super) unfold_cache: Option<UnfoldCache>,
     /// Keyboard focus ring shown on the cursor item (after keyboard navigation, until a mouse
     /// click or focus loss).
     pub(super) focus_visible: bool,
@@ -87,36 +142,20 @@ pub struct FenceViewState {
     pub(super) item_hover: Fades<ItemId>,
     pub(super) item_sel: Fades<ItemId>,
     pub(super) header_fades: Fades<HeaderColumn>,
-    pub(super) chrome_fades: Fades<ChromeKey>,
     /// Drop-target fade per item (a folder under a drag), 83 ms both ways.
     pub(super) drop_fades: Fades<ItemId>,
     /// Fence-wide drop wash + ring alpha (83 ms in, 167 ms out).
     pub(super) drop_wash: Tween,
     /// Insertion caret alpha (83 ms) and the slot it is (still) drawn at while fading out.
     pub(super) caret_alpha: Tween,
-    /// Frameless widget grab handle: fades in while the pointer is over the window.
-    pub(super) grab_alpha: Tween,
-    pub(super) grab_busy: bool,
     pub(super) caret_shown: Option<usize>,
-    /// Drag-to-merge title highlight: logical state and its alpha (83 ms in, 167 ms out).
-    pub(super) merge_hint: bool,
-    pub(super) merge_t: Tween,
     /// Layout motion: items gliding to new cells / fading in, and removed items fading out.
     pub(super) item_motion: HashMap<ItemId, ItemMotion>,
     pub(super) leaving: Vec<LeavingItem>,
     /// A fade was still running when the surface was last drawn: `tick` redraws it.
     pub(super) content_busy: bool,
-    pub(super) chrome_busy: bool,
-    /// Mouse is somewhere over the window (title or content) — drives title-on-hover and the
-    /// inactive-scrollbar rule.
-    pub(super) mouse_inside: bool,
     /// Last scroll / scrollbar activity, for the inactive-scrollbar linger.
     pub(super) last_scroll: Option<Instant>,
-    /// A rolled title was pressed with click-to-expand on; released without dragging = expand.
-    pub(super) click_pending: Option<(i32, i32)>,
-    /// The last title click expanded the fence (click-to-expand); a WM_NCLBUTTONDBLCLK that
-    /// completes it must not roll the fence back up.
-    pub(super) suppress_dblclk: bool,
     /// Double-click on a folder item navigates inside the portal instead of launching it.
     pub(super) navigate_folders: bool,
     /// Icons grid, compact list or details rows (FenceView.layout).
@@ -139,7 +178,6 @@ pub struct FenceViewState {
     /// Width the cached labels were fitted for; a change invalidates them.
     pub(super) label_w: f32,
     pub(super) hover: Option<usize>,
-    pub(super) title_hover: bool,
     pub(super) selected: HashSet<usize>,
     /// Scroll offset in DIPs as drawn and hit-tested; while `scroll_anim` runs it is the
     /// animated value (WinUI ScrollPresenter: wheel, keyboard and paging glide, thumb drags and
@@ -156,30 +194,8 @@ pub struct FenceViewState {
     /// accumulates: a second wheel notch retargets from the anticipated end, not from the
     /// current frame.
     pub(super) scroll_anim: Option<Tween>,
-    pub(super) dpi: u32,
-    pub(super) theme: Theme,
-    /// Last contrast choice for a clear plate; interior mutability keeps the draw API read-only.
-    pub(super) glass_dark_text: Cell<Option<bool>>,
-    pub(super) backdrops: Rc<BackdropSets>,
-    pub(super) backdrop_crop: Option<Image>,
-    /// Screen rect (left, top, width, height) `backdrop_crop` was cut for. While the height
-    /// animates the crop covers the taller end, so the per-frame chrome draws reuse it.
-    pub(super) backdrop_rect: Option<(i32, i32, i32, i32)>,
-    /// `BitmapCache` key of the uploaded crop (per window; dropped whenever the crop changes).
-    pub(super) backdrop_key: String,
-    pub(super) gpu_glass: RefCell<pecofence_render::gpu_glass::GpuGlass>,
-    pub(super) chrome_panel: Panel,
-    pub(super) chrome_scene: Option<super::chrome_scene::ChromeScene>,
-    pub(super) content_panel: Panel,
     pub(super) file_scene: Option<super::file_scene::FileScene>,
-    pub(super) _target: DesktopWindowTarget,
-    /// Root of the window's visual tree: whole-window fades / scales animate this.
-    pub(super) root: ContainerVisual,
-    pub(super) chrome: Rc<FenceChrome>,
     pub(super) icons: Rc<RefCell<IconCache>>,
-    pub(super) bitmaps: Rc<RefCell<BitmapCache>>,
-    #[allow(dead_code)]
-    pub(super) queue: CommandQueue,
     pub(super) drag: Option<DragState>,
     /// An OLE drag started from this window is running: hover is suppressed, the selection keeps
     /// its normal look (Explorer leaves the source drawn as is; the shell drag image is the only
@@ -223,6 +239,52 @@ pub struct FenceViewState {
     pub(super) type_ahead_at: Option<Instant>,
     /// Slow-double-click rename armed for this item (TIMER_RENAME).
     pub(super) pending_rename: Option<ItemId>,
+    /// Items on the clipboard via 剪切 (drawn at half alpha like Explorer).
+    pub(super) cut: HashSet<ItemId>,
+    /// Ctrl+wheel accumulator (touchpads deliver fractional notches).
+    pub(super) wheel_zoom_accum: i32,
+    /// Fence height follows the item grid (FenceView.auto_height).
+    pub(super) auto_height: bool,
+    /// Icon grid spacing (FenceView.spacing).
+    pub(super) spacing: Spacing,
+    /// Keyboard/selection anchor: the last item clicked or moved to with the arrow keys.
+    pub(super) anchor_index: Option<usize>,
+    /// Start of a Shift range selection.
+    pub(super) range_anchor: Option<usize>,
+    pub(super) drop_hover: bool,
+
+    #[allow(dead_code)]
+    pub fence_id: ContainerId,
+    pub(super) accessibility: pecofence_platform::accessibility::Publisher,
+    /// The mounted content instance; independent of the window/container identity.
+    pub(super) active: ContentId,
+    /// Mouse is somewhere over the window (title or content) — drives title-on-hover and the
+    /// inactive-scrollbar rule.
+    pub(super) mouse_inside: bool,
+    pub(super) dpi: u32,
+    pub(super) theme: Theme,
+    /// The app-wide theme before per-fence adjustments. A fence whose panel publishes
+    /// its chrome is an app window, so it draws as one paper sheet (`sheet_theme`).
+    pub(super) base_theme: Theme,
+    /// Last contrast choice for a clear plate; interior mutability keeps the draw API read-only.
+    pub(super) glass_dark_text: Cell<Option<bool>>,
+    pub(super) backdrops: Rc<BackdropSets>,
+    pub(super) backdrop_crop: Option<Image>,
+    /// Screen rect (left, top, width, height) `backdrop_crop` was cut for. While the height
+    /// animates the crop covers the taller end, so the per-frame chrome draws reuse it.
+    pub(super) backdrop_rect: Option<(i32, i32, i32, i32)>,
+    /// `BitmapCache` key of the uploaded crop (per window; dropped whenever the crop changes).
+    pub(super) backdrop_key: String,
+    pub(super) gpu_glass: RefCell<pecofence_render::gpu_glass::GpuGlass>,
+    pub(super) chrome_panel: Panel,
+    pub(super) content_panel: Panel,
+    pub(super) _target: DesktopWindowTarget,
+    /// Root of the window's visual tree: whole-window fades / scales animate this.
+    pub(super) root: ContainerVisual,
+    pub(super) chrome: Rc<FenceChrome>,
+    pub(super) bitmaps: Rc<RefCell<BitmapCache>>,
+    #[allow(dead_code)]
+    pub(super) queue: CommandQueue,
     pub(super) tip: Option<Tooltip>,
     pub(super) tip_target: Option<TipTarget>,
     /// Visible tooltip lifetime, independent of queued TIMER_TIP_HIDE messages.
@@ -232,12 +294,6 @@ pub struct FenceViewState {
     /// Client px where TIMER_TIP was armed and whether it is armed: like TME_HOVER the tip
     /// shows only once the pointer has rested inside the SM_C[XY]MOUSEHOVER box for the delay.
     pub(super) tip_wait: Option<super::tooltip::TipWait>,
-    /// Items on the clipboard via 剪切 (drawn at half alpha like Explorer).
-    pub(super) cut: HashSet<ItemId>,
-    /// Ctrl+wheel accumulator (touchpads deliver fractional notches).
-    pub(super) wheel_zoom_accum: i32,
-    /// Fence height follows the item grid (FenceView.auto_height).
-    pub(super) auto_height: bool,
     /// Mouse move/resize disabled (menu "锁定位置和大小").
     pub(super) locked: bool,
     /// Per-fence material override; None follows the global setting.
@@ -246,60 +302,28 @@ pub struct FenceViewState {
     pub(super) opacity: f32,
     /// Per-fence colour wash / title colour / title size.
     pub(super) style: FenceStyle,
-    /// Icon grid spacing (FenceView.spacing).
-    pub(super) spacing: Spacing,
     /// Widget windows: span rules and the live cell (docs/WIDGET_GRID.md).
     pub(super) widget_grid: Option<WidgetGrid>,
     /// Single-widget windows draw no title bar: the widget fills the window, empty
     /// widget areas move it and the fence menu comes from a right-click.
     pub(super) frameless: bool,
-    /// Keyboard/selection anchor: the last item clicked or moved to with the arrow keys.
-    pub(super) anchor_index: Option<usize>,
-    /// Start of a Shift range selection.
-    pub(super) range_anchor: Option<usize>,
     /// A draw hit `DXGI_ERROR_DEVICE_REMOVED`; surfaces must be recreated (task 6).
     pub(super) device_lost: bool,
-    pub(super) drop_hover: bool,
-    pub(super) roll_anim: Option<RollAnim>,
-    /// Roll progress 0 (expanded) ..= 1 (rolled), phase-locked with the roll's height tween
-    /// (same duration and curve): the chevron rotates with it instead of flipping at the end.
-    pub(super) roll_t: Tween,
-    /// Auto-height settle (250 ms point-to-point): the bottom edge glides to the fitting
-    /// height. Separate from `roll_anim` so it never blocks hover-peek or the chevron.
-    pub(super) height_anim: Option<Tween>,
-    /// Whole-window fade in progress and its generation (see `VisFade`).
-    pub(super) vis_fade: Option<VisFade>,
-    pub(super) vis_gen: usize,
-    pub(super) vis_deadline: Option<Instant>,
-    /// `FenceWindow::retire` was called: the window is fading out for good and lives only in
-    /// `App::dying`. Nothing may show it again, and every hide must end in `FadeOutDone`.
-    pub(super) retired: bool,
-    /// Outgoing content panels of tab switches, still fading out under the new panel (a
-    /// second switch mid-swap hands off from the current opacity instead of snapping, so more
-    /// than one can be in flight); all parked in `spares` when `WM_APP_TAB_SWAP_DONE` arrives
-    /// with the newest generation. At most two spares are kept.
-    pub(super) outgoing: Vec<Panel>,
-    pub(super) spares: Vec<Panel>,
-    pub(super) swap_gen: usize,
-    pub(super) swap_deadline: Option<Instant>,
-    /// Active-tab pill gliding to the newly selected tab: (x, w) in DIPs, 167 ms decelerate.
-    pub(super) pill_anim: Option<(Tween, Tween)>,
     pub(super) stack: Rc<RenderStack>,
     pub(super) motion: Rc<Motion>,
     pub(super) frames: Rc<FrameClock>,
     pub(super) hwnd: HWND,
     pub(super) shadow: ShadowWindow,
-    /// When the shadow bitmap was last uploaded (throttle for interactive resizing).
-    pub(super) shadow_uploaded: Option<Instant>,
-    /// Constant alpha of the shadow window (0..=1), a client tween mirroring the root's
-    /// whole-window fade: a layered HWND has no compositor property, so `tick` re-issues the
-    /// cached shadow bitmap with the sampled alpha each frame while `shadow_fading`.
-    pub(super) shadow_alpha: Tween,
-    pub(super) shadow_fading: bool,
-    /// Temporarily expanded by hovering a rolled fence (state stays "rolled" for persistence).
-    pub(super) peeking: bool,
     pub(super) behavior: Rc<Behavior>,
 }
+
+/// Owned title bar state.
+
+/// Owned panel host state.
+
+/// Owned animation state.
+
+/// Owned file view state.
 
 impl FenceViewState {
     /// Posts `msg` with `wparam` to this window from the compositor's callback thread.

@@ -77,6 +77,16 @@ pub fn mouse_hover_rect() -> (i32, i32) {
 /// stores `HKCU\Software\Microsoft\Accessibility\TextScaleFactor` (WinRT
 /// `UISettings.TextScaleFactor`); it does not rewrite the GDI icon-title `LOGFONT`.
 pub fn text_scale_percent() -> u32 {
+    // Debug builds let UI tests render at another text size without changing the
+    // user's accessibility setting.
+    #[cfg(debug_assertions)]
+    if let Some(percent) = std::env::var("PECOFENCE_TEST_TEXT_SCALE")
+        .ok()
+        .and_then(|v| v.parse::<u32>().ok())
+        .filter(|v| (100..=225).contains(v))
+    {
+        return percent;
+    }
     let key = to_wide(r"Software\Microsoft\Accessibility");
     let value = to_wide("TextScaleFactor");
     let mut data: u32 = 0;

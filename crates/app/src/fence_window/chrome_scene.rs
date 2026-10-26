@@ -2,6 +2,7 @@
 //! stable tab identities and the same control boxes used by FenceChrome.
 use super::*;
 use pecofence_plugin_api::{RectDip, SemanticNode};
+use pecofence_render::title_controls::{TitleControl, TitleControlId};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum ChromeTarget {
@@ -9,6 +10,10 @@ pub(super) enum ChromeTarget {
     Tab(ContentId),
     Up,
     Chevron,
+    /// A panel command, by index in the published chrome.
+    Command(usize),
+    /// A Windows caption button (app-style fences).
+    Caption(pecofence_render::fence_chrome::CaptionButton),
 }
 
 pub(super) struct ChromeInput<'a> {
@@ -22,6 +27,12 @@ pub(super) struct ChromeInput<'a> {
     pub tabs: &'a [TabDraw<'a>],
     pub deco: TitleDeco,
     pub rolled: bool,
+    /// Accessible names of the panel's chrome commands, nearest the chevron first.
+    pub commands: &'a [&'a str],
+    /// The fence fills its work area (names the middle caption button "Restore").
+    pub maximized: bool,
+    pub state: TitleState,
+    pub command_states: &'a [pecofence_render::fence_chrome::TitleCommandDraw],
 }
 
 pub(super) struct ChromeScene {
@@ -32,15 +43,27 @@ pub(super) struct ChromeScene {
     size: (i32, i32),
     viewport: RectDip,
     nodes: Vec<SemanticNode<ChromeTarget>>,
+    controls: Vec<TitleControl>,
     clipped_captions: HashSet<ContentId>,
 }
 
+#[cfg(test)]
 fn dip_rect(rect: Rect) -> RectDip {
     RectDip {
         x: rect.left,
         y: rect.top,
         w: rect.width(),
         h: rect.height(),
+    }
+}
+
+fn target(id: TitleControlId) -> ChromeTarget {
+    match id {
+        TitleControlId::Tab(id) => ChromeTarget::Tab(ContentId::from_u128(id)),
+        TitleControlId::Up => ChromeTarget::Up,
+        TitleControlId::Chevron => ChromeTarget::Chevron,
+        TitleControlId::Command(i) => ChromeTarget::Command(i),
+        TitleControlId::Caption(b) => ChromeTarget::Caption(b),
     }
 }
 
@@ -64,51 +87,37 @@ impl ChromeScene {
             rect: viewport,
             action: None,
         }];
-        // The dragged tab is painted after all ordinary tabs. Reverse hit testing
-        // must follow that exact order, including overlapping animation samples.
-        for tab in input
-            .tabs
-            .iter()
-            .filter(|tab| input.tabs.len() > 1 && !tab.dragging)
-            .chain(
-                input
-                    .tabs
-                    .iter()
-                    .filter(|tab| input.tabs.len() > 1 && tab.dragging),
-            )
-        {
-            nodes.push(SemanticNode {
-                id: ChromeTarget::Tab(ContentId::from_u128(tab.key)),
+        let controls = TitleControl::layout(
+            width,
+            height,
+            input.deco,
+            input.tabs,
+            input.command_states,
+            input.commands,
+            input.rolled,
+            TitleState {
+                maximized: input.maximized,
+                ..input.state
+            },
+        );
+        nodes.extend(controls.iter().map(|control| {
+            SemanticNode {
+                id: target(control.id),
                 parent: Some(root),
-                role: "tab".into(),
-                name: tab.title.into(),
-                rect: RectDip {
-                    x: tab.x,
-                    y: 0.0,
-                    w: tab.w,
-                    h: height,
+                role: if matches!(control.id, TitleControlId::Tab(_)) {
+                    "tab"
+                } else {
+                    "button"
+                }
+                .into(),
+                name: match &control.label {
+                    std::borrow::Cow::Borrowed(key) => pecofence_core::i18n::text(key).into(),
+                    std::borrow::Cow::Owned(text) => text.clone(),
                 },
+                rect: control.rect,
                 action: None,
-            });
-        }
-        if input.deco.up_button && input.tabs.len() <= 1 {
-            nodes.push(SemanticNode {
-                id: ChromeTarget::Up,
-                parent: Some(root),
-                role: "button".into(),
-                name: pecofence_core::i18n::text("向上").into(),
-                rect: dip_rect(TitleDeco::up_box(height)),
-                action: None,
-            });
-        }
-        nodes.push(SemanticNode {
-            id: ChromeTarget::Chevron,
-            parent: Some(root),
-            role: "button".into(),
-            name: pecofence_core::i18n::text(if input.rolled { "展开" } else { "卷起" }).into(),
-            rect: dip_rect(TitleDeco::chevron_box(width, height)),
-            action: None,
-        });
+            }
+        }));
         Self {
             active: input.active,
             dpi: input.dpi,
@@ -117,6 +126,7 @@ impl ChromeScene {
             size: input.size,
             viewport,
             nodes,
+            controls,
             clipped_captions: HashSet::new(),
         }
     }
@@ -125,12 +135,22 @@ impl ChromeScene {
         if !self.viewport.contains(x, y) {
             return None;
         }
-        self.nodes
+        self.controls
             .iter()
-            .skip(1)
             .rev()
-            .find(|node| node.rect.contains(x, y))
-            .map(|node| node.id)
+            .find(|control| control.rect.contains(x, y))
+            .map(|control| target(control.id))
+    }
+
+    pub fn enabled(&self, id: ChromeTarget) -> bool {
+        self.controls
+            .iter()
+            .find(|control| target(control.id) == id)
+            .is_some_and(|control| control.enabled)
+    }
+
+    pub fn controls(&self) -> &[TitleControl] {
+        &self.controls
     }
 
     pub fn with_clipped_captions(mut self, ids: impl IntoIterator<Item = ContentId>) -> Self {
@@ -194,6 +214,12 @@ impl FenceViewState {
     }
 }
 
+/// Caption boxes own resize-edge pixels too; all other controls retain the
+/// resize border. This decision is shared with the native NC hit-test.
+pub(super) fn control_owns_client(target: Option<ChromeTarget>, inside_border: bool) -> bool {
+    target.is_some() && (matches!(target, Some(ChromeTarget::Caption(_))) || inside_border)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -228,8 +254,13 @@ mod tests {
             deco: TitleDeco {
                 folder_icon: true,
                 up_button: true,
+                captions: false,
             },
             rolled: false,
+            commands: &[],
+            maximized: false,
+            state: TitleState::default(),
+            command_states: &[],
         })
     }
 
@@ -315,5 +346,213 @@ mod tests {
         assert!(!frame.matches(active, 96, 1, 10, (320, 120)));
         assert!(!frame.matches(active, 96, 1, 9, (320, 160)));
         assert!(!frame.matches(ContentId::from_u128(8), 96, 1, 9, (320, 120)));
+    }
+
+    #[test]
+    fn panel_commands_sit_left_of_the_chevron_and_hit_by_index() {
+        let commands = ["Refresh", "Copy summary"];
+        let frame = ChromeScene::new(ChromeInput {
+            active: ContentId::from_u128(7),
+            dpi: 96,
+            device: 1,
+            surface: 9,
+            size: (600, 300),
+            title_height: 36.0,
+            title: "orion · orion-ir",
+            tabs: &[],
+            deco: TitleDeco::default(),
+            rolled: false,
+            commands: &commands,
+            maximized: false,
+            state: TitleState::default(),
+            command_states: &[],
+        });
+        let chevron = TitleDeco::chevron_box(600.0, 36.0);
+        let first = TitleDeco::default().command_box(600.0, 36.0, 0);
+        let second = TitleDeco::default().command_box(600.0, 36.0, 1);
+        assert!(first.right <= chevron.left && second.right <= first.left);
+        assert_eq!(
+            frame.hit(first.left + 2.0, first.top + 2.0),
+            Some(ChromeTarget::Command(0))
+        );
+        assert_eq!(
+            frame.hit(second.left + 2.0, second.top + 2.0),
+            Some(ChromeTarget::Command(1))
+        );
+        let names: Vec<_> = frame
+            .semantics()
+            .iter()
+            .filter(|n| matches!(n.id, ChromeTarget::Command(_)))
+            .map(|n| n.name.as_str())
+            .collect();
+        assert_eq!(names, commands);
+        // A rolled-up fence shows only its title and chevron.
+        let rolled = ChromeScene::new(ChromeInput {
+            active: ContentId::from_u128(7),
+            dpi: 96,
+            device: 1,
+            surface: 9,
+            size: (600, 300),
+            title_height: 36.0,
+            title: "orion",
+            tabs: &[],
+            deco: TitleDeco::default(),
+            rolled: true,
+            commands: &commands,
+            maximized: false,
+            state: TitleState::default(),
+            command_states: &[],
+        });
+        assert_eq!(rolled.hit(first.left + 2.0, first.top + 2.0), None);
+    }
+
+    #[test]
+    fn app_style_fences_get_windows_caption_buttons_instead_of_the_chevron() {
+        use pecofence_render::fence_chrome::CaptionButton;
+        let commands = ["Refresh"];
+        let scene = |maximized| {
+            ChromeScene::new(ChromeInput {
+                active: ContentId::from_u128(7),
+                dpi: 96,
+                device: 1,
+                surface: 9,
+                size: (600, 300),
+                title_height: 36.0,
+                title: "orion",
+                tabs: &[],
+                deco: TitleDeco {
+                    captions: true,
+                    ..TitleDeco::default()
+                },
+                rolled: false,
+                commands: &commands,
+                maximized,
+                state: TitleState::default(),
+                command_states: &[],
+            })
+        };
+        let frame = scene(false);
+        let close = TitleDeco::caption_box(600.0, 36.0, CaptionButton::Close);
+        let max = TitleDeco::caption_box(600.0, 36.0, CaptionButton::Maximize);
+        let min = TitleDeco::caption_box(600.0, 36.0, CaptionButton::Minimize);
+        // Windows order, Close at the edge.
+        assert_eq!(close.right, 600.0);
+        assert!(min.right <= max.left && max.right <= close.left);
+        for (rect, button) in [
+            (close, CaptionButton::Close),
+            (max, CaptionButton::Maximize),
+            (min, CaptionButton::Minimize),
+        ] {
+            assert_eq!(
+                frame.hit(rect.left + 2.0, 18.0),
+                Some(ChromeTarget::Caption(button))
+            );
+        }
+        // No chevron; the panel command moves left of the caption buttons.
+        assert!(
+            !frame
+                .semantics()
+                .iter()
+                .any(|n| n.id == ChromeTarget::Chevron)
+        );
+        let deco = TitleDeco {
+            captions: true,
+            ..TitleDeco::default()
+        };
+        let command = deco.command_box(600.0, 36.0, 0);
+        assert!(command.right <= min.left);
+        assert_eq!(
+            frame.hit(command.left + 2.0, command.top + 2.0),
+            Some(ChromeTarget::Command(0))
+        );
+        let name = |frame: &ChromeScene| {
+            frame
+                .semantics()
+                .iter()
+                .find(|n| n.id == ChromeTarget::Caption(CaptionButton::Maximize))
+                .map(|n| n.name.clone())
+                .unwrap()
+        };
+        assert_ne!(name(&frame), name(&scene(true)), "Maximize becomes Restore");
+    }
+    #[test]
+    fn disabled_commands_reserve_their_geometry_but_cannot_be_pressed() {
+        let command = pecofence_render::fence_chrome::TitleCommandDraw {
+            glyph: '\u{E72C}',
+            enabled: false,
+            hover: 0.5,
+            pressed: false,
+        };
+        let frame = ChromeScene::new(ChromeInput {
+            active: ContentId::from_u128(7),
+            dpi: 144,
+            device: 1,
+            surface: 9,
+            size: (900, 450),
+            title_height: 36.0,
+            title: "Board",
+            tabs: &[],
+            deco: TitleDeco {
+                captions: true,
+                ..Default::default()
+            },
+            rolled: false,
+            commands: &["Refresh"],
+            maximized: true,
+            state: TitleState::default(),
+            command_states: &[command],
+        });
+        let control = frame
+            .controls()
+            .iter()
+            .find(|c| c.id == TitleControlId::Command(0))
+            .unwrap();
+        let point = (control.rect.x + 1.0, control.rect.y + 1.0);
+        assert_eq!(frame.hit(point.0, point.1), Some(ChromeTarget::Command(0)));
+        assert!(!frame.enabled(ChromeTarget::Command(0)));
+        assert_eq!(control.glyph, command.glyph);
+        assert_eq!(control.state.hover, command.hover);
+        let drawn = control.draw_rect();
+        assert_eq!((drawn.left, drawn.top), (control.rect.x, control.rect.y));
+        assert!(control_owns_client(frame.hit(point.0, point.1), true));
+    }
+
+    #[test]
+    fn caption_edges_and_release_points_follow_the_committed_frame() {
+        use pecofence_render::fence_chrome::CaptionButton;
+        let frame = ChromeScene::new(ChromeInput {
+            active: ContentId::from_u128(7),
+            dpi: 192,
+            device: 1,
+            surface: 9,
+            size: (1200, 600),
+            title_height: 36.0,
+            title: "Board",
+            tabs: &[],
+            deco: TitleDeco {
+                captions: true,
+                ..Default::default()
+            },
+            rolled: false,
+            commands: &[],
+            maximized: true,
+            state: TitleState::default(),
+            command_states: &[],
+        });
+        let max = TitleDeco::caption_box(600.0, 36.0, CaptionButton::Maximize);
+        let pressed = ChromeTarget::Caption(CaptionButton::Maximize);
+        // The final release point, not a cached hover, determines activation.
+        assert_eq!(frame.hit(max.left + 1.0, 0.0), Some(pressed));
+        assert_ne!(frame.hit(1.0, 1.0), Some(pressed));
+        assert!(control_owns_client(frame.hit(max.left + 1.0, 0.0), false));
+        assert!(control_owns_client(frame.hit(599.5, 0.0), false));
+        assert!(!control_owns_client(None, false));
+        assert!(!control_owns_client(Some(ChromeTarget::Up), false));
+        let restore = frame
+            .controls()
+            .iter()
+            .find(|c| c.id == TitleControlId::Caption(CaptionButton::Maximize))
+            .unwrap();
+        assert_eq!(restore.glyph, '\u{E923}');
     }
 }

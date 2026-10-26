@@ -823,7 +823,7 @@ fn theme_snapshot_for(theme: &pecofence_render::Theme, revision: u64) -> ThemeSn
     }
     let rgba = |c: pecofence_render::ColorF| [c.r, c.g, c.b, c.a];
     snapshot.revision = revision;
-    snapshot.high_contrast = theme.high_contrast;
+    snapshot.high_contrast = theme.is_high_contrast();
     snapshot.animations = PLUGIN_ANIMATIONS.load(Ordering::Relaxed);
     snapshot.text_primary = rgba(theme.text_primary);
     snapshot.text_secondary = rgba(theme.text_secondary);
@@ -836,7 +836,7 @@ fn theme_snapshot_for(theme: &pecofence_render::Theme, revision: u64) -> ThemeSn
     snapshot.accent = rgba(theme.accent);
     snapshot.info = snapshot.accent;
     snapshot.unknown = snapshot.text_secondary;
-    if theme.high_contrast {
+    if theme.is_high_contrast() {
         snapshot.accent = snapshot.text_primary;
         snapshot.info = snapshot.text_primary;
         snapshot.danger = snapshot.text_primary;

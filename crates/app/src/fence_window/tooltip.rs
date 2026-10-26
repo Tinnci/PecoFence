@@ -17,6 +17,10 @@ pub(super) enum TipTarget {
     Item(ContentId, ItemId),
     Tab(ContentId),
     Up(ContentId),
+    /// A panel chrome command (icon only), by index.
+    Command(ContentId, usize),
+    /// A caption button: its name, from the committed chrome scene.
+    Caption(ContentId, pecofence_render::fence_chrome::CaptionButton),
 }
 
 /// Pending native hover timer. A queued WM_TIMER can survive KillTimer and arrive
@@ -62,6 +66,12 @@ impl FenceViewState {
     ) -> Option<TipTarget> {
         if self.up_button_at(x_px, y_px) {
             return Some(TipTarget::Up(self.active));
+        }
+        if let Some(i) = self.command_at(x_px, y_px) {
+            return Some(TipTarget::Command(self.active, i));
+        }
+        if let Some(b) = self.caption_at(x_px, y_px) {
+            return Some(TipTarget::Caption(self.active, b));
         }
         if let Some(t) = self.tab_at(x_px, y_px) {
             return Some(TipTarget::Tab(self.tabs.get(t)?.id));
@@ -143,6 +153,26 @@ impl FenceViewState {
         match self.tip_target? {
             TipTarget::Up(content) => {
                 (content == self.active).then(|| pecofence_core::i18n::text("向上").to_string())
+            }
+            TipTarget::Caption(content, button) => {
+                if content != self.active {
+                    return None;
+                }
+                self.committed_chrome_scene()?
+                    .semantics()
+                    .iter()
+                    .find(|n| n.id == super::chrome_scene::ChromeTarget::Caption(button))
+                    .map(|n| n.name.clone())
+            }
+            TipTarget::Command(content, i) => {
+                if content != self.active {
+                    return None;
+                }
+                self.committed_chrome_scene()?
+                    .semantics()
+                    .iter()
+                    .find(|node| node.id == super::chrome_scene::ChromeTarget::Command(i))
+                    .map(|node| node.name.clone())
             }
             TipTarget::Tab(id) => {
                 if !self.tabs.iter().any(|tab| tab.id == id) {

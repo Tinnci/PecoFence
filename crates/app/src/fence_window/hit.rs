@@ -21,6 +21,31 @@ pub(super) fn bounded_auto_height(
 }
 
 impl FenceViewState {
+    pub(super) fn title_control_at(
+        &self,
+        x: i32,
+        y: i32,
+    ) -> Option<super::chrome_scene::ChromeTarget> {
+        self.committed_chrome_scene()?
+            .hit(x as f32 / self.scale(), y as f32 / self.scale())
+    }
+
+    pub(super) fn title_button_at(&self, x: i32, y: i32) -> Option<PressTarget> {
+        use super::chrome_scene::ChromeTarget;
+        let scene = self.committed_chrome_scene()?;
+        let target = self.title_control_at(x, y)?;
+        if !scene.enabled(target) {
+            return None;
+        }
+        match target {
+            ChromeTarget::Up => Some(PressTarget::Up),
+            ChromeTarget::Chevron => Some(PressTarget::Chevron),
+            ChromeTarget::Command(i) => Some(PressTarget::Command(i)),
+            ChromeTarget::Caption(b) => Some(PressTarget::Caption(b)),
+            _ => None,
+        }
+    }
+
     /// Is the client-pixel point on item `index`'s label text (not its icon)?
     pub(super) fn label_hit(&self, x_px: i32, y_px: i32, index: usize) -> bool {
         let Some(id) = self.items.get(index).map(|i| i.id) else {
@@ -104,11 +129,39 @@ impl FenceViewState {
             == Some(super::chrome_scene::ChromeTarget::Chevron)
     }
 
+    /// The caption button (app-style fences) under the client-pixel point, if any.
+    pub(super) fn caption_at(
+        &self,
+        x_px: i32,
+        y_px: i32,
+    ) -> Option<pecofence_render::fence_chrome::CaptionButton> {
+        match self
+            .committed_chrome_scene()?
+            .hit(x_px as f32 / self.scale(), y_px as f32 / self.scale())?
+        {
+            super::chrome_scene::ChromeTarget::Caption(button) => Some(button),
+            _ => None,
+        }
+    }
+
+    /// The panel chrome command under the client-pixel point, if any.
+    pub(super) fn command_at(&self, x_px: i32, y_px: i32) -> Option<usize> {
+        match self
+            .committed_chrome_scene()?
+            .hit(x_px as f32 / self.scale(), y_px as f32 / self.scale())?
+        {
+            super::chrome_scene::ChromeTarget::Command(i) => Some(i),
+            _ => None,
+        }
+    }
+
     /// Is the pointer (client px) over the pressed control?
     pub(super) fn press_hit(&self, p: PressTarget, x_px: i32, y_px: i32) -> bool {
         match p {
             PressTarget::Up => self.up_button_at(x_px, y_px),
             PressTarget::Chevron => self.chevron_at(x_px, y_px),
+            PressTarget::Command(i) => self.command_at(x_px, y_px) == Some(i),
+            PressTarget::Caption(b) => self.caption_at(x_px, y_px) == Some(b),
             PressTarget::Header(c) => self.header_hit(x_px, y_px) == Some(c),
             PressTarget::Item(i) => self.hit_item(x_px, y_px) == Some(i),
             PressTarget::Tab(t) => self.tab_at(x_px, y_px) == Some(t),

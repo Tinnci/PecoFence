@@ -503,6 +503,7 @@ impl AppState {
     }
 
     /// Fences that own a window (not hosted as tabs), in layout order.
+    /// Fences that own a window: every container's active tab, except closed ones.
     pub fn host_fences(&self) -> Vec<Fence> {
         self.config
             .layouts
@@ -510,10 +511,38 @@ impl AppState {
             .map(|l| {
                 l.containers
                     .iter()
+                    .filter(|c| !c.closed)
                     .filter_map(|c| l.project(c.active_tab))
                     .collect()
             })
             .unwrap_or_default()
+    }
+
+    /// Closed fences as (container, active tab title), for the tray's reopen menu.
+    pub fn closed_fences(&self) -> Vec<(ContainerId, String)> {
+        self.config
+            .layouts
+            .get(self.layout)
+            .map(|l| {
+                l.containers
+                    .iter()
+                    .filter(|c| c.closed)
+                    .filter_map(|c| l.project(c.active_tab).map(|f| (c.id, f.title)))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Close or reopen a fence window. The fence and its content stay in the layout.
+    pub fn set_closed(&mut self, id: ContainerId, closed: bool) -> bool {
+        match self.container_mut(id) {
+            Some(c) if c.closed != closed => {
+                c.closed = closed;
+                self.mark_dirty();
+                true
+            }
+            _ => false,
+        }
     }
 
     pub fn tabs_of(&self, host: ContainerId) -> Vec<FenceId> {
@@ -632,13 +661,24 @@ impl AppState {
     }
 
     pub fn new_widget_fence(&mut self, title: &str, rect: RECT, provider: &str) -> Option<FenceId> {
+        self.new_panel_fence(title, rect, provider, 1, serde_json::json!({}))
+    }
+
+    pub fn new_panel_fence(
+        &mut self,
+        title: &str,
+        rect: RECT,
+        provider: &str,
+        config_version: u16,
+        config: serde_json::Value,
+    ) -> Option<FenceId> {
         let id = self.new_fence(title, rect)?;
         self.content_mut(id)?.content = pecofence_core::ContentSpec::Panel {
             panel: pecofence_core::PanelSpec {
                 provider: provider.to_owned(),
                 instance_id: uuid::Uuid::new_v4(),
-                config_version: 1,
-                config: serde_json::json!({}),
+                config_version,
+                config,
             },
         };
         Some(id)
@@ -2069,6 +2109,37 @@ mod tests {
         assert!(!state.is_dirty());
         assert_eq!(state.committed_revision(), Some(stamp.revision));
         assert_eq!(state.persistence_issue.as_deref(), Some("backup offline"));
+    }
+
+    #[test]
+    fn closing_a_fence_removes_its_window_but_keeps_the_fence_until_reopened() {
+        let mut state = test_state();
+        let id = state
+            .new_widget_fence(
+                "Board",
+                RECT {
+                    left: 100,
+                    top: 100,
+                    right: 700,
+                    bottom: 500,
+                },
+                "pecofence.todo",
+            )
+            .unwrap();
+        let host = state.host_of(id).unwrap();
+        let hosts = |state: &AppState| state.host_fences().iter().any(|f| f.container_id == host);
+        assert!(hosts(&state));
+        assert!(state.set_closed(host, true));
+        assert!(
+            !state.set_closed(host, true),
+            "closing twice changes nothing"
+        );
+        assert!(!hosts(&state));
+        assert!(state.fence(id).is_some(), "close never deletes");
+        assert_eq!(state.closed_fences(), vec![(host, "Board".to_owned())]);
+        assert!(state.set_closed(host, false));
+        assert!(hosts(&state));
+        assert!(state.closed_fences().is_empty());
     }
 
     #[test]

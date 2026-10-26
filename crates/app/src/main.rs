@@ -5,6 +5,8 @@
 
 mod anchor;
 mod app;
+#[allow(dead_code)] // The SPM workspace window will use it; the fence draws chrome itself.
+mod chrome_title_bar;
 mod commands;
 mod fence_window;
 mod holiday_updates;

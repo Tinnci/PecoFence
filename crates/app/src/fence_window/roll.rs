@@ -41,7 +41,9 @@ pub(super) fn show_with_fade(view: &ViewCell, hwnd: HWND, entrance: bool) {
             // A retired window is on its way out: nothing may bring it back.
             Some(v) if v.retired => return,
             // Visible and not mid fade-out: nothing to do.
-            Some(v) if visible && !matches!(v.vis_fade, Some(VisFade::Hiding { .. })) => return,
+            Some(v) if visible && !matches!(v.vis_fade, Some(VisFade::Hiding { .. })) => {
+                return;
+            }
             Some(v) => v.prepare_fade_in(entrance),
             None => false,
         }
@@ -311,7 +313,7 @@ impl FenceViewState {
 
     /// Whether the title row is shown right now (title-on-hover rule).
     pub(super) fn title_visible_target(&self) -> bool {
-        self.theme.high_contrast
+        self.theme.is_high_contrast()
             || !self.behavior.title_on_hover.get()
             || self.mouse_inside
             || self.roll_target()
@@ -401,7 +403,7 @@ impl FenceViewState {
         } else {
             (motion::SLOW, Curve::Decelerate)
         };
-        let curve = if self.theme.liquid_glass {
+        let curve = if self.theme.is_liquid_glass() {
             Curve::Smooth
         } else {
             curve

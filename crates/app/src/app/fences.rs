@@ -66,8 +66,12 @@ impl App {
             if let Some(w) = self.fences.get(&host) {
                 w.set_content(&shown.content);
                 w.set_tabs(tabs, active);
-                w.set_group_by_date(shown.view.group_by_date);
-                w.set_items(items);
+                if let Some(view) = w.files() {
+                    view.set_group_by_date(shown.view.group_by_date);
+                };
+                if let Some(view) = w.files() {
+                    view.set_items(items);
+                };
                 // The window may have been kept across a layout switch (same ContainerId, other
                 // per-fence view flags): push every persisted flag, not just items/title.
                 self.apply_fence_view_with_snap(host, false);
@@ -82,17 +86,19 @@ impl App {
             };
             match FenceWindow::create(
                 &self.ctx,
-                host,
-                active,
-                &fence.title,
-                shown.kind == FenceKind::Inbox,
-                fence.rolled_up,
-                shown.view.icon_size,
-                shown.view.label_lines,
-                fence.auto_height,
-                rect,
-                px.height(),
-                items,
+                crate::fence_window::FenceWindowSpec {
+                    fence_id: host,
+                    content_id: active,
+                    title: &fence.title,
+                    is_inbox: shown.kind == FenceKind::Inbox,
+                    rolled_up: fence.rolled_up,
+                    icon_size: shown.view.icon_size,
+                    label_lines: shown.view.label_lines,
+                    auto_height: fence.auto_height,
+                    bounds: rect,
+                    expanded_h_px: px.height(),
+                    items,
+                },
             ) {
                 Ok(w) => {
                     w.set_content(&shown.content);
@@ -224,10 +230,16 @@ impl App {
                 && let Some(f) = self.state.fence(id)
             {
                 // Grouping first: the layout glide must target the new sections.
-                w.set_group_by_date(f.view.group_by_date);
+                if let Some(view) = w.files() {
+                    view.set_group_by_date(f.view.group_by_date);
+                };
                 w.set_content(&f.content);
-                w.set_items(self.item_views(&f));
-                w.set_sort_indicator(f.view.sort, f.view.reverse);
+                if let Some(view) = w.files() {
+                    view.set_items(self.item_views(&f));
+                };
+                if let Some(view) = w.files() {
+                    view.set_sort_indicator(f.view.sort, f.view.reverse);
+                };
             }
         }
         self.apply_portal_deco(host);
@@ -245,6 +257,11 @@ impl App {
             return;
         };
         w.set_locked(f.locked);
+        w.set_maximized(
+            self.state
+                .container(id)
+                .is_some_and(|c| c.restore.is_some()),
+        );
         let (bd, op) = f
             .appearance
             .as_ref()
@@ -287,23 +304,39 @@ impl App {
             let Some(w) = self.fences.get(&id) else {
                 return;
             };
+            w.set_content(&shown.content);
             if w.icon_size() != shown.view.icon_size {
                 // Drops cached icons/labels, so only when it actually differs.
-                w.set_icon_size(shown.view.icon_size);
+                if let Some(view) = w.files() {
+                    view.set_icon_size(shown.view.icon_size);
+                };
             }
-            w.set_content(&shown.content);
-            w.set_layout(shown.view.layout);
-            w.set_is_inbox(shown.kind == FenceKind::Inbox);
-            w.set_spacing(shown.view.spacing);
-            w.set_column_widths(
-                shown
-                    .view
-                    .column_widths
-                    .unwrap_or(crate::layout::DetailColumns::DEFAULT_WIDTHS),
-            );
-            w.set_columns_visible(shown.view.columns_visible.unwrap_or([true; 3]));
-            w.set_group_by_date(shown.view.group_by_date);
-            w.set_sort_indicator(shown.view.sort, shown.view.reverse);
+            if let Some(view) = w.files() {
+                view.set_layout(shown.view.layout);
+            };
+            if let Some(view) = w.files() {
+                view.set_is_inbox(shown.kind == FenceKind::Inbox);
+            };
+            if let Some(view) = w.files() {
+                view.set_spacing(shown.view.spacing);
+            };
+            if let Some(view) = w.files() {
+                view.set_column_widths(
+                    shown
+                        .view
+                        .column_widths
+                        .unwrap_or(crate::layout::DetailColumns::DEFAULT_WIDTHS),
+                );
+            };
+            if let Some(view) = w.files() {
+                view.set_columns_visible(shown.view.columns_visible.unwrap_or([true; 3]));
+            };
+            if let Some(view) = w.files() {
+                view.set_group_by_date(shown.view.group_by_date);
+            };
+            if let Some(view) = w.files() {
+                view.set_sort_indicator(shown.view.sort, shown.view.reverse);
+            };
             w.set_auto_height(f.auto_height && shown.content.is_files());
             if w.is_rolled() != f.rolled_up {
                 w.set_rolled(f.rolled_up);
@@ -328,9 +361,13 @@ impl App {
                 && let Some(w) = self.fences.get(&id)
             {
                 w.set_tabs(self.tab_views(id), active);
-                w.set_group_by_date(f.view.group_by_date);
+                if let Some(view) = w.files() {
+                    view.set_group_by_date(f.view.group_by_date);
+                };
                 w.set_content(&f.content);
-                w.set_items(self.item_views(&f));
+                if let Some(view) = w.files() {
+                    view.set_items(self.item_views(&f));
+                };
             }
             self.apply_auto_height(id);
         }
@@ -494,7 +531,9 @@ impl App {
         };
         w.set_widget_grid(grid);
         if grid.is_none() && self.grouped_grid_widget(id) {
-            w.set_widget_presentation(pecofence_plugin_api::Presentation::Compact);
+            if let Some(panel) = w.panel() {
+                panel.set_presentation(pecofence_plugin_api::Presentation::Compact);
+            }
         }
         if let Some(grid) = grid {
             let scale = monitors::dpi_for_window(w.hwnd()).max(96) as f32 / 96.0;
@@ -510,7 +549,9 @@ impl App {
                 grid.cell,
                 self.ctx.behavior.text_scale.get(),
             );
-            w.set_widget_presentation(span.presentation());
+            if let Some(panel) = w.panel() {
+                panel.set_presentation(span.presentation());
+            }
         }
     }
 
@@ -526,7 +567,9 @@ impl App {
         w.set_widget_grid(grid);
         let Some(grid) = grid else {
             if self.grouped_grid_widget(id) {
-                w.set_widget_presentation(pecofence_plugin_api::Presentation::Compact);
+                if let Some(panel) = w.panel() {
+                    panel.set_presentation(pecofence_plugin_api::Presentation::Compact);
+                }
             }
             return;
         };
@@ -553,7 +596,9 @@ impl App {
                 text_scale,
             ),
         };
-        w.set_widget_presentation(span.presentation());
+        if let Some(panel) = w.panel() {
+            panel.set_presentation(span.presentation());
+        }
         let saved = pecofence_core::WidgetSpan {
             columns: span.columns,
             rows: span.rows,
@@ -725,7 +770,9 @@ impl App {
         if let Some(w) = self.window_for(fence)
             && w.active_fence() == fence
         {
-            w.set_icon_size(size);
+            if let Some(view) = w.files() {
+                view.set_icon_size(size);
+            };
         }
         let Some(host) = self.state.host_of(fence) else {
             return;
@@ -824,6 +871,81 @@ impl App {
     }
 
     /// Deletes a content instance. Only deleting a container's last tab removes its window.
+    /// Caption Close: the window goes away, the fence and its content stay. The tray's
+    /// "Closed fences" menu reopens it where it was.
+    pub(super) fn close_fence(&mut self, host: ContainerId) {
+        if self.state.set_closed(host, true) {
+            self.resync_windows();
+            self.schedule_save();
+        }
+    }
+
+    pub(super) fn reopen_fence(&mut self, host: ContainerId) {
+        if self.state.set_closed(host, false) {
+            self.resync_windows();
+            self.schedule_save();
+        }
+    }
+
+    /// Caption Maximize / Restore: fill the work area of the fence's monitor, or go back
+    /// to the bounds it had before.
+    pub(super) fn toggle_maximize(&mut self, host: ContainerId) {
+        let Some(w) = self.fences.get(&host) else {
+            return;
+        };
+        if w.is_rolled() {
+            self.toggle_roll(host);
+        }
+        let Some(w) = self.fences.get(&host) else {
+            return;
+        };
+        let restore = self.state.container(host).and_then(|c| c.restore.clone());
+        let rect = match restore {
+            Some(geo) => {
+                let Some(work) =
+                    pecofence_core::geometry::resolve_work_area(&geo, &self.state.work_areas)
+                        .cloned()
+                else {
+                    return;
+                };
+                let px = pecofence_core::geometry::denormalize(&geo, &work);
+                if let Some(c) = self.state.container_mut(host) {
+                    c.restore = None;
+                }
+                RECT {
+                    left: px.left,
+                    top: px.top,
+                    right: px.right,
+                    bottom: px.bottom,
+                }
+            }
+            None => {
+                let r = w.rect();
+                let Some(wa) = self.work_area_at((r.left + r.right) / 2, (r.top + r.bottom) / 2)
+                else {
+                    return;
+                };
+                if let Some(c) = self.state.container_mut(host) {
+                    c.restore = Some(c.geometry.clone());
+                }
+                RECT {
+                    left: wa.left,
+                    top: wa.top,
+                    right: wa.right,
+                    bottom: wa.bottom,
+                }
+            }
+        };
+        self.state.mark_dirty();
+        let maximized = self
+            .state
+            .container(host)
+            .is_some_and(|c| c.restore.is_some());
+        w.set_maximized(maximized);
+        w.set_bounds(rect);
+        self.schedule_save();
+    }
+
     pub(super) fn delete_fence(&mut self, fence: ContentId) {
         if self.state.delete_fence(fence) {
             self.resync_windows();

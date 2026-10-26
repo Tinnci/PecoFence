@@ -27,7 +27,7 @@ pub(super) fn on_windowposchanging(
     // after the composition surfaces and their rounded clip have the new dimensions.
     if let Ok(mut guard) = h.view.try_borrow_mut()
         && let Some(v) = guard.as_mut()
-        && v.theme.liquid_glass
+        && v.theme.is_liquid_glass()
         // SAFETY: this is the WINDOWPOS of the message; fences are top-level windows.
         && let Some(next) = unsafe {
             window::windowpos_move_rect(lparam, window::window_rect(hwnd))
@@ -94,10 +94,14 @@ pub(super) fn on_nchittest(
     let rolled = v.rolled_up;
     // Tab headers take clicks (switch / drag out); the rest of the title
     // row keeps moving the window.
+    // A caption button owns its complete painted box, including the top/right
+    // edge of a maximized fence. Other title controls retain resize borders.
+    let control = v.title_control_at(left, top);
     if top < title_h
-        && left >= border
-        && right > border
-        && (v.tab_at(left, top).is_some() || v.up_button_at(left, top) || v.chevron_at(left, top))
+        && super::super::chrome_scene::control_owns_client(
+            control,
+            left >= border && right > border,
+        )
     {
         return Some(msg::HTCLIENT);
     }
@@ -275,7 +279,7 @@ pub(super) fn on_nclbuttondown(
                 if v.locked {
                     return Some(0);
                 }
-                if v.theme.liquid_glass {
+                if v.theme.is_liquid_glass() {
                     v.height_anim = None;
                     v.remote_drag = Some(RemoteDrag {
                         hwnd,
@@ -457,7 +461,7 @@ pub(super) fn on_size(h: &HandlerCtx, hwnd: HWND, _wparam: usize, lparam: isize)
         let draw_done = Instant::now();
         v.update_shadow();
         if tracing::enabled!(target: "pecofence::frame_shape", tracing::Level::TRACE)
-            && v.theme.liquid_glass
+            && v.theme.is_liquid_glass()
         {
             let r = window::window_rect(hwnd);
             let origin = window::screen_to_client(
@@ -509,7 +513,7 @@ pub(super) fn on_move(
         if v.update_backdrop() {
             if old_ink != v.material_foreground().text_primary
                 || v.plugin_panel.is_some()
-                || (v.theme.liquid_glass && v.row_metrics().is_some())
+                || (v.theme.is_liquid_glass() && v.row_metrics().is_some())
             {
                 // Moving clear glass across a light/dark boundary also changes the icon labels.
                 let _ = v.redraw();

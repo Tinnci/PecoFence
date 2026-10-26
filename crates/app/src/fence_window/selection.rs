@@ -24,6 +24,10 @@ pub(super) enum PressTarget {
     Header(DetailColumn),
     Up,
     Chevron,
+    /// A panel chrome command, by index.
+    Command(usize),
+    /// A Windows caption button (app-style fences).
+    Caption(pecofence_render::fence_chrome::CaptionButton),
 }
 
 /// How a keyboard navigation key moves the cursor (Explorer): plain = select the target,
@@ -304,7 +308,11 @@ impl FenceViewState {
                     let _ = self.redraw_content();
                 }
             }
-            PressTarget::Tab(_) | PressTarget::Up | PressTarget::Chevron => {
+            PressTarget::Tab(_)
+            | PressTarget::Up
+            | PressTarget::Chevron
+            | PressTarget::Command(_)
+            | PressTarget::Caption(_) => {
                 let _ = self.redraw_chrome_only();
             }
         }
@@ -314,10 +322,8 @@ impl FenceViewState {
     /// records the press and paints it. The caller takes the mouse capture afterwards (with no
     /// borrow held) so the release always arrives here.
     pub(super) fn press_button_at(&mut self, x_px: i32, y_px: i32) -> Option<PressTarget> {
-        let p = if self.up_button_at(x_px, y_px) {
-            PressTarget::Up
-        } else if self.chevron_at(x_px, y_px) {
-            PressTarget::Chevron
+        let p = if let Some(button) = self.title_button_at(x_px, y_px) {
+            button
         } else if self.divider_hit(x_px, y_px).is_none()
             && let Some(col) = self.header_hit(x_px, y_px)
         {
@@ -330,6 +336,12 @@ impl FenceViewState {
         self.press_origin = (x_px, y_px);
         self.redraw_for_press(p);
         Some(p)
+    }
+
+    pub(super) fn take_pressed_at(&mut self, x: i32, y: i32) -> Option<(PressTarget, bool)> {
+        let target = self.pressed?;
+        let inside = self.press_hit(target, x, y);
+        self.take_pressed().map(|(target, _)| (target, inside))
     }
 
     /// Takes the pressed control without repainting: the caller folds the repaint into its own

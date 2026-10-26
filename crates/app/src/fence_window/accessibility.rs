@@ -96,6 +96,14 @@ impl FenceViewState {
                     ChromeTarget::Tab(id) => (id, 1),
                     ChromeTarget::Up => (self.active, 2),
                     ChromeTarget::Chevron => (self.active, 3),
+                    ChromeTarget::Command(i) => (self.active, 4 + i as i32),
+                    ChromeTarget::Caption(button) => (
+                        self.active,
+                        -1 - pecofence_render::fence_chrome::CaptionButton::ALL
+                            .iter()
+                            .position(|b| *b == button)
+                            .unwrap_or(0) as i32,
+                    ),
                 };
                 let mut id = identity(1, content.as_u128());
                 id.push(kind);
@@ -107,7 +115,8 @@ impl FenceViewState {
                     key(node.id),
                     node.parent.map(key),
                     clipped_bounds(node.rect, scene.viewport(), origin, scale, bounds),
-                    true,
+                    matches!(node.id, super::chrome_scene::ChromeTarget::Title(_))
+                        || scene.enabled(node.id),
                 ));
             }
         }

@@ -800,6 +800,15 @@ impl App {
             })?;
         panel_manager
             .borrow_mut()
+            .register_provider(Rc::new(pecofence_plugin_spm::board::BoardPlugin))
+            .map_err(|error| {
+                windows_core::Error::new(
+                    windows_core::HRESULT(0x80004005u32 as i32),
+                    error.to_string(),
+                )
+            })?;
+        panel_manager
+            .borrow_mut()
             .register_provider(Rc::new(pecofence_plugin_widgets::ClockPlugin))
             .map_err(|error| {
                 windows_core::Error::new(
@@ -1322,6 +1331,28 @@ impl App {
                     .map(|w| (w.is_rolled(), w.expanded_height_px()))
                     .unwrap_or((false, rect.bottom - rect.top));
                 self.state.set_fence_bounds(fence, rect, rolled, expanded);
+                // Moving or resizing a maximized fence leaves the maximized state, as on
+                // Windows: Maximize shows again and Restore has nothing to return to.
+                if !roll_finished
+                    && self
+                        .state
+                        .container(fence)
+                        .is_some_and(|c| c.restore.is_some())
+                    && self
+                        .work_area_at((rect.left + rect.right) / 2, (rect.top + rect.bottom) / 2)
+                        .is_some_and(|wa| {
+                            (wa.left, wa.top, wa.right, wa.bottom)
+                                != (rect.left, rect.top, rect.right, rect.bottom)
+                        })
+                {
+                    if let Some(c) = self.state.container_mut(fence) {
+                        c.restore = None;
+                    }
+                    self.state.mark_dirty();
+                    if let Some(w) = self.fences.get(&fence) {
+                        w.set_maximized(false);
+                    }
+                }
                 // A resized widget keeps the span it was snapped to.
                 if !roll_finished
                     && !rolled
@@ -1382,18 +1413,6 @@ impl App {
                 fence,
                 mode,
             } => self.transfer_files_into_folder(paths, folder, fence, mode),
-            Command::DragOutFinished => {
-                // The shell performs the file operation itself, often asynchronously: what is
-                // not on the desktop yet arrives through the folder watcher a moment later.
-                let report = self.sync_desktop_if_available("drag out");
-                self.route_pending_creation();
-                self.refresh_portals();
-                if report.changed() {
-                    tracing::info!(?report, "desktop resynced right after the drag-out");
-                    self.refresh_all();
-                    self.schedule_save();
-                }
-            }
             Command::PortalEnter { fence, path } => self.portal_enter(fence, &path),
             Command::PortalUp(fence) => self.portal_up(fence),
             Command::SwitchTab { host, tab } => self.switch_tab(host, tab),
@@ -1592,6 +1611,38 @@ impl App {
                     w.redraw();
                 }
             }
+            Command::DeleteFence(fence) => self.delete_fence(fence),
+            Command::NewFence { x, y } => self.new_fence_near(x, y),
+            Command::NewFenceRect(rect) => self.offer_new_fence(rect),
+            Command::RaiseFence(hwnd) => {
+                if let Some(a) = self.anchor.borrow_mut().as_mut() {
+                    a.raise_fence(hwnd);
+                }
+            }
+            Command::SortColumn { fence, sort } => {
+                // Explorer: clicking the active column flips the direction.
+                if let Some(f) = self.state.fence(fence) {
+                    let reverse = f.view.sort == sort && !f.view.reverse;
+                    self.state.set_sort(fence, sort);
+                    self.state.set_reverse(fence, reverse);
+                    self.refresh_fence(fence);
+                    self.schedule_save();
+                }
+            }
+            Command::RenameItem { fence, item } => self.begin_item_rename(fence, item),
+            Command::RenameItemCommit { item, name } => {
+                self.end_item_rename_visuals();
+                self.rename_item_file(item, &name);
+            }
+            Command::EndItemRename { commit } => crate::rename::end_active(commit),
+            Command::DeleteItems {
+                fence,
+                items,
+                permanent,
+            } => self.delete_items(fence, &items, permanent),
+            Command::CloseFence(host) => self.close_fence(host),
+            Command::ToggleMaximize(host) => self.toggle_maximize(host),
+
             Command::PanelConfigChanged { key, bytes } => {
                 let active_fence = self.state.fences().iter().find_map(|f| match &f.content {
                     pecofence_core::FenceContentSpec::Panel { panel }
@@ -1658,35 +1709,37 @@ impl App {
                 }
                 self.process_panel_events();
             }
-            Command::DeleteFence(fence) => self.delete_fence(fence),
-            Command::NewFence { x, y } => self.new_fence_near(x, y),
-            Command::NewFenceRect(rect) => self.offer_new_fence(rect),
-            Command::RaiseFence(hwnd) => {
-                if let Some(a) = self.anchor.borrow_mut().as_mut() {
-                    a.raise_fence(hwnd);
+
+            Command::OpenSettings => self.open_settings(),
+            Command::OpenOptionsForFence(fence) => self.open_fence_options(fence),
+            Command::SettingsClosed { source } => {
+                if self.settings.as_ref().is_some_and(|h| h.source() == source) {
+                    self.settings = None;
+                    self.settings_session.close();
                 }
             }
-            Command::SortColumn { fence, sort } => {
-                // Explorer: clicking the active column flips the direction.
-                if let Some(f) = self.state.fence(fence) {
-                    let reverse = f.view.sort == sort && !f.view.reverse;
-                    self.state.set_sort(fence, sort);
-                    self.state.set_reverse(fence, reverse);
-                    self.refresh_fence(fence);
+            Command::SettingsRequest { source, request } => {
+                if self
+                    .settings
+                    .as_ref()
+                    .is_some_and(|host| host.source() == source && host.is_alive())
+                {
+                    self.on_settings_request(*request);
+                }
+            }
+
+            Command::DragOutFinished => {
+                // The shell performs the file operation itself, often asynchronously: what is
+                // not on the desktop yet arrives through the folder watcher a moment later.
+                let report = self.sync_desktop_if_available("drag out");
+                self.route_pending_creation();
+                self.refresh_portals();
+                if report.changed() {
+                    tracing::info!(?report, "desktop resynced right after the drag-out");
+                    self.refresh_all();
                     self.schedule_save();
                 }
             }
-            Command::RenameItem { fence, item } => self.begin_item_rename(fence, item),
-            Command::RenameItemCommit { item, name } => {
-                self.end_item_rename_visuals();
-                self.rename_item_file(item, &name);
-            }
-            Command::EndItemRename { commit } => crate::rename::end_active(commit),
-            Command::DeleteItems {
-                fence,
-                items,
-                permanent,
-            } => self.delete_items(fence, &items, permanent),
             Command::DeviceLost => self.recover_device(),
             Command::ToggleAllFences => self.toggle_all_fences(),
             Command::TogglePeek => self.toggle_peek(),
@@ -1707,7 +1760,6 @@ impl App {
                     );
                 }
             }
-            Command::OpenSettings => self.open_settings(),
             Command::ShellAction(command) => {
                 // The private window can receive messages from other processes. Keep an
                 // out-of-range coordinate from reaching placement arithmetic.
@@ -1731,7 +1783,6 @@ impl App {
                     ShellAction::OpenSettings => self.open_settings(),
                 }
             }
-            Command::OpenOptionsForFence(fence) => self.open_fence_options(fence),
             Command::RedrawAll => {
                 // Also the rename edit's cancel path: the edited label may unfold again.
                 self.end_item_rename_visuals();
@@ -1762,24 +1813,9 @@ impl App {
                     self.cancel_document_close();
                 }
             }
-            Command::SettingsClosed { source } => {
-                if self.settings.as_ref().is_some_and(|h| h.source() == source) {
-                    self.settings = None;
-                    self.settings_session.close();
-                }
-            }
             Command::FadeOutDone(hwnd) => {
                 // Dropping the window destroys it (RevokeDragDrop + DestroyWindow).
                 self.dying.retain(|w| w.hwnd() != hwnd);
-            }
-            Command::SettingsRequest { source, request } => {
-                if self
-                    .settings
-                    .as_ref()
-                    .is_some_and(|host| host.source() == source && host.is_alive())
-                {
-                    self.on_settings_request(*request);
-                }
             }
         }
     }
@@ -1829,7 +1865,12 @@ impl App {
         self.pending_panel_updates.retain(|key, update| {
             let mut retry = false;
             for window in self.fences.values() {
-                match window.try_apply_panel_update(*key, update) {
+                let applied = match window.try_panel() {
+                    Err(_) => None,
+                    Ok(None) => Some(false),
+                    Ok(Some(panel)) => panel.try_apply_panel_update(*key, update),
+                };
+                match applied {
                     Some(true) => return false,
                     Some(false) => {}
                     None => retry = true,

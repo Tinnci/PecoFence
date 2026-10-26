@@ -678,5 +678,6 @@
   "保存快照后，可以随时回到当前的栅栏排布。": "Speichern Sie einen Snapshot, um jederzeit zur aktuellen Anordnung der Zäune zurückzukehren.",
   "更早的备份（{0}）": "Ältere Sicherungen ({0})",
   "配置文件": "Konfigurationsdatei",
-  "补齐": "Ergänzen"
+  "补齐": "Ergänzen",
+  "已关闭的栅栏": "Geschlossene Zäune"
 }

@@ -358,6 +358,13 @@ pub struct Container {
     /// geometry is re-derived from it whenever the cell changes. Absent in older files.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub span: Option<WidgetSpan>,
+    /// Closed with the title bar's Close button: no window until it is reopened from
+    /// the tray. Closing never deletes the fence or its content.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub closed: bool,
+    /// Bounds to return to after Maximize (the work area). Absent when not maximized.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub restore: Option<NormGeometry>,
 }
 
 /// A widget's size in whole fence icon cells, title bar included.
@@ -382,6 +389,8 @@ impl Container {
             tabs: vec![content],
             active_tab: content,
             span: None,
+            closed: false,
+            restore: None,
         }
     }
 }

@@ -2,6 +2,20 @@
 
 use super::*;
 
+pub struct FenceWindowSpec<'a> {
+    pub fence_id: ContainerId,
+    pub content_id: ContentId,
+    pub title: &'a str,
+    pub is_inbox: bool,
+    pub rolled_up: bool,
+    pub icon_size: u32,
+    pub label_lines: u8,
+    pub auto_height: bool,
+    pub bounds: RECT,
+    pub expanded_h_px: i32,
+    pub items: Vec<ItemView>,
+}
+
 pub struct FenceWindow {
     #[allow(dead_code)]
     pub id: ContainerId,
@@ -39,21 +53,20 @@ fn text_change_height(current: i32, expanded: i32, title: i32, rolled: bool, rol
 }
 
 impl FenceWindow {
-    #[allow(clippy::too_many_arguments)]
-    pub fn create(
-        ctx: &FenceContext,
-        fence_id: ContainerId,
-        content_id: ContentId,
-        title: &str,
-        is_inbox: bool,
-        rolled_up: bool,
-        icon_size: u32,
-        label_lines: u8,
-        auto_height: bool,
-        bounds: RECT,
-        expanded_h_px: i32,
-        items: Vec<ItemView>,
-    ) -> Result<Self> {
+    pub fn create(ctx: &FenceContext, spec: FenceWindowSpec<'_>) -> Result<Self> {
+        let FenceWindowSpec {
+            fence_id,
+            content_id,
+            title,
+            is_inbox,
+            rolled_up,
+            icon_size,
+            label_lines,
+            auto_height,
+            bounds,
+            expanded_h_px,
+            items,
+        } = spec;
         let view: Rc<RefCell<Option<FenceViewState>>> = Rc::new(RefCell::new(None));
         let accessibility = Rc::new(pecofence_platform::accessibility::WindowAccessibility::new());
         let handler = Self::make_handler(ctx, fence_id, view.clone(), accessibility.clone());
@@ -118,19 +131,8 @@ impl FenceWindow {
         // Re-derive the rolled height with the window's real DPI.
         let theme = *ctx.theme.borrow();
         let mut state = FenceViewState {
-            fence_id,
             title: title.to_string(),
-            accessibility: accessibility.publisher(),
-            plugin_panel: None,
-            input_capture_release: Rc::new(Cell::new(false)),
-            rolled_up,
-            is_inbox,
-            expanded_h_px: expanded_h_px.max(1),
-            icon_size,
-            label_lines,
-            items,
             tabs: Vec::new(),
-            active: content_id,
             tab_hover: None,
             tab_drag: None,
             tab_slide: Vec::new(),
@@ -138,20 +140,62 @@ impl FenceWindow {
             tab_natural_w: RefCell::new(Vec::new()),
             tab_settle: None,
             drop_tab: None,
-            drag_peek_armed: false,
-            rbutton_swallow: false,
-            renaming: None,
             title_renaming: false,
-            unfold_cache: None,
             detach_pending: false,
             detach_cancelled: false,
             remote_drag: None,
             deco: TitleDeco::default(),
             up_hovered: false,
             chevron_hovered: false,
+            panel_chrome: None,
+            command_hovered: None,
+            caption_hovered: None,
+            maximized: false,
             pressed: None,
             press_inside: false,
             press_origin: (0, 0),
+            chrome_fades: Fades::new(motion::FASTER, motion::FASTER, Curve::Linear),
+            merge_hint: false,
+            merge_t: Tween::at(0.0, Instant::now()),
+            chrome_scene: None,
+            chrome_busy: false,
+            title_hover: false,
+            pill_anim: None,
+
+            is_panel: false,
+            plugin_panel: None,
+            input_capture_release: Rc::new(Cell::new(false)),
+
+            rolled_up,
+            expanded_h_px: expanded_h_px.max(1),
+            drag_peek_armed: false,
+            grab_alpha: Tween::at(0.0, Instant::now()),
+            grab_busy: false,
+            click_pending: None,
+            suppress_dblclk: false,
+            roll_anim: None,
+            roll_t: Tween::at(rolled_up as u8 as f32, Instant::now()),
+            height_anim: None,
+            vis_fade: None,
+            vis_gen: 0,
+            vis_deadline: None,
+            retired: false,
+            outgoing: Vec::new(),
+            spares: Vec::new(),
+            swap_gen: 0,
+            swap_deadline: None,
+            shadow_uploaded: None,
+            shadow_alpha: Tween::at(1.0, Instant::now()),
+            shadow_fading: false,
+            peeking: false,
+
+            is_inbox,
+            icon_size,
+            label_lines,
+            items,
+            rbutton_swallow: false,
+            renaming: None,
+            unfold_cache: None,
             focus_visible: false,
             win_active: false,
             selection_inactive: Tween::at(1.0, Instant::now()),
@@ -159,25 +203,15 @@ impl FenceWindow {
             item_hover: Fades::new(motion::FASTER, motion::FASTER, Curve::Linear),
             item_sel: Fades::new(motion::FASTER, motion::FASTER, Curve::Linear),
             header_fades: Fades::new(motion::FASTER, motion::FASTER, Curve::Linear),
-            chrome_fades: Fades::new(motion::FASTER, motion::FASTER, Curve::Linear),
             drop_fades: Fades::new(motion::FASTER, motion::FASTER, Curve::Linear),
             drop_wash: Tween::at(0.0, Instant::now()),
             caret_alpha: Tween::at(0.0, Instant::now()),
-            grab_alpha: Tween::at(0.0, Instant::now()),
-            grab_busy: false,
             caret_shown: None,
-            merge_hint: false,
-            merge_t: Tween::at(0.0, Instant::now()),
             item_motion: HashMap::new(),
             file_scene: None,
-            chrome_scene: None,
             leaving: Vec::new(),
             content_busy: false,
-            chrome_busy: false,
-            mouse_inside: false,
             last_scroll: None,
-            click_pending: None,
-            suppress_dblclk: false,
             navigate_folders: false,
             layout: ViewLayout::Icons,
             sort: SortMode::Manual,
@@ -191,28 +225,12 @@ impl FenceWindow {
             portal_health: None,
             label_w: 0.0,
             hover: None,
-            title_hover: false,
             selected: HashSet::new(),
             scroll_y: 0.0,
             scroll_memory: HashMap::new(),
             scroll_restore: None,
             scroll_anim: None,
-            dpi,
-            theme,
-            glass_dark_text: Cell::new(None),
-            backdrops: ctx.backdrops.borrow().clone(),
-            backdrop_crop: None,
-            backdrop_rect: None,
-            backdrop_key: format!("backdrop:{:x}", hwnd.0 as isize),
-            gpu_glass: RefCell::new(pecofence_render::gpu_glass::GpuGlass::default()),
-            chrome_panel,
-            content_panel,
-            _target: target,
-            root,
-            chrome: ctx.chrome.clone(),
             icons: ctx.icons.clone(),
-            bitmaps: ctx.bitmaps.clone(),
-            queue: ctx.queue.clone(),
             drag: None,
             ole_drag: false,
             ole_drag_press: (0, 0),
@@ -240,46 +258,51 @@ impl FenceWindow {
             type_ahead: String::new(),
             type_ahead_at: None,
             pending_rename: None,
+            cut: HashSet::new(),
+            wheel_zoom_accum: 0,
+            auto_height,
+            spacing: Spacing::Normal,
+            anchor_index: None,
+            range_anchor: None,
+            drop_hover: false,
+
+            fence_id,
+            accessibility: accessibility.publisher(),
+            active: content_id,
+            mouse_inside: false,
+            dpi,
+            theme,
+            base_theme: theme,
+            glass_dark_text: Cell::new(None),
+            backdrops: ctx.backdrops.borrow().clone(),
+            backdrop_crop: None,
+            backdrop_rect: None,
+            backdrop_key: format!("backdrop:{:x}", hwnd.0 as isize),
+            gpu_glass: RefCell::new(pecofence_render::gpu_glass::GpuGlass::default()),
+            chrome_panel,
+            content_panel,
+            _target: target,
+            root,
+            chrome: ctx.chrome.clone(),
+            bitmaps: ctx.bitmaps.clone(),
+            queue: ctx.queue.clone(),
             tip: None,
             tip_target: None,
             tip_expires: None,
             tip_hidden_at: None,
             tip_wait: None,
-            cut: HashSet::new(),
-            wheel_zoom_accum: 0,
-            auto_height,
             locked: false,
             backdrop_override: None,
             opacity: 1.0,
             style: FenceStyle::default(),
-            spacing: Spacing::Normal,
             widget_grid: None,
             frameless: false,
-            anchor_index: None,
-            range_anchor: None,
             device_lost: false,
-            drop_hover: false,
-            roll_anim: None,
-            roll_t: Tween::at(rolled_up as u8 as f32, Instant::now()),
-            height_anim: None,
-            vis_fade: None,
-            vis_gen: 0,
-            vis_deadline: None,
-            retired: false,
-            outgoing: Vec::new(),
-            spares: Vec::new(),
-            swap_gen: 0,
-            swap_deadline: None,
-            pill_anim: None,
             stack: ctx.stack.clone(),
             motion: ctx.motion.clone(),
             frames: ctx.frames.clone(),
             hwnd,
             shadow,
-            shadow_uploaded: None,
-            shadow_alpha: Tween::at(1.0, Instant::now()),
-            shadow_fading: false,
-            peeking: false,
             behavior: ctx.behavior.clone(),
         };
         if rolled_up {
@@ -327,6 +350,12 @@ impl FenceWindow {
 
     pub fn hwnd(&self) -> HWND {
         self.window.hwnd()
+    }
+
+    /// The drop-shadow popup that follows this fence (hosting spike only).
+    #[cfg(debug_assertions)]
+    pub fn shadow_hwnd(&self) -> Option<HWND> {
+        self.view.borrow().as_ref().map(|state| state.shadow.hwnd())
     }
 
     /// Fades the window out (167 ms, shrinking to 0.97) ahead of its destruction. Returns
@@ -442,6 +471,58 @@ impl FenceWindow {
             return;
         }
         let hwnd = self.hwnd();
+        let (action, x, y) = if action.starts_with("caption-") && action != "caption-down" {
+            use pecofence_render::fence_chrome::CaptionButton;
+            let (button, action) = match action {
+                "caption-max-down" => (CaptionButton::Maximize, "down"),
+                "caption-max-up" => (CaptionButton::Maximize, "up"),
+                "caption-close-down" => (CaptionButton::Close, "down"),
+                "caption-close-up" => (CaptionButton::Close, "up"),
+                "caption-max-outside-up" => (CaptionButton::Maximize, "outside-up"),
+                "caption-edges" => (CaptionButton::Maximize, "edges"),
+                _ => return,
+            };
+            let point = {
+                let view = self.view.borrow();
+                let Some(view) = view.as_ref() else {
+                    return;
+                };
+                let Some(scene) = view.committed_chrome_scene() else {
+                    return;
+                };
+                let target = crate::fence_window::chrome_scene::ChromeTarget::Caption(button);
+                let Some(node) = scene.semantics().iter().find(|node| node.id == target) else {
+                    return;
+                };
+                (
+                    ((node.rect.x + node.rect.w * 0.5) * view.scale()).round() as i32,
+                    ((node.rect.y + node.rect.h * 0.5) * view.scale()).round() as i32,
+                )
+            };
+            if action == "edges" {
+                for x in [point.0, self.window.client_size().0 - 1] {
+                    let screen =
+                        window::client_to_screen(hwnd, pecofence_platform::POINT { x, y: 0 });
+                    assert_eq!(
+                        window::send_message(
+                            hwnd,
+                            msg::WM_NCHITTEST,
+                            0,
+                            msg::make_lparam(screen.x, screen.y)
+                        ),
+                        msg::HTCLIENT
+                    );
+                }
+                return;
+            }
+            if action == "outside-up" {
+                ("up", 1, 1)
+            } else {
+                (action, point.0, point.1)
+            }
+        } else {
+            (action, x, y)
+        };
         match action {
             "pointer" => self.with_view(|v| {
                 if let Some(drag) = v.remote_drag.as_mut() {
@@ -452,6 +533,20 @@ impl FenceWindow {
                 }
             }),
             "capture-lost" => window::release_capture(),
+            // `vk <code> 0`: one key press; `wheel <x> <y>` / `wheel-up <x> <y>`: one notch.
+            "vk" => {
+                window::send_message(hwnd, msg::WM_KEYDOWN, x as usize, 0);
+            }
+            "wheel" | "wheel-up" => {
+                let p = window::client_to_screen(hwnd, pecofence_platform::POINT { x, y });
+                let delta: i16 = if action == "wheel" { -120 } else { 120 };
+                window::send_message(
+                    hwnd,
+                    msg::WM_MOUSEWHEEL,
+                    (delta as u16 as usize) << 16,
+                    msg::make_lparam(p.x, p.y),
+                );
+            }
             _ => {
                 let (message, key, point) = match action {
                     "down" => (msg::WM_LBUTTONDOWN, 1, (x, y)),
@@ -519,7 +614,11 @@ impl FenceWindow {
     }
 
     pub fn release_panel_view(&self) {
-        self.with_view(|view| view.plugin_panel = None);
+        self.with_view(|view| {
+            view.plugin_panel = None;
+            view.panel_chrome = None;
+            view.command_hovered = None;
+        });
     }
 
     pub fn set_content(&self, content: &pecofence_core::FenceContentSpec) {
@@ -547,171 +646,21 @@ impl FenceWindow {
             pecofence_core::FenceContentSpec::Files { .. } => None,
         };
         self.with_view(|v| {
+            v.is_panel = matches!(content, pecofence_core::FenceContentSpec::Panel { .. });
             if v.plugin_panel.as_ref().map(|panel| panel.key())
                 != panel.as_ref().map(|panel| panel.key())
             {
                 v.plugin_panel = panel;
+                v.panel_chrome = None;
+                v.command_hovered = None;
+                // Back to the app-wide material until the new panel publishes chrome.
+                v.refresh_sheet();
             }
             if v.plugin_panel.is_some() {
                 v.replace_items(Vec::new());
                 v.auto_height = false;
             }
             let _ = v.redraw_content();
-        });
-    }
-
-    /// `None` means a modal handler currently holds the view; the caller must retry.
-    pub(crate) fn try_apply_panel_update(
-        &self,
-        key: pecofence_plugin_api::InstanceKey,
-        update: &pecofence_plugin_api::PanelUpdate,
-    ) -> Option<bool> {
-        let _capture_boundary = super::interaction::CaptureReleaseBoundary {
-            view: &self.view,
-            hwnd: self.hwnd(),
-        };
-        let Ok(mut guard) = self.view.try_borrow_mut() else {
-            return None;
-        };
-        let Some(view) = guard.as_mut() else {
-            return Some(false);
-        };
-        if view.plugin_panel.as_ref().map(|panel| panel.key()) != Some(key) {
-            return Some(false);
-        }
-        if let Err(error) = view.apply_plugin_update(update.clone()) {
-            tracing::warn!(%error, "panel update failed");
-        }
-        Some(true)
-    }
-
-    #[allow(dead_code)]
-    pub fn set_panel_presentation(&self, presentation: pecofence_plugin_api::Presentation) {
-        self.with_view(|view| {
-            if let Some(panel) = &view.plugin_panel {
-                panel.set_presentation(presentation);
-                let _ = view.redraw_content();
-            }
-        });
-    }
-
-    /// Replaces the item list with layout motion (see `FenceViewState::replace_items`).
-    pub fn set_items(&self, items: Vec<ItemView>) {
-        self.with_view(|v| {
-            // Selection / focus / hover ride along by item id (`remap_item_state`), so a sort,
-            // a reorder drop, a rename or a watcher refresh keeps them on the same items while
-            // the layout glide moves those items to their new cells.
-            v.replace_items(if v.plugin_panel.is_some() {
-                Vec::new()
-            } else {
-                items
-            });
-            v.drop_insert = None;
-            // The caret's slot index means nothing in the new list.
-            v.caret_shown = None;
-            v.caret_alpha = Tween::at(0.0, Instant::now());
-            if let Some(PressTarget::Item(_)) = v.pressed {
-                v.pressed = None;
-                v.press_inside = false;
-            }
-            v.type_ahead.clear();
-            v.cancel_pending_rename();
-            v.hide_tip();
-            if let Some(s) = v.scroll_restore {
-                // Tab switch: the new tab's items are here, back to where that tab was
-                // (the redraw clamps to its content; `set_layout` consumes the value).
-                v.scroll_y = s;
-            }
-            let _ = v.redraw();
-            // The item under a stationary pointer may have changed: re-hit-test from the loop.
-            v.request_hover_refresh();
-        });
-    }
-
-    /// A portal rename changes its path-derived id. Re-key the old view before replacing
-    /// its items so selection, keyboard focus and layout motion follow the renamed file.
-    pub fn rekey_item(&self, old: ItemId, new: ItemId) {
-        if old == new {
-            return;
-        }
-        self.with_view(|v| {
-            if let Some(item) = v.items.iter_mut().find(|it| it.id == old) {
-                item.id = new;
-                if let Some(motion) = v.item_motion.remove(&old) {
-                    v.item_motion.insert(new, motion);
-                }
-                let now = Instant::now();
-                v.item_hover.prune(now, |id| *id != old);
-                v.item_sel.prune(now, |id| *id != old);
-                v.drop_fades.prune(now, |id| *id != old);
-                if v.renaming == Some(old) {
-                    v.renaming = Some(new);
-                }
-            }
-        });
-    }
-
-    /// Scrolls item `item` fully into view at once (no glide) and redraws, so the caller can
-    /// place a popup on its final label rect (LVM_EDITLABEL ensures visibility before the
-    /// edit opens).
-    pub fn ensure_item_visible_now(&self, item: ItemId) {
-        self.with_view(|v| {
-            let Some(i) = v.items.iter().position(|it| it.id == item) else {
-                return;
-            };
-            if let Some(t) = v.scroll_anim.take() {
-                v.scroll_y = t.target().clamp(0.0, v.scroll_max());
-            }
-            let before = v.scroll_y;
-            v.scroll_into_view(i, false);
-            if v.scroll_y != before && !v.rolled_up {
-                let _ = v.redraw_content();
-            }
-        });
-    }
-
-    /// Items on the clipboard via 剪切: drawn at half alpha until the clipboard changes.
-    pub fn set_cut_items(&self, cut: &HashSet<ItemId>) {
-        self.with_view(|v| {
-            if &v.cut != cut {
-                v.cut = cut.clone();
-                let _ = v.redraw_content();
-            }
-        });
-    }
-
-    /// Details columns shown (修改日期, 类型, 大小) for the fence being shown.
-    pub fn set_columns_visible(&self, visible: [bool; 3]) {
-        self.with_view(|v| {
-            if v.columns_visible != visible {
-                v.columns_visible = visible;
-                if v.layout == ViewLayout::Details {
-                    let _ = v.redraw();
-                }
-            }
-        });
-    }
-
-    /// Item whose inline rename edit is open (None = closed): its label stays folded under
-    /// the edit box instead of unfolding to the full name.
-    pub fn set_renaming(&self, item: Option<ItemId>) {
-        self.with_view(|v| {
-            if v.renaming != item {
-                v.renaming = item;
-                if let Some(item) = item
-                    && let Some(index) = v.items.iter().position(|it| it.id == item)
-                {
-                    // New items enter rename without a preceding click. Keep keyboard
-                    // actions on the edited item after the popup closes.
-                    v.select_only(index);
-                }
-                if !v.rolled_up {
-                    let _ = v.redraw_content();
-                }
-                if item.is_none() {
-                    v.resume_peek_close();
-                }
-            }
         });
     }
 
@@ -731,15 +680,6 @@ impl FenceWindow {
     pub fn set_title(&self, title: &str) {
         self.with_view(|v| {
             v.title = title.to_string();
-            let _ = v.redraw();
-        });
-    }
-
-    pub fn set_icon_size(&self, size: u32) {
-        self.with_view(|v| {
-            v.icon_size = size;
-            v.drop_icons_for_reload();
-            v.snap_item_motion();
             let _ = v.redraw();
         });
     }
@@ -1020,53 +960,6 @@ impl FenceWindow {
             .map_or(usize::MAX, |v| v.merge_slot_at(x))
     }
 
-    /// Details column widths (修改日期, 类型, 大小) for the fence being shown.
-    pub fn set_column_widths(&self, widths: [f32; 3]) {
-        self.with_view(|v| {
-            if v.column_widths != widths && v.col_drag.is_none() {
-                v.column_widths = widths;
-                if v.layout == ViewLayout::Details {
-                    let _ = v.redraw_content();
-                }
-            }
-        });
-    }
-
-    pub fn set_portal_deco(
-        &self,
-        health: Option<pecofence_core::portal::PortalHealth>,
-        folder_icon: bool,
-        up_button: bool,
-        navigate_folders: bool,
-    ) {
-        self.with_view(|v| {
-            let deco = TitleDeco {
-                folder_icon,
-                up_button,
-            };
-            let changed = v.deco != deco || v.navigate_folders != navigate_folders;
-            let portal_changed = v.portal_health != health;
-            v.deco = deco;
-            v.navigate_folders = navigate_folders;
-            v.is_portal = health.is_some();
-            v.portal_health = health;
-            if !up_button {
-                v.up_hovered = false;
-                if v.pressed == Some(PressTarget::Up) {
-                    v.pressed = None;
-                    v.press_inside = false;
-                }
-            }
-            if changed {
-                let _ = v.redraw_chrome_only();
-            }
-            if portal_changed && v.items.is_empty() && !v.rolled_up {
-                // Empty, loading and unavailable are different facts even with zero items.
-                let _ = v.redraw_content();
-            }
-        });
-    }
-
     /// The content instance currently mounted in this container window.
     pub fn active_fence(&self) -> ContentId {
         self.view
@@ -1079,67 +972,6 @@ impl FenceWindow {
     /// Item whose inline rename edit this window currently shows (see `set_renaming`).
     pub fn renaming_item(&self) -> Option<ItemId> {
         self.view.borrow().as_ref().and_then(|v| v.renaming)
-    }
-
-    /// Whether the fence being shown is the desktop Inbox (chooses the empty-state text).
-    pub fn set_is_inbox(&self, on: bool) {
-        self.with_view(|v| {
-            if v.is_inbox != on {
-                v.is_inbox = on;
-                if v.items.is_empty() {
-                    let _ = v.redraw();
-                }
-            }
-        });
-    }
-
-    /// Switches between the icon grid and the List / Details rows.
-    pub fn set_layout(&self, layout: ViewLayout) {
-        self.with_view(|v| {
-            // Consumes the tab switch's pending offset either way (see `set_tabs`).
-            let restore = v.scroll_restore.take();
-            if v.layout == layout {
-                return;
-            }
-            v.layout = layout;
-            v.scroll_anim = None;
-            // A genuine layout change starts at the top; a tab switch between tabs of
-            // different layouts keeps the restored offset (the redraw clamps it).
-            v.scroll_y = restore.unwrap_or(0.0);
-            v.header_hover = None;
-            v.header_fades.clear();
-            v.reset_item_fades();
-            v.drop_icons_for_reload();
-            v.snap_item_motion();
-            let _ = v.redraw();
-        });
-    }
-
-    /// Current sort, shown by the details header (chevron on the active column).
-    pub fn set_sort_indicator(&self, sort: SortMode, reverse: bool) {
-        self.with_view(|v| {
-            if v.sort != sort || v.sort_reverse != reverse {
-                v.sort = sort;
-                v.sort_reverse = reverse;
-                if v.layout == ViewLayout::Details {
-                    let _ = v.redraw_content();
-                }
-            }
-        });
-    }
-
-    /// "按时间分组": the items sit under 今天 / 昨天 / 本周 / 本月 / 更早 section headers, in
-    /// every layout. Push it before `set_items` so the layout glide targets the new sections.
-    pub fn set_group_by_date(&self, on: bool) {
-        self.with_view(|v| {
-            if v.group_by_date == on {
-                return;
-            }
-            v.group_by_date = on;
-            // The cells a running glide was computed for no longer exist.
-            v.snap_item_motion();
-            let _ = v.redraw_content();
-        });
     }
 
     pub fn is_rolled(&self) -> bool {
@@ -1193,6 +1025,16 @@ impl FenceWindow {
 
     pub fn set_locked(&self, on: bool) {
         self.with_view(|v| v.locked = on);
+    }
+
+    /// Whether the caption Maximize button shows Restore.
+    pub fn set_maximized(&self, on: bool) {
+        self.with_view(|v| {
+            if v.maximized != on {
+                v.maximized = on;
+                let _ = v.redraw_chrome_only();
+            }
+        });
     }
 
     /// Re-reads the window's DPI and relayouts if it drifted (logon-time 96-DPI windows).
@@ -1275,36 +1117,6 @@ impl FenceWindow {
     /// Widget windows snap live resizing to whole cells of this grid.
     pub fn set_widget_grid(&self, grid: Option<WidgetGrid>) {
         self.with_view(|v| v.widget_grid = grid);
-    }
-
-    /// One-row widgets show their capsule layout; taller ones the full layout.
-    pub fn set_widget_presentation(&self, presentation: pecofence_plugin_api::Presentation) {
-        self.with_view(|v| {
-            let Some(panel) = v.plugin_panel.as_mut() else {
-                return;
-            };
-            if panel.presentation() == presentation {
-                return;
-            }
-            panel.set_presentation(presentation);
-            panel
-                .invalidation
-                .request(pecofence_plugin_api::design::FrameInvalidation::Layout);
-            let _ = v.redraw_content();
-        });
-    }
-
-    pub fn set_spacing(&self, spacing: Spacing) {
-        self.with_view(|v| {
-            if v.spacing != spacing {
-                v.spacing = spacing;
-                for item in &mut v.items {
-                    item.label = None;
-                }
-                v.snap_item_motion();
-                let _ = v.redraw();
-            }
-        });
     }
 
     /// Drops every cached icon (global icon processing changed); they reload lazily.
@@ -1427,14 +1239,12 @@ impl FenceWindow {
                 v.hide_tip();
                 v.tip = None;
             }
-            if v.theme.liquid_glass != theme.liquid_glass || v.theme.mode != theme.mode {
+            if v.theme.is_liquid_glass() != theme.is_liquid_glass() || v.theme.mode != theme.mode {
                 v.glass_dark_text.set(None);
             }
-            v.theme = theme;
-            if v.frameless {
-                v.theme.title_height = 0.0;
-            }
-            if !theme.liquid_glass {
+            v.base_theme = theme;
+            v.theme = v.sheet_theme();
+            if !theme.is_liquid_glass() {
                 v.gpu_glass.borrow_mut().reset();
             }
             v.backdrops = backdrops;
@@ -1463,6 +1273,290 @@ impl FenceWindow {
     }
 }
 
+impl FenceWindow {
+    /// Replaces the item list with layout motion (see `FenceViewState::replace_items`).
+    pub fn set_items(&self, items: Vec<ItemView>) {
+        self.with_view(|v| {
+            // Selection / focus / hover ride along by item id (`remap_item_state`), so a sort,
+            // a reorder drop, a rename or a watcher refresh keeps them on the same items while
+            // the layout glide moves those items to their new cells.
+            v.replace_items(if v.plugin_panel.is_some() {
+                Vec::new()
+            } else {
+                items
+            });
+            v.drop_insert = None;
+            // The caret's slot index means nothing in the new list.
+            v.caret_shown = None;
+            v.caret_alpha = Tween::at(0.0, Instant::now());
+            if let Some(PressTarget::Item(_)) = v.pressed {
+                v.pressed = None;
+                v.press_inside = false;
+            }
+            v.type_ahead.clear();
+            v.cancel_pending_rename();
+            v.hide_tip();
+            if let Some(s) = v.scroll_restore {
+                // Tab switch: the new tab's items are here, back to where that tab was
+                // (the redraw clamps to its content; `set_layout` consumes the value).
+                v.scroll_y = s;
+            }
+            let _ = v.redraw();
+            // The item under a stationary pointer may have changed: re-hit-test from the loop.
+            v.request_hover_refresh();
+        });
+    }
+    /// A portal rename changes its path-derived id. Re-key the old view before replacing
+    /// its items so selection, keyboard focus and layout motion follow the renamed file.
+    pub fn rekey_item(&self, old: ItemId, new: ItemId) {
+        if old == new {
+            return;
+        }
+        self.with_view(|v| {
+            if let Some(item) = v.items.iter_mut().find(|it| it.id == old) {
+                item.id = new;
+                if let Some(motion) = v.item_motion.remove(&old) {
+                    v.item_motion.insert(new, motion);
+                }
+                let now = Instant::now();
+                v.item_hover.prune(now, |id| *id != old);
+                v.item_sel.prune(now, |id| *id != old);
+                v.drop_fades.prune(now, |id| *id != old);
+                if v.renaming == Some(old) {
+                    v.renaming = Some(new);
+                }
+            }
+        });
+    }
+    /// Scrolls item `item` fully into view at once (no glide) and redraws, so the caller can
+    /// place a popup on its final label rect (LVM_EDITLABEL ensures visibility before the
+    /// edit opens).
+    pub fn ensure_item_visible_now(&self, item: ItemId) {
+        self.with_view(|v| {
+            let Some(i) = v.items.iter().position(|it| it.id == item) else {
+                return;
+            };
+            if let Some(t) = v.scroll_anim.take() {
+                v.scroll_y = t.target().clamp(0.0, v.scroll_max());
+            }
+            let before = v.scroll_y;
+            v.scroll_into_view(i, false);
+            if v.scroll_y != before && !v.rolled_up {
+                let _ = v.redraw_content();
+            }
+        });
+    }
+    /// Items on the clipboard via 剪切: drawn at half alpha until the clipboard changes.
+    pub fn set_cut_items(&self, cut: &HashSet<ItemId>) {
+        self.with_view(|v| {
+            if &v.cut != cut {
+                v.cut = cut.clone();
+                let _ = v.redraw_content();
+            }
+        });
+    }
+    /// Details columns shown (修改日期, 类型, 大小) for the fence being shown.
+    pub fn set_columns_visible(&self, visible: [bool; 3]) {
+        self.with_view(|v| {
+            if v.columns_visible != visible {
+                v.columns_visible = visible;
+                if v.layout == ViewLayout::Details {
+                    let _ = v.redraw();
+                }
+            }
+        });
+    }
+    /// Item whose inline rename edit is open (None = closed): its label stays folded under
+    /// the edit box instead of unfolding to the full name.
+    pub fn set_renaming(&self, item: Option<ItemId>) {
+        self.with_view(|v| {
+            if v.renaming != item {
+                v.renaming = item;
+                if let Some(item) = item
+                    && let Some(index) = v.items.iter().position(|it| it.id == item)
+                {
+                    // New items enter rename without a preceding click. Keep keyboard
+                    // actions on the edited item after the popup closes.
+                    v.select_only(index);
+                }
+                if !v.rolled_up {
+                    let _ = v.redraw_content();
+                }
+                if item.is_none() {
+                    v.resume_peek_close();
+                }
+            }
+        });
+    }
+    pub fn set_icon_size(&self, size: u32) {
+        self.with_view(|v| {
+            v.icon_size = size;
+            v.drop_icons_for_reload();
+            v.snap_item_motion();
+            let _ = v.redraw();
+        });
+    }
+    /// Details column widths (修改日期, 类型, 大小) for the fence being shown.
+    pub fn set_column_widths(&self, widths: [f32; 3]) {
+        self.with_view(|v| {
+            if v.column_widths != widths && v.col_drag.is_none() {
+                v.column_widths = widths;
+                if v.layout == ViewLayout::Details {
+                    let _ = v.redraw_content();
+                }
+            }
+        });
+    }
+    pub fn set_portal_deco(
+        &self,
+        health: Option<pecofence_core::portal::PortalHealth>,
+        folder_icon: bool,
+        up_button: bool,
+        navigate_folders: bool,
+    ) {
+        self.with_view(|v| {
+            let deco = TitleDeco {
+                folder_icon,
+                up_button,
+                captions: false,
+            };
+            let changed = v.deco != deco || v.navigate_folders != navigate_folders;
+            let portal_changed = v.portal_health != health;
+            v.deco = deco;
+            v.navigate_folders = navigate_folders;
+            v.is_portal = health.is_some();
+            v.portal_health = health;
+            if !up_button {
+                v.up_hovered = false;
+                if v.pressed == Some(PressTarget::Up) {
+                    v.pressed = None;
+                    v.press_inside = false;
+                }
+            }
+            if changed {
+                let _ = v.redraw_chrome_only();
+            }
+            if portal_changed && v.items.is_empty() && !v.rolled_up {
+                // Empty, loading and unavailable are different facts even with zero items.
+                let _ = v.redraw_content();
+            }
+        });
+    }
+    /// Whether the fence being shown is the desktop Inbox (chooses the empty-state text).
+    pub fn set_is_inbox(&self, on: bool) {
+        self.with_view(|v| {
+            if v.is_inbox != on {
+                v.is_inbox = on;
+                if v.items.is_empty() {
+                    let _ = v.redraw();
+                }
+            }
+        });
+    }
+    /// Switches between the icon grid and the List / Details rows.
+    pub fn set_layout(&self, layout: ViewLayout) {
+        self.with_view(|v| {
+            // Consumes the tab switch's pending offset either way (see `set_tabs`).
+            let restore = v.scroll_restore.take();
+            if v.layout == layout {
+                return;
+            }
+            v.layout = layout;
+            v.scroll_anim = None;
+            // A genuine layout change starts at the top; a tab switch between tabs of
+            // different layouts keeps the restored offset (the redraw clamps it).
+            v.scroll_y = restore.unwrap_or(0.0);
+            v.header_hover = None;
+            v.header_fades.clear();
+            v.reset_item_fades();
+            v.drop_icons_for_reload();
+            v.snap_item_motion();
+            let _ = v.redraw();
+        });
+    }
+    /// Current sort, shown by the details header (chevron on the active column).
+    pub fn set_sort_indicator(&self, sort: SortMode, reverse: bool) {
+        self.with_view(|v| {
+            if v.sort != sort || v.sort_reverse != reverse {
+                v.sort = sort;
+                v.sort_reverse = reverse;
+                if v.layout == ViewLayout::Details {
+                    let _ = v.redraw_content();
+                }
+            }
+        });
+    }
+    /// "按时间分组": the items sit under 今天 / 昨天 / 本周 / 本月 / 更早 section headers, in
+    /// every layout. Push it before `set_items` so the layout glide targets the new sections.
+    pub fn set_group_by_date(&self, on: bool) {
+        self.with_view(|v| {
+            if v.group_by_date == on {
+                return;
+            }
+            v.group_by_date = on;
+            // The cells a running glide was computed for no longer exist.
+            v.snap_item_motion();
+            let _ = v.redraw_content();
+        });
+    }
+    pub fn set_spacing(&self, spacing: Spacing) {
+        self.with_view(|v| {
+            if v.spacing != spacing {
+                v.spacing = spacing;
+                for item in &mut v.items {
+                    item.label = None;
+                }
+                v.snap_item_motion();
+                let _ = v.redraw();
+            }
+        });
+    }
+}
+
+impl FenceWindow {
+    /// One-row widgets show their capsule layout; taller ones the full layout.
+    pub fn set_presentation(&self, presentation: pecofence_plugin_api::Presentation) {
+        self.with_view(|v| {
+            let Some(panel) = v.plugin_panel.as_mut() else {
+                return;
+            };
+            if panel.presentation() == presentation {
+                return;
+            }
+            panel.set_presentation(presentation);
+            panel
+                .invalidation
+                .request(pecofence_plugin_api::design::FrameInvalidation::Layout);
+            let _ = v.redraw_content();
+        });
+    }
+
+    /// `None` means a modal handler currently holds the view; the caller must retry.
+    pub(crate) fn try_apply_panel_update(
+        &self,
+        key: pecofence_plugin_api::InstanceKey,
+        update: &pecofence_plugin_api::PanelUpdate,
+    ) -> Option<bool> {
+        let _capture_boundary = super::interaction::CaptureReleaseBoundary {
+            view: &self.view,
+            hwnd: self.hwnd(),
+        };
+        let Ok(mut guard) = self.view.try_borrow_mut() else {
+            return None;
+        };
+        let Some(view) = guard.as_mut() else {
+            return Some(false);
+        };
+        if view.plugin_panel.as_ref().map(|panel| panel.key()) != Some(key) {
+            return Some(false);
+        }
+        if let Err(error) = view.apply_plugin_update(update.clone()) {
+            tracing::warn!(%error, "panel update failed");
+        }
+        Some(true)
+    }
+}
+
 #[cfg(test)]
 mod typography_geometry_tests {
     use super::text_change_height;
@@ -1475,5 +1569,26 @@ mod typography_geometry_tests {
         assert_eq!(text_change_height(140, 280, 60, false, true), 280);
         assert_eq!(text_change_height(140, 280, 60, true, true), 60);
         assert_eq!(text_change_height(40, 50, 60, false, false), 61);
+    }
+}
+
+impl FenceWindow {
+    pub fn files(&self) -> Option<&Self> {
+        self.view
+            .borrow()
+            .as_ref()
+            .filter(|v| !v.is_panel)
+            .map(|_| self)
+    }
+    pub fn panel(&self) -> Option<&Self> {
+        self.try_panel().ok().flatten()
+    }
+    pub(crate) fn try_panel(&self) -> std::result::Result<Option<&Self>, std::cell::BorrowError> {
+        Ok(self
+            .view
+            .try_borrow()?
+            .as_ref()
+            .filter(|v| v.is_panel)
+            .map(|_| self))
     }
 }

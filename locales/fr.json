@@ -678,5 +678,6 @@
   "保存快照后，可以随时回到当前的栅栏排布。": "Enregistrez un instantané pour revenir à tout moment à la disposition actuelle des clôtures.",
   "更早的备份（{0}）": "Sauvegardes plus anciennes ({0})",
   "配置文件": "Fichier de configuration",
-  "补齐": "Compléter"
+  "补齐": "Compléter",
+  "已关闭的栅栏": "Clôtures fermées"
 }

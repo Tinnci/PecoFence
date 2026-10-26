@@ -251,6 +251,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         ..Default::default()
                     },
                     FenceStyle::default(),
+                    &Default::default(),
                 )?;
                 let ink = s.create_solid_brush(theme.text_primary)?;
                 for (i, name) in ["Documents", "Pictures", "Projects"]

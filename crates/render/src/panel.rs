@@ -355,6 +355,7 @@ mod tests {
                                     TitleDeco {
                                         folder_icon: true,
                                         up_button: true,
+                                        captions: false,
                                     },
                                     TitleState {
                                         title: 1.0,
@@ -366,6 +367,7 @@ mod tests {
                                         title_size,
                                         ..Default::default()
                                     },
+                                    &crate::fence_chrome::TitleChrome::default(),
                                 )
                             })
                             .unwrap()

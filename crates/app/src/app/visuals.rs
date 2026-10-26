@@ -111,7 +111,7 @@ fn build_backdrops(
         wallpaper::Position::Span => WallpaperPosition::Span,
     };
     // Clear glass needs wallpaper detail for refraction. Acrylic intentionally discards it.
-    let downscale = if theme.liquid_glass { 1 } else { 4 };
+    let downscale = if theme.is_liquid_glass() { 1 } else { 4 };
     let infos = monitors::enumerate();
     let mut out = Vec::new();
     for m in &snapshot.monitors {
@@ -138,7 +138,7 @@ fn build_backdrops(
             .map(|i| i.dpi)
             .unwrap_or(96)
             .max(96);
-        let mut tint = if theme.liquid_glass || theme.paper {
+        let mut tint = if theme.is_liquid_glass() || theme.is_paper() {
             theme.acrylic_tint()
         } else {
             tuned_tint(theme.acrylic_tint())
@@ -146,7 +146,7 @@ fn build_backdrops(
         tint.blur_sigma_dip *= dpi as f32 / 96.0;
         let image = match &m.path {
             Some(p) => {
-                let decode_divisor = if theme.liquid_glass { 1 } else { 2 };
+                let decode_divisor = if theme.is_liquid_glass() { 1 } else { 2 };
                 let d = wallpaper::decode_scaled(
                     p,
                     (w as u32 / decode_divisor).max(1),
@@ -254,7 +254,7 @@ pub(super) fn shadow_style_for(theme: &Theme) -> ShadowStyle {
     };
     // The casting shape follows the window outline in every style.
     shadow.radius = theme.corner_radius;
-    if theme.liquid_glass {
+    if theme.is_liquid_glass() {
         shadow.sigma = 12.0;
         shadow.offset_y = 5.0;
     }
@@ -450,9 +450,9 @@ impl App {
         let mut theme = theme_for(mode, style, accent.as_ref());
         theme.title_height = self.ctx.chrome.title_height();
         let old_theme = *self.ctx.theme.borrow();
-        let style_changed = old_theme.liquid_glass != theme.liquid_glass;
-        let contrast_changed = old_theme.high_contrast != theme.high_contrast
-            || (theme.high_contrast
+        let style_changed = old_theme.is_liquid_glass() != theme.is_liquid_glass();
+        let contrast_changed = old_theme.is_high_contrast() != theme.is_high_contrast()
+            || (theme.is_high_contrast()
                 && (old_theme.solid_fill != theme.solid_fill
                     || old_theme.text_primary != theme.text_primary));
         if mode == self.theme_mode
@@ -500,7 +500,7 @@ impl App {
         self.ctx.shadow_style.set(shadow);
         if let Some(h) = &self.settings {
             if theme_changed {
-                h.set_theme(mode, theme.liquid_glass);
+                h.set_theme(mode, theme.is_liquid_glass());
             }
             self.push_settings_state();
         }

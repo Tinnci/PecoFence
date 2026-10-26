@@ -179,7 +179,9 @@ impl App {
         };
         // LVM_EDITLABEL: the item is scrolled fully into view (at its final position) before
         // the edit opens, so the box sits on its label instead of the fence edge.
-        w.ensure_item_visible_now(item);
+        if let Some(view) = w.files() {
+            view.ensure_item_visible_now(item);
+        };
         let Some(rect) = w.item_label_rect(item) else {
             return;
         };
@@ -197,7 +199,9 @@ impl App {
             it.is_folder,
         );
         let dpi = monitors::dpi_for_window(w.hwnd());
-        w.set_renaming(Some(item));
+        if let Some(view) = w.files() {
+            view.set_renaming(Some(item));
+        };
         crate::rename::begin_item_rename(
             rect,
             dpi,
@@ -224,7 +228,9 @@ impl App {
         };
         for w in self.fences.values() {
             if keep_item.is_none() || w.renaming_item() != keep_item {
-                w.set_renaming(None);
+                if let Some(view) = w.files() {
+                    view.set_renaming(None);
+                };
             }
             if keep_title != Some(w.hwnd()) {
                 w.set_title_renaming(false);
@@ -289,7 +295,9 @@ impl App {
                     if let Some(portal) = self.state.portal_of_item(item) {
                         let new_id = crate::state::portal_item_id(portal, &new.to_string_lossy());
                         for w in self.fences.values() {
-                            w.rekey_item(item, new_id);
+                            if let Some(view) = w.files() {
+                                view.rekey_item(item, new_id);
+                            };
                         }
                     }
                     self.refresh_portals_in(&[parent.to_path_buf()]);
@@ -414,7 +422,9 @@ impl App {
 
     pub(super) fn push_cut_items(&self) {
         for w in self.fences.values() {
-            w.set_cut_items(&self.cut_items);
+            if let Some(view) = w.files() {
+                view.set_cut_items(&self.cut_items);
+            };
         }
     }
 
