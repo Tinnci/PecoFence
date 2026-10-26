@@ -29,6 +29,9 @@ pub enum RpcMethod {
     Ping,
     QueryBoardPage,
     GetCardEvidence,
+    GetCiWatch,
+    UpdateCiWatchlist,
+    SuggestCiWatch,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -204,6 +207,9 @@ pub enum Request {
     Ping(PingRequest),
     QueryBoardPage(QueryPageRequest),
     GetCardEvidence(GetCardEvidenceRequest),
+    GetCiWatch(GetCiWatchRequest),
+    UpdateCiWatchlist(UpdateCiWatchlistRequest),
+    SuggestCiWatch(SuggestCiWatchRequest),
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -220,6 +226,9 @@ pub enum Response {
     Ping(PingResponse),
     QueryBoardPage(BoardPageResponse),
     GetCardEvidence(CardEvidenceResponse),
+    GetCiWatch(CiWatchSnapshot),
+    UpdateCiWatchlist(CiWatchSnapshot),
+    SuggestCiWatch(CiSuggestions),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -266,9 +275,17 @@ impl Request {
             Self::Ping(_) => RpcMethod::Ping,
             Self::QueryBoardPage(_) => RpcMethod::QueryBoardPage,
             Self::GetCardEvidence(_) => RpcMethod::GetCardEvidence,
+            Self::GetCiWatch(_) => RpcMethod::GetCiWatch,
+            Self::UpdateCiWatchlist(_) => RpcMethod::UpdateCiWatchlist,
+            Self::SuggestCiWatch(_) => RpcMethod::SuggestCiWatch,
         }
     }
     pub fn validate(&self) -> Result<(), ContractError> {
+        match self {
+            Self::UpdateCiWatchlist(q) => return q.validate(),
+            Self::SuggestCiWatch(q) => return validate_ci_query(&q.query),
+            _ => {}
+        }
         let (revision, page_size) = match self {
             Self::QueryPage(q) | Self::QueryBoardPage(q) => (q.revision, q.page_size),
             Self::GetCardEvidence(q) => (q.revision, q.page_size),

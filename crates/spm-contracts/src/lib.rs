@@ -2,6 +2,7 @@
 
 mod board;
 mod canonical;
+mod ci_watch;
 mod endpoint;
 mod envelope;
 mod error;
@@ -14,6 +15,7 @@ mod version;
 
 pub use board::*;
 pub use canonical::*;
+pub use ci_watch::*;
 pub use endpoint::*;
 pub use envelope::*;
 pub use error::*;

@@ -81,7 +81,14 @@ impl Envelope {
                 }
                 request.validate()?;
             }
-            Body::Response(_) => {
+            Body::Response(response) => {
+                match response {
+                    Response::GetCiWatch(snapshot) | Response::UpdateCiWatchlist(snapshot) => {
+                        snapshot.validate()?
+                    }
+                    Response::SuggestCiWatch(suggestions) => suggestions.validate()?,
+                    _ => {}
+                }
                 if direction != Direction::ServerToClient
                     || self.daemon_session.is_none()
                     || self.request_id.is_none()
