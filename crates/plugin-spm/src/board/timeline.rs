@@ -1,5 +1,6 @@
 //! Delivery presentation only: all stage boundaries, due dates and dependencies
 //! come from the snapshot. Date arithmetic here maps them into view coordinates.
+use super::super::text::project_day;
 use super::*;
 use chrono::{DateTime, Datelike, Duration, NaiveDate, TimeZone, Utc};
 use spm_contracts::{BoardStage, SourceSystem};
@@ -19,8 +20,10 @@ pub struct Range {
 }
 
 impl Range {
-    pub fn for_zoom(today: DateTime<Utc>, zoom: Zoom) -> Self {
-        let day = today.date_naive();
+    pub fn for_zoom(today: DateTime<Utc>, zoom: Zoom, timezone: &str) -> Self {
+        let offset = super::super::text::offset(timezone)
+            .unwrap_or_else(|| chrono::FixedOffset::east_opt(0).unwrap());
+        let day = today.with_timezone(&offset).date_naive();
         let from = match zoom {
             Zoom::Week => {
                 day - Duration::days(i64::from(day.weekday().num_days_from_monday()) + 14)
@@ -33,7 +36,11 @@ impl Range {
             Zoom::Quarter => 92,
         };
         Self {
-            from: Utc.from_utc_datetime(&from.and_hms_opt(0, 0, 0).unwrap()),
+            from: offset
+                .from_local_datetime(&from.and_hms_opt(0, 0, 0).unwrap())
+                .single()
+                .unwrap()
+                .with_timezone(&Utc),
             days,
         }
     }
@@ -46,12 +53,14 @@ impl Range {
     }
 }
 
-fn date(at: DateTime<Utc>) -> String {
-    at.format("%m-%d").to_string()
+fn date(at: DateTime<Utc>, timezone: &str) -> String {
+    short_time(at, timezone).chars().take(5).collect()
 }
 
 fn label(b: &mut Builder, key: &str, r: RectDip, text: &str, size: f32, color: [f32; 4]) {
+    let full_name = text.to_owned();
     let (text, _) = b.fit.fit(text, size, 400, r.w, 1);
+    let start = b.out.nodes.len();
     b.text(
         key.into(),
         r,
@@ -61,9 +70,13 @@ fn label(b: &mut Builder, key: &str, r: RectDip, text: &str, size: f32, color: [
         color,
         TextAlign::MiddleLeading,
     );
+    if let Some(node) = b.out.nodes.get_mut(start) {
+        node.name = full_name;
+    }
 }
 
 fn number(b: &mut Builder, key: &str, r: RectDip, text: &str) {
+    let text = text.strip_prefix("ORION-").unwrap_or(text);
     let (text, _) = b
         .fit
         .with_font(FontRole::Condensed)
@@ -229,7 +242,22 @@ pub(super) fn workspace(b: &mut Builder, input: &Input, viewport: RectDip) {
             120.0,
         ) + 4.0;
     }
-    let range = Range::for_zoom(input.now, input.zoom);
+    label(
+        b,
+        "timeline:fresh",
+        rect(300.0, 2.0, viewport.w - 316.0, 26.0),
+        &format!(
+            "{} · {}",
+            b.lang.f(
+                "Data as of {}",
+                &[&short_time(board.computed_at, &board.project_timezone)]
+            ),
+            board.project_timezone
+        ),
+        12.0,
+        b.pal.secondary,
+    );
+    let range = Range::for_zoom(input.now, input.zoom, &board.project_timezone);
     let chart_x = PAD + 260.0;
     let track = rect(chart_x, 82.0, viewport.w - chart_x - PAD, 1.0);
     let drawer_h = if input.detail_open && input.selected.is_some() {
@@ -239,9 +267,9 @@ pub(super) fn workspace(b: &mut Builder, input: &Input, viewport: RectDip) {
     };
     let area = rect(
         PAD,
-        100.0,
+        124.0,
         viewport.w - 2.0 * PAD,
-        viewport.h - 108.0 - drawer_h,
+        viewport.h - 132.0 - drawer_h,
     );
     b.out.board = Some(area);
     let cards = visible_cards(board, input.filter);
@@ -251,7 +279,12 @@ pub(super) fn workspace(b: &mut Builder, input: &Input, viewport: RectDip) {
     for day in 0..range.days {
         let at = range.from + Duration::days(day);
         let gx = range.x(at, track);
-        if input.zoom == Zoom::Week && at.weekday().num_days_from_monday() >= 5 {
+        if input.zoom == Zoom::Week
+            && project_day(at, &board.project_timezone)
+                .weekday()
+                .num_days_from_monday()
+                >= 5
+        {
             b.fill(
                 format!("weekend:{day}"),
                 rect(gx, area.y, track.w / range.days as f32, area.h),
@@ -259,7 +292,7 @@ pub(super) fn workspace(b: &mut Builder, input: &Input, viewport: RectDip) {
                 0.0,
             );
         }
-        if at.weekday() == chrono::Weekday::Mon {
+        if project_day(at, &board.project_timezone).weekday() == chrono::Weekday::Mon {
             b.fill(
                 format!("guide:{day}"),
                 rect(gx, area.y, 1.0, area.h),
@@ -307,7 +340,7 @@ pub(super) fn workspace(b: &mut Builder, input: &Input, viewport: RectDip) {
                 y,
                 track,
                 range,
-                area.y + input.scroll,
+                area.y - input.scroll,
             );
             y += 58.0;
         }
@@ -385,18 +418,21 @@ pub(super) fn workspace(b: &mut Builder, input: &Input, viewport: RectDip) {
 }
 
 fn axis(b: &mut Builder, input: &Input, board: &BoardSnapshot, track: RectDip, range: Range) {
+    let tz = &input.board.unwrap().project_timezone;
+    let date = |at| date(at, tz);
+
     for day in 0..range.days {
         let at = range.from + Duration::days(day);
         let tick = if input.zoom == Zoom::Quarter {
-            at.day() == 1
+            project_day(at, tz).day() == 1
         } else {
-            at.weekday() == chrono::Weekday::Mon
+            project_day(at, tz).weekday() == chrono::Weekday::Mon
         };
         if tick {
             let text = if input.zoom == Zoom::Quarter {
                 at.format("%Y-%m").to_string()
             } else {
-                format!("W{} {}", at.iso_week().week(), date(at))
+                format!("W{} {}", project_day(at, tz).iso_week().week(), date(at))
             };
             let x = range.x(at, track);
             label(
@@ -404,7 +440,7 @@ fn axis(b: &mut Builder, input: &Input, board: &BoardSnapshot, track: RectDip, r
                 &format!("axis:{day}"),
                 rect(
                     x + 3.0,
-                    76.0,
+                    100.0,
                     (track.x + track.w - x - 3.0).min(110.0),
                     22.0,
                 ),
@@ -431,7 +467,7 @@ fn axis(b: &mut Builder, input: &Input, board: &BoardSnapshot, track: RectDip, r
                 &format!("milestone:{}:flag", m.id),
                 rect(
                     x.min(track.x + track.w - 160.0),
-                    52.0 + (i % 2) as f32 * 0.0,
+                    50.0 + (i % 2) as f32 * 22.0,
                     160.0,
                     22.0,
                 ),
@@ -466,6 +502,9 @@ fn row(
     range: Range,
     origin: f32,
 ) {
+    let tz = &input.board.unwrap().project_timezone;
+    let date = |at| date(at, tz);
+
     let key = format!("tl:{}", c.card_id.as_str());
     let selected = input.selected == Some(&c.card_id);
     if selected {
@@ -603,6 +642,40 @@ fn row(
             }
         }
     }
+    if let Some(s) = &c.schedule {
+        let mut name = format!(
+            "{}: {} {}",
+            c.business_number.as_deref().unwrap_or(""),
+            b.lang.t("Due"),
+            date(s.due)
+        );
+        if let Some(base) = s.baseline_due.filter(|d| *d != s.due) {
+            name.push_str(&format!("; {} {}", b.lang.t("Original due"), date(base)));
+        }
+        for blocker in &c.blockers {
+            name.push_str(&format!("; ⊘ {}", blocker.reason));
+            if let Some(at) = blocker.expected_at {
+                name.push_str(&format!("; {} {}", b.lang.t("Expected"), date(at)));
+            }
+        }
+        b.push(
+            format!("{key}:schedule:name"),
+            rect(track.x, y + 1.0, track.w, 25.0),
+            "img",
+            name,
+            String::new(),
+            None,
+            style(
+                12.0,
+                400,
+                BODY,
+                b.pal.primary,
+                None,
+                0.0,
+                TextAlign::TopLeading,
+            ),
+        );
+    }
     let status = if !c.blockers.is_empty() {
         format!("⊘ {}", b.lang.t("Blocked"))
     } else {
@@ -668,6 +741,9 @@ fn row(
 }
 
 fn drawer(b: &mut Builder, input: &Input, c: &BoardCard, r: RectDip) {
+    let tz = &input.board.unwrap().project_timezone;
+    let date = |at| date(at, tz);
+
     b.out.detail = Some(r);
     b.fill("drawer:bg".into(), r, b.pal.card, 0.0);
     number(
@@ -724,18 +800,38 @@ fn drawer(b: &mut Builder, input: &Input, c: &BoardCard, r: RectDip) {
         parts.push(format!(
             "{} {} {}",
             b.lang.t("Days to due"),
-            (s.due.date_naive() - input.now.date_naive()).num_days(),
+            (project_day(s.due, tz) - project_day(input.now, tz)).num_days(),
             date(s.due)
         ));
     }
-    label(
-        b,
-        "drawer:stats",
-        rect(r.x + 10.0, r.y + 60.0, r.w - 20.0, 24.0),
-        &parts.join(" · "),
-        12.0,
-        b.pal.primary,
-    );
+    let narrow = r.w < 700.0;
+    if narrow {
+        for (i, part) in parts.iter().enumerate() {
+            label(
+                b,
+                &format!("drawer:stats:{i}"),
+                rect(
+                    r.x + 10.0 + (i % 3) as f32 * (r.w - 20.0) / 3.0,
+                    r.y + 60.0 + (i / 3) as f32 * 22.0,
+                    (r.w - 20.0) / 3.0 - 6.0,
+                    22.0,
+                ),
+                part,
+                11.0,
+                b.pal.primary,
+            );
+        }
+    } else {
+        label(
+            b,
+            "drawer:stats",
+            rect(r.x + 10.0, r.y + 60.0, r.w - 20.0, 24.0),
+            &parts.join(" · "),
+            12.0,
+            b.pal.primary,
+        );
+    }
+    let extra = if narrow { 22.0 } else { 0.0 };
     let next = c
         .next_action
         .as_ref()
@@ -743,18 +839,31 @@ fn drawer(b: &mut Builder, input: &Input, c: &BoardCard, r: RectDip) {
     label(
         b,
         "drawer:next",
-        rect(r.x + 10.0, r.y + 86.0, r.w - 20.0, 24.0),
+        rect(r.x + 10.0, r.y + 86.0 + extra, r.w - 20.0, 24.0),
         &format!("{}: {}", b.lang.t("Next action"), next),
         12.0,
         b.pal.accent_ink,
     );
-    let notes = c
+    let mut notes = c
         .blockers
         .iter()
         .map(|v| v.reason.as_str())
         .chain(c.conflicts.iter().map(|v| v.explanation.as_str()))
         .collect::<Vec<_>>()
         .join(" · ");
+    if let Some(s) = &c.schedule
+        && let Some(baseline) = s.baseline_due.filter(|d| *d != s.due)
+    {
+        if !notes.is_empty() {
+            notes.push_str(" · ");
+        }
+        notes.push_str(&format!(
+            "{} {} → {}",
+            b.lang.t("Original due"),
+            date(baseline),
+            date(s.due)
+        ));
+    }
     let note = if notes.is_empty() {
         c.stage.explanation.as_str()
     } else {
@@ -763,32 +872,33 @@ fn drawer(b: &mut Builder, input: &Input, c: &BoardCard, r: RectDip) {
     label(
         b,
         "drawer:notes",
-        rect(r.x + 10.0, r.y + 110.0, r.w - 20.0, 24.0),
+        rect(r.x + 10.0, r.y + 110.0 + extra, r.w - 20.0, 24.0),
         note,
         12.0,
         b.pal.secondary,
     );
+    let max_button = ((r.w - 28.0) / 2.0).min(180.0);
     let w = b.button(
         "drawer:evidence",
         r.x + 10.0,
-        r.y + 142.0,
+        r.y + 142.0 + extra,
         28.0,
         None,
         b.lang.t("Open evidence"),
         true,
         Target::OpenEvidence,
-        180.0,
+        max_button,
     );
     b.button(
         "drawer:board",
         r.x + w + 18.0,
-        r.y + 142.0,
+        r.y + 142.0 + extra,
         28.0,
         None,
         b.lang.t("Show on board"),
         false,
         Target::ShowOnBoard,
-        180.0,
+        max_button,
     );
     b.button(
         "drawer:close",
@@ -804,10 +914,10 @@ fn drawer(b: &mut Builder, input: &Input, c: &BoardCard, r: RectDip) {
 }
 
 fn tooltip(b: &mut Builder, input: &Input, viewport: RectDip) {
-    let Some(id) = input.selected_evidence else {
+    let Some(id) = input.preview_event else {
         return;
     };
-    let summary = match input.evidence {
+    let summary = match input.preview_evidence {
         EvidenceView::Loaded(e) => e
             .items
             .iter()
@@ -842,10 +952,19 @@ fn tooltip(b: &mut Builder, input: &Input, viewport: RectDip) {
 
 /// Fourteen calendar dates including today, ordered by the supplied due date.
 fn compact(b: &mut Builder, input: &Input, viewport: RectDip) {
+    let tz = &input.board.unwrap().project_timezone;
+    let date = |at| date(at, tz);
+
     let board = input.board.unwrap();
     b.out.mode = Mode::Compact;
-    let today = input.now.date_naive();
-    let from = Utc.from_utc_datetime(&today.and_hms_opt(0, 0, 0).unwrap());
+    let offset =
+        super::super::text::offset(tz).unwrap_or_else(|| chrono::FixedOffset::east_opt(0).unwrap());
+    let today = input.now.with_timezone(&offset).date_naive();
+    let from = offset
+        .from_local_datetime(&today.and_hms_opt(0, 0, 0).unwrap())
+        .single()
+        .unwrap()
+        .with_timezone(&Utc);
     let range = Range { from, days: 13 };
     let w = viewport.w - 2.0 * PAD;
     let mut my = 2.0;
@@ -870,12 +989,17 @@ fn compact(b: &mut Builder, input: &Input, viewport: RectDip) {
     if input.detail_open
         && let Some(c) = input.selected.and_then(|id| model::find(board, id))
     {
+        let area = rect(PAD, my + 4.0, w, (viewport.h - my - 8.0).max(0.0));
+        b.clip = Some(area);
         drawer(
             b,
             input,
             c,
-            rect(PAD, my + 4.0, w, (viewport.h - my - 8.0).max(180.0)),
+            rect(PAD, my + 4.0 - input.detail_scroll, w, 220.0),
         );
+        b.clip = None;
+        b.out.detail = Some(area);
+        b.out.detail_content = 340.0;
         tooltip(b, input, viewport);
         return;
     }
@@ -900,7 +1024,10 @@ fn compact(b: &mut Builder, input: &Input, viewport: RectDip) {
     cards.retain(|c| c.card.stage.stage != BoardStage::Done);
     cards.sort_by_key(|c| {
         (
-            c.card.schedule.as_ref().map(|s| s.due),
+            c.card
+                .schedule
+                .as_ref()
+                .map_or(i64::MAX, |s| s.due.timestamp()),
             c.card.card_id.as_str(),
         )
     });
@@ -912,7 +1039,7 @@ fn compact(b: &mut Builder, input: &Input, viewport: RectDip) {
         let days = c
             .schedule
             .as_ref()
-            .map(|s| (s.due.date_naive() - today).num_days());
+            .map(|s| (project_day(s.due, tz) - today).num_days());
         let g = match days {
             Some(d) if d <= 1 => 0,
             Some(d) if d <= 6 - i64::from(today.weekday().num_days_from_monday()) => 1,
@@ -968,7 +1095,7 @@ fn compact(b: &mut Builder, input: &Input, viewport: RectDip) {
             id: c.card_id.clone(),
             column: 0,
             lane: 0,
-            y: y - area.y + input.scroll,
+            y: y - area.y - input.scroll,
             h: 90.0,
         });
         number(

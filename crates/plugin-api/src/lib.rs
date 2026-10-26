@@ -564,6 +564,12 @@ pub trait PreparedFrame {
 }
 
 pub enum PanelEvent {
+    /// Hover or keyboard focus over a committed action. Allows lazy previews
+    /// without activating it. `None` dismisses the preview.
+    Inspect {
+        action: Option<u64>,
+        layout_revision: u64,
+    },
     /// Host-scheduled wake-up. Read the current source state again; timer delivery may be late.
     Wake,
     Invoke {

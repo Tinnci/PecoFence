@@ -183,6 +183,7 @@ pub struct BoardPanel {
     detail_scroll: f32,
     evidence: HashMap<(RecordId, Revision), Evidence>,
     selected_evidence: Option<String>,
+    preview_event: Option<(RecordId, String)>,
     pending: HashMap<Token, Pending>,
     refresh_operation: Option<OperationId>,
     board_since_refresh: bool,
@@ -270,6 +271,7 @@ impl BoardPanel {
             detail_scroll: 0.0,
             evidence: HashMap::new(),
             selected_evidence: None,
+            preview_event: None,
             pending: HashMap::new(),
             refresh_operation: None,
             board_since_refresh: false,
@@ -397,7 +399,14 @@ impl BoardPanel {
 
     /// Load the selected card's evidence for the current revision once.
     fn request_evidence(&mut self, now: Instant, retry: bool) -> Result<()> {
-        let (Some(board), Some(id)) = (&self.board, &self.selected) else {
+        let Some(id) = self.selected.clone() else {
+            return Ok(());
+        };
+        self.request_card_evidence(&id, now, retry)
+    }
+
+    fn request_card_evidence(&mut self, id: &RecordId, now: Instant, retry: bool) -> Result<()> {
+        let Some(board) = &self.board else {
             return Ok(());
         };
         if model::find(board, id).is_none() {
@@ -661,7 +670,8 @@ impl BoardPanel {
         match target {
             Target::Zoom(zoom) => self.zoom = zoom,
             Target::Event(id, evidence) => {
-                self.select(id, false, now)?;
+                self.preview_event = Some((id.clone(), evidence.clone()));
+                self.select(id, self.detail_open, now)?;
                 self.selected_evidence = Some(evidence);
                 self.request_evidence(now, false)?;
             }
@@ -685,6 +695,7 @@ impl BoardPanel {
                 }
             }
             Target::View(view) => {
+                self.preview_event = None;
                 self.view = view;
                 self.evidence_open = false;
                 self.scroll = 0.0;
@@ -913,6 +924,14 @@ impl BoardPanel {
                     let column = in_column(me.column);
                     let at = column.iter().position(|n| n.id == me.id).unwrap_or(0);
                     match key {
+                        PanelKey::Left | PanelKey::Right if self.view == BoardView::Timeline => {
+                            let next = if key == PanelKey::Left {
+                                index.checked_sub(1)
+                            } else {
+                                Some(index + 1)
+                            };
+                            next.and_then(|i| nav.get(i)).map(|n| n.id.clone())
+                        }
                         PanelKey::Up => column.get(at.wrapping_sub(1)).map(|n| n.id.clone()),
                         PanelKey::Down => column.get(at + 1).map(|n| n.id.clone()),
                         PanelKey::Home => column.first().map(|n| n.id.clone()),
@@ -1077,6 +1096,31 @@ impl BoardPanel {
             return Err(Error::Closed);
         }
         match event {
+            PanelEvent::Inspect {
+                action,
+                layout_revision,
+            } => {
+                if layout_revision != self.layout_revision
+                    || self.prepared_view_revision != self.view_revision
+                {
+                    return Ok(PanelUpdate::default());
+                }
+                let target = action
+                    .and_then(|a| a.checked_sub(ACTION_BASE))
+                    .and_then(|a| self.targets.get(a as usize));
+                let preview = match target {
+                    Some(Target::Event(id, e)) => Some((id.clone(), e.clone())),
+                    _ => None,
+                };
+                if preview == self.preview_event {
+                    return Ok(PanelUpdate::default());
+                }
+                self.preview_event = preview;
+                if let Some((id, _)) = self.preview_event.clone() {
+                    self.request_card_evidence(&id, now, false)?;
+                }
+                Ok(self.redraw())
+            }
             PanelEvent::Command { id } => {
                 let target = match id {
                     CHROME_REFRESH => Target::Refresh,
@@ -1213,6 +1257,17 @@ impl BoardPanel {
                 scroll: self.scroll,
                 detail_scroll: self.detail_scroll,
                 evidence,
+                preview_event: self.preview_event.as_ref().map(|(_, e)| e.as_str()),
+                preview_evidence: match (&self.board, &self.preview_event) {
+                    (Some(board), Some((id, _))) => {
+                        match self.evidence.get(&(id.clone(), board.revision)) {
+                            Some(Evidence::Loaded(e)) => EvidenceView::Loaded(e),
+                            Some(Evidence::Failed(e)) => EvidenceView::Failed(e),
+                            _ => EvidenceView::Loading,
+                        }
+                    }
+                    _ => EvidenceView::None,
+                },
                 selected_evidence: self.selected_evidence.as_deref(),
                 status,
                 demo,

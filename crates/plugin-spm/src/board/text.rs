@@ -46,6 +46,8 @@ impl Lang {
 
 const ZH: &[(&str, &str)] = &[
     ("Board", "看板"),
+    ("Original due", "原定到期"),
+    ("Due", "到期"),
     ("14 days", "14 天"),
     ("Overdue / tomorrow", "已逾期或明天到期"),
     ("This week", "本周"),
@@ -230,7 +232,7 @@ const ZH: &[(&str, &str)] = &[
 
 /// Fixed offsets for project time zones without daylight saving. Anything else
 /// is shown in UTC and says so, instead of guessing an offset.
-fn offset(timezone: &str) -> Option<FixedOffset> {
+pub(super) fn offset(timezone: &str) -> Option<FixedOffset> {
     let hours = match timezone {
         "Asia/Shanghai" | "Asia/Chongqing" | "Asia/Hong_Kong" | "Asia/Taipei"
         | "Asia/Singapore" | "Asia/Macau" => 8 * 3600,
@@ -240,6 +242,12 @@ fn offset(timezone: &str) -> Option<FixedOffset> {
         _ => return None,
     };
     FixedOffset::east_opt(hours)
+}
+
+pub(super) fn project_day(at: DateTime<Utc>, timezone: &str) -> chrono::NaiveDate {
+    offset(timezone).map_or(at.date_naive(), |offset| {
+        at.with_timezone(&offset).date_naive()
+    })
 }
 
 /// Short project-local time, such as `10-27 14:00`.

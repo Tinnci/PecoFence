@@ -407,6 +407,20 @@ impl PluginPanelContent {
             .find(|node| node.rect.contains(x, y))
     }
 
+    fn inspect_event(&self, id: Option<u64>) -> PanelEvent {
+        let frame = self.committed.as_ref();
+        let action = frame.and_then(|f| {
+            f.hit_tree()
+                .iter()
+                .find(|h| Some(h.id) == id)
+                .map(|h| h.action)
+        });
+        PanelEvent::Inspect {
+            action,
+            layout_revision: frame.map_or(0, |f| f.identity().layout_revision),
+        }
+    }
+
     fn focusable_hits(&self) -> Vec<pecofence_plugin_api::HitNode> {
         self.committed
             .as_ref()
@@ -752,14 +766,18 @@ pub(super) fn handle_message(
         msg::WM_MOUSEMOVE => {
             let hit = panel.hit_at(x, y).map(|hit| hit.id);
             if panel.interaction.hover(hit) {
+                let event = panel.inspect_event(hit);
                 view.redraw_plugin_feedback();
+                forward_panel_event(view, event);
             }
             // Continue the ordinary handler for title/peek/mouse-leave tracking.
             None
         }
         msg::WM_MOUSELEAVE => {
             if panel.interaction.hover(None) {
+                let event = panel.inspect_event(None);
                 view.redraw_plugin_feedback();
+                forward_panel_event(view, event);
             }
             None
         }
@@ -838,7 +856,9 @@ pub(super) fn handle_message(
                     panel
                         .interaction
                         .focus_next(&hits, window::key_down(msg::VK_SHIFT));
+                    let event = panel.inspect_event(panel.interaction.focused);
                     view.redraw_plugin_feedback();
+                    forward_panel_event(view, event);
                     Some(0)
                 }
                 0x0D | 0x20 if panel.interaction.focused.is_some() => {

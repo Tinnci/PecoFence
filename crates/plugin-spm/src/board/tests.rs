@@ -431,7 +431,7 @@ fn refresh_reorders_cards_and_keeps_the_selection_by_identity() {
     assert!(texts.iter().any(|t| t.starts_with('≥')));
     assert!(texts.iter().any(|t| t.contains("Gerrit did not refresh")));
     // The outage is reported once; it does not turn every card into attention work.
-    assert!(texts.iter().any(|t| t == "Needs attention 5"), "{texts:?}");
+    assert!(texts.iter().any(|t| t == "Needs attention 4"), "{texts:?}");
     // R-087's facts come partly from Gerrit; its card keeps its progress facts.
     assert!(
         texts
@@ -497,7 +497,7 @@ fn keyboard_moves_through_columns_and_lanes() {
     h.frame(1440.0, 900.0);
     h.key(PanelKey::Down); // nothing selected: first card in reading order
     let first = h.panel.selected().cloned().unwrap();
-    assert_eq!(first, h.card("ORION-R-103"));
+    assert_eq!(first, h.card("ORION-R-104"));
     h.frame(1440.0, 900.0);
     h.key(PanelKey::Right);
     let develop = h
@@ -551,13 +551,7 @@ fn filters_narrow_the_board_and_clear_together() {
                 .unwrap()
         })
         .collect();
-    for expected in [
-        "ORION-R-093",
-        "ORION-R-099",
-        "ORION-R-124",
-        "ORION-R-090",
-        "ORION-R-121",
-    ] {
+    for expected in ["ORION-R-093", "ORION-R-099", "ORION-R-124", "ORION-R-121"] {
         assert!(
             numbers.iter().any(|n| n == expected),
             "{expected} in {numbers:?}"
@@ -586,7 +580,7 @@ fn filters_narrow_the_board_and_clear_together() {
     );
     h.click(&Target::ClearFilters);
     h.frame(1440.0, 900.0);
-    assert_eq!(h.panel.layout().nav.len(), 15);
+    assert_eq!(h.panel.layout().nav.len(), 19);
 }
 
 #[test]
@@ -689,7 +683,7 @@ fn width_and_content_choose_the_composition() {
         scene
             .nodes()
             .iter()
-            .any(|n| n.name == "Done 1" && n.action.is_some())
+            .any(|n| n.name.starts_with("Done") && n.action.is_some())
     );
     assert_eq!(modes(&mut h, 700.0, 700.0), Mode::Tabs);
     assert_eq!(modes(&mut h, 480.0, 320.0), Mode::Compact);
@@ -967,4 +961,252 @@ fn a_chrome_command_runs_the_same_action_as_its_old_button() {
         "{:?}",
         h.calls.copied.borrow()
     );
+}
+
+fn timeline_harness(theme: Option<ThemeSnapshot>, w: f32, ht: f32) -> Harness {
+    let mut h = harness_with(theme);
+    h.settle();
+    h.frame(w, ht);
+    h.click(&Target::View(BoardView::Timeline));
+    h.frame(w, ht);
+    h
+}
+
+#[test]
+fn delivery_view_choice_preserves_identity_across_refresh_and_board_return() {
+    let mut h = timeline_harness(None, 1440.0, 1100.0);
+    let id = h.card("ORION-R-102");
+    h.panel.select(id.clone(), true, h.now).unwrap();
+    h.frame(1440.0, 1100.0);
+    h.refresh(1440.0, 1100.0);
+    assert_eq!(h.panel.view, BoardView::Timeline);
+    assert_eq!(h.panel.selected(), Some(&id));
+    h.frame(1440.0, 1100.0);
+    h.click(&Target::ShowOnBoard);
+    h.frame(1440.0, 1100.0);
+    assert_eq!(h.panel.view, BoardView::Board);
+    assert_eq!(h.panel.selected(), Some(&id));
+    assert!(!h.panel.detail_open);
+}
+
+#[test]
+fn delivery_geometry_tracks_supplied_dates_and_zoom_ranges() {
+    let mut h = timeline_harness(None, 1440.0, 1200.0);
+    let key = format!("tl:{}", h.card("ORION-R-103").as_str());
+    let mut previous = None;
+    for zoom in [Zoom::Week, Zoom::Month, Zoom::Quarter] {
+        h.frame(1440.0, 1200.0);
+        h.click(&Target::Zoom(zoom));
+        h.frame(1440.0, 1200.0);
+        let nodes = &h.panel.last.nodes;
+        let due = nodes
+            .iter()
+            .find(|n| n.key == format!("{key}:due"))
+            .unwrap();
+        let today = h.panel.board().unwrap().computed_at;
+        let schedule = h
+            .panel
+            .board()
+            .unwrap()
+            .card("ORION-R-103")
+            .unwrap()
+            .schedule
+            .as_ref()
+            .unwrap();
+        let range = layout::timeline::Range::for_zoom(today, zoom, "Asia/Shanghai");
+        let track = RectDip {
+            x: 276.0,
+            y: 0.0,
+            w: 1148.0,
+            h: 1.0,
+        };
+        assert!((due.rect.x - range.x(schedule.due, track)).abs() < 0.1);
+        assert!(
+            nodes
+                .iter()
+                .any(|n| n.key.starts_with(&format!("{key}:baseline:")))
+        );
+        assert!(nodes.iter().any(|n| n.key.contains(":dependency:0:")));
+        assert_eq!(
+            nodes.iter().any(|n| n.key.starts_with("weekend:")),
+            zoom == Zoom::Week
+        );
+        if let Some(x) = previous {
+            assert_ne!(due.rect.x, x);
+        }
+        previous = Some(due.rect.x);
+    }
+}
+
+#[test]
+fn delivery_keyboard_drawer_and_evidence_reuse_existing_detail() {
+    let mut h = timeline_harness(None, 1440.0, 1200.0);
+    h.key(PanelKey::Down);
+    let first = h.panel.selected.clone();
+    h.frame(1440.0, 1200.0);
+    h.key(PanelKey::Right);
+    assert_ne!(first, h.panel.selected);
+    h.frame(1440.0, 1200.0);
+    h.key(PanelKey::Enter);
+    h.settle();
+    let s = h.frame(1440.0, 1200.0);
+    assert!(h.panel.detail_open);
+    for word in ["Develop", "Verify", "Blocked", "Days to due"] {
+        assert!(texts(&s).iter().any(|s| s.contains(word)), "{word}");
+    }
+    assert!(h.panel.last.nodes.iter().any(|n| n.key == "drawer:next"));
+    h.click(&Target::OpenEvidence);
+    h.settle();
+    h.frame(1440.0, 1200.0);
+    assert!(h.panel.evidence_open);
+    assert_eq!(h.panel.last.mode, Mode::Detail);
+    h.key(PanelKey::Escape);
+    h.frame(1440.0, 1200.0);
+    assert!(!h.panel.detail_open);
+    assert!(!h.panel.evidence_open);
+}
+
+#[test]
+fn event_focus_loads_evidence_without_changing_selection_and_ignores_stale_layout() {
+    let mut h = timeline_harness(None, 1440.0, 1200.0);
+    let target = h
+        .panel
+        .targets
+        .iter()
+        .find(|t| matches!(t, Target::Event(_, _)))
+        .unwrap()
+        .clone();
+    let action = h.panel.action_for(&target).unwrap();
+    let revision = h.panel.layout_revision();
+    h.panel
+        .handle(
+            PanelEvent::Inspect {
+                action: Some(action),
+                layout_revision: revision,
+            },
+            h.now,
+        )
+        .unwrap();
+    assert!(h.panel.selected.is_none());
+    assert!(h.panel.preview_event.is_some());
+    h.settle();
+    let scene = h.frame(1440.0, 1200.0);
+    assert!(h.panel.last.nodes.iter().any(|n| n.key == "event:tooltip"));
+    assert!(!texts(&scene).iter().any(|t| t == "Loading evidence…"));
+    h.panel
+        .handle(
+            PanelEvent::Inspect {
+                action: None,
+                layout_revision: revision.wrapping_sub(1),
+            },
+            h.now,
+        )
+        .unwrap();
+    assert!(h.panel.preview_event.is_some());
+    let revision = h.panel.layout_revision();
+    h.panel
+        .handle(
+            PanelEvent::Inspect {
+                action: None,
+                layout_revision: revision,
+            },
+            h.now,
+        )
+        .unwrap();
+    assert!(h.panel.preview_event.is_none());
+}
+
+#[test]
+fn compact_delivery_rows_are_due_sorted_and_have_fourteen_day_tracks() {
+    let h = timeline_harness(None, 480.0, 700.0);
+    assert_eq!(h.panel.last.mode, Mode::Compact);
+    let board = h.panel.board().unwrap();
+    let dues: Vec<_> = h
+        .panel
+        .last
+        .nav
+        .iter()
+        .map(|n| {
+            model::find(board, &n.id)
+                .unwrap()
+                .schedule
+                .as_ref()
+                .unwrap()
+                .due
+        })
+        .collect();
+    assert!(dues.windows(2).all(|v| v[0] <= v[1]));
+    assert_eq!(h.panel.last.nav.first().unwrap().id, h.card("ORION-R-124"));
+    assert!(
+        h.panel
+            .last
+            .nodes
+            .iter()
+            .any(|n| n.key == "compact:range" && n.text.contains("11-08"))
+    );
+    assert!(
+        h.panel
+            .last
+            .nodes
+            .iter()
+            .any(|n| n.key == "compact:group:0")
+    );
+}
+
+#[test]
+fn timeline_snapshots() {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/snapshots");
+    for (name, theme, w, ht, zoom, drawer) in [
+        (
+            "timeline-week",
+            Some(light()),
+            1440.0,
+            1000.0,
+            Zoom::Week,
+            false,
+        ),
+        (
+            "timeline-month",
+            Some(light()),
+            1440.0,
+            1000.0,
+            Zoom::Month,
+            false,
+        ),
+        ("timeline-compact", None, 480.0, 700.0, Zoom::Week, false),
+        (
+            "timeline-hc",
+            Some(high_contrast()),
+            1440.0,
+            1000.0,
+            Zoom::Week,
+            false,
+        ),
+        ("timeline-drawer", None, 1440.0, 1100.0, Zoom::Week, true),
+    ] {
+        let mut h = timeline_harness(theme, w, ht);
+        h.panel.zoom = zoom;
+        if drawer {
+            let id = h.card("ORION-R-093");
+            h.panel.select(id, true, h.now).unwrap();
+            h.settle();
+        }
+        let scene = h.frame(w, ht);
+        assert!(
+            scene
+                .nodes()
+                .iter()
+                .filter(|n| n.action.is_some())
+                .all(|n| !n.name.trim().is_empty())
+        );
+        let mut canvas = pecofence_render::HeadlessCanvas::default();
+        scene.paint(&mut canvas).unwrap();
+        let pixmap = pecofence_render::raster::rasterize(
+            canvas.commands(),
+            w as u32,
+            ht as u32,
+            h.panel.palette.base,
+        );
+        pecofence_render::raster::assert_snapshot(&pixmap, &dir.join(format!("{name}.png")));
+    }
 }

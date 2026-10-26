@@ -6,7 +6,7 @@
 //! never paints over the fixed header and never reflows while it scrolls.
 
 #[path = "timeline.rs"]
-mod timeline;
+pub(super) mod timeline;
 pub use timeline::Zoom;
 
 use super::model::{self, DisplayColumn, Filter, Signal, Tone};
@@ -136,6 +136,8 @@ pub struct Input<'a> {
     pub scroll: f32,
     pub detail_scroll: f32,
     pub evidence: EvidenceView<'a>,
+    pub preview_event: Option<&'a str>,
+    pub preview_evidence: EvidenceView<'a>,
     pub selected_evidence: Option<&'a str>,
     pub status: Option<(&'a str, Option<Tone>)>,
     pub demo: Option<(usize, usize, &'a str)>,
