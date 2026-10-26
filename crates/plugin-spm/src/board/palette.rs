@@ -3,7 +3,7 @@
 
 use super::model::Tone;
 use pecofence_plugin_api::{ThemeSnapshot, paper};
-use spm_contracts::ProgressState;
+use spm_contracts::{BoardStage, ProgressState};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Palette {
@@ -70,6 +70,29 @@ impl Palette {
             chip_on_text: p.accent_ink,
             rule: paper::mix(p.card, p.ink, 0.1),
             skeleton: paper::mix(p.card, p.ink, 0.06),
+        }
+    }
+
+    /// Timeline's three terracotta steps use the same resolved paper accent.
+    pub(super) fn stage(&self, stage: BoardStage) -> [f32; 4] {
+        if self.hc {
+            return self.base;
+        }
+        match stage {
+            BoardStage::NotStarted | BoardStage::Unmapped => self.skeleton,
+            BoardStage::Implementation | BoardStage::Review => {
+                paper::mix(self.accent, self.base, 0.35)
+            }
+            BoardStage::Done => paper::mix(self.accent, self.primary, 0.35),
+            _ => self.accent,
+        }
+    }
+
+    pub(super) fn weekend(&self) -> [f32; 4] {
+        if self.hc {
+            self.base
+        } else {
+            paper::mix(self.base, self.primary, 0.035)
         }
     }
 

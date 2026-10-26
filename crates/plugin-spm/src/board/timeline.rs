@@ -1,0 +1,833 @@
+//! Delivery presentation only: all stage boundaries, due dates and dependencies
+//! come from the snapshot. Date arithmetic here maps them into view coordinates.
+use super::*;
+use chrono::{DateTime, Datelike, Duration, NaiveDate, TimeZone, Utc};
+use spm_contracts::{BoardStage, SourceSystem};
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Zoom {
+    #[default]
+    Week,
+    Month,
+    Quarter,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct Range {
+    pub from: DateTime<Utc>,
+    pub days: i64,
+}
+
+impl Range {
+    pub fn for_zoom(today: DateTime<Utc>, zoom: Zoom) -> Self {
+        let day = today.date_naive();
+        let from = match zoom {
+            Zoom::Week => {
+                day - Duration::days(i64::from(day.weekday().num_days_from_monday()) + 14)
+            }
+            _ => NaiveDate::from_ymd_opt(day.year(), day.month(), 1).unwrap_or(day),
+        };
+        let days = match zoom {
+            Zoom::Week => 35,
+            Zoom::Month => 61,
+            Zoom::Quarter => 92,
+        };
+        Self {
+            from: Utc.from_utc_datetime(&from.and_hms_opt(0, 0, 0).unwrap()),
+            days,
+        }
+    }
+    pub fn x(self, at: DateTime<Utc>, track: RectDip) -> f32 {
+        let fraction = (at - self.from).num_seconds() as f32 / (self.days * 86400) as f32;
+        track.x + fraction.clamp(0.0, 1.0) * track.w
+    }
+    fn contains(self, at: DateTime<Utc>) -> bool {
+        at >= self.from && at <= self.from + Duration::days(self.days)
+    }
+}
+
+fn date(at: DateTime<Utc>) -> String {
+    at.format("%m-%d").to_string()
+}
+
+fn label(b: &mut Builder, key: &str, r: RectDip, text: &str, size: f32, color: [f32; 4]) {
+    let (text, _) = b.fit.fit(text, size, 400, r.w, 1);
+    b.text(
+        key.into(),
+        r,
+        &text,
+        size,
+        400,
+        color,
+        TextAlign::MiddleLeading,
+    );
+}
+
+fn number(b: &mut Builder, key: &str, r: RectDip, text: &str) {
+    let (text, _) = b
+        .fit
+        .with_font(FontRole::Condensed)
+        .fit(text, 18.0, 700, r.w, 1);
+    b.push(
+        key.into(),
+        r,
+        "heading",
+        text.clone(),
+        text,
+        None,
+        style(
+            18.0,
+            700,
+            FontRole::Condensed,
+            b.pal.primary,
+            None,
+            0.0,
+            TextAlign::MiddleLeading,
+        ),
+    );
+}
+
+fn dashed(b: &mut Builder, key: &str, r: RectDip, ink: [f32; 4], vertical: bool) {
+    let length = if vertical { r.h } else { r.w };
+    for i in 0..(length / 8.0).ceil() as usize {
+        let d = i as f32 * 8.0;
+        let part = (length - d).min(4.0);
+        b.fill(
+            format!("{key}:{i}"),
+            if vertical {
+                rect(r.x, r.y + d, r.w, part)
+            } else {
+                rect(r.x + d, r.y, part, r.h)
+            },
+            ink,
+            0.0,
+        );
+    }
+}
+
+fn dashed_box(b: &mut Builder, key: &str, r: RectDip, ink: [f32; 4]) {
+    dashed(
+        b,
+        &format!("{key}:top"),
+        rect(r.x, r.y, r.w, 1.0),
+        ink,
+        false,
+    );
+    dashed(
+        b,
+        &format!("{key}:bottom"),
+        rect(r.x, r.y + r.h - 1.0, r.w, 1.0),
+        ink,
+        false,
+    );
+    dashed(
+        b,
+        &format!("{key}:left"),
+        rect(r.x, r.y, 1.0, r.h),
+        ink,
+        true,
+    );
+    dashed(
+        b,
+        &format!("{key}:right"),
+        rect(r.x + r.w - 1.0, r.y, 1.0, r.h),
+        ink,
+        true,
+    );
+}
+
+fn span(b: &mut Builder, key: &str, r: RectDip, stage: BoardStage, name: String) {
+    if r.w <= 0.0 {
+        return;
+    }
+    b.fill(key.into(), r, b.pal.stage(stage), 2.0);
+    if stage == BoardStage::NotStarted || b.pal.hc {
+        dashed_box(b, &format!("{key}:outline"), r, b.pal.primary);
+    }
+    b.push(
+        format!("{key}:name"),
+        r,
+        "img",
+        name,
+        String::new(),
+        None,
+        style(
+            12.0,
+            400,
+            BODY,
+            b.pal.primary,
+            None,
+            0.0,
+            TextAlign::TopLeading,
+        ),
+    );
+}
+
+fn blocked(b: &mut Builder, key: &str, r: RectDip) {
+    if r.w <= 0.0 {
+        return;
+    }
+    // Small staircase diagonals form hatching without a renderer-specific path.
+    for i in 0..(r.w / 7.0).ceil() as usize {
+        for y in 0..r.h as usize {
+            let x = i as f32 * 7.0 + y as f32 * 0.5;
+            if x + 1.0 <= r.w {
+                b.fill(
+                    format!("{key}:hatch:{i}:{y}"),
+                    rect(r.x + x, r.y + y as f32, 1.5, 1.0),
+                    b.pal.danger,
+                    0.0,
+                );
+            }
+        }
+    }
+}
+
+pub(super) fn workspace(b: &mut Builder, input: &Input, viewport: RectDip) {
+    let board = input.board.unwrap();
+    if input.evidence_open && input.detail_open {
+        b.out.mode = Mode::Detail;
+        b.button(
+            "timeline:back",
+            PAD,
+            4.0,
+            28.0,
+            None,
+            b.lang.t("Back to timeline"),
+            false,
+            Target::CloseDetail,
+            200.0,
+        );
+        detail(
+            b,
+            board,
+            input,
+            rect(PAD, 42.0, viewport.w - 2.0 * PAD, viewport.h - 50.0),
+        );
+        return;
+    }
+    b.out.mode = Mode::Board;
+    let mut x = PAD;
+    for (zoom, text) in [
+        (Zoom::Week, "Week"),
+        (Zoom::Month, "Month"),
+        (Zoom::Quarter, "Quarter"),
+    ] {
+        x += b.button(
+            &format!("zoom:{zoom:?}"),
+            x,
+            2.0,
+            26.0,
+            None,
+            b.lang.t(text),
+            input.zoom == zoom,
+            Target::Zoom(zoom),
+            120.0,
+        ) + 4.0;
+    }
+    let range = Range::for_zoom(input.now, input.zoom);
+    let chart_x = PAD + 260.0;
+    let track = rect(chart_x, 82.0, viewport.w - chart_x - PAD, 1.0);
+    let drawer_h = if input.detail_open && input.selected.is_some() {
+        182.0
+    } else {
+        0.0
+    };
+    let area = rect(
+        PAD,
+        100.0,
+        viewport.w - 2.0 * PAD,
+        viewport.h - 108.0 - drawer_h,
+    );
+    b.out.board = Some(area);
+    let cards = visible_cards(board, input.filter);
+    let mut y = area.y - input.scroll;
+    b.clip = Some(area);
+    // Guides are clipped to the scroll region; the axis remains fixed.
+    for day in 0..range.days {
+        let at = range.from + Duration::days(day);
+        let gx = range.x(at, track);
+        if input.zoom == Zoom::Week && at.weekday().num_days_from_monday() >= 5 {
+            b.fill(
+                format!("weekend:{day}"),
+                rect(gx, area.y, track.w / range.days as f32, area.h),
+                b.pal.weekend(),
+                0.0,
+            );
+        }
+        if at.weekday() == chrono::Weekday::Mon {
+            b.fill(
+                format!("guide:{day}"),
+                rect(gx, area.y, 1.0, area.h),
+                b.pal.rule,
+                0.0,
+            );
+        }
+    }
+    for (li, lane) in board.lanes.iter().enumerate() {
+        let items: Vec<_> = cards
+            .iter()
+            .filter(|c| c.card.swimlane == lane.swimlane)
+            .collect();
+        if items.is_empty() {
+            continue;
+        }
+        label(
+            b,
+            &format!("tl:lane:{li}"),
+            rect(PAD, y, 250.0, 26.0),
+            &lane_name(&lane.swimlane),
+            14.0,
+            b.pal.accent_ink,
+        );
+        b.hit(
+            format!("tl:lane:{li}:hit"),
+            rect(PAD, y, 250.0, 26.0),
+            "button",
+            lane_name(&lane.swimlane),
+            Target::ToggleLane(lane.swimlane.clone()),
+        );
+        y += 30.0;
+        if input.collapsed.contains(&lane.swimlane) {
+            continue;
+        }
+        for info in items
+            .iter()
+            .filter(|c| c.card.stage.stage != BoardStage::Done)
+        {
+            row(
+                b,
+                input,
+                info.card,
+                li,
+                y,
+                track,
+                range,
+                area.y + input.scroll,
+            );
+            y += 58.0;
+        }
+        let done: Vec<_> = items
+            .iter()
+            .filter(|c| c.card.stage.stage == BoardStage::Done)
+            .collect();
+        label(
+            b,
+            &format!("tl:done:{li}"),
+            rect(PAD, y, 250.0, 24.0),
+            &format!("✓ {} {}", b.lang.t("Done"), done.len()),
+            12.0,
+            b.pal.secondary,
+        );
+        // Each completed item gets its own named miniature in the lane's collapsed strip.
+        for info in done {
+            let c = info.card;
+            if let (Some(start), Some(end)) = (
+                c.started_at,
+                c.stage_history
+                    .iter()
+                    .find(|s| s.stage == BoardStage::Done)
+                    .map(|s| s.from),
+            ) {
+                let l = range.x(start, track);
+                let r = range.x(end, track);
+                span(
+                    b,
+                    &format!("done:{}", c.card_id.as_str()),
+                    rect(l, y + 4.0, r - l, 14.0),
+                    BoardStage::Done,
+                    format!(
+                        "{} ✓ {}",
+                        c.business_number.as_deref().unwrap_or(""),
+                        b.lang.t("Done")
+                    ),
+                );
+            }
+        }
+        y += 30.0;
+    }
+    b.out.board_content = (y + input.scroll - area.y).max(0.0);
+    for m in &board.milestones {
+        if range.contains(m.at) {
+            dashed(
+                b,
+                &format!("milestone:{}", m.id),
+                rect(range.x(m.at, track), area.y, 1.0, area.h),
+                b.pal.accent_ink,
+                true,
+            );
+        }
+    }
+    let today_x = range.x(input.now, track);
+    b.fill(
+        "today:line".into(),
+        rect(today_x, area.y, 2.0, area.h),
+        b.pal.accent,
+        0.0,
+    );
+    b.clip = None;
+    axis(b, input, board, track, range);
+    if input.detail_open
+        && let Some(card) = input.selected.and_then(|id| model::find(board, id))
+    {
+        drawer(
+            b,
+            input,
+            card,
+            rect(PAD, viewport.h - drawer_h, viewport.w - 2.0 * PAD, drawer_h),
+        );
+    }
+    tooltip(b, input, viewport);
+}
+
+fn axis(b: &mut Builder, input: &Input, board: &BoardSnapshot, track: RectDip, range: Range) {
+    for day in 0..range.days {
+        let at = range.from + Duration::days(day);
+        let tick = if input.zoom == Zoom::Quarter {
+            at.day() == 1
+        } else {
+            at.weekday() == chrono::Weekday::Mon
+        };
+        if tick {
+            let text = if input.zoom == Zoom::Quarter {
+                at.format("%Y-%m").to_string()
+            } else {
+                format!("W{} {}", at.iso_week().week(), date(at))
+            };
+            let x = range.x(at, track);
+            label(
+                b,
+                &format!("axis:{day}"),
+                rect(
+                    x + 3.0,
+                    76.0,
+                    (track.x + track.w - x - 3.0).min(110.0),
+                    22.0,
+                ),
+                &text,
+                12.0,
+                b.pal.secondary,
+            );
+        }
+    }
+    label(
+        b,
+        "today:tag",
+        rect(range.x(input.now, track) + 4.0, 30.0, 110.0, 22.0),
+        &format!("{} {}", b.lang.t("Today"), date(input.now)),
+        12.0,
+        b.pal.accent_ink,
+    );
+    for (i, m) in board.milestones.iter().enumerate() {
+        if range.contains(m.at) {
+            let x = range.x(m.at, track);
+            let text = format!("◆ {} {}", m.label, date(m.at));
+            label(
+                b,
+                &format!("milestone:{}:flag", m.id),
+                rect(
+                    x.min(track.x + track.w - 160.0),
+                    52.0 + (i % 2) as f32 * 0.0,
+                    160.0,
+                    22.0,
+                ),
+                &text,
+                12.0,
+                b.pal.accent_ink,
+            );
+        }
+    }
+    label(
+        b,
+        "tl:legend",
+        rect(PAD, 36.0, 260.0, 40.0),
+        &format!(
+            "○ {} · ▰ {} · ✓ {}",
+            b.lang.t("Not started"),
+            b.lang.t("Develop"),
+            b.lang.t("Done")
+        ),
+        11.0,
+        b.pal.secondary,
+    );
+}
+
+fn row(
+    b: &mut Builder,
+    input: &Input,
+    c: &BoardCard,
+    lane: usize,
+    y: f32,
+    track: RectDip,
+    range: Range,
+    origin: f32,
+) {
+    let key = format!("tl:{}", c.card_id.as_str());
+    let selected = input.selected == Some(&c.card_id);
+    if selected {
+        b.outline(
+            &format!("{key}:selected"),
+            rect(PAD, y, track.x + track.w - PAD, 56.0),
+            b.pal.accent,
+            1.5,
+            3.0,
+            b.pal.selected,
+        );
+    }
+    b.hit(
+        format!("{key}:hit"),
+        rect(PAD, y, track.x + track.w - PAD, 56.0),
+        "listitem",
+        format!(
+            "{} {} {}",
+            c.business_number.as_deref().unwrap_or(""),
+            c.title,
+            model::stage_label(c.stage.stage, b.lang)
+        ),
+        Target::Select(c.card_id.clone()),
+    );
+    b.out.nav.push(NavCard {
+        id: c.card_id.clone(),
+        column: 0,
+        lane,
+        y: y - origin,
+        h: 58.0,
+    });
+    number(
+        b,
+        &format!("{key}:number"),
+        rect(PAD + 4.0, y, 86.0, 25.0),
+        c.business_number.as_deref().unwrap_or(c.card_id.as_str()),
+    );
+    label(
+        b,
+        &format!("{key}:title"),
+        rect(PAD + 96.0, y, 154.0, 25.0),
+        &c.title,
+        12.0,
+        b.pal.primary,
+    );
+    let who = c
+        .assignee()
+        .map_or(b.lang.t("Unassigned"), |a| a.person.display_name.as_str());
+    label(
+        b,
+        &format!("{key}:who"),
+        rect(PAD + 4.0, y + 26.0, 246.0, 24.0),
+        who,
+        12.0,
+        b.pal.secondary,
+    );
+    for (i, s) in c.stage_history.iter().enumerate() {
+        let end = s.to.unwrap_or(input.now).min(input.now);
+        if end <= s.from {
+            continue;
+        }
+        let l = range.x(s.from, track);
+        let r = range.x(end, track);
+        span(
+            b,
+            &format!("{key}:span:{i}"),
+            rect(l, y + 5.0, r - l, 16.0),
+            s.stage,
+            format!(
+                "{} {} – {}",
+                model::stage_label(s.stage, b.lang),
+                date(s.from),
+                date(end)
+            ),
+        );
+    }
+    if let Some(schedule) = &c.schedule {
+        let l = range.x(input.now, track);
+        let r = range.x(schedule.due, track);
+        if r > l {
+            dashed_box(
+                b,
+                &format!("{key}:plan"),
+                rect(l, y + 5.0, r - l, 16.0),
+                b.pal.secondary,
+            );
+        }
+        b.fill(
+            format!("{key}:due"),
+            rect(r, y + 1.0, 2.0, 24.0),
+            b.pal.secondary,
+            0.0,
+        );
+        if let Some(base) = schedule.baseline_due.filter(|base| *base != schedule.due) {
+            dashed(
+                b,
+                &format!("{key}:baseline"),
+                rect(range.x(base, track), y + 1.0, 1.0, 24.0),
+                b.pal.secondary,
+                true,
+            );
+        }
+        for (i, blocker) in c.blockers.iter().enumerate() {
+            if let Some(since) = blocker.since {
+                let l = range.x(since, track);
+                let r = range.x(input.now, track);
+                blocked(
+                    b,
+                    &format!("{key}:blocked:{i}"),
+                    rect(l, y + 5.0, r - l, 16.0),
+                );
+            }
+            if let Some(expected) = blocker.expected_at {
+                let l = range.x(schedule.due, track);
+                let r = range.x(expected, track);
+                dashed(
+                    b,
+                    &format!("{key}:dependency:{i}"),
+                    rect(l.min(r), y + 15.0, (r - l).abs(), 2.0),
+                    b.pal.danger,
+                    false,
+                );
+                label(
+                    b,
+                    &format!("{key}:dependency:{i}:label"),
+                    rect(r.min(track.x + track.w - 160.0), y + 30.0, 160.0, 22.0),
+                    &format!("⊘ {} {}", b.lang.t("Expected"), date(expected)),
+                    12.0,
+                    b.pal.danger,
+                );
+            }
+        }
+    }
+    let status = if !c.blockers.is_empty() {
+        format!("⊘ {}", b.lang.t("Blocked"))
+    } else {
+        format!(
+            "{} {}",
+            if c.stage.stage == BoardStage::NotStarted {
+                "○"
+            } else {
+                "▰"
+            },
+            model::stage_label(c.stage.stage, b.lang)
+        )
+    };
+    label(
+        b,
+        &format!("{key}:stage"),
+        rect(track.x, y + 30.0, 155.0, 22.0),
+        &status,
+        11.0,
+        b.pal.secondary,
+    );
+    for (i, m) in c.event_marks.iter().enumerate() {
+        if !range.contains(m.at) {
+            continue;
+        }
+        let x = range.x(m.at, track);
+        let glyph = match m.system {
+            SourceSystem::Gerrit => "●",
+            SourceSystem::Meegle => "■",
+            SourceSystem::Jenkins => "▲",
+            SourceSystem::Lark => "◆",
+            SourceSystem::Jira => "◇",
+            SourceSystem::People => "○",
+        };
+        b.fill(
+            format!("{key}:event:{i}:bg"),
+            rect(x - 7.0, y + 5.0, 14.0, 16.0),
+            b.pal.base,
+            8.0,
+        );
+        b.text(
+            format!("{key}:event:{i}:glyph"),
+            rect(x - 7.0, y + 4.0, 14.0, 18.0),
+            glyph,
+            11.0,
+            600,
+            b.pal.primary,
+            TextAlign::Center,
+        );
+        b.hit(
+            format!("{key}:event:{i}"),
+            rect(x - 9.0, y + 2.0, 18.0, 24.0),
+            "button",
+            format!(
+                "{} {} {}",
+                date(m.at),
+                model::system_label(m.system),
+                b.lang.t("Open evidence")
+            ),
+            Target::Event(c.card_id.clone(), m.evidence_id.clone()),
+        );
+    }
+}
+
+fn drawer(b: &mut Builder, input: &Input, c: &BoardCard, r: RectDip) {
+    b.out.detail = Some(r);
+    b.fill("drawer:bg".into(), r, b.pal.card, 0.0);
+    number(
+        b,
+        "drawer:number",
+        rect(r.x + 10.0, r.y + 4.0, r.w - 60.0, 26.0),
+        c.business_number.as_deref().unwrap_or(""),
+    );
+    label(
+        b,
+        "drawer:title",
+        rect(r.x + 10.0, r.y + 32.0, r.w - 20.0, 24.0),
+        &c.title,
+        14.0,
+        b.pal.primary,
+    );
+    let mut parts = Vec::new();
+    for column in [
+        DisplayColumn::Todo,
+        DisplayColumn::Develop,
+        DisplayColumn::Verify,
+        DisplayColumn::Done,
+    ] {
+        let days: i64 = c
+            .stage_history
+            .iter()
+            .filter(|s| DisplayColumn::of(s.stage) == column)
+            .map(|s| {
+                (s.to.unwrap_or(input.now).min(input.now) - s.from)
+                    .num_days()
+                    .max(0)
+            })
+            .sum();
+        parts.push(format!(
+            "{} {} {}",
+            column.label(b.lang),
+            days,
+            b.lang.t("days")
+        ));
+    }
+    let blocked_days = c
+        .blockers
+        .iter()
+        .filter_map(|v| v.since)
+        .min()
+        .map_or(0, |since| (input.now - since).num_days().max(0));
+    parts.push(format!(
+        "{} {} {}",
+        b.lang.t("Blocked"),
+        blocked_days,
+        b.lang.t("days")
+    ));
+    if let Some(s) = &c.schedule {
+        parts.push(format!(
+            "{} {} {}",
+            b.lang.t("Days to due"),
+            (s.due.date_naive() - input.now.date_naive()).num_days(),
+            date(s.due)
+        ));
+    }
+    label(
+        b,
+        "drawer:stats",
+        rect(r.x + 10.0, r.y + 60.0, r.w - 20.0, 24.0),
+        &parts.join(" · "),
+        12.0,
+        b.pal.primary,
+    );
+    let next = c
+        .next_action
+        .as_ref()
+        .map_or(b.lang.t("No next action"), |n| n.text.as_str());
+    label(
+        b,
+        "drawer:next",
+        rect(r.x + 10.0, r.y + 86.0, r.w - 20.0, 24.0),
+        &format!("{}: {}", b.lang.t("Next action"), next),
+        12.0,
+        b.pal.accent_ink,
+    );
+    let notes = c
+        .blockers
+        .iter()
+        .map(|v| v.reason.as_str())
+        .chain(c.conflicts.iter().map(|v| v.explanation.as_str()))
+        .collect::<Vec<_>>()
+        .join(" · ");
+    let note = if notes.is_empty() {
+        c.stage.explanation.as_str()
+    } else {
+        notes.as_str()
+    };
+    label(
+        b,
+        "drawer:notes",
+        rect(r.x + 10.0, r.y + 110.0, r.w - 20.0, 24.0),
+        note,
+        12.0,
+        b.pal.secondary,
+    );
+    let w = b.button(
+        "drawer:evidence",
+        r.x + 10.0,
+        r.y + 142.0,
+        28.0,
+        None,
+        b.lang.t("Open evidence"),
+        true,
+        Target::OpenEvidence,
+        180.0,
+    );
+    b.button(
+        "drawer:board",
+        r.x + w + 18.0,
+        r.y + 142.0,
+        28.0,
+        None,
+        b.lang.t("Show on board"),
+        false,
+        Target::ShowOnBoard,
+        180.0,
+    );
+    b.button(
+        "drawer:close",
+        r.x + r.w - 44.0,
+        r.y + 4.0,
+        28.0,
+        None,
+        b.lang.t("Close"),
+        false,
+        Target::CloseDetail,
+        44.0,
+    );
+}
+
+fn tooltip(b: &mut Builder, input: &Input, viewport: RectDip) {
+    let Some(id) = input.selected_evidence else {
+        return;
+    };
+    let summary = match input.evidence {
+        EvidenceView::Loaded(e) => e
+            .items
+            .iter()
+            .find(|e| e.id == id)
+            .map_or(b.lang.t("Evidence unavailable"), |e| e.summary.as_str()),
+        EvidenceView::Failed(e) => e,
+        _ => b.lang.t("Loading evidence…"),
+    };
+    let w = (viewport.w - 32.0).min(480.0);
+    let y = if input.detail_open {
+        viewport.h - 252.0
+    } else {
+        viewport.h - 72.0
+    };
+    b.fill(
+        "event:tooltip:bg".into(),
+        rect(PAD, y, w, 64.0),
+        b.pal.card,
+        3.0,
+    );
+    let (text, lines) = b.fit.fit(summary, 12.0, 400, w - 20.0, 2);
+    b.text(
+        "event:tooltip".into(),
+        rect(PAD + 10.0, y + 8.0, w - 20.0, lines as f32 * b.line_h(12.0)),
+        &text,
+        12.0,
+        400,
+        b.pal.primary,
+        TextAlign::TopLeading,
+    );
+}

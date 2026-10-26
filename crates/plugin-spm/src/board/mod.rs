@@ -14,7 +14,7 @@ pub mod palette;
 pub mod text;
 
 use crate::{decode_event, encode_request};
-use layout::{BoardView, Draft, EvidenceView, Input, Layout, Mode, NavCard, Palette, Target};
+use layout::{BoardView, Draft, EvidenceView, Input, Layout, Mode, NavCard, Palette, Target, Zoom};
 use model::{DisplayColumn, Filter, Tone};
 use pecofence_plugin_api::design::{ContentScale, LayoutTracker};
 use pecofence_plugin_api::scene::{NodeStyle, Scene, SceneNode};
@@ -171,6 +171,8 @@ pub struct BoardPanel {
     cursor: BoardCursor,
     load_error: Option<String>,
     view: BoardView,
+    zoom: Zoom,
+    evidence_open: bool,
     selected: Option<RecordId>,
     detail_open: bool,
     filter: Filter,
@@ -256,6 +258,8 @@ impl BoardPanel {
             cursor: BoardCursor::default(),
             load_error: None,
             view: BoardView::default(),
+            zoom: Zoom::default(),
+            evidence_open: false,
             selected: None,
             detail_open: false,
             filter: Filter::default(),
@@ -655,8 +659,34 @@ impl BoardPanel {
     fn invoke(&mut self, target: Target, now: Instant) -> Result<PanelUpdate> {
         let lang = self.lang();
         match target {
+            Target::Zoom(zoom) => self.zoom = zoom,
+            Target::Event(id, evidence) => {
+                self.select(id, false, now)?;
+                self.selected_evidence = Some(evidence);
+                self.request_evidence(now, false)?;
+            }
+            Target::OpenEvidence => {
+                self.evidence_open = true;
+                self.detail_open = true;
+                self.request_evidence(now, false)?;
+            }
+            Target::ShowOnBoard => {
+                self.view = BoardView::Board;
+                self.detail_open = false;
+                self.evidence_open = false;
+                self.scroll = 0.0;
+                self.filter = Filter::default();
+                self.done_open = true;
+                self.collapsed.clear();
+                if let (Some(board), Some(id)) = (&self.board, &self.selected) {
+                    if let Some(card) = model::find(board, id) {
+                        self.tab = DisplayColumn::of(card.stage.stage);
+                    }
+                }
+            }
             Target::View(view) => {
                 self.view = view;
+                self.evidence_open = false;
                 self.scroll = 0.0;
                 self.detail_open = false;
             }
@@ -770,7 +800,10 @@ impl BoardPanel {
                     self.select(id, true, now)?;
                 }
             }
-            Target::CloseDetail => self.detail_open = false,
+            Target::CloseDetail => {
+                self.detail_open = false;
+                self.evidence_open = false;
+            }
             Target::ToggleLane(lane) => match self.collapsed.iter().position(|l| *l == lane) {
                 Some(i) => {
                     self.collapsed.remove(i);
@@ -840,6 +873,7 @@ impl BoardPanel {
             PanelKey::Escape => {
                 if self.detail_open {
                     self.detail_open = false;
+                    self.evidence_open = false;
                 } else if self.selected.is_some() {
                     self.selected = None;
                 } else {
@@ -1165,6 +1199,8 @@ impl BoardPanel {
             let layout_input = Input {
                 board: self.board.as_ref(),
                 view: self.view,
+                zoom: self.zoom,
+                evidence_open: self.evidence_open,
                 previous_error: self.load_error.as_deref(),
                 loading_hint: waiting
                     .then(|| lang.t("Waiting for SPM. It has not sent a board yet.")),

@@ -5,6 +5,10 @@
 //! and a text line is drawn only when it fits completely, so scrolled content
 //! never paints over the fixed header and never reflows while it scrolls.
 
+#[path = "timeline.rs"]
+mod timeline;
+pub use timeline::Zoom;
+
 use super::model::{self, DisplayColumn, Filter, Signal, Tone};
 pub use super::palette::Palette;
 use super::text::{BODY, Fitter, Lang, age, short_time};
@@ -34,6 +38,10 @@ const META: f32 = 12.0;
 #[derive(Clone, Debug, PartialEq)]
 pub enum Target {
     View(BoardView),
+    Zoom(Zoom),
+    Event(RecordId, String),
+    OpenEvidence,
+    ShowOnBoard,
     Refresh,
     CopySummary,
     RestartDemo,
@@ -115,6 +123,8 @@ pub enum Mode {
 pub struct Input<'a> {
     pub board: Option<&'a BoardSnapshot>,
     pub view: BoardView,
+    pub zoom: Zoom,
+    pub evidence_open: bool,
     pub previous_error: Option<&'a str>,
     pub loading_hint: Option<&'a str>,
     pub filter: &'a Filter,
@@ -484,6 +494,8 @@ pub fn build(input: &Input, viewport: RectDip, pal: &Palette, fit: &Fitter) -> L
     if input.capsule {
         b.out.mode = Mode::Capsule;
         capsule(&mut b, input, viewport);
+    } else if input.view == BoardView::Timeline && input.board.is_some() {
+        timeline::workspace(&mut b, input, content);
     } else if viewport.w < COMPACT_MAX_W || viewport.h < COMPACT_MAX_H {
         compact(&mut b, input, content);
     } else {
