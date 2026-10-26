@@ -345,12 +345,9 @@ impl App {
                 {
                     // Windows owns the MSIX startup task. A handoff to Windows
                     // Settings is not proof that the requested switch changed.
-                    shell::shell_execute(
-                        std::path::Path::new("ms-settings:startupapps"),
-                        None,
-                        None,
-                    )
-                    .map_err(|e| Rejection::Backend(e.to_string()))?;
+                    self.shell_port
+                        .open(std::path::Path::new("ms-settings:startupapps"), None, None)
+                        .map_err(|e| Rejection::Backend(e.to_string()))?;
                     return Err(Rejection::Backend(
                         pecofence_core::i18n::text(
                             "MSIX 启动由 Windows 管理，请在“启动应用”中更改。",
@@ -606,7 +603,7 @@ impl App {
             }
             if pecofence_platform::process::is_packaged() {
                 // Store installs: Windows owns the startup task, so hand the user the switch.
-                let _ = shell::shell_execute(
+                let _ = self.shell_port.open(
                     std::path::Path::new("ms-settings:startupapps"),
                     None,
                     None,

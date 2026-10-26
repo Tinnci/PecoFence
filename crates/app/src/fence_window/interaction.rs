@@ -151,7 +151,7 @@ impl Drop for CaptureReleaseBoundary<'_> {
         // UIA can call native providers while dispatching events. No view borrow
         // or snapshot lock may be held across this boundary.
         if let Some(publisher) = publisher {
-            publisher.flush_events();
+            pecofence_core::ports::AccessibilityNotifications::flush_events(&publisher);
         }
     }
 }

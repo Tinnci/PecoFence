@@ -10,6 +10,7 @@ pub mod i18n;
 pub mod model;
 pub mod order;
 pub mod portal;
+pub mod ports;
 pub mod rules;
 pub mod session;
 pub mod settings_protocol;

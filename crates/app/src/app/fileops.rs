@@ -55,6 +55,7 @@ impl App {
         } = op;
         let owner = owner.map(|h| h.0 as isize);
         let results = self.fileops_done.clone();
+        let shell_port = self.shell_port.clone();
         let control = self.control.hwnd().0 as isize;
         let spawned = std::thread::Builder::new()
             .name("pecofence-fileop".into())
@@ -62,10 +63,9 @@ impl App {
                 // The shell's copy engine wants an STA; its progress / conflict dialogs run on
                 // this thread, parented to the fence window.
                 let _sta = OleGuard::init();
-                let owner = owner.map(|h| HWND(h as *mut core::ffi::c_void));
-                let result =
-                    shell::transfer_to_folder(&paths, &dest, owner, copy, rename_on_collision)
-                        .map_err(|e| e.to_string());
+                let result = shell_port
+                    .transfer(&paths, &dest, owner, copy, rename_on_collision)
+                    .map_err(|e| e.to_string());
                 if let Ok(mut r) = results.lock() {
                     r.push((then, result));
                 }

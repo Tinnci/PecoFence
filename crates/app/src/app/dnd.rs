@@ -72,7 +72,7 @@ impl App {
         let mut failed = 0usize;
         let mut first_error = None;
         for p in paths {
-            match shell::create_shortcut(p, dir) {
+            match self.shell_port.create_shortcut(p, dir) {
                 Ok(lnk) => made.push(lnk),
                 Err(e) => {
                     tracing::warn!(error = %e, path = %p.display(), "creating shortcut failed");
@@ -83,7 +83,7 @@ impl App {
         }
         if let (Some(t), Some(e)) = (&self.tray, first_error) {
             let text = if failed == 1 {
-                pecofence_core::i18n::format("无法创建快捷方式：{0}", &[e.to_string()])
+                pecofence_core::i18n::format("无法创建快捷方式：{0}", std::slice::from_ref(&e))
             } else {
                 pecofence_core::i18n::format(
                     "无法创建 {0} 个快捷方式：{1}",

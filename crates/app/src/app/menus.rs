@@ -707,7 +707,7 @@ impl App {
                 CMD_FENCE_PASTE,
                 pecofence_core::i18n::text("粘贴\tCtrl+V"),
                 false,
-                !clipboard::has_file_list(),
+                !self.clipboard_port.has_files(),
             );
         }
         menu.submenu(
@@ -916,7 +916,7 @@ impl App {
             }
             CMD_FENCE_OPEN_FOLDER => {
                 if let Some(dir) = portal_dir.as_deref() {
-                    let _ = shell::shell_execute(dir, None, None);
+                    let _ = self.shell_port.open(dir, None, None);
                 }
             }
             CMD_PORTAL_UP => self.portal_up(fence),

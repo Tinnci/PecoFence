@@ -26,7 +26,6 @@ use pecofence_core::{
     ContainerId, ContentId, FenceId, FenceKind, ItemId, ItemKey, PeekHotkey, ShowDesktopSetting,
     SortMode, Spacing, ThemeSetting, TitleSize, ViewLayout, ZOrderSetting,
 };
-use pecofence_platform::clipboard;
 use pecofence_platform::frameclock::FrameClock;
 use pecofence_platform::hotkey;
 use pecofence_platform::shell;
@@ -167,6 +166,8 @@ pub struct Args {
 }
 
 pub struct App {
+    shell_port: Arc<dyn pecofence_core::ports::ShellPort>,
+    clipboard_port: Arc<dyn pecofence_core::ports::ClipboardPort>,
     state: AppState,
     writer: Writer,
     _holiday_updates: crate::holiday_updates::Updater,
@@ -979,6 +980,8 @@ impl App {
                 && pecofence_core::brand::var_os("PECOFENCE_HOLIDAY_OFFLINE").is_none(),
         );
         let mut app = App {
+            shell_port: Arc::new(pecofence_platform::ports::WindowsShell),
+            clipboard_port: Arc::new(pecofence_platform::ports::WindowsClipboard),
             _holiday_updates: holiday_updates,
             state,
             writer,

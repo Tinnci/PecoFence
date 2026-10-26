@@ -289,7 +289,7 @@ impl App {
             }
             return;
         }
-        match shell::rename_no_replace(&old, &new) {
+        match self.shell_port.rename(&old, &new) {
             Ok(()) => {
                 tracing::info!(from = %old.display(), to = %new.display(), "item renamed");
                 if self.state.is_portal_item(item) {
@@ -404,7 +404,9 @@ impl App {
                 .window_for(fence)
                 .map(|w| w.hwnd())
                 .unwrap_or(self.control.hwnd());
-            let _ = shell::shell_execute(&p, Some("properties"), Some(owner));
+            let _ = self
+                .shell_port
+                .open(&p, Some("properties"), Some(owner.0 as isize));
         }
     }
 
@@ -419,7 +421,7 @@ impl App {
         } else {
             HashSet::new()
         };
-        self.cut_clip_seq = clipboard::sequence();
+        self.cut_clip_seq = self.clipboard_port.sequence();
         self.push_cut_items();
     }
 
@@ -433,7 +435,7 @@ impl App {
 
     /// The clipboard changed since our cut (Explorer pasted, another copy happened): undim.
     pub(super) fn check_cut_clipboard(&mut self) {
-        if !self.cut_items.is_empty() && clipboard::sequence() != self.cut_clip_seq {
+        if !self.cut_items.is_empty() && self.clipboard_port.sequence() != self.cut_clip_seq {
             self.cut_items.clear();
             self.push_cut_items();
         }
@@ -451,7 +453,7 @@ impl App {
         {
             return;
         }
-        let Some((paths, cut)) = clipboard::file_list() else {
+        let Some((paths, cut)) = self.clipboard_port.files() else {
             return;
         };
         let dest = self.state.portal_path(fence).or_else(shell::user_desktop);
@@ -485,7 +487,7 @@ impl App {
         }));
         if cut {
             // Explorer empties the clipboard after pasting cut files.
-            clipboard::clear();
+            self.clipboard_port.clear();
             self.cut_items.clear();
             self.push_cut_items();
         }
@@ -509,7 +511,7 @@ impl App {
         else {
             return;
         };
-        match shell::shell_execute(&path, None, None) {
+        match self.shell_port.open(&path, None, None) {
             Ok(()) => self.note_launched(item),
             Err(e) => tracing::warn!(path = %path.display(), error = %e, "launch failed"),
         }

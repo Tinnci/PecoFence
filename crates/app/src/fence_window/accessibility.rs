@@ -249,7 +249,10 @@ impl FenceViewState {
             .ok_or(pecofence_plugin_api::Error::Closed)?;
         let update = panel.invoke_committed(control, action, layout_revision)?;
         if let Some(id) = notice {
-            self.accessibility.queue_invoked(&id);
+            pecofence_core::ports::AccessibilityNotifications::queue_invoked(
+                &self.accessibility,
+                &id,
+            );
         }
         self.apply_plugin_update(update)
             .map_err(|error| pecofence_plugin_api::Error::Backend(error.to_string()))
