@@ -14,9 +14,7 @@ pub enum ThemeMode {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Theme {
     pub mode: ThemeMode,
-    pub high_contrast: bool,
-    pub liquid_glass: bool,
-    pub paper: bool,
+    pub material_kind: crate::material::MaterialKind,
     /// Fence body fill when no wallpaper backdrop is available (SolidBackgroundFillColorBase).
     pub solid_fill: ColorF,
     /// Extra translucent layer drawn over the Mica-like backdrop (LayerFillColorDefault).
@@ -72,22 +70,29 @@ pub struct Theme {
 }
 
 impl Theme {
+    pub fn material(&self) -> &'static dyn crate::material::Material {
+        self.material_kind.strategy()
+    }
     pub const fn is_high_contrast(&self) -> bool {
-        self.high_contrast
+        matches!(
+            self.material_kind,
+            crate::material::MaterialKind::HighContrast
+        )
     }
     pub const fn is_liquid_glass(&self) -> bool {
-        self.liquid_glass
+        matches!(
+            self.material_kind,
+            crate::material::MaterialKind::LiquidGlass
+        )
     }
     pub const fn is_paper(&self) -> bool {
-        self.paper
+        matches!(self.material_kind, crate::material::MaterialKind::Paper)
     }
 
     pub const fn dark() -> Self {
         Self {
             mode: ThemeMode::Dark,
-            high_contrast: false,
-            liquid_glass: false,
-            paper: false,
+            material_kind: crate::material::MaterialKind::Fluent,
             solid_fill: ColorF::from_rgba8(0x1B, 0x25, 0x2C, 0xF2),
             layer_fill: ColorF::from_rgba8(0x31, 0x40, 0x48, 0x4D),
             glass_layer_fill: ColorF::from_rgba8(0xFF, 0xFF, 0xFF, 0x09),
@@ -119,9 +124,7 @@ impl Theme {
     pub const fn light() -> Self {
         Self {
             mode: ThemeMode::Light,
-            high_contrast: false,
-            liquid_glass: false,
-            paper: false,
+            material_kind: crate::material::MaterialKind::Fluent,
             solid_fill: ColorF::from_rgba8(0xF4, 0xF7, 0xF8, 0xF2),
             layer_fill: ColorF::from_rgba8(0xFF, 0xFF, 0xFF, 0x80),
             glass_layer_fill: ColorF::from_rgba8(0xFF, 0xFF, 0xFF, 0x40),
@@ -184,9 +187,7 @@ impl Theme {
         let color = |[r, g, b]: [u8; 3]| ColorF::from_rgba8(r, g, b, 255);
         let bg = color(window);
         let fg = color(text);
-        self.high_contrast = true;
-        self.liquid_glass = false;
-        self.paper = false;
+        self.material_kind = crate::material::MaterialKind::HighContrast;
         self.solid_fill = bg;
         self.layer_fill = bg;
         self.glass_layer_fill = bg;
@@ -220,8 +221,7 @@ impl Theme {
         if self.is_high_contrast() {
             return self;
         }
-        self.liquid_glass = true;
-        self.paper = false;
+        self.material_kind = crate::material::MaterialKind::LiquidGlass;
         self.corner_radius = 24.0;
         self.glass_rim_top = ColorF::from_rgba8(0xFF, 0xFF, 0xFF, 0xCD);
         match self.mode {
@@ -257,8 +257,7 @@ impl Theme {
         if self.is_high_contrast() {
             return self;
         }
-        self.liquid_glass = false;
-        self.paper = true;
+        self.material_kind = crate::material::MaterialKind::Paper;
         self.corner_radius = 8.0;
         self.title_fill = ColorF::from_rgba8(0, 0, 0, 0);
         self.divider = ColorF::from_rgba8(0, 0, 0, 0);
@@ -351,11 +350,8 @@ impl Theme {
         tint: Option<ColorF>,
         previous_dark_text: Option<bool>,
     ) -> Self {
-        if self.liquid_glass {
-            self.sample_glass_ink(image, opacity, tint, previous_dark_text)
-        } else {
-            self
-        }
+        self.material()
+            .ink(self, image, opacity, tint, previous_dark_text)
     }
 
     pub(crate) fn sample_glass_ink(

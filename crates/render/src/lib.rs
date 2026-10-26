@@ -46,6 +46,8 @@ pub mod gpu_glass;
 #[cfg(windows)]
 pub mod liquid_glass;
 #[cfg(windows)]
+pub mod material;
+#[cfg(windows)]
 mod material_shaders;
 #[cfg(windows)]
 pub mod motion;

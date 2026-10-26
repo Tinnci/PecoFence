@@ -205,7 +205,11 @@ impl FenceViewState {
     /// Liquid Glass and Paper render on the GPU from the shared wallpaper at the exact
     /// window rectangle; Fluent draws a CPU acrylic crop.
     pub(super) fn gpu_material(&self) -> bool {
-        self.theme.is_liquid_glass() || self.theme.is_paper()
+        matches!(
+            self.theme.material().backdrop_source(),
+            pecofence_render::material::BackdropSource::Lens
+                | pecofence_render::material::BackdropSource::Sheet
+        )
     }
 
     /// Per-window paper fibre variation, stable across restarts.

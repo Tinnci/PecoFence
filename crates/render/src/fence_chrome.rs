@@ -560,16 +560,10 @@ pub const ROLLED_COUNT_W: f32 = 64.0;
 /// Nested controls share the fence's radius, inset from its outer edge and limited by
 /// their own height. This also applies to hover, pressed, drop and merge feedback.
 pub fn header_control_radius(theme: &Theme, rect: Rect) -> f32 {
-    if theme.is_liquid_glass() {
-        (theme.corner_radius - 4.0)
-            .max(0.0)
-            .min(rect.width().min(rect.height()) * 0.5)
-    } else {
-        4.0
-    }
+    theme.material().control_radius(theme, rect)
 }
 pub fn tab_text_padding(theme: &Theme) -> f32 {
-    if theme.is_liquid_glass() { 24.0 } else { 16.0 }
+    theme.material().tab_padding()
 }
 
 /// Counts are secondary: a short collapsed fence must retain space for its title/tabs.
@@ -770,13 +764,7 @@ struct StateBrushes {
 impl StateBrushes {
     fn new(session: &DrawingSession<'_>, theme: &Theme) -> Result<Self> {
         Ok(Self {
-            hover: session.create_solid_brush(
-                (if theme.is_high_contrast() {
-                    ColorF::TRANSPARENT
-                } else {
-                    theme.subtle_hover
-                }),
-            )?,
+            hover: session.create_solid_brush(theme.material().hover_fill(theme))?,
             sel_fill: session.create_solid_brush(theme.selection_fill)?,
             sel_stroke: session.create_solid_brush(theme.selection_stroke)?,
             focus_outer: session.create_solid_brush(theme.focus_outer)?,
@@ -849,7 +837,7 @@ fn draw_item_state(
 ) {
     let drop = drop_target.clamp(0.0, 1.0);
     let sel = selection.max(drop);
-    if theme.is_high_contrast() {
+    if theme.material().outline_feedback() {
         if hover > 0.0 || sel > 0.0 || pressed {
             let ink = theme.text_primary;
             if let Some((r, stroke)) = design::contrast_outline(
@@ -877,17 +865,9 @@ fn draw_item_state(
         let subtle_a = hover.clamp(0.0, 1.0) * (1.0 - sel);
         if subtle_a > 0.0 {
             let subtle = if pressed {
-                (if theme.is_high_contrast() {
-                    ColorF::TRANSPARENT
-                } else {
-                    theme.subtle_pressed
-                })
+                theme.material().pressed_fill(theme)
             } else {
-                (if theme.is_high_contrast() {
-                    ColorF::TRANSPARENT
-                } else {
-                    theme.subtle_hover
-                })
+                theme.material().hover_fill(theme)
             };
             brushes.hover.set_color(with_alpha(subtle, subtle_a));
             session.fill_rounded_rect(&RoundedRect::uniform(rect, 4.0), &brushes.hover);
@@ -1019,14 +999,7 @@ fn draw_item_icon(
         }
         session.fill_rounded_rect(
             &RoundedRect::uniform(Rect::from_xywh(x, y, size, size), tile_radius),
-            brushes.a(with_alpha(
-                (if theme.is_high_contrast() {
-                    ColorF::TRANSPARENT
-                } else {
-                    theme.subtle_pressed
-                }),
-                a,
-            )),
+            brushes.a(with_alpha(theme.material().pressed_fill(theme), a)),
         );
     };
     if let Some(img) = icon {
@@ -1108,22 +1081,12 @@ fn draw_scrollbar(
             if pressed {
                 // WinUI ScrollBarButtonBackgroundPressed is SubtleFillColorTertiary (the plan's
                 // ControlStrong is the glyph colour, not the plate).
-                let bg = session.create_solid_brush(with_alpha(
-                    (if theme.is_high_contrast() {
-                        ColorF::TRANSPARENT
-                    } else {
-                        theme.subtle_pressed
-                    }),
-                    parts,
-                ))?;
+                let bg = session
+                    .create_solid_brush(with_alpha(theme.material().pressed_fill(theme), parts))?;
                 session.fill_rounded_rect(&RoundedRect::uniform(box_r, 4.0), &bg);
             } else if hover > 0.0 {
                 let bg = session.create_solid_brush(with_alpha(
-                    (if theme.is_high_contrast() {
-                        ColorF::TRANSPARENT
-                    } else {
-                        theme.subtle_hover
-                    }),
+                    theme.material().hover_fill(theme),
                     hover * parts,
                 ))?;
                 session.fill_rounded_rect(&RoundedRect::uniform(box_r, 4.0), &bg);
@@ -1355,12 +1318,12 @@ impl FenceChrome {
             chrome.controls
         };
         session.clear(ColorF::TRANSPARENT);
-        let backdrop = if theme.is_high_contrast() {
+        let backdrop = if theme.material().outline_feedback() {
             Backdrop::Solid
         } else {
             backdrop
         };
-        let style = if theme.is_high_contrast() {
+        let style = if theme.material().outline_feedback() {
             FenceStyle {
                 tint: None,
                 title_color: None,
@@ -1369,7 +1332,7 @@ impl FenceChrome {
         } else {
             style
         };
-        let opacity = if theme.is_high_contrast() {
+        let opacity = if theme.material().outline_feedback() {
             1.0
         } else {
             opacity
@@ -1378,7 +1341,11 @@ impl FenceChrome {
         // Per-fence opacity: <1 thins the layer over the glass, >1 adds a solid veil on top.
         let opacity = opacity.clamp(0.4, 1.8);
         let outer = Rect::from_xywh(0.0, 0.0, width, height);
-        let radius = theme.corner_radius.min(width.min(height) * 0.5).max(0.0);
+        let radius = theme
+            .material()
+            .corner_radius(theme)
+            .min(width.min(height) * 0.5)
+            .max(0.0);
         // The crop may cover more than the surface (height animation): the surface clips it.
         let crop_rect =
             |crop: &BackdropCrop<'_>| Rect::from_xywh(0.0, 0.0, width, crop.height.max(height));
@@ -1391,15 +1358,7 @@ impl FenceChrome {
                 scale,
                 seed,
             } => {
-                let surface = if theme.is_paper() {
-                    crate::gpu_glass::Surface::Paper {
-                        color: theme.paper_rgb(),
-                        translucency: theme.paper_translucency(),
-                        seed,
-                    }
-                } else {
-                    crate::gpu_glass::Surface::Glass
-                };
+                let surface = theme.material().gpu_surface(theme, seed);
                 let result = material.borrow_mut().draw(
                     session,
                     &mut bitmaps.glass_wallpaper,
@@ -1415,7 +1374,7 @@ impl FenceChrome {
                     if windows_canvas::is_device_lost(error.code()) {
                         return Err(error);
                     }
-                    let fallback = if theme.is_paper() {
+                    let fallback = if theme.material().is_sheet() {
                         theme.solid_fill
                     } else if theme.text_primary.r > 0.5 {
                         Theme::dark().solid_fill
@@ -1424,7 +1383,7 @@ impl FenceChrome {
                     };
                     let fill = session.create_solid_brush(fallback)?;
                     session.fill_rounded_rect(&RoundedRect::uniform(outer, radius), &fill);
-                } else if !theme.is_paper() {
+                } else if !theme.material().is_sheet() {
                     let mut c = theme.glass_layer_fill;
                     c.a *= opacity.min(1.0);
                     let layer = session.create_solid_brush(c)?;
@@ -1440,7 +1399,7 @@ impl FenceChrome {
                 session.fill_rounded_rect(&RoundedRect::uniform(outer, radius), &layer);
             }
             Backdrop::Glass(crop, scale) if crop.image.width > 0 && crop.image.height > 0 => {
-                let bitmap = if theme.is_liquid_glass() {
+                let bitmap = if theme.material().uses_lens() {
                     match bitmaps.get(crop.key) {
                         Some(bitmap) => bitmap,
                         None => {
@@ -1456,7 +1415,7 @@ impl FenceChrome {
                 } else {
                     bitmaps.get_or_upload(session, crop.key, crop.image)?
                 };
-                let alpha = if theme.is_liquid_glass() {
+                let alpha = if theme.material().uses_lens() {
                     opacity.min(1.0)
                 } else {
                     glass_alpha(opacity)
@@ -1467,7 +1426,7 @@ impl FenceChrome {
                 let layer = session.create_solid_brush(c)?;
                 session.fill_rounded_rect(&RoundedRect::uniform(outer, radius), &layer);
                 // Acrylic grain: tile the noise texture at exactly one texel per device pixel.
-                if !theme.is_liquid_glass() {
+                if !theme.material().uses_lens() {
                     let tile = crate::backdrop::noise_tile();
                     let noise = bitmaps.get_or_upload(session, NOISE_BITMAP_KEY, tile)?;
                     let step = crate::backdrop::NOISE_TILE_PX as f32 / scale.max(0.5);
@@ -1506,12 +1465,12 @@ impl FenceChrome {
         // A quiet, directional reflection gives sampled materials depth without adding a
         // header band. It is static at rest; existing title hover tweens gently lift the edge.
         // Paper takes neither the glass sheen nor the lit glass rim: a plain ink hairline.
-        let sampled_material = !theme.is_paper()
+        let sampled_material = !theme.material().is_sheet()
             && matches!(
                 backdrop,
                 Backdrop::Glass(..) | Backdrop::MicaLike(..) | Backdrop::GpuGlass { .. }
             );
-        if sampled_material && !theme.is_liquid_glass() {
+        if sampled_material && !theme.material().uses_lens() {
             let sheen = session.create_linear_gradient(
                 Vector2::new(0.0, 0.0),
                 Vector2::new(width, height.max(1.0)),
@@ -1525,7 +1484,7 @@ impl FenceChrome {
         }
 
         // Title-row reveal ("title on hover"); a rolled fence always shows its title row.
-        let title_a = if rolled_up || theme.is_high_contrast() {
+        let title_a = if rolled_up || theme.material().outline_feedback() {
             1.0
         } else {
             state.title.clamp(0.0, 1.0)
@@ -1537,19 +1496,13 @@ impl FenceChrome {
         let pill_a = state.hover * title_a;
         if pill_a > 0.0 && tabs.len() <= 1 {
             let row = Rect::from_xywh(4.0, 4.0, (width - 8.0).max(0.0), (title_h - 8.0).max(0.0));
-            if theme.is_high_contrast() {
+            if theme.material().outline_feedback() {
                 draw_contrast_outline(session, theme, px, row, false)?;
-            } else if theme.is_liquid_glass() {
+            } else if theme.material().uses_lens() {
                 draw_header_glass(session, &backdrop, theme, scale, 1, row, 0.28, pill_a)?;
             } else {
-                let pill = session.create_solid_brush(with_alpha(
-                    (if theme.is_high_contrast() {
-                        ColorF::TRANSPARENT
-                    } else {
-                        theme.subtle_hover
-                    }),
-                    pill_a,
-                ))?;
+                let pill = session
+                    .create_solid_brush(with_alpha(theme.material().hover_fill(theme), pill_a))?;
                 session.fill_rounded_rect(
                     &RoundedRect::uniform(row, header_control_radius(theme, row)),
                     &pill,
@@ -1561,7 +1514,7 @@ impl FenceChrome {
         // like Windows 11's elevation border: both top corners match, then it falls off to
         // the bottom colour within the corner radius band.
         let rim_rect = px.ring(outer, radius);
-        if sampled_material && theme.is_liquid_glass() {
+        if sampled_material && theme.material().uses_lens() {
             crate::liquid_glass::draw_reflection(
                 session, theme, scale, width, height, pill_a, opacity,
             )?;
@@ -1592,7 +1545,7 @@ impl FenceChrome {
             let wash = session.create_solid_brush(with_alpha(theme.drop_highlight, a))?;
             let row = Rect::from_xywh(4.0, 4.0, (width - 8.0).max(0.0), (title_h - 8.0).max(0.0));
             let radius = header_control_radius(theme, row);
-            if theme.is_liquid_glass() {
+            if theme.material().uses_lens() {
                 draw_header_glass(session, &backdrop, theme, scale, 2, row, 0.5, a)?;
             }
             session.fill_rounded_rect(&RoundedRect::uniform(row, radius), &wash);
@@ -1670,7 +1623,11 @@ impl FenceChrome {
         };
         let title_reserve = title_reserve + commands_w + status_w;
         if tabs.len() > 1 {
-            let inset = if theme.is_liquid_glass() { 4.0 } else { 6.0 };
+            let inset = if theme.material().uses_lens() {
+                4.0
+            } else {
+                6.0
+            };
             let pill_h = (title_h - inset * 2.0).max(0.0);
             let tab_rect = |x, w| Rect::from_xywh(x, inset, w, pill_h);
             let marker = |x: f32, w: f32, color: ColorF, alpha: f32| -> Result<()> {
@@ -1693,7 +1650,7 @@ impl FenceChrome {
                 Ok(())
             };
             // Paint the resting lenses first; the moving selection must stay above them.
-            if theme.is_liquid_glass() {
+            if theme.material().uses_lens() {
                 for tab in tabs.iter().filter(|t| !t.dragging) {
                     if tab.active && pill.is_none() {
                         continue;
@@ -1712,7 +1669,7 @@ impl FenceChrome {
             }
             if let Some((x, w)) = pill {
                 let rect = tab_rect(x, w);
-                if theme.is_liquid_glass() {
+                if theme.material().uses_lens() {
                     draw_header_glass(session, &backdrop, theme, scale, 0, rect, 0.78, title_a)?;
                 } else {
                     let fill =
@@ -1722,7 +1679,7 @@ impl FenceChrome {
                         &fill,
                     );
                 }
-                let color = if theme.is_high_contrast() {
+                let color = if theme.material().outline_feedback() {
                     theme.text_primary
                 } else {
                     tabs.iter()
@@ -1747,7 +1704,7 @@ impl FenceChrome {
                 let rect = tab_rect(tab.x, tab.w);
                 let radius = header_control_radius(theme, rect);
                 if pill.is_none() && (tab.active || tab.pressed || tab.dragging) {
-                    if theme.is_liquid_glass() {
+                    if theme.material().uses_lens() {
                         let amount = if tab.pressed && !tab.dragging {
                             0.94
                         } else {
@@ -1759,18 +1716,14 @@ impl FenceChrome {
                             session.create_solid_brush(with_alpha(theme.tab_active_fill, ta))?;
                         session.fill_rounded_rect(&RoundedRect::uniform(rect, radius), &fill);
                     }
-                } else if !theme.is_liquid_glass() && tab.hover > 0.0 && !tab.active {
+                } else if !theme.material().uses_lens() && tab.hover > 0.0 && !tab.active {
                     let fill = session.create_solid_brush(with_alpha(
-                        (if theme.is_high_contrast() {
-                            ColorF::TRANSPARENT
-                        } else {
-                            theme.subtle_hover
-                        }),
+                        theme.material().hover_fill(theme),
                         tab.hover * ta,
                     ))?;
                     session.fill_rounded_rect(&RoundedRect::uniform(rect, radius), &fill);
                 }
-                if theme.is_high_contrast() && (tab.hover > 0.0 || tab.pressed) {
+                if theme.material().outline_feedback() && (tab.hover > 0.0 || tab.pressed) {
                     draw_contrast_outline(session, theme, px, rect, tab.pressed)?;
                 }
                 if tab.drop_target > 0.0 {
@@ -1781,11 +1734,11 @@ impl FenceChrome {
                     session.draw_rounded_rect(&px.ring(rect, radius), &ring, px.hair());
                 }
                 // A persistent marker identifies the selected tab even on uniform wallpaper.
-                if theme.is_high_contrast() && pill.is_none() && tab.active {
+                if theme.material().outline_feedback() && pill.is_none() && tab.active {
                     marker(tab.x, tab.w, theme.text_primary, ta)?;
-                } else if !theme.is_high_contrast() && pill.is_none() && tab.active {
+                } else if !theme.material().outline_feedback() && pill.is_none() && tab.active {
                     marker(tab.x, tab.w, tab.color.unwrap_or(theme.accent), ta)?;
-                } else if !theme.is_high_contrast()
+                } else if !theme.material().outline_feedback()
                     && !tab.active
                     && let Some(color) = tab.color
                 {
@@ -1796,7 +1749,7 @@ impl FenceChrome {
                 let fitted = crate::text::fit_width(tab.title, &fmt, (tab.w - padding).max(0.0));
                 let foreground =
                     header_foreground(&backdrop, theme, tab.key, rect, scale, opacity, style.tint);
-                let color = if theme.is_high_contrast() {
+                let color = if theme.material().outline_feedback() {
                     theme.text_primary
                 } else if tab.pressed && !tab.dragging {
                     foreground.text_tertiary
@@ -1827,9 +1780,11 @@ impl FenceChrome {
                 // Up (Segoe Fluent E74A) in a 28×28 box: transparent at rest, SubtleFill
                 // fading in on hover, SubtleFillColorTertiary + tertiary glyph while pressed.
                 let box_r = control.draw_rect();
-                if theme.is_high_contrast() && (state.up_pressed || state.up_hover > 0.0) {
+                if theme.material().outline_feedback() && (state.up_pressed || state.up_hover > 0.0)
+                {
                     draw_contrast_outline(session, theme, px, box_r, state.up_pressed)?;
-                } else if theme.is_liquid_glass() && (state.up_pressed || state.up_hover > 0.0) {
+                } else if theme.material().uses_lens() && (state.up_pressed || state.up_hover > 0.0)
+                {
                     draw_header_glass(
                         session,
                         &backdrop,
@@ -1847,21 +1802,13 @@ impl FenceChrome {
                     )?;
                 } else if state.up_pressed {
                     let pill = session.create_solid_brush(with_alpha(
-                        (if theme.is_high_contrast() {
-                            ColorF::TRANSPARENT
-                        } else {
-                            theme.subtle_pressed
-                        }),
+                        theme.material().pressed_fill(theme),
                         title_a,
                     ))?;
                     session.fill_rounded_rect(&RoundedRect::uniform(box_r, 4.0), &pill);
                 } else if state.up_hover > 0.0 {
                     let pill = session.create_solid_brush(with_alpha(
-                        (if theme.is_high_contrast() {
-                            ColorF::TRANSPARENT
-                        } else {
-                            theme.subtle_hover
-                        }),
+                        theme.material().hover_fill(theme),
                         state.up_hover * title_a,
                     ))?;
                     session.fill_rounded_rect(&RoundedRect::uniform(box_r, 4.0), &pill);
@@ -1968,7 +1915,7 @@ impl FenceChrome {
             self.draw_caption_buttons(session, theme, px, title_a, controls)?;
             return Ok(());
         }
-        let chevron_a = if theme.is_high_contrast() || rolled_up || roll_t > 0.0 {
+        let chevron_a = if theme.material().outline_feedback() || rolled_up || roll_t > 0.0 {
             1.0
         } else {
             state.hover.clamp(0.0, 1.0)
@@ -1980,9 +1927,11 @@ impl FenceChrome {
             let box_r = control.draw_rect();
             let foreground =
                 header_foreground(&backdrop, theme, 7, box_r, scale, opacity, style.tint);
-            if theme.is_high_contrast() && (state.chevron_pressed || state.chevron_hover > 0.0) {
+            if theme.material().outline_feedback()
+                && (state.chevron_pressed || state.chevron_hover > 0.0)
+            {
                 draw_contrast_outline(session, theme, px, box_r, state.chevron_pressed)?;
-            } else if theme.is_liquid_glass()
+            } else if theme.material().uses_lens()
                 && (state.chevron_pressed || state.chevron_hover > 0.0)
             {
                 draw_header_glass(
@@ -2002,21 +1951,13 @@ impl FenceChrome {
                 )?;
             } else if state.chevron_pressed {
                 let pill = session.create_solid_brush(with_alpha(
-                    (if theme.is_high_contrast() {
-                        ColorF::TRANSPARENT
-                    } else {
-                        theme.subtle_pressed
-                    }),
+                    theme.material().pressed_fill(theme),
                     chevron_a,
                 ))?;
                 session.fill_rounded_rect(&RoundedRect::uniform(box_r, 4.0), &pill);
             } else if state.chevron_hover > 0.0 {
                 let pill = session.create_solid_brush(with_alpha(
-                    (if theme.is_high_contrast() {
-                        ColorF::TRANSPARENT
-                    } else {
-                        theme.subtle_hover
-                    }),
+                    theme.material().hover_fill(theme),
                     state.chevron_hover * chevron_a,
                 ))?;
                 session.fill_rounded_rect(&RoundedRect::uniform(box_r, 4.0), &pill);
@@ -2056,7 +1997,11 @@ impl FenceChrome {
         alpha: f32,
         controls: &[TitleControl],
     ) -> Result<()> {
-        let alpha = alpha.max(if theme.is_high_contrast() { 1.0 } else { 0.0 });
+        let alpha = alpha.max(if theme.material().outline_feedback() {
+            1.0
+        } else {
+            0.0
+        });
         if alpha <= 0.0 {
             return Ok(());
         }
@@ -2069,7 +2014,7 @@ impl FenceChrome {
             let hover = control.state.hover > 0.0;
             let pressed = control.state.pressed;
             let close = button == CaptionButton::Close;
-            if theme.is_high_contrast() && (hover || pressed) {
+            if theme.material().outline_feedback() && (hover || pressed) {
                 draw_contrast_outline(session, theme, px, box_r, pressed)?;
             } else if close && (hover || pressed) {
                 let fill = session.create_solid_brush(with_alpha(
@@ -2078,27 +2023,15 @@ impl FenceChrome {
                 ))?;
                 session.fill_rect(&box_r, &fill);
             } else if pressed {
-                let fill = session.create_solid_brush(with_alpha(
-                    (if theme.is_high_contrast() {
-                        ColorF::TRANSPARENT
-                    } else {
-                        theme.subtle_pressed
-                    }),
-                    alpha,
-                ))?;
+                let fill = session
+                    .create_solid_brush(with_alpha(theme.material().pressed_fill(theme), alpha))?;
                 session.fill_rect(&box_r, &fill);
             } else if hover {
-                let fill = session.create_solid_brush(with_alpha(
-                    (if theme.is_high_contrast() {
-                        ColorF::TRANSPARENT
-                    } else {
-                        theme.subtle_hover
-                    }),
-                    alpha,
-                ))?;
+                let fill = session
+                    .create_solid_brush(with_alpha(theme.material().hover_fill(theme), alpha))?;
                 session.fill_rect(&box_r, &fill);
             }
-            let ink = if close && (hover || pressed) && !theme.is_high_contrast() {
+            let ink = if close && (hover || pressed) && !theme.material().outline_feedback() {
                 ColorF::from_rgba8(0xFF, 0xFF, 0xFF, 0xFF)
             } else if pressed {
                 theme.text_secondary
@@ -2150,25 +2083,15 @@ impl FenceChrome {
                 opacity,
                 style.tint,
             );
-            if theme.is_high_contrast() && (command.pressed || command.hover > 0.0) {
+            if theme.material().outline_feedback() && (command.pressed || command.hover > 0.0) {
                 draw_contrast_outline(session, theme, px, box_r, command.pressed)?;
             } else if command.pressed {
-                let pill = session.create_solid_brush(with_alpha(
-                    (if theme.is_high_contrast() {
-                        ColorF::TRANSPARENT
-                    } else {
-                        theme.subtle_pressed
-                    }),
-                    alpha,
-                ))?;
+                let pill = session
+                    .create_solid_brush(with_alpha(theme.material().pressed_fill(theme), alpha))?;
                 session.fill_rounded_rect(&RoundedRect::uniform(box_r, 4.0), &pill);
             } else if command.hover > 0.0 {
                 let pill = session.create_solid_brush(with_alpha(
-                    (if theme.is_high_contrast() {
-                        ColorF::TRANSPARENT
-                    } else {
-                        theme.subtle_hover
-                    }),
+                    theme.material().hover_fill(theme),
                     command.hover * alpha,
                 ))?;
                 session.fill_rounded_rect(&RoundedRect::uniform(box_r, 4.0), &pill);
@@ -2205,7 +2128,7 @@ impl FenceChrome {
                 ChromeSeverity::Warning => "\u{E7BA} ",
                 ChromeSeverity::Error => "\u{E783} ",
             };
-            let color = if theme.is_high_contrast() {
+            let color = if theme.material().outline_feedback() {
                 theme.text_primary
             } else {
                 pecofence_plugin_api::paper::status_ink(severity, dark).map_or(
@@ -2268,7 +2191,7 @@ impl FenceChrome {
         let secondary = session.create_solid_brush(theme.text_secondary)?;
         let cols = rows.columns;
         let header_h = rows.header_h;
-        let halo = if theme.is_liquid_glass() {
+        let halo = if theme.material().uses_lens() {
             Some(session.create_solid_brush(ColorF::TRANSPARENT)?)
         } else {
             None
@@ -2536,21 +2459,11 @@ impl FenceChrome {
                     .find(|(c, _)| *c == col)
                     .map_or(0.0, |(_, a)| *a);
                 if rows.header_pressed == Some(col) {
-                    let b = session.create_solid_brush(
-                        (if theme.is_high_contrast() {
-                            ColorF::TRANSPARENT
-                        } else {
-                            theme.subtle_pressed
-                        }),
-                    )?;
+                    let b = session.create_solid_brush(theme.material().pressed_fill(theme))?;
                     session.fill_rounded_rect(&cell, &b);
                 } else if hover > 0.0 {
                     let b = session.create_solid_brush(with_alpha(
-                        (if theme.is_high_contrast() {
-                            ColorF::TRANSPARENT
-                        } else {
-                            theme.subtle_hover
-                        }),
+                        theme.material().hover_fill(theme),
                         hover,
                     ))?;
                     session.fill_rounded_rect(&cell, &b);
@@ -2670,7 +2583,7 @@ impl FenceChrome {
         if !content.group_headers.is_empty() {
             let line = session.create_solid_brush(theme.stroke)?;
             // The same local halo the labels get over mixed wallpaper.
-            let halo = if theme.is_liquid_glass() {
+            let halo = if theme.material().uses_lens() {
                 Some(session.create_solid_brush(if theme.text_secondary.r > 0.5 {
                     ColorF::new(0.0, 0.0, 0.0, 0.28)
                 } else {
@@ -2874,7 +2787,7 @@ impl FenceChrome {
         } else {
             resting
         };
-        if theme.is_liquid_glass() {
+        if theme.material().uses_lens() {
             // A local halo protects labels over mixed light/dark wallpaper. It does not
             // frost or darken the glass between icons.
             let halo = if theme.text_primary.r > 0.5 {
