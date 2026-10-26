@@ -360,47 +360,6 @@
     "next_cursor": null
   },
   {
-    "card_id": "meegle:acme/orion/story/88190",
-    "revision": 41,
-    "items": [
-      {
-        "id": "ev:g-4711-ps1",
-        "source": {
-          "system": "gerrit",
-          "tenant": "review.acme",
-          "project": "launcher",
-          "record_kind": "patchset",
-          "record_id": "4711/1"
-        },
-        "field_locator": "revisions.1.commit.author",
-        "source_time": "2026-10-14T03:20:00Z",
-        "observed_at": "2026-10-26T02:14:00Z",
-        "summary": "Change 4711 patch set 1 authored by Morgan; touches regional-feature and search-position configuration",
-        "relationship_ids": [
-          "rel-090-contact"
-        ]
-      },
-      {
-        "id": "ev:m-88190",
-        "source": {
-          "system": "meegle",
-          "tenant": "acme",
-          "project": "orion",
-          "record_kind": "story",
-          "record_id": "88190"
-        },
-        "field_locator": "fields.description",
-        "source_time": "2026-10-25T09:00:00Z",
-        "observed_at": "2026-10-26T01:40:00Z",
-        "summary": "Follow-up of ORION-R-101 created by Taylor; no owner",
-        "relationship_ids": [
-          "rel-090-contact"
-        ]
-      }
-    ],
-    "next_cursor": null
-  },
-  {
     "card_id": "meegle:acme/orion/story/88196",
     "revision": 41,
     "items": [
@@ -474,7 +433,7 @@
         "field_locator": "fields.status",
         "source_time": "2026-10-22T03:00:00Z",
         "observed_at": "2026-10-26T01:40:00Z",
-        "summary": "Vendor issue 77104 (BSP drop 2026.11) is open; due 11-05",
+        "summary": "Vendor issue 77104 (BSP drop 2026.11) is open; expected 11-08",
         "relationship_ids": []
       }
     ],
@@ -780,6 +739,211 @@
         "summary": "Regression failed on build 1190: Search box hidden after rotation",
         "relationship_ids": [
           "rel-124-verified"
+        ]
+      }
+    ],
+    "next_cursor": null
+  },
+  {
+    "card_id": "meegle:acme/orion/story/done-080",
+    "revision": 41,
+    "items": [
+      {
+        "id": "ev:m-88196-owner",
+        "source": {
+          "system": "meegle",
+          "tenant": "acme",
+          "project": "orion",
+          "record_kind": "story",
+          "record_id": "88196"
+        },
+        "field_locator": "workflow.nodes.develop.owners",
+        "source_time": "2026-10-12T02:00:00Z",
+        "observed_at": "2026-10-26T01:40:00Z",
+        "summary": "Meegle develop node owner set to Kai",
+        "relationship_ids": [
+          "rel-096-meegle"
+        ]
+      },
+      {
+        "id": "ev:m-88196-accept",
+        "source": {
+          "system": "meegle",
+          "tenant": "acme",
+          "project": "orion",
+          "record_kind": "story",
+          "record_id": "88196"
+        },
+        "field_locator": "workflow.nodes.accept.finished",
+        "source_time": "2026-10-23T08:00:00Z",
+        "observed_at": "2026-10-26T01:40:00Z",
+        "summary": "Taylor completes the acceptance node",
+        "relationship_ids": [
+          "rel-096-verified"
+        ]
+      }
+    ],
+    "next_cursor": null
+  },
+  {
+    "card_id": "meegle:acme/orion/story/done-081",
+    "revision": 41,
+    "items": [
+      {
+        "id": "ev:m-88196-owner",
+        "source": {
+          "system": "meegle",
+          "tenant": "acme",
+          "project": "orion",
+          "record_kind": "story",
+          "record_id": "88196"
+        },
+        "field_locator": "workflow.nodes.develop.owners",
+        "source_time": "2026-10-12T02:00:00Z",
+        "observed_at": "2026-10-26T01:40:00Z",
+        "summary": "Meegle develop node owner set to Kai",
+        "relationship_ids": [
+          "rel-096-meegle"
+        ]
+      },
+      {
+        "id": "ev:m-88196-accept",
+        "source": {
+          "system": "meegle",
+          "tenant": "acme",
+          "project": "orion",
+          "record_kind": "story",
+          "record_id": "88196"
+        },
+        "field_locator": "workflow.nodes.accept.finished",
+        "source_time": "2026-10-23T08:00:00Z",
+        "observed_at": "2026-10-26T01:40:00Z",
+        "summary": "Taylor completes the acceptance node",
+        "relationship_ids": [
+          "rel-096-verified"
+        ]
+      }
+    ],
+    "next_cursor": null
+  },
+  {
+    "card_id": "meegle:acme/orion/story/done-090",
+    "revision": 41,
+    "items": [
+      {
+        "id": "ev:m-88196-owner",
+        "source": {
+          "system": "meegle",
+          "tenant": "acme",
+          "project": "orion",
+          "record_kind": "story",
+          "record_id": "88196"
+        },
+        "field_locator": "workflow.nodes.develop.owners",
+        "source_time": "2026-10-12T02:00:00Z",
+        "observed_at": "2026-10-26T01:40:00Z",
+        "summary": "Meegle develop node owner set to Kai",
+        "relationship_ids": [
+          "rel-096-meegle"
+        ]
+      },
+      {
+        "id": "ev:m-88196-accept",
+        "source": {
+          "system": "meegle",
+          "tenant": "acme",
+          "project": "orion",
+          "record_kind": "story",
+          "record_id": "88196"
+        },
+        "field_locator": "workflow.nodes.accept.finished",
+        "source_time": "2026-10-23T08:00:00Z",
+        "observed_at": "2026-10-26T01:40:00Z",
+        "summary": "Taylor completes the acceptance node",
+        "relationship_ids": [
+          "rel-096-verified"
+        ]
+      }
+    ],
+    "next_cursor": null
+  },
+  {
+    "card_id": "meegle:acme/orion/story/done-110",
+    "revision": 41,
+    "items": [
+      {
+        "id": "ev:m-88196-owner",
+        "source": {
+          "system": "meegle",
+          "tenant": "acme",
+          "project": "orion",
+          "record_kind": "story",
+          "record_id": "88196"
+        },
+        "field_locator": "workflow.nodes.develop.owners",
+        "source_time": "2026-10-12T02:00:00Z",
+        "observed_at": "2026-10-26T01:40:00Z",
+        "summary": "Meegle develop node owner set to Kai",
+        "relationship_ids": [
+          "rel-096-meegle"
+        ]
+      },
+      {
+        "id": "ev:m-88196-accept",
+        "source": {
+          "system": "meegle",
+          "tenant": "acme",
+          "project": "orion",
+          "record_kind": "story",
+          "record_id": "88196"
+        },
+        "field_locator": "workflow.nodes.accept.finished",
+        "source_time": "2026-10-23T08:00:00Z",
+        "observed_at": "2026-10-26T01:40:00Z",
+        "summary": "Taylor completes the acceptance node",
+        "relationship_ids": [
+          "rel-096-verified"
+        ]
+      }
+    ],
+    "next_cursor": null
+  },
+  {
+    "card_id": "meegle:acme/orion/story/done-111",
+    "revision": 41,
+    "items": [
+      {
+        "id": "ev:m-88196-owner",
+        "source": {
+          "system": "meegle",
+          "tenant": "acme",
+          "project": "orion",
+          "record_kind": "story",
+          "record_id": "88196"
+        },
+        "field_locator": "workflow.nodes.develop.owners",
+        "source_time": "2026-10-12T02:00:00Z",
+        "observed_at": "2026-10-26T01:40:00Z",
+        "summary": "Meegle develop node owner set to Kai",
+        "relationship_ids": [
+          "rel-096-meegle"
+        ]
+      },
+      {
+        "id": "ev:m-88196-accept",
+        "source": {
+          "system": "meegle",
+          "tenant": "acme",
+          "project": "orion",
+          "record_kind": "story",
+          "record_id": "88196"
+        },
+        "field_locator": "workflow.nodes.accept.finished",
+        "source_time": "2026-10-23T08:00:00Z",
+        "observed_at": "2026-10-26T01:40:00Z",
+        "summary": "Taylor completes the acceptance node",
+        "relationship_ids": [
+          "rel-096-verified"
         ]
       }
     ],

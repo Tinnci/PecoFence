@@ -267,6 +267,7 @@ fn blocked_work_lists_its_blocker_and_stays_in_progress() {
             dependency: None,
             contact: None,
             since: None,
+            expected_at: None,
             evidence: vec!["ev:l-reply".into()],
         });
     });
@@ -337,4 +338,56 @@ fn evidence_is_time_ordered() {
     let mut evidence: CardEvidenceResponse = serde_json::from_str(R102_EVIDENCE).unwrap();
     evidence.items.swap(0, 3);
     assert!(evidence.validate().is_err());
+}
+
+#[test]
+fn delivery_fields_default_for_older_payloads() {
+    let mut value: serde_json::Value = serde_json::from_str(AFTER_REPLY).unwrap();
+    value.as_object_mut().unwrap().remove("milestones");
+    for card in value["cards"].as_array_mut().unwrap() {
+        for key in ["schedule", "stage_history", "event_marks"] {
+            card.as_object_mut().unwrap().remove(key);
+        }
+    }
+    let parsed: BoardSnapshot = serde_json::from_value(value).unwrap();
+    parsed.validate().unwrap();
+    assert!(parsed.milestones.is_empty());
+    assert!(parsed
+        .cards
+        .iter()
+        .all(|c| c.schedule.is_none() && c.stage_history.is_empty() && c.event_marks.is_empty()));
+}
+
+#[test]
+fn delivery_spans_are_ordered_nonoverlapping_and_open_only_at_end() {
+    for text in [
+        include_str!("../fixtures/invalid/board-stage-overlap.json"),
+        include_str!("../fixtures/invalid/board-event-marks-13.json"),
+    ] {
+        let parsed: BoardSnapshot = serde_json::from_str(text).unwrap();
+        assert!(parsed.validate().is_err());
+    }
+    let mut b = board(AFTER_REPLY);
+    let c = &mut b.cards[0];
+    let mut span = c.stage_history[0].clone();
+    span.to = Some(span.from + chrono::Duration::days(2));
+    c.stage_history = vec![span.clone(), span.clone()];
+    assert!(c.validate().is_err());
+    c.stage_history[1].from += chrono::Duration::days(2);
+    c.stage_history[1].to = None;
+    c.validate().unwrap();
+    c.stage_history[0].to = Some(c.stage_history[0].from);
+    assert!(c.validate().is_err());
+    c.stage_history.clear();
+    c.event_marks = vec![
+        EventMark {
+            at: span.from,
+            system: SourceSystem::Lark,
+            evidence_id: "e".into()
+        };
+        12
+    ];
+    c.validate().unwrap();
+    c.event_marks[0].evidence_id.clear();
+    assert!(c.validate().is_err());
 }

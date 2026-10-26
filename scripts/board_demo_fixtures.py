@@ -277,7 +277,7 @@ def r093(step: int) -> dict:
     ev_owner = evidence("ev:m-88193-owner", s, "workflow.nodes.develop.owners", "2026-10-16T02:00:00Z", EARLY,
                         "Meegle develop node owner set to Riley")
     ev_block = evidence("ev:m-77104", dep, "fields.status", "2026-10-22T03:00:00Z", EARLY,
-                        "Vendor issue 77104 (BSP drop 2026.11) is open; due 11-05")
+                        "Vendor issue 77104 (BSP drop 2026.11) is open; expected 11-08")
     relationships = [assigned_meegle("rel-093-meegle", "riley", s, "2026-10-16T02:00:00Z", ev_owner)]
     blockers = [{"reason": "Waiting for the vendor BSP drop 2026.11 (issue 77104)", "dependency": dep,
                  "contact": person("avery"), "since": "2026-10-22T03:00:00Z", "evidence": [ev_block]}]
@@ -477,8 +477,59 @@ def sources(step: int) -> list[dict]:
     return result
 
 
+# Approved timeline projection; dates are backend fixture data, never UI guesses.
+def timeline_projection(cards: list[dict], step: int) -> None:
+    date = lambda md: "2026-" + md + "T00:00:00Z"
+    data = {
+        "101": ("11-04", None, [("10-14", "not_started")]),
+        "102": ("11-06", None, [("10-22", "not_started")]),
+        "103": ("10-30", "10-28", [("10-15", "implementation"), ("10-25", "regression")]),
+        "104": ("11-10", None, [("10-22", "not_started")]),
+        "087": ("10-28", None, [("10-05", "implementation"), ("10-20", "regression")]),
+        "099": ("11-03", None, [("10-21", "implementation")]),
+        "093": ("10-31", None, [("10-14", "implementation")]),
+        "108": ("11-05", None, [("10-20", "implementation")]),
+        "112": ("11-02", None, [("10-19", "implementation")]),
+        "124": ("10-27", "10-24", [("10-16", "implementation"), ("10-23", "regression")]),
+    }
+    for c in cards:
+        n = c["business_number"][-3:]
+        due, baseline, spans = data.get(n, ("11-10", None, [("10-22", c["stage"]["stage"])]))
+        # Preserve the original scripted R-102 assignment/start and R-108 acceptance.
+        if n in ("101", "102") and step > 0:
+            spans = spans + [("10-27", c["stage"]["stage"])]
+        if n == "108" and step == 2:
+            spans = spans + [("10-27", "done")]
+        c["schedule"] = {"due": date(due), "baseline_due": date(baseline) if baseline else None,
+                         "basis": c["source"]}
+        c["stage_history"] = [{"stage": stage, "from": date(md),
+                               "to": date(spans[i+1][0]) if i+1 < len(spans) else None}
+                              for i, (md, stage) in enumerate(spans)]
+        ids = sorted({e for r in c["relationships"] for e in r["evidence"]}
+                     | {e for b in c["blockers"] for e in b["evidence"]})
+        c["event_marks"] = [{"at": EVIDENCE[e][2], "system": EVIDENCE[e][0]["system"], "evidence_id": e}
+                            for e in ids if EVIDENCE[e][2] <= STEPS[step]["computed_at"]][:12]
+        for blocker in c["blockers"]:
+            blocker["since"] = date("10-18")
+            blocker["expected_at"] = date("11-08")
+    # Completed requirements appear as small strips, grouped by model.
+    cards[:] = [c for c in cards if c["business_number"] != "ORION-R-090"]
+    for n, lane, start, end in [("080", IR, "10-12", "10-19"), ("081", IR, "10-13", "10-21"),
+                                ("090", PRO, "10-14", "10-22"), ("110", LITE, "10-12", "10-18"),
+                                ("111", LITE, "10-15", "10-23")]:
+        c = copy.deepcopy(next(c for c in cards if c["business_number"] == "ORION-R-096"))
+        c.update(card_id="meegle:acme/orion/story/done-" + n, source=story("done-" + n),
+                 business_number="ORION-R-" + n, title="Completed delivery " + n, swimlane=lane,
+                 schedule={"due": date(end), "baseline_due": None, "basis": story("done-" + n)},
+                 started_at=date(start),
+                 stage_history=[{"stage": "implementation", "from": date(start), "to": date(end)},
+                                {"stage": "done", "from": date(end), "to": None}], event_marks=[])
+        cards.append(c)
+
+
 def snapshot(step: int) -> dict:
     cards = orion_tasks(step) + [make(step) for make in EXTRA]
+    timeline_projection(cards, step)
     for c in cards:
         c["swimlane"] = copy.deepcopy(c["swimlane"])
     return {
@@ -495,6 +546,7 @@ def snapshot(step: int) -> dict:
         "lanes": lane_counts(cards),
         "totals_complete": step != 2,
         "cards": cards,
+        "milestones": base.milestones(),
         "next_cursor": None,
     }
 

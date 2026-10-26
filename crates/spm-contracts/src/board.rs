@@ -320,6 +320,8 @@ pub struct Blocker {
     pub dependency: Option<SourceRef>,
     pub contact: Option<PersonRef>,
     pub since: Option<DateTime<Utc>>,
+    #[serde(default)]
+    pub expected_at: Option<DateTime<Utc>>,
     pub evidence: Vec<String>,
 }
 
@@ -338,6 +340,41 @@ pub struct Conflict {
     pub explanation: String,
 }
 
+/// Backend-owned delivery dates. The panel must not infer a schedule.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CardSchedule {
+    pub due: DateTime<Utc>,
+    #[serde(default)]
+    pub baseline_due: Option<DateTime<Utc>>,
+    pub basis: SourceRef,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct StageSpan {
+    pub stage: BoardStage,
+    pub from: DateTime<Utc>,
+    pub to: Option<DateTime<Utc>>,
+}
+
+/// Bounded pointers into GetCardEvidence, never copies of evidence text.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EventMark {
+    pub at: DateTime<Utc>,
+    pub system: SourceSystem,
+    pub evidence_id: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Milestone {
+    pub id: String,
+    pub label: String,
+    pub at: DateTime<Utc>,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BoardCard {
@@ -350,6 +387,12 @@ pub struct BoardCard {
     pub column: SummaryColumn,
     pub stage: StageProjection,
     pub started_at: Option<DateTime<Utc>>,
+    #[serde(default)]
+    pub schedule: Option<CardSchedule>,
+    #[serde(default)]
+    pub stage_history: Vec<StageSpan>,
+    #[serde(default)]
+    pub event_marks: Vec<EventMark>,
     pub current_assignee: Option<String>,
     pub relationships: Vec<Relationship>,
     pub progress: CardProgress,
@@ -394,6 +437,31 @@ impl BoardCard {
             }
         }
         self.validate_stage()?;
+        for (i, span) in self.stage_history.iter().enumerate() {
+            if span.to.is_some_and(|to| to <= span.from) {
+                return Err(invalid(
+                    "stage_history",
+                    "a span must have positive duration",
+                ));
+            }
+            if i > 0 && self.stage_history[i - 1].to.is_none_or(|to| to > span.from) {
+                return Err(invalid(
+                    "stage_history",
+                    "must be ordered and non-overlapping; open span is last",
+                ));
+            }
+        }
+        if self.event_marks.len() > 12
+            || self
+                .event_marks
+                .iter()
+                .any(|m| m.evidence_id.trim().is_empty())
+        {
+            return Err(invalid(
+                "event_marks",
+                "at most 12 nonempty evidence pointers",
+            ));
+        }
         if let Some(id) = &self.current_assignee {
             let assignee = self
                 .relationship(id)
@@ -541,6 +609,8 @@ pub struct BoardSnapshot {
     pub lanes: Vec<LaneSummary>,
     pub totals_complete: bool,
     pub cards: Vec<BoardCard>,
+    #[serde(default)]
+    pub milestones: Vec<Milestone>,
     pub next_cursor: Option<PageCursor>,
 }
 
@@ -559,6 +629,18 @@ impl BoardSnapshot {
             ));
         }
         validate_cards(&self.cards)?;
+        let mut milestone_ids = BTreeSet::new();
+        for milestone in &self.milestones {
+            if milestone.id.trim().is_empty()
+                || milestone.label.trim().is_empty()
+                || !milestone_ids.insert(&milestone.id)
+            {
+                return Err(invalid(
+                    "milestones",
+                    "unique nonempty ids and nonempty labels required",
+                ));
+            }
+        }
         let mut lanes = BTreeSet::new();
         for lane in &self.lanes {
             if !lanes.insert(&lane.swimlane) {

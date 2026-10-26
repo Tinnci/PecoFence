@@ -236,6 +236,9 @@ def card(number: int, *, started: bool, relationships: list[dict], assignee: str
         "column": "doing" if started else "todo",
         "stage": stage,
         "started_at": "2026-10-27T06:00:00Z" if started else None,
+        "schedule": {"due": "2026-11-06T00:00:00Z", "baseline_due": None, "basis": story(number)},
+        "stage_history": [{"stage": stage["stage"], "from": workflow["source_time"], "to": None}],
+        "event_marks": [],
         "current_assignee": assignee,
         "relationships": relationships,
         "progress": progress(linked),
@@ -270,6 +273,11 @@ def sources(meegle_at: str, gerrit_at: str, people_at: str) -> list[dict]:
     ]
 
 
+def milestones() -> list[dict]:
+    return [{"id": "code-freeze", "label": "Code freeze", "at": "2026-11-06T00:00:00Z"},
+            {"id": "ir-release", "label": "IR release", "at": "2026-11-13T00:00:00Z"}]
+
+
 def snapshot(revision: int, computed_at: str, cards: list[dict], counts: dict, src: list[dict]) -> dict:
     return {
         "project_id": "orion",
@@ -286,6 +294,7 @@ def snapshot(revision: int, computed_at: str, cards: list[dict], counts: dict, s
                    "counts": {"todo": 0, "doing": 0, "done": 0, "unclassified": 0, "blocked": 0} | counts}],
         "totals_complete": True,
         "cards": cards,
+        "milestones": milestones(),
         "next_cursor": None,
     }
 
@@ -367,6 +376,12 @@ def main() -> None:
         "orion-after-meegle.json": after_meegle(),
         "orion-r102-evidence.json": evidence_r102(),
     })
+    invalid_history = after_reply()
+    invalid_history["cards"][0]["stage_history"] *= 2
+    invalid_marks = after_reply()
+    invalid_marks["cards"][0]["event_marks"] = [{"at": LARK_SEEN, "system": "lark", "evidence_id": "ev:l-reply"}] * 13
+    write(OUT.parent / "invalid", {"board-stage-overlap.json": invalid_history,
+                                    "board-event-marks-13.json": invalid_marks})
     import board_demo_fixtures
 
     write(board_demo_fixtures.OUT, board_demo_fixtures.build())
