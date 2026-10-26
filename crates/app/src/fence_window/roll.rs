@@ -39,9 +39,9 @@ pub(super) fn show_with_fade(view: &ViewCell, hwnd: HWND, entrance: bool) {
         let mut guard = view.borrow_mut();
         match guard.as_mut() {
             // A retired window is on its way out: nothing may bring it back.
-            Some(v) if v.retired => return,
+            Some(v) if v.animation.retired => return,
             // Visible and not mid fade-out: nothing to do.
-            Some(v) if visible && !matches!(v.vis_fade, Some(VisFade::Hiding { .. })) => {
+            Some(v) if visible && !matches!(v.animation.vis_fade, Some(VisFade::Hiding { .. })) => {
                 return;
             }
             Some(v) => v.prepare_fade_in(entrance),
@@ -51,10 +51,11 @@ pub(super) fn show_with_fade(view: &ViewCell, hwnd: HWND, entrance: bool) {
     if !visible {
         desktop::show_no_activate(hwnd);
         if let Some(v) = view.borrow_mut().as_mut()
-            && v.plugin_panel
+            && v.panel_host
+                .plugin_panel
                 .as_ref()
                 .is_some_and(|panel| panel.invalidation.is_pending())
-            && !v.rolled_up
+            && !v.animation.rolled_up
         {
             let _ = v.redraw_content();
         }
@@ -87,7 +88,7 @@ pub(super) fn hide_with_fade(view: &ViewCell, hwnd: HWND, exit: bool, destroy: b
     let (animated, shadow, cancel) = {
         let mut guard = view.borrow_mut();
         match guard.as_mut() {
-            Some(v) if !destroy && matches!(v.vis_fade, Some(VisFade::Hiding { .. })) => {
+            Some(v) if !destroy && matches!(v.animation.vis_fade, Some(VisFade::Hiding { .. })) => {
                 return true;
             }
             Some(v) => {
@@ -139,7 +140,7 @@ impl FenceViewState {
             return;
         }
         let now = Instant::now();
-        if let Some(t) = self.shadow_uploaded
+        if let Some(t) = self.animation.shadow_uploaded
             && now.duration_since(t).as_millis() < SHADOW_MIN_INTERVAL_MS
         {
             // Too soon after the previous upload: let the body render at full rate and refresh
@@ -154,13 +155,13 @@ impl FenceViewState {
         window::kill_timer(self.hwnd, TIMER_SHADOW);
         let r = window::window_rect(self.hwnd);
         self.shadow.update(r, self.dpi);
-        self.shadow_uploaded = Some(Instant::now());
+        self.animation.shadow_uploaded = Some(Instant::now());
     }
 
     /// The window height is being animated (roll-up / expand or an auto-height settle): the
     /// content surface is frozen and only the chrome and the shadow follow the bottom edge.
     pub(super) fn height_animating(&self) -> bool {
-        self.roll_anim.is_some() || self.height_anim.is_some()
+        self.animation.roll_anim.is_some() || self.animation.height_anim.is_some()
     }
 
     /// The rolled state the chrome should show: the end state of a roll in flight, else the
@@ -169,8 +170,8 @@ impl FenceViewState {
     /// end so persistence and hit-testing see the settled state).
     pub(super) fn roll_target(&self) -> bool {
         roll_target_of(
-            self.roll_anim.as_ref().map(|a| a.rolled_at_end),
-            self.rolled_up,
+            self.animation.roll_anim.as_ref().map(|a| a.rolled_at_end),
+            self.animation.rolled_up,
         )
     }
 
@@ -179,29 +180,30 @@ impl FenceViewState {
     /// animations are off — the caller then shows the window plainly.
     pub(super) fn prepare_fade_in(&mut self, entrance: bool) -> bool {
         window::kill_timer(self.hwnd, TIMER_VISIBILITY_FINISH);
-        self.vis_deadline = None;
+        self.animation.vis_deadline = None;
         if !self.motion.enabled() {
-            self.vis_fade = None;
+            self.animation.vis_fade = None;
             self.reset_root();
             return false;
         }
-        self.vis_gen += 1;
+        self.animation.vis_gen += 1;
         let now = Instant::now();
         // Reversing a fade-out continues from its current opacity instead of restarting at 0.
-        if self.vis_fade.is_none() {
+        if self.animation.vis_fade.is_none() {
             self.root.set_opacity(0.0);
             if entrance {
                 self.motion.set_scale(&self.root, ENTRANCE_SCALE);
             }
             self.shadow.set_alpha(0);
-            self.shadow_alpha = Tween::at(0.0, now);
+            self.animation.shadow_alpha = Tween::at(0.0, now);
         }
         // The shadow fades with the plate: same 167 ms linear, continuous when reversing.
-        self.shadow_alpha
+        self.animation
+            .shadow_alpha
             .retarget(1.0, motion::FAST, Curve::Linear, now);
-        self.shadow_fading = true;
+        self.animation.shadow_fading = true;
         self.frames.request();
-        self.vis_fade = Some(VisFade::Showing);
+        self.animation.vis_fade = Some(VisFade::Showing);
         true
     }
 
@@ -212,7 +214,7 @@ impl FenceViewState {
     pub(super) fn start_fade_in(&mut self, entrance: bool) -> bool {
         let root = self.root.clone();
         let motion = self.motion.clone();
-        let done = self.poster(WM_APP_FADE_DONE, self.vis_gen);
+        let done = self.poster(WM_APP_FADE_DONE, self.animation.vis_gen);
         let started = motion.batch(
             || {
                 motion.fade_to(&root, 1.0, motion::FAST, Curve::Linear)?;
@@ -226,11 +228,11 @@ impl FenceViewState {
         if let Err(e) = started {
             // No completion will ever arrive: finish synchronously or the fence stays invisible.
             tracing::warn!(error = %e, "fade-in batch failed; showing plainly");
-            self.vis_fade = None;
+            self.animation.vis_fade = None;
             self.reset_root();
             return false;
         }
-        self.vis_deadline =
+        self.animation.vis_deadline =
             Some(Instant::now() + Duration::from_millis(COMPOSITION_FINISH_MS as u64));
         window::set_timer(self.hwnd, TIMER_VISIBILITY_FINISH, COMPOSITION_FINISH_MS);
         true
@@ -244,20 +246,20 @@ impl FenceViewState {
     /// animations are off or the compositor refused the batch: the caller hides plainly.
     pub(super) fn begin_fade_out(&mut self, exit: bool, destroy: bool) -> bool {
         window::kill_timer(self.hwnd, TIMER_VISIBILITY_FINISH);
-        self.vis_deadline = None;
+        self.animation.vis_deadline = None;
         self.hide_tip();
         // A retired window must always end in `FadeOutDone`, whoever hides it (quick hide,
         // Peek) while its exit fade is still running.
-        let destroy = destroy || self.retired;
+        let destroy = destroy || self.animation.retired;
         if !self.motion.enabled() {
-            self.vis_fade = None;
+            self.animation.vis_fade = None;
             return false;
         }
-        self.vis_gen += 1;
-        self.vis_fade = Some(VisFade::Hiding { destroy });
+        self.animation.vis_gen += 1;
+        self.animation.vis_fade = Some(VisFade::Hiding { destroy });
         let root = self.root.clone();
         let motion = self.motion.clone();
-        let done = self.poster(WM_APP_FADE_DONE, self.vis_gen);
+        let done = self.poster(WM_APP_FADE_DONE, self.animation.vis_gen);
         let started = motion.batch(
             || {
                 motion.fade_to(&root, 0.0, motion::FAST, Curve::Linear)?;
@@ -270,15 +272,17 @@ impl FenceViewState {
         );
         if let Err(e) = started {
             tracing::warn!(error = %e, "fade-out batch failed; hiding plainly");
-            self.vis_fade = None;
+            self.animation.vis_fade = None;
             return false;
         }
         let now = Instant::now();
-        self.shadow_alpha
+        self.animation
+            .shadow_alpha
             .retarget(0.0, motion::FAST, Curve::Linear, now);
-        self.shadow_fading = true;
+        self.animation.shadow_fading = true;
         self.frames.request();
-        self.vis_deadline = Some(now + Duration::from_millis(COMPOSITION_FINISH_MS as u64));
+        self.animation.vis_deadline =
+            Some(now + Duration::from_millis(COMPOSITION_FINISH_MS as u64));
         window::set_timer(self.hwnd, TIMER_VISIBILITY_FINISH, COMPOSITION_FINISH_MS);
         true
     }
@@ -287,25 +291,25 @@ impl FenceViewState {
     /// unscaled, shadow at full alpha.
     pub(super) fn reset_root(&mut self) {
         window::kill_timer(self.hwnd, TIMER_VISIBILITY_FINISH);
-        self.vis_deadline = None;
+        self.animation.vis_deadline = None;
         let _ = self.motion.stop(&self.root, Prop::Opacity);
         let _ = self.motion.stop(&self.root, Prop::Scale);
         self.root.set_opacity(1.0);
         self.motion.set_scale(&self.root, 1.0);
-        self.shadow_alpha = Tween::at(1.0, Instant::now());
-        self.shadow_fading = false;
+        self.animation.shadow_alpha = Tween::at(1.0, Instant::now());
+        self.animation.shadow_fading = false;
         self.shadow.set_alpha(255);
     }
 
     /// Advances the shadow's fade for one frame (see `shadow_alpha`); true while it still moves.
     pub(super) fn tick_shadow_alpha(&mut self, now: Instant) -> bool {
-        if !self.shadow_fading {
+        if !self.animation.shadow_fading {
             return false;
         }
-        let a = self.shadow_alpha.value_at(now).clamp(0.0, 1.0);
+        let a = self.animation.shadow_alpha.value_at(now).clamp(0.0, 1.0);
         self.shadow.set_alpha((a * 255.0).round() as u8);
-        if self.shadow_alpha.is_done(now) {
-            self.shadow_fading = false;
+        if self.animation.shadow_alpha.is_done(now) {
+            self.animation.shadow_fading = false;
             return false;
         }
         true
@@ -321,10 +325,11 @@ impl FenceViewState {
 
     /// End height (device px) of the roll / auto-height tween in flight.
     pub(super) fn height_target_px(&self) -> Option<i32> {
-        self.roll_anim
+        self.animation
+            .roll_anim
             .as_ref()
             .map(|a| a.height.target())
-            .or_else(|| self.height_anim.map(|t| t.target()))
+            .or_else(|| self.animation.height_anim.map(|t| t.target()))
             .map(|h| h.round() as i32)
     }
 
@@ -332,7 +337,7 @@ impl FenceViewState {
     /// now (a WM_MOUSEMOVE inside the fence cancels it as usual). `SetTimer` is safe under
     /// the borrow.
     pub(super) fn resume_peek_close(&self) {
-        if self.peeking {
+        if self.animation.peeking {
             window::kill_timer(self.hwnd, TIMER_PEEK_CLOSE);
             window::set_timer(self.hwnd, TIMER_PEEK_CLOSE, PEEK_CLOSE_MS);
         }
@@ -344,28 +349,29 @@ impl FenceViewState {
         // Painted x per tab before the target state changes: the pills slide the 64 DIP the
         // item-count reserve takes (or frees) instead of jumping there.
         let prev: Vec<(ContentId, f32)> = self
+            .title_bar
             .tabs
             .iter()
             .map(|t| t.id)
             .zip(self.tab_draw_xs(now))
             .collect();
         // The roll owns the height (and the content panel) from here on.
-        self.height_anim = None;
+        self.animation.height_anim = None;
         self.finish_content_swap_now();
         let cur_h = window::window_rect(self.hwnd);
         let cur_h = cur_h.bottom - cur_h.top;
         let to_h = if rolled {
             self.title_h_px()
-        } else if self.auto_height {
+        } else if self.file_view.auto_height {
             // Items may have changed while rolled (the remembered height is stale then): expand
             // straight to the fitting height so the settle does not add a second glide.
             let h = self.fitting_height_px();
-            self.expanded_h_px = h;
+            self.animation.expanded_h_px = h;
             h
         } else {
-            self.expanded_h_px.max(self.title_h_px() + 40)
+            self.animation.expanded_h_px.max(self.title_h_px() + 40)
         };
-        let mid_roll = self.roll_anim.is_some();
+        let mid_roll = self.animation.roll_anim.is_some();
         if rolled {
             // WinUI Expander: the content cross-fades out (83 ms linear) while the height
             // collapses; the surface stays at its expanded size and the shrinking HWND
@@ -377,7 +383,7 @@ impl FenceViewState {
                 Curve::Linear,
             );
         } else {
-            self.rolled_up = false;
+            self.animation.rolled_up = false;
             // Rasterise the content once at its final size; the growing HWND reveals it.
             let (w, _) = self.chrome_panel.size_px();
             let title_h = self.title_h_px();
@@ -408,7 +414,7 @@ impl FenceViewState {
         } else {
             curve
         };
-        self.roll_anim = Some(RollAnim {
+        self.animation.roll_anim = Some(RollAnim {
             height: self
                 .motion
                 .tween(cur_h as f32, to_h as f32, dur, curve, now),
@@ -416,9 +422,10 @@ impl FenceViewState {
         });
         // Chevron angle (and anything else reading the roll progress) moves with the height:
         // same duration and curve, continuous when a roll is reversed mid-flight.
-        self.roll_t
+        self.animation
+            .roll_t
             .retarget(rolled as u8 as f32, self.anim_dur(dur), curve, now);
-        if self.tabs.len() > 1 && self.tab_drag.is_none() {
+        if self.title_bar.tabs.len() > 1 && self.title_bar.tab_drag.is_none() {
             self.sync_tab_slides(&prev, now);
         }
         self.frames.request();
@@ -430,7 +437,7 @@ impl FenceViewState {
     /// height). The content is rasterised once at the larger of the two sizes so the moving
     /// bottom edge only ever reveals or conceals finished rows.
     pub(super) fn start_height_anim(&mut self, to_h: i32) -> bool {
-        if self.roll_anim.is_some() {
+        if self.animation.roll_anim.is_some() {
             return false;
         }
         let cur_h = window::window_rect_size(self.hwnd).1;
@@ -438,10 +445,10 @@ impl FenceViewState {
         if (to_h - cur_h).abs() < 2 || !self.motion.enabled() || !desktop::is_visible(self.hwnd) {
             return false;
         }
-        match self.height_anim.as_mut() {
+        match self.animation.height_anim.as_mut() {
             Some(t) => t.retarget(to_h as f32, motion::NORMAL, Curve::PointToPoint, now),
             None => {
-                self.height_anim = Some(self.motion.tween(
+                self.animation.height_anim = Some(self.motion.tween(
                     cur_h as f32,
                     to_h as f32,
                     motion::NORMAL,

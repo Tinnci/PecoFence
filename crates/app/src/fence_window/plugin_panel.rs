@@ -534,7 +534,7 @@ fn paint_grab_handle(
 
 impl FenceViewState {
     pub(super) fn redraw_plugin_feedback(&mut self) {
-        if let Some(panel) = &mut self.plugin_panel {
+        if let Some(panel) = &mut self.panel_host.plugin_panel {
             match panel.repaint_feedback(&self.content_panel, self.dpi) {
                 Ok(ok) => self.note_draw_result(ok),
                 Err(error) => tracing::warn!(%error, "panel feedback redraw failed"),
@@ -550,31 +550,37 @@ impl FenceViewState {
             match command {
                 HostCommand::Invalidate => redraw_content = true,
                 HostCommand::SetTitle(title) => {
-                    if self.title != title {
-                        self.title = title.clone();
-                        if let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == self.active) {
+                    if self.title_bar.title != title {
+                        self.title_bar.title = title.clone();
+                        if let Some(tab) = self
+                            .title_bar
+                            .tabs
+                            .iter_mut()
+                            .find(|tab| tab.id == self.active)
+                        {
                             tab.title = title;
                         }
                         redraw_chrome = true;
                     }
                 }
                 HostCommand::RequestMode(mode) => {
-                    if let Some(panel) = &self.plugin_panel {
+                    if let Some(panel) = &self.panel_host.plugin_panel {
                         panel.set_presentation(mode);
                     }
                     relayout = true;
                     redraw_content = true;
                 }
                 HostCommand::SetChrome(chrome) => {
-                    if self.panel_chrome.as_ref() != Some(&chrome) {
+                    if self.title_bar.panel_chrome.as_ref() != Some(&chrome) {
                         if self
+                            .title_bar
                             .command_hovered
                             .is_some_and(|i| i >= chrome.commands.len())
                         {
-                            self.command_hovered = None;
+                            self.title_bar.command_hovered = None;
                         }
-                        let first = self.panel_chrome.is_none();
-                        self.panel_chrome = Some(chrome);
+                        let first = self.title_bar.panel_chrome.is_none();
+                        self.title_bar.panel_chrome = Some(chrome);
                         redraw_chrome = true;
                         if first {
                             self.refresh_sheet();
@@ -582,7 +588,7 @@ impl FenceViewState {
                     }
                 }
                 HostCommand::PersistConfig(bytes) => {
-                    if let Some(panel) = &self.plugin_panel {
+                    if let Some(panel) = &self.panel_host.plugin_panel {
                         self.queue.push(Command::Panel(PanelCmd::ConfigChanged {
                             key: panel.key(),
                             bytes,
@@ -595,7 +601,7 @@ impl FenceViewState {
                     multiline,
                     style,
                 } => {
-                    if let Some(panel) = &self.plugin_panel {
+                    if let Some(panel) = &self.panel_host.plugin_panel {
                         self.queue.push(Command::Panel(PanelCmd::TextRequested {
                             key: panel.key(),
                             action,
@@ -607,11 +613,11 @@ impl FenceViewState {
                 }
             }
         }
-        if redraw_content && let Some(panel) = &self.plugin_panel {
+        if redraw_content && let Some(panel) = &self.panel_host.plugin_panel {
             self.queue
                 .push(Command::Panel(PanelCmd::WakeChanged { key: panel.key() }));
         }
-        if redraw_content && let Some(panel) = &mut self.plugin_panel {
+        if redraw_content && let Some(panel) = &mut self.panel_host.plugin_panel {
             panel.invalidation.request(if relayout {
                 FrameInvalidation::Layout
             } else {
@@ -624,7 +630,7 @@ impl FenceViewState {
         if redraw_chrome {
             self.redraw_chrome_only()?;
         }
-        if redraw_content && (!self.rolled_up || self.roll_anim.is_some()) {
+        if redraw_content && (!self.animation.rolled_up || self.animation.roll_anim.is_some()) {
             self.redraw_content()?;
         }
         Ok(())
@@ -641,7 +647,7 @@ pub(super) fn handle_message(
         let mut guard = handler.view.try_borrow_mut().ok()?;
         let view = guard.as_mut()?;
         let device_epoch = (u64::from(view.stack.device_generation()) << 32) | u64::from(view.dpi);
-        if let Some(panel) = view.plugin_panel.as_mut() {
+        if let Some(panel) = view.panel_host.plugin_panel.as_mut() {
             panel.bind_storage(view.content_panel.surface_epoch(), view.dpi, device_epoch);
         }
     }
@@ -654,10 +660,11 @@ pub(super) fn handle_message(
     }
     let mut guard = handler.view.try_borrow_mut().ok()?;
     let view = guard.as_mut()?;
-    view.plugin_panel.as_ref()?;
+    view.panel_host.plugin_panel.as_ref()?;
     if message == msg::WM_GETMINMAXINFO {
         let scale = view.scale();
         let presentation = view
+            .panel_host
             .plugin_panel
             .as_ref()
             .map(PluginPanelContent::presentation)
@@ -683,8 +690,8 @@ pub(super) fn handle_message(
         let minimum_height = panel_minimum_height(
             minimum_height,
             view.title_h_px(),
-            view.rolled_up,
-            view.roll_anim.is_some(),
+            view.animation.rolled_up,
+            view.animation.roll_anim.is_some(),
         );
         // SAFETY: this branch is only reached for WM_GETMINMAXINFO.
         unsafe {
@@ -694,13 +701,13 @@ pub(super) fn handle_message(
     }
     // Frozen content surfaces remain available during roll/fade animations, but
     // their controls must not remain interactive while concealed or retiring.
-    let input_available = view.input_lifecycle().body()
-        && view
-            .plugin_panel
-            .as_ref()
-            .is_some_and(|panel| panel.handle.active.get() && panel.exposure() != Exposure::Hidden);
+    let input_available =
+        view.input_lifecycle().body()
+            && view.panel_host.plugin_panel.as_ref().is_some_and(|panel| {
+                panel.handle.active.get() && panel.exposure() != Exposure::Hidden
+            });
     if !input_available {
-        let panel = view.plugin_panel.as_mut()?;
+        let panel = view.panel_host.plugin_panel.as_mut()?;
         let feedback_changed = panel.interaction != ControlInteraction::default();
         let captured = panel.cancel_input();
         if feedback_changed {
@@ -718,8 +725,9 @@ pub(super) fn handle_message(
     if message == msg::WM_SETCURSOR && msg::lo_i16(lparam) as isize == msg::HTCLIENT {
         let point = window::screen_to_client(view.hwnd, window::cursor_pos());
         let scale = view.scale();
-        if !view.rolled_up
+        if !view.animation.rolled_up
             && view
+                .panel_host
                 .plugin_panel
                 .as_ref()?
                 .hit_at(
@@ -736,9 +744,10 @@ pub(super) fn handle_message(
     let scale = view.scale();
     let x = msg::lo_i16(lparam) as f32 / scale;
     let y = (msg::hi_i16(lparam) as i32 - view.title_h_px()) as f32 / scale;
-    let header_dragging =
-        view.tab_drag.is_some() || view.remote_drag.is_some() || view.detach_pending;
-    let panel = view.plugin_panel.as_mut()?;
+    let header_dragging = view.title_bar.tab_drag.is_some()
+        || view.title_bar.remote_drag.is_some()
+        || view.title_bar.detach_pending;
+    let panel = view.panel_host.plugin_panel.as_mut()?;
     match message {
         msg::WM_MOUSEMOVE => {
             let hit = panel.hit_at(x, y).map(|hit| hit.id);
@@ -790,7 +799,7 @@ pub(super) fn handle_message(
             }
             None
         }
-        msg::WM_MOUSEWHEEL if !view.rolled_up => {
+        msg::WM_MOUSEWHEEL if !view.animation.rolled_up => {
             // Wheel coordinates are screen-relative; content DIPs start below the title.
             let point = window::screen_to_client(
                 view.hwnd,
@@ -924,6 +933,7 @@ fn forwarded_key(vk: u32, host_focus: bool) -> Option<pecofence_plugin_api::Pane
 /// Run a command the panel published in its chrome (title-row button, UIA invoke).
 pub(super) fn invoke_chrome_command(view: &mut FenceViewState, index: usize) {
     let Some(command) = view
+        .title_bar
         .panel_chrome
         .as_ref()
         .and_then(|chrome| chrome.commands.get(index))
@@ -935,7 +945,7 @@ pub(super) fn invoke_chrome_command(view: &mut FenceViewState, index: usize) {
 }
 
 fn forward_panel_event(view: &mut FenceViewState, event: PanelEvent) {
-    let Some(panel) = view.plugin_panel.as_ref() else {
+    let Some(panel) = view.panel_host.plugin_panel.as_ref() else {
         return;
     };
     match panel.handle.event(event) {

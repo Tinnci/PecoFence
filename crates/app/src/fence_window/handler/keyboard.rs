@@ -41,8 +41,8 @@ pub(super) fn on_killfocus(
     let HandlerCtx { view, .. } = h;
     if let Ok(mut guard) = view.try_borrow_mut()
         && let Some(v) = guard.as_mut()
-        && std::mem::take(&mut v.focus_visible)
-        && !v.rolled_up
+        && std::mem::take(&mut v.file_view.focus_visible)
+        && !v.animation.rolled_up
     {
         let _ = v.redraw_content();
     }
@@ -91,7 +91,7 @@ pub(super) fn on_keydown(
     if !v.input_lifecycle().body()
         && !(vk == VK_TAB && ctrl)
         && vk != msg::VK_ESCAPE
-        && !(vk == VK_BACK && v.deco.up_button)
+        && !(vk == VK_BACK && v.title_bar.deco.up_button)
     {
         return Some(0);
     }
@@ -120,18 +120,22 @@ pub(super) fn on_keydown(
             v.toggle_focused();
             let _ = v.redraw_content();
         }
-        VK_PRIOR | VK_NEXT if !v.items.is_empty() => {
+        VK_PRIOR | VK_NEXT if !v.file_view.items.is_empty() => {
             v.page_cursor(if vk == VK_PRIOR { -1 } else { 1 }, mode);
             let _ = v.redraw_content();
         }
-        VK_HOME | VK_END if !v.items.is_empty() => {
-            let target = if vk == VK_HOME { 0 } else { v.items.len() - 1 };
+        VK_HOME | VK_END if !v.file_view.items.is_empty() => {
+            let target = if vk == VK_HOME {
+                0
+            } else {
+                v.file_view.items.len() - 1
+            };
             v.cursor_to(target, mode);
             let _ = v.redraw_content();
         }
         VK_A if ctrl => {
-            v.selected = (0..v.items.len()).collect();
-            v.focus_visible = v.anchor_index.is_some();
+            v.file_view.selected = (0..v.file_view.items.len()).collect();
+            v.file_view.focus_visible = v.file_view.anchor_index.is_some();
             let _ = v.redraw_content();
         }
         VK_C | VK_X if ctrl => {
@@ -147,9 +151,9 @@ pub(super) fn on_keydown(
         VK_N if ctrl && shift => {
             queue.push(Command::Fence(FenceCmd::NewFolder { fence: v.active }))
         }
-        VK_TAB if ctrl && v.tabs.len() > 1 => {
+        VK_TAB if ctrl && v.title_bar.tabs.len() > 1 => {
             // Ctrl+Tab / Ctrl+Shift+Tab cycle the tabs (Explorer).
-            let n = v.tabs.len();
+            let n = v.title_bar.tabs.len();
             let cur = v.active_index();
             let next = if shift {
                 (cur + n - 1) % n
@@ -158,7 +162,7 @@ pub(super) fn on_keydown(
             };
             queue.push(Command::Fence(FenceCmd::SwitchTab {
                 host: fence_id,
-                tab: v.tabs[next].id,
+                tab: v.title_bar.tabs[next].id,
             }));
         }
         VK_F5 => queue.push(Command::Fence(FenceCmd::RefreshFence(v.active))),
@@ -171,9 +175,10 @@ pub(super) fn on_keydown(
             }
         }
         k if k == msg::VK_RETURN => {
-            let folder = (v.navigate_folders && ids.len() == 1)
+            let folder = (v.file_view.navigate_folders && ids.len() == 1)
                 .then(|| {
-                    v.items
+                    v.file_view
+                        .items
                         .iter()
                         .find(|it| it.id == ids[0] && it.is_folder)
                         .map(|it| it.path.clone())
@@ -191,7 +196,7 @@ pub(super) fn on_keydown(
                 }
             }
         }
-        VK_BACK if v.deco.up_button => {
+        VK_BACK if v.title_bar.deco.up_button => {
             queue.push(Command::Fence(FenceCmd::PortalUp(v.active)));
         }
         k if k == msg::VK_DELETE => {
@@ -211,11 +216,11 @@ pub(super) fn on_keydown(
                 finish_drag_cancel(hwnd, c, queue);
                 return Some(0);
             }
-            v.selected.clear();
-            v.type_ahead.clear();
+            v.file_view.selected.clear();
+            v.file_view.type_ahead.clear();
             quicklook::close();
             release = v.end_marquee()
-                || v.drag.take().is_some()
+                || v.file_view.drag.take().is_some()
                 || v.end_scrollbar_press()
                 || v.clear_pressed().is_some();
             let _ = v.redraw_content();
@@ -294,7 +299,7 @@ pub(super) fn on_syskeydown(
         }
         return Some(0);
     }
-    if vk == VK_UP && v.deco.up_button {
+    if vk == VK_UP && v.title_bar.deco.up_button {
         queue.push(Command::Fence(FenceCmd::PortalUp(v.active)));
         return Some(0);
     }
@@ -335,14 +340,15 @@ pub(super) fn on_contextmenu(
     }
     // Anchor at the focused item's label (Explorer: bottom-left of the item).
     let idx = v
+        .file_view
         .anchor_index
-        .filter(|i| v.selected.contains(i))
-        .or_else(|| v.selected.iter().min().copied())
+        .filter(|i| v.file_view.selected.contains(i))
+        .or_else(|| v.file_view.selected.iter().min().copied())
         .unwrap_or(0);
     // The menu anchors at the label's final position: no glide here.
     v.scroll_into_view(idx, false);
     let _ = v.redraw();
-    let item = v.items[idx].id;
+    let item = v.file_view.items[idx].id;
     let (x, y) = match v.item_label_rect(item) {
         Some(r) => (r.left, r.bottom),
         None => {

@@ -77,7 +77,7 @@ impl FenceViewState {
             name: self
                 .committed_chrome_scene()
                 .and_then(|s| s.semantics().first())
-                .map_or_else(|| self.title.clone(), |n| n.name.clone()),
+                .map_or_else(|| self.title_bar.title.clone(), |n| n.name.clone()),
             bounds,
             visible: lifecycle.window(),
             nodes: Vec::new(),
@@ -124,7 +124,7 @@ impl FenceViewState {
             return snapshot;
         }
         let origin = (origin.0, origin.1 + f64::from(self.title_h_px()));
-        if let Some(panel) = &self.plugin_panel {
+        if let Some(panel) = &self.panel_host.plugin_panel {
             let device = (u64::from(self.stack.device_generation()) << 32) | u64::from(self.dpi);
             if let Some(frame) =
                 panel.accessibility_frame(self.content_panel.surface_epoch(), self.dpi, device)
@@ -243,6 +243,7 @@ impl FenceViewState {
             })
             .map(|node| node.id);
         let panel = self
+            .panel_host
             .plugin_panel
             .as_ref()
             .ok_or(pecofence_plugin_api::Error::Closed)?;

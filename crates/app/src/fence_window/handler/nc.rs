@@ -56,7 +56,8 @@ pub(super) fn on_windowposchanging(
 /// title bar; the caption path then also gives drag-snapping, merge and the menu.
 fn frameless_drag(v: &FenceViewState, x: i32, y: i32) -> bool {
     v.frameless
-        && v.plugin_panel
+        && v.panel_host
+            .plugin_panel
             .as_ref()
             .is_some_and(|panel| !panel.control_at_client(x, y, v.title_h_px(), v.scale()))
 }
@@ -93,7 +94,7 @@ pub(super) fn on_nchittest(
     if left < 0 || top < 0 || left >= w || top >= h {
         return Some(msg::HTNOWHERE);
     }
-    let rolled = v.rolled_up;
+    let rolled = v.animation.rolled_up;
     // Tab headers take clicks (switch / drag out); the rest of the title
     // row keeps moving the window.
     // A caption button owns its complete painted box, including the top/right
@@ -169,18 +170,18 @@ pub(super) fn on_ncmousemove(
         if title {
             let _ = v.redraw_chrome_only();
         }
-        if item && !v.rolled_up {
+        if item && !v.animation.rolled_up {
             let _ = v.redraw_content();
         }
         // Click-to-expand pressed and now moving: hand the drag to the
         // system move loop (the press itself was swallowed).
-        if let Some((px, py)) = v.click_pending
+        if let Some((px, py)) = v.animation.click_pending
             && window::key_down(msg::VK_LBUTTON)
         {
             let (tx, ty) = window::drag_threshold();
             let (cx, cy) = (msg::lo_i16(lparam), msg::hi_i16(lparam));
             if (cx - px).abs() > tx || (cy - py).abs() > ty {
-                v.click_pending = None;
+                v.animation.click_pending = None;
                 drop(guard);
                 window::send_message(
                     hwnd,
@@ -191,9 +192,9 @@ pub(super) fn on_ncmousemove(
                 return Some(0);
             }
         }
-        if v.rolled_up
-            && !v.peeking
-            && v.roll_anim.is_none()
+        if v.animation.rolled_up
+            && !v.animation.peeking
+            && v.animation.roll_anim.is_none()
             && behavior.hover_peek.get()
             && !behavior.click_to_expand.get()
             && !in_size_move.get()
@@ -202,7 +203,7 @@ pub(super) fn on_ncmousemove(
         {
             window::set_timer(hwnd, TIMER_PEEK_OPEN, Tooltip::hover_delay_ms());
         }
-        if v.peeking {
+        if v.animation.peeking {
             window::kill_timer(hwnd, TIMER_PEEK_CLOSE);
         }
         window::track_mouse_leave_nc(hwnd);
@@ -235,13 +236,13 @@ pub(super) fn on_ncmouseleave(
     if let Some(v) = guard.as_mut() {
         if !inside {
             v.set_mouse_inside(false);
-            v.click_pending = None;
+            v.animation.click_pending = None;
         }
-        if v.title_hover {
-            v.title_hover = false;
+        if v.title_bar.title_hover {
+            v.title_bar.title_hover = false;
             let _ = v.redraw_chrome_only();
         }
-        if v.peeking {
+        if v.animation.peeking {
             window::set_timer(hwnd, TIMER_PEEK_CLOSE, PEEK_CLOSE_MS);
         }
     }
@@ -267,7 +268,7 @@ pub(super) fn on_nclbuttondown(
     window::kill_timer(hwnd, TIMER_PEEK_OPEN);
     peek_armed.set(false);
     if let Some(v) = view.borrow_mut().as_mut() {
-        v.suppress_dblclk = false;
+        v.animation.suppress_dblclk = false;
         v.hide_tip();
         v.cancel_pending_rename();
     }
@@ -282,8 +283,8 @@ pub(super) fn on_nclbuttondown(
                     return Some(0);
                 }
                 if v.theme.is_liquid_glass() {
-                    v.height_anim = None;
-                    v.remote_drag = Some(RemoteDrag {
+                    v.animation.height_anim = None;
+                    v.title_bar.remote_drag = Some(RemoteDrag {
                         hwnd,
                         fence: v.fence_id,
                         offset: (start.0 - rect.left, start.1 - rect.top),
@@ -293,9 +294,9 @@ pub(super) fn on_nclbuttondown(
                         origin: WindowDragOrigin::Caption {
                             rect,
                             click_expand: behavior.click_to_expand.get()
-                                && v.rolled_up
-                                && !v.peeking
-                                && v.roll_anim.is_none(),
+                                && v.animation.rolled_up
+                                && !v.animation.peeking
+                                && v.animation.roll_anim.is_none(),
                         },
                         press: start,
                         last_pointer: start,
@@ -323,11 +324,11 @@ pub(super) fn on_nclbuttondown(
         // fence (WM_NCLBUTTONUP); a drag hands over to SC_MOVE.
         let mut guard = view.borrow_mut();
         if let Some(v) = guard.as_mut()
-            && v.rolled_up
-            && !v.peeking
-            && v.roll_anim.is_none()
+            && v.animation.rolled_up
+            && !v.animation.peeking
+            && v.animation.roll_anim.is_none()
         {
-            v.click_pending = Some((msg::lo_i16(lparam), msg::hi_i16(lparam)));
+            v.animation.click_pending = Some((msg::lo_i16(lparam), msg::hi_i16(lparam)));
             return Some(0);
         }
     }
@@ -343,11 +344,11 @@ pub(super) fn on_nclbuttonup(
     let HandlerCtx { view, queue, .. } = h;
     let fence_id = h.fence_id;
     let expand = view.borrow_mut().as_mut().is_some_and(|v| {
-        let e = v.click_pending.take().is_some();
+        let e = v.animation.click_pending.take().is_some();
         if e {
             // The next press may arrive as WM_NCLBUTTONDBLCLK; it must not
             // re-roll the fence this click just expanded.
-            v.suppress_dblclk = true;
+            v.animation.suppress_dblclk = true;
         }
         e
     });
@@ -378,15 +379,15 @@ pub(super) fn on_nclbuttondblclk(
         let suppressed = view
             .borrow_mut()
             .as_mut()
-            .is_some_and(|v| std::mem::take(&mut v.suppress_dblclk));
+            .is_some_and(|v| std::mem::take(&mut v.animation.suppress_dblclk));
         if suppressed {
             // Second half of a double-click on a title that the first click
             // already expanded (click-to-expand): same click, nothing to do.
             return Some(0);
         }
         let was_peeking = view.borrow_mut().as_mut().map(|v| {
-            let p = v.peeking;
-            v.peeking = false;
+            let p = v.animation.peeking;
+            v.animation.peeking = false;
             p
         });
         if was_peeking == Some(true) {
@@ -476,7 +477,7 @@ pub(super) fn on_size(h: &HandlerCtx, hwnd: HWND, _wparam: usize, lparam: isize)
             if let Ok((clip, radius)) = v.motion.rounded_clip_bounds(&v.root) {
                 tracing::trace!(
                     target: "pecofence::frame_shape",
-                    title = %v.title,
+                    title = %v.title_bar.title,
                     window_w = r.right - r.left, window_h = r.bottom - r.top,
                     client_w = w, client_h = h,
                     inset_x = -origin.x, inset_y = -origin.y,
@@ -484,7 +485,7 @@ pub(super) fn on_size(h: &HandlerCtx, hwnd: HWND, _wparam: usize, lparam: isize)
                     chrome_h = v.chrome_panel.size_px().1,
                     clip_w = clip.x, clip_h = clip.y,
                     radius_x = radius.x, radius_y = radius.y,
-                    peeking = v.peeking,
+                    peeking = v.animation.peeking,
                     "shape frame"
                 );
             }
@@ -514,7 +515,7 @@ pub(super) fn on_move(
         let old_ink = v.material_foreground().text_primary;
         if v.update_backdrop() {
             if old_ink != v.material_foreground().text_primary
-                || v.plugin_panel.is_some()
+                || v.panel_host.plugin_panel.is_some()
                 || (v.theme.is_liquid_glass() && v.row_metrics().is_some())
             {
                 // Moving clear glass across a light/dark boundary also changes the icon labels.
@@ -550,7 +551,7 @@ pub(super) fn on_entersizemove(
     if let Ok(mut guard) = view.try_borrow_mut()
         && let Some(v) = guard.as_mut()
     {
-        v.height_anim = None;
+        v.animation.height_anim = None;
     }
     let (r, pt) = (window::window_rect(hwnd), window::cursor_pos());
     let (start_x, start_y) = move_start.take().unwrap_or((pt.x, pt.y));
@@ -607,10 +608,10 @@ pub(super) fn on_exitsizemove(
             Some(v) => {
                 // Record the user's height, but never a transient
                 // mid-animation one (it would be persisted as expanded_h).
-                if !v.rolled_up && !v.height_animating() {
-                    v.expanded_h_px = rect.bottom - rect.top;
+                if !v.animation.rolled_up && !v.height_animating() {
+                    v.animation.expanded_h_px = rect.bottom - rect.top;
                 }
-                v.peeking
+                v.animation.peeking
             }
             None => false,
         }
@@ -668,9 +669,9 @@ pub(super) fn on_sizing(
     // whole rows, so a fence never shows a partial column or row.
     let guard = view.try_borrow().ok()?;
     let v = guard.as_ref()?;
-    if v.plugin_panel.is_some() {
+    if v.panel_host.plugin_panel.is_some() {
         // Widgets snap to whole fence icon cells (docs/WIDGET_GRID.md).
-        let grid = v.widget_grid.filter(|_| !v.rolled_up)?;
+        let grid = v.widget_grid.filter(|_| !v.animation.rolled_up)?;
         let scale = v.scale();
         let text_scale = v.behavior.text_scale.get();
         drop(guard);
@@ -715,9 +716,9 @@ pub(super) fn on_sizing(
             v.title_h_px() as f32 + metrics.pad_y * 2.0 * scale + 2.0,
         ),
     };
-    let rolled = v.rolled_up;
+    let rolled = v.animation.rolled_up;
     // "按时间分组" interleaves header bands with the rows: no whole-row rhythm to snap to.
-    let grouped = v.group_by_date && {
+    let grouped = v.file_view.group_by_date && {
         let (cw, _) = v.content_size_px();
         v.layout(cw as f32 / scale).is_grouped()
     };

@@ -19,9 +19,9 @@ pub(super) fn on_timer_composition_finish(
         return Some(0);
     };
     let (deadline, generation) = if timer == TIMER_VISIBILITY_FINISH {
-        (v.vis_deadline, v.vis_gen)
+        (v.animation.vis_deadline, v.animation.vis_gen)
     } else {
-        (v.swap_deadline, v.swap_gen)
+        (v.animation.swap_deadline, v.animation.swap_gen)
     };
     let Some(deadline) = deadline else {
         window::kill_timer(hwnd, timer);
@@ -51,10 +51,10 @@ pub(super) fn on_timer_rename(
     window::kill_timer(hwnd, TIMER_RENAME);
     if let Ok(mut guard) = view.try_borrow_mut()
         && let Some(v) = guard.as_mut()
-        && let Some(id) = v.pending_rename.take()
-        && let Some(i) = v.items.iter().position(|it| it.id == id)
-        && v.selected.len() == 1
-        && v.selected.contains(&i)
+        && let Some(id) = v.file_view.pending_rename.take()
+        && let Some(i) = v.file_view.items.iter().position(|it| it.id == id)
+        && v.file_view.selected.len() == 1
+        && v.file_view.selected.contains(&i)
         && !window::key_down(msg::VK_LBUTTON)
     {
         queue.push(Command::Fence(FenceCmd::RenameItem {
@@ -91,11 +91,11 @@ pub(super) fn on_timer_tip(
         }
         v.tip_wait = None;
         if v.tip_target.is_some()
-            && v.drag.is_none()
-            && v.marquee.is_none()
-            && v.tab_drag.is_none()
-            && v.scroll_drag.is_none()
-            && !v.ole_drag
+            && v.file_view.drag.is_none()
+            && v.file_view.marquee.is_none()
+            && v.title_bar.tab_drag.is_none()
+            && v.file_view.scroll_drag.is_none()
+            && !v.file_view.ole_drag
         {
             v.show_tip(wait.anchor);
         }
@@ -143,7 +143,7 @@ pub(super) fn on_timer_scroll_repeat(
     let Some(v) = guard.as_mut() else {
         return Some(0);
     };
-    let Some(side) = v.page_repeat else {
+    let Some(side) = v.file_view.page_repeat else {
         window::kill_timer(hwnd, TIMER_SCROLL_REPEAT);
         return Some(0);
     };
@@ -166,7 +166,7 @@ pub(super) fn on_timer_scroll_repeat(
                 window::kill_timer(hwnd, TIMER_SCROLL_REPEAT);
             } else {
                 v.scroll_to(target + step, motion::FASTER);
-                if v.scroll_anim.is_none() {
+                if v.file_view.scroll_anim.is_none() {
                     let _ = v.redraw_content();
                 }
                 window::set_timer(hwnd, TIMER_SCROLL_REPEAT, SCROLL_PAGE_REPEAT_MS);
@@ -188,7 +188,7 @@ pub(super) fn on_timer_scrollbar_expand(
     window::kill_timer(hwnd, TIMER_SCROLLBAR_EXPAND);
     if let Ok(mut guard) = view.try_borrow_mut()
         && let Some(v) = guard.as_mut()
-        && v.scrollbar_hot
+        && v.file_view.scrollbar_hot
         && v.scrollbar_geometry().is_some()
     {
         v.scrollbar_width_to(ScrollbarDraw::EXPANDED_WIDTH);
@@ -206,7 +206,7 @@ pub(super) fn on_timer_scrollbar_contract(
     window::kill_timer(hwnd, TIMER_SCROLLBAR_CONTRACT);
     if let Ok(mut guard) = view.try_borrow_mut()
         && let Some(v) = guard.as_mut()
-        && !v.scrollbar_hot
+        && !v.file_view.scrollbar_hot
         && !v.scrollbar_pressed()
     {
         v.scrollbar_width_to(ScrollbarDraw::REST_WIDTH);
@@ -236,15 +236,15 @@ pub(super) fn on_timer_peek_open(
     {
         let mut guard = view.borrow_mut();
         if let Some(v) = guard.as_mut()
-            && !v.retired
-            && v.rolled_up
-            && !v.peeking
-            && v.roll_anim.is_none()
-            && v.title_hover
+            && !v.animation.retired
+            && v.animation.rolled_up
+            && !v.animation.peeking
+            && v.animation.roll_anim.is_none()
+            && v.title_bar.title_hover
         {
-            v.peeking = true;
-            if v.expanded_h_px <= v.title_h_px() {
-                v.expanded_h_px = v.title_h_px() + (200.0 * v.scale()) as i32;
+            v.animation.peeking = true;
+            if v.animation.expanded_h_px <= v.title_h_px() {
+                v.animation.expanded_h_px = v.title_h_px() + (200.0 * v.scale()) as i32;
             }
             v.start_roll_anim(false);
         }
@@ -269,17 +269,17 @@ pub(super) fn on_timer_drag_peek(
     if let Ok(mut guard) = view.try_borrow_mut()
         && let Some(v) = guard.as_mut()
     {
-        v.drag_peek_armed = false;
-        if !v.retired
-            && v.rolled_up
-            && !v.peeking
-            && v.roll_anim.is_none()
-            && (v.drop_hover || v.drop_tab.is_some())
+        v.animation.drag_peek_armed = false;
+        if !v.animation.retired
+            && v.animation.rolled_up
+            && !v.animation.peeking
+            && v.animation.roll_anim.is_none()
+            && (v.file_view.drop_hover || v.title_bar.drop_tab.is_some())
             && !in_size_move.get()
         {
-            v.peeking = true;
-            if v.expanded_h_px <= v.title_h_px() {
-                v.expanded_h_px = v.title_h_px() + (200.0 * v.scale()) as i32;
+            v.animation.peeking = true;
+            if v.animation.expanded_h_px <= v.title_h_px() {
+                v.animation.expanded_h_px = v.title_h_px() + (200.0 * v.scale()) as i32;
             }
             v.start_roll_anim(false);
         }
@@ -347,7 +347,7 @@ pub(super) fn on_exitmenuloop(
     let peeking = view
         .try_borrow()
         .ok()
-        .is_some_and(|g| g.as_ref().is_some_and(|v| v.peeking));
+        .is_some_and(|g| g.as_ref().is_some_and(|v| v.animation.peeking));
     if peeking {
         window::kill_timer(hwnd, TIMER_PEEK_CLOSE);
         window::set_timer(hwnd, TIMER_PEEK_CLOSE, PEEK_CLOSE_MS);
@@ -379,7 +379,7 @@ pub(super) fn on_timer_peek_close(
     let popup = menu_open.get()
         || view.try_borrow().ok().is_some_and(|g| {
             g.as_ref()
-                .is_some_and(|v| v.renaming.is_some() || v.title_renaming)
+                .is_some_and(|v| v.file_view.renaming.is_some() || v.title_bar.title_renaming)
         });
     let pt = window::cursor_pos();
     let r = window::window_rect(hwnd);
@@ -391,14 +391,14 @@ pub(super) fn on_timer_peek_close(
     {
         let mut guard = view.borrow_mut();
         if let Some(v) = guard.as_mut()
-            && !v.retired
-            && v.peeking
-            && v.roll_anim.is_none()
-            && v.drag.is_none()
-            && !v.ole_drag
-            && v.marquee.is_none()
+            && !v.animation.retired
+            && v.animation.peeking
+            && v.animation.roll_anim.is_none()
+            && v.file_view.drag.is_none()
+            && !v.file_view.ole_drag
+            && v.file_view.marquee.is_none()
         {
-            v.peeking = false;
+            v.animation.peeking = false;
             v.start_roll_anim(true);
         }
     }

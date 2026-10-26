@@ -15,13 +15,13 @@ impl FenceViewState {
         let mut more = self.tick_shadow_alpha(now);
         let mut content = false;
         let mut glide_done = false;
-        if let Some(t) = self.scroll_anim {
-            self.scroll_y = t.value_at(now);
+        if let Some(t) = self.file_view.scroll_anim {
+            self.file_view.scroll_y = t.value_at(now);
             let done = t.is_done(now);
             if done {
                 // Exactly the (pixel-snapped) destination, whatever the eased sample was.
-                self.scroll_y = t.target();
-                self.scroll_anim = None;
+                self.file_view.scroll_y = t.target();
+                self.file_view.scroll_anim = None;
                 glide_done = true;
             }
             content = true;
@@ -35,36 +35,36 @@ impl FenceViewState {
             content = true;
             more = true;
         }
-        if self.sb_busy {
+        if self.file_view.sb_busy {
             content = true;
-            self.sb_arrow_fades.prune(now, |_| true);
-            self.sb_busy = !self.sb_width.is_done(now)
-                || !self.sb_alpha.is_done(now)
-                || !self.sb_parts.is_done(now)
-                || self.sb_arrow_fades.busy(now);
-            more |= self.sb_busy;
+            self.file_view.sb_arrow_fades.prune(now, |_| true);
+            self.file_view.sb_busy = !self.file_view.sb_width.is_done(now)
+                || !self.file_view.sb_alpha.is_done(now)
+                || !self.file_view.sb_parts.is_done(now)
+                || self.file_view.sb_arrow_fades.busy(now);
+            more |= self.file_view.sb_busy;
         }
-        if self.content_busy {
+        if self.file_view.content_busy {
             content = true;
         }
-        if self.grab_busy {
-            let done = self.grab_alpha.is_done(now);
+        if self.animation.grab_busy {
+            let done = self.animation.grab_alpha.is_done(now);
             let grab = if done {
-                self.grab_alpha.target()
+                self.animation.grab_alpha.target()
             } else {
-                self.grab_alpha.value_at(now)
+                self.animation.grab_alpha.value_at(now)
             };
-            if let Some(panel) = self.plugin_panel.as_mut() {
+            if let Some(panel) = self.panel_host.plugin_panel.as_mut() {
                 panel.grab = grab.clamp(0.0, 1.0);
             }
             self.redraw_plugin_feedback();
-            self.grab_busy = !done;
+            self.animation.grab_busy = !done;
             more |= !done;
         }
-        if self.rolled_up && self.roll_anim.is_none() {
+        if self.animation.rolled_up && self.animation.roll_anim.is_none() {
             // Rolled: nothing is visible, and a glide must not keep moving the hidden offset.
-            self.content_busy = false;
-            self.scroll_anim = None;
+            self.file_view.content_busy = false;
+            self.file_view.scroll_anim = None;
             content = false;
         }
         if content {
@@ -72,20 +72,20 @@ impl FenceViewState {
                 self.note_scroll_activity();
                 self.request_hover_refresh();
             }
-            if self.marquee.is_some() {
+            if self.file_view.marquee.is_some() {
                 self.update_marquee_selection();
             }
-            let before = self.scroll_y;
+            let before = self.file_view.scroll_y;
             let _ = self.redraw_content();
-            if self.scroll_y != before {
+            if self.file_view.scroll_y != before {
                 // The draw clamped the offset (content shrank mid-glide): drop the glide.
-                self.scroll_anim = None;
+                self.file_view.scroll_anim = None;
             }
-            more |= self.content_busy;
+            more |= self.file_view.content_busy;
         }
-        if self.chrome_busy && draw_chrome {
+        if self.title_bar.chrome_busy && draw_chrome {
             let _ = self.draw_chrome_panel();
-            more |= self.chrome_busy;
+            more |= self.title_bar.chrome_busy;
         }
         more
     }
@@ -109,10 +109,11 @@ impl FenceWindow {
                 return false;
             };
             let height = v
+                .animation
                 .roll_anim
                 .as_ref()
                 .map(|a| (a.height, Some(a.rolled_at_end)))
-                .or_else(|| v.height_anim.map(|t| (t, None)))
+                .or_else(|| v.animation.height_anim.map(|t| (t, None)))
                 .map(|(t, rolled)| (t.value_at(now).round() as i32, t.is_done(now), rolled));
             // If height changes, WM_SIZE will render the new chrome. Drawing hover
             // feedback here would first publish the same frame at the previous height.
@@ -137,10 +138,10 @@ impl FenceWindow {
             let Some(v) = guard.as_mut() else {
                 return more;
             };
-            v.roll_anim = None;
-            v.height_anim = None;
+            v.animation.roll_anim = None;
+            v.animation.height_anim = None;
             if let Some(rolled) = rolled_at_end {
-                v.rolled_up = rolled;
+                v.animation.rolled_up = rolled;
                 v.content_panel.visual.set_opacity(1.0);
                 v.content_panel.visual.set_visible(!rolled);
             }

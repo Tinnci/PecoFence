@@ -44,10 +44,11 @@ pub(super) fn flush_window_drag(
             return false;
         };
         let height = v
+            .animation
             .roll_anim
             .as_ref()
             .map(|a| a.height.value_at(now).round() as i32);
-        let Some(drag) = v.remote_drag.as_mut() else {
+        let Some(drag) = v.title_bar.remote_drag.as_mut() else {
             return false;
         };
         if let Some(point) = release {
@@ -92,7 +93,12 @@ pub(super) fn flush_window_drag(
         let Some(v) = guard.as_mut() else {
             return false;
         };
-        let Some(drag) = v.remote_drag.as_mut().filter(|d| d.hwnd == target_hwnd) else {
+        let Some(drag) = v
+            .title_bar
+            .remote_drag
+            .as_mut()
+            .filter(|d| d.hwnd == target_hwnd)
+        else {
             return false;
         };
         let changed = drag.merge_target != target || (target != 0 && drag.merge_x != point.0);

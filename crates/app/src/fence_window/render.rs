@@ -140,7 +140,7 @@ impl FenceViewState {
     /// other fences use. Everything else follows the app-wide style.
     pub(super) fn sheet_theme(&self) -> Theme {
         let base = self.base_theme;
-        let mut theme = match self.panel_chrome.as_ref() {
+        let mut theme = match self.title_bar.panel_chrome.as_ref() {
             None => base,
             Some(_) if base.is_high_contrast() => base,
             Some(chrome) => match chrome.surface {
@@ -181,8 +181,8 @@ impl FenceViewState {
     /// buttons instead of the roll-up chevron.
     pub(super) fn title_deco(&self) -> TitleDeco {
         TitleDeco {
-            captions: self.panel_chrome.is_some() && !self.frameless,
-            ..self.deco
+            captions: self.title_bar.panel_chrome.is_some() && !self.frameless,
+            ..self.title_bar.deco
         }
     }
 
@@ -254,9 +254,9 @@ impl FenceViewState {
     /// Drops the per-item fades: the view now shows a different list (tab switch, layout
     /// change), so nothing should cross-fade from the old one.
     pub(super) fn reset_item_fades(&mut self) {
-        self.item_hover.clear();
-        self.item_sel.clear();
-        self.drop_fades.clear();
+        self.file_view.item_hover.clear();
+        self.file_view.item_sel.clear();
+        self.file_view.drop_fades.clear();
     }
 
     /// Syncs the per-item hover / selection / drop-target fades from the logical state and
@@ -264,67 +264,69 @@ impl FenceViewState {
     /// top of every content draw.
     pub(super) fn item_alphas(&mut self, now: Instant) -> Vec<(f32, f32, f32)> {
         let animate = self.motion.enabled();
-        let dragging = self.ole_drag;
-        for (i, it) in self.items.iter().enumerate() {
-            let hover = (self.hover == Some(i) && !dragging) as u8 as f32;
-            self.item_hover.set(animate, it.id, hover, now);
-            let sel = self.selected.contains(&i) as u8 as f32;
-            self.item_sel.set(animate, it.id, sel, now);
-            let drop = (self.drop_item == Some(i)) as u8 as f32;
-            self.drop_fades.set(animate, it.id, drop, now);
+        let dragging = self.file_view.ole_drag;
+        for (i, it) in self.file_view.items.iter().enumerate() {
+            let hover = (self.file_view.hover == Some(i) && !dragging) as u8 as f32;
+            self.file_view.item_hover.set(animate, it.id, hover, now);
+            let sel = self.file_view.selected.contains(&i) as u8 as f32;
+            self.file_view.item_sel.set(animate, it.id, sel, now);
+            let drop = (self.file_view.drop_item == Some(i)) as u8 as f32;
+            self.file_view.drop_fades.set(animate, it.id, drop, now);
         }
         let out = self
+            .file_view
             .items
             .iter()
             .map(|it| {
                 (
-                    self.item_hover.value(&it.id, now),
-                    self.item_sel.value(&it.id, now),
-                    self.drop_fades.value(&it.id, now),
+                    self.file_view.item_hover.value(&it.id, now),
+                    self.file_view.item_sel.value(&it.id, now),
+                    self.file_view.drop_fades.value(&it.id, now),
                 )
             })
             .collect();
         // Fades that settled at 0 go; ids that left the list were dropped in `replace_items`
         // (no per-draw id set: this runs every frame of a glide).
-        self.item_hover.prune(now, |_| true);
-        self.item_sel.prune(now, |_| true);
-        self.drop_fades.prune(now, |_| true);
+        self.file_view.item_hover.prune(now, |_| true);
+        self.file_view.item_sel.prune(now, |_| true);
+        self.file_view.drop_fades.prune(now, |_| true);
         out
     }
 
     /// Drops finished layout / icon motion before a content draw (a finished tween sits at its
     /// end value, so nothing changes visually) and folds the caret away once it has faded out.
     pub(super) fn prune_content_motion(&mut self, now: Instant) {
-        self.item_motion.retain(|_, m| !m.done(now));
-        self.leaving.retain(|l| !l.alpha.is_done(now));
-        for item in &mut self.items {
+        self.file_view.item_motion.retain(|_, m| !m.done(now));
+        self.file_view.leaving.retain(|l| !l.alpha.is_done(now));
+        for item in &mut self.file_view.items {
             if item.icon_fade.is_some_and(|t| t.is_done(now)) {
                 item.icon_fade = None;
             }
         }
-        if self.drop_insert.is_none() && self.caret_alpha.is_done(now) {
-            self.caret_shown = None;
+        if self.file_view.drop_insert.is_none() && self.file_view.caret_alpha.is_done(now) {
+            self.file_view.caret_shown = None;
         }
     }
 
     /// Notes whether a content fade / motion is still running after a draw and keeps the frame
     /// clock ticking while it is.
     pub(super) fn note_content_fades(&mut self, now: Instant) {
-        self.content_busy = self.item_hover.busy(now)
-            || self.item_sel.busy(now)
-            || self.header_fades.busy(now)
-            || self.drop_fades.busy(now)
-            || !self.selection_inactive.is_done(now)
-            || !self.drop_inactive.is_done(now)
-            || !self.drop_wash.is_done(now)
-            || !self.caret_alpha.is_done(now)
-            || self.item_motion.values().any(|m| !m.done(now))
-            || self.leaving.iter().any(|l| !l.alpha.is_done(now))
+        self.file_view.content_busy = self.file_view.item_hover.busy(now)
+            || self.file_view.item_sel.busy(now)
+            || self.file_view.header_fades.busy(now)
+            || self.file_view.drop_fades.busy(now)
+            || !self.file_view.selection_inactive.is_done(now)
+            || !self.file_view.drop_inactive.is_done(now)
+            || !self.file_view.drop_wash.is_done(now)
+            || !self.file_view.caret_alpha.is_done(now)
+            || self.file_view.item_motion.values().any(|m| !m.done(now))
+            || self.file_view.leaving.iter().any(|l| !l.alpha.is_done(now))
             || self
+                .file_view
                 .items
                 .iter()
                 .any(|i| i.icon_fade.is_some_and(|t| !t.is_done(now)));
-        if self.content_busy {
+        if self.file_view.content_busy {
             self.frames.request();
         }
     }
@@ -333,20 +335,21 @@ impl FenceViewState {
     /// grey (1) while a drag from elsewhere hovers the fence (`drop_inactive`, 83 ms) —
     /// Explorer's view is inactive then and only the drop target reads accent.
     pub(super) fn selection_inactive_now(&self, now: Instant) -> f32 {
-        let base = self.selection_inactive.value_at(now);
-        let foreign = self.drop_inactive.value_at(now).clamp(0.0, 1.0);
+        let base = self.file_view.selection_inactive.value_at(now);
+        let foreign = self.file_view.drop_inactive.value_at(now).clamp(0.0, 1.0);
         base + (1.0 - base) * foreign
     }
 
     /// Empty-state caption for the fence being shown.
     pub(super) fn empty_text(&self) -> &'static str {
-        if self.is_inbox {
+        if self.file_view.is_inbox {
             pecofence_core::i18n::text("没有未归类的项目")
-        } else if self.drop_hover {
+        } else if self.file_view.drop_hover {
             pecofence_core::i18n::text("松开以放入")
-        } else if self.is_portal {
+        } else if self.file_view.is_portal {
             portal_empty_text(
-                self.portal_health
+                self.file_view
+                    .portal_health
                     .as_ref()
                     .unwrap_or(&pecofence_core::portal::PortalHealth::Loading),
             )
@@ -360,24 +363,29 @@ impl FenceViewState {
         let animate = self.motion.enabled();
         let title_visible = self.title_visible_target();
         let rolled = self.roll_target();
-        let f = &mut self.chrome_fades;
+        let f = &mut self.title_bar.chrome_fades;
         f.set(animate, ChromeKey::Title, title_visible as u8 as f32, now);
         f.set(
             animate,
             ChromeKey::Hover,
-            self.title_hover as u8 as f32,
+            self.title_bar.title_hover as u8 as f32,
             now,
         );
-        f.set(animate, ChromeKey::Up, self.up_hovered as u8 as f32, now);
+        f.set(
+            animate,
+            ChromeKey::Up,
+            self.title_bar.up_hovered as u8 as f32,
+            now,
+        );
         f.set(
             animate,
             ChromeKey::Chevron,
-            self.chevron_hovered as u8 as f32,
+            self.title_bar.chevron_hovered as u8 as f32,
             now,
         );
         f.set(animate, ChromeKey::Count, rolled as u8 as f32, now);
-        let ntabs = if self.tabs.len() > 1 {
-            self.tabs.len()
+        let ntabs = if self.title_bar.tabs.len() > 1 {
+            self.title_bar.tabs.len()
         } else {
             0
         };
@@ -385,32 +393,32 @@ impl FenceViewState {
             f.set(
                 animate,
                 ChromeKey::Tab(i),
-                (self.tab_hover == Some(i)) as u8 as f32,
+                (self.title_bar.tab_hover == Some(i)) as u8 as f32,
                 now,
             );
             f.set(
                 animate,
                 ChromeKey::TabDrop(i),
-                (self.drop_tab == Some(i)) as u8 as f32,
+                (self.title_bar.drop_tab == Some(i)) as u8 as f32,
                 now,
             );
         }
-        let inside = self.press_inside;
+        let inside = self.title_bar.press_inside;
         TitleState {
             title: f.value(&ChromeKey::Title, now),
             hover: f.value(&ChromeKey::Hover, now),
             up_hover: f.value(&ChromeKey::Up, now),
-            up_pressed: self.pressed == Some(PressTarget::Up) && inside,
+            up_pressed: self.title_bar.pressed == Some(PressTarget::Up) && inside,
             chevron_hover: f.value(&ChromeKey::Chevron, now),
-            chevron_pressed: self.pressed == Some(PressTarget::Chevron) && inside,
+            chevron_pressed: self.title_bar.pressed == Some(PressTarget::Chevron) && inside,
             count: f.value(&ChromeKey::Count, now),
-            merge_hint: self.merge_t.value_at(now),
-            caption_hover: self.caption_hovered,
-            caption_pressed: match self.pressed {
+            merge_hint: self.title_bar.merge_t.value_at(now),
+            caption_hover: self.title_bar.caption_hovered,
+            caption_pressed: match self.title_bar.pressed {
                 Some(PressTarget::Caption(button)) if inside => Some(button),
                 _ => None,
             },
-            maximized: self.maximized,
+            maximized: self.title_bar.maximized,
         }
     }
 
@@ -418,8 +426,11 @@ impl FenceViewState {
     pub(super) fn snap_chrome_fades(&mut self) {
         let now = Instant::now();
         let title = self.title_visible_target() as u8 as f32;
-        self.chrome_fades.snap(ChromeKey::Title, title, now);
-        self.chrome_fades
+        self.title_bar
+            .chrome_fades
+            .snap(ChromeKey::Title, title, now);
+        self.title_bar
+            .chrome_fades
             .snap(ChromeKey::Count, self.roll_target() as u8 as f32, now);
     }
 
@@ -457,11 +468,13 @@ impl FenceViewState {
         let bitmaps = self.bitmaps.clone();
         // A panel that publishes its own header names the title row.
         let title = self
+            .title_bar
             .panel_chrome
             .as_ref()
-            .filter(|c| !c.title.is_empty() && self.tabs.len() <= 1)
-            .map_or_else(|| self.title.clone(), |c| c.title.clone());
+            .filter(|c| !c.title.is_empty() && self.title_bar.tabs.len() <= 1)
+            .map_or_else(|| self.title_bar.title.clone(), |c| c.title.clone());
         let commands: Vec<pecofence_render::fence_chrome::TitleCommandDraw> = self
+            .title_bar
             .panel_chrome
             .as_ref()
             .map(|c| {
@@ -472,15 +485,16 @@ impl FenceViewState {
                         |(i, command)| pecofence_render::fence_chrome::TitleCommandDraw {
                             glyph: command.glyph,
                             enabled: command.enabled,
-                            hover: (self.command_hovered == Some(i)) as u8 as f32,
-                            pressed: self.pressed == Some(PressTarget::Command(i))
-                                && self.press_inside,
+                            hover: (self.title_bar.command_hovered == Some(i)) as u8 as f32,
+                            pressed: self.title_bar.pressed == Some(PressTarget::Command(i))
+                                && self.title_bar.press_inside,
                         },
                     )
                     .collect()
             })
             .unwrap_or_default();
         let command_labels: Vec<&str> = self
+            .title_bar
             .panel_chrome
             .as_ref()
             .map(|c| {
@@ -492,10 +506,12 @@ impl FenceViewState {
             .unwrap_or_default();
         let mut title_chrome = pecofence_render::fence_chrome::TitleChrome {
             subtitle: self
+                .title_bar
                 .panel_chrome
                 .as_ref()
                 .map_or("", |c| c.subtitle.as_str()),
             status: self
+                .title_bar
                 .panel_chrome
                 .as_ref()
                 .and_then(|c| c.status.as_ref())
@@ -506,15 +522,18 @@ impl FenceViewState {
         let rolled = self.roll_target();
         // A roll set / cancelled without the animation (reduced motion, retire, external
         // geometry) leaves the progress tween behind: rest it at the settled state.
-        if self.roll_anim.is_none()
-            && (self.roll_t.target() - self.rolled_up as u8 as f32).abs() > f32::EPSILON
+        if self.animation.roll_anim.is_none()
+            && (self.animation.roll_t.target() - self.animation.rolled_up as u8 as f32).abs()
+                > f32::EPSILON
         {
-            self.roll_t = Tween::at(self.rolled_up as u8 as f32, now);
+            self.animation.roll_t = Tween::at(self.animation.rolled_up as u8 as f32, now);
         }
-        let roll_t = self.roll_t.value_at(now);
+        let roll_t = self.animation.roll_t.value_at(now);
         // The count is drawn while it fades out after expanding, not only while rolled.
-        let count = (self.plugin_panel.is_none() && (rolled || state.count > 0.0))
-            .then(|| pecofence_core::i18n::format("{0} 项", &[format!("{}", self.items.len())]));
+        let count =
+            (self.panel_host.plugin_panel.is_none() && (rolled || state.count > 0.0)).then(|| {
+                pecofence_core::i18n::format("{0} 项", &[format!("{}", self.file_view.items.len())])
+            });
         let opacity = self.material_opacity();
         let theme = self.material_foreground();
         let scale = self.scale();
@@ -524,28 +543,36 @@ impl FenceViewState {
         let active = self.active_index();
         // A pressed tab counts as dragged only past the drag threshold; a plain click keeps the
         // pressed caption and the SwitchTab pill glide.
-        let dragging = self.tab_drag.as_ref().filter(|d| d.moved).map(|d| d.index);
+        let dragging = self
+            .title_bar
+            .tab_drag
+            .as_ref()
+            .filter(|d| d.moved)
+            .map(|d| d.index);
         // A dragged tab carries the active fill itself: no pill glide underneath it.
         if dragging.is_some() {
-            self.pill_anim = None;
+            self.title_bar.pill_anim = None;
         }
         // Active pill mid-glide: drawn at the tweened place instead of on the active tab.
         let pill = self
+            .title_bar
             .pill_anim
             .map(|(x, w)| (x.value_at(now), w.value_at(now)));
         if self
+            .title_bar
             .pill_anim
             .is_some_and(|(x, w)| x.is_done(now) && w.is_done(now))
         {
-            self.pill_anim = None;
+            self.title_bar.pill_anim = None;
         }
         let deco = self.title_deco();
         let style = self.style;
-        let pressed_tab = match self.pressed {
-            Some(PressTarget::Tab(t)) if self.press_inside => Some(t),
+        let pressed_tab = match self.title_bar.pressed {
+            Some(PressTarget::Tab(t)) if self.title_bar.press_inside => Some(t),
             _ => None,
         };
         let tabs: Vec<TabDraw<'_>> = self
+            .title_bar
             .tabs
             .iter()
             .zip(rects.iter())
@@ -558,12 +585,19 @@ impl FenceViewState {
                 title_size: t.title_size,
                 title_color: t.title_color,
                 active: i == active,
-                hover: self.chrome_fades.value(&ChromeKey::Tab(i), now),
+                hover: self.title_bar.chrome_fades.value(&ChromeKey::Tab(i), now),
                 pressed: pressed_tab == Some(i),
                 color: t.color.map(|c| ColorF::from_rgba8(c[0], c[1], c[2], 0xFF)),
-                drop_target: self.chrome_fades.value(&ChromeKey::TabDrop(i), now),
+                drop_target: self
+                    .title_bar
+                    .chrome_fades
+                    .value(&ChromeKey::TabDrop(i), now),
                 dragging: dragging == Some(i),
-                alpha: 1.0 - self.chrome_fades.value(&ChromeKey::TabNew(t.id), now),
+                alpha: 1.0
+                    - self
+                        .title_bar
+                        .chrome_fades
+                        .value(&ChromeKey::TabNew(t.id), now),
             })
             .collect();
         let chrome_scene =
@@ -579,7 +613,7 @@ impl FenceViewState {
                 deco,
                 rolled,
                 commands: &command_labels,
-                maximized: self.maximized,
+                maximized: self.title_bar.maximized,
                 state,
                 command_states: &commands,
             })
@@ -614,26 +648,30 @@ impl FenceViewState {
                 )
             })?;
         if ok {
-            self.chrome_scene = Some(chrome_scene);
+            self.title_bar.chrome_scene = Some(chrome_scene);
             self.publish_accessibility();
         }
         self.note_draw_result(ok);
-        let ntabs = self.tabs.len();
-        self.chrome_fades.prune(now, |k| match k {
+        let ntabs = self.title_bar.tabs.len();
+        self.title_bar.chrome_fades.prune(now, |k| match k {
             ChromeKey::Tab(i) | ChromeKey::TabDrop(i) => *i < ntabs,
-            ChromeKey::TabNew(id) => self.tabs.iter().any(|t| t.id == *id),
+            ChromeKey::TabNew(id) => self.title_bar.tabs.iter().any(|t| t.id == *id),
             _ => true,
         });
-        self.tab_slide.retain(|(_, t)| !t.is_done(now));
-        if self.tab_settle.is_some_and(|(_, t)| t.is_done(now)) {
-            self.tab_settle = None;
+        self.title_bar.tab_slide.retain(|(_, t)| !t.is_done(now));
+        if self
+            .title_bar
+            .tab_settle
+            .is_some_and(|(_, t)| t.is_done(now))
+        {
+            self.title_bar.tab_settle = None;
         }
-        self.chrome_busy = self.chrome_fades.busy(now)
-            || self.pill_anim.is_some()
-            || !self.merge_t.is_done(now)
-            || !self.tab_slide.is_empty()
-            || self.tab_settle.is_some();
-        if self.chrome_busy {
+        self.title_bar.chrome_busy = self.title_bar.chrome_fades.busy(now)
+            || self.title_bar.pill_anim.is_some()
+            || !self.title_bar.merge_t.is_done(now)
+            || !self.title_bar.tab_slide.is_empty()
+            || self.title_bar.tab_settle.is_some();
+        if self.title_bar.chrome_busy {
             self.frames.request();
         }
         Ok(())
@@ -718,7 +756,7 @@ impl FenceViewState {
             .set_offset(0.0, title_h as f32, 0.0);
         self.content_panel
             .visual
-            .set_visible(!self.rolled_up || self.roll_anim.is_some());
+            .set_visible(!self.animation.rolled_up || self.animation.roll_anim.is_some());
         Ok(())
     }
 
@@ -744,18 +782,18 @@ impl FenceViewState {
     /// text width for rows. Changing it drops every fitted label.
     pub(super) fn ensure_icons_and_labels(&mut self, label_w: f32) {
         let icon_px = (self.icon_dip() * self.scale()).round() as u32;
-        if (self.label_w - label_w).abs() > 0.5 {
-            self.label_w = label_w;
-            for item in &mut self.items {
+        if (self.file_view.label_w - label_w).abs() > 0.5 {
+            self.file_view.label_w = label_w;
+            for item in &mut self.file_view.items {
                 item.label = None;
             }
-            self.unfold_cache = None;
+            self.file_view.unfold_cache = None;
         }
-        let details = self.layout == ViewLayout::Details;
+        let details = self.file_view.layout == ViewLayout::Details;
         let now = Instant::now();
         let mut started = false;
-        let mut icons = self.icons.borrow_mut();
-        for item in &mut self.items {
+        let mut icons = self.file_view.icons.borrow_mut();
+        for item in &mut self.file_view.items {
             if item.icon.is_none() && !item.icon_failed {
                 match icons.get(&item.icon_key, &item.path, icon_px, item.icon_only) {
                     Lookup::Ready(Some(img)) => {
@@ -777,13 +815,13 @@ impl FenceViewState {
                 }
             }
             if item.label.is_none() {
-                item.label = Some(match self.layout {
+                item.label = Some(match self.file_view.layout {
                     ViewLayout::Icons => pecofence_render::text::fit_lines(
                         &item.name,
                         &self.chrome.label_format(),
                         (label_w - pecofence_render::fence_chrome::ICON_LABEL_SIDE_INSET * 2.0)
                             .max(1.0),
-                        self.label_lines as u32,
+                        self.file_view.label_lines as u32,
                     ),
                     _ => pecofence_render::text::fit_width(
                         &item.name,
@@ -813,7 +851,8 @@ impl FenceViewState {
 
     /// True when some item is still waiting for its icon.
     pub fn has_pending_icons(&self) -> bool {
-        self.items
+        self.file_view
+            .items
             .iter()
             .any(|i| i.icon.is_none() && !i.icon_failed)
     }
@@ -835,17 +874,19 @@ impl FenceViewState {
 
     pub fn redraw(&mut self) -> Result<()> {
         self.draw_chrome_panel()?;
-        if self.rolled_up && self.roll_anim.is_none() {
+        if self.animation.rolled_up && self.animation.roll_anim.is_none() {
             return Ok(());
         }
         self.redraw_content()
     }
 
     pub(super) fn columns_for(&self, width_dip: f32) -> DetailColumns {
-        match self.layout {
-            ViewLayout::Details => {
-                DetailColumns::for_width_with(width_dip, self.column_widths, self.columns_visible)
-            }
+        match self.file_view.layout {
+            ViewLayout::Details => DetailColumns::for_width_with(
+                width_dip,
+                self.file_view.column_widths,
+                self.file_view.columns_visible,
+            ),
             _ => DetailColumns {
                 name_x: 8.0,
                 name_w: (width_dip - 16.0).max(40.0),
@@ -859,8 +900,9 @@ impl FenceViewState {
     /// Fills `unfold_cache` for item `i` at `cell_w` unless it already holds that entry: one
     /// DirectWrite layout pass per anchor / width / name change instead of one per redraw.
     pub(super) fn refresh_unfold_cache(&mut self, i: usize, cell_w: f32) {
-        let it = &self.items[i];
+        let it = &self.file_view.items[i];
         let fresh = self
+            .file_view
             .unfold_cache
             .as_ref()
             .is_some_and(|c| c.id == it.id && c.cell_w == cell_w && c.name == it.name);
@@ -873,7 +915,7 @@ impl FenceViewState {
             (cell_w - pecofence_render::fence_chrome::ICON_LABEL_SIDE_INSET * 2.0).max(1.0),
             MAX_UNFOLD_LINES,
         );
-        self.unfold_cache = Some(UnfoldCache {
+        self.file_view.unfold_cache = Some(UnfoldCache {
             id: it.id,
             cell_w,
             name: it.name.clone(),
@@ -884,17 +926,18 @@ impl FenceViewState {
 
     pub(super) fn redraw_content(&mut self) -> Result<()> {
         if self
+            .panel_host
             .plugin_panel
             .as_ref()
             .is_some_and(|panel| panel.invalidation.needs_layout())
         {
             let (width, height) = window::window_rect_size(self.hwnd);
             self.layout_panels(width, height)?;
-            if let Some(panel) = &mut self.plugin_panel {
+            if let Some(panel) = &mut self.panel_host.plugin_panel {
                 panel.invalidation.layout_resolved();
             }
         }
-        if self.plugin_panel.is_some() {
+        if self.panel_host.plugin_panel.is_some() {
             let foreground = self.material_foreground();
             let rect = window::window_rect(self.hwnd);
             let cx = (rect.left + rect.right) / 2;
@@ -925,10 +968,14 @@ impl FenceViewState {
                 brightness: self.behavior.widget_paper_brightness.get(),
                 wallpaper_luminance,
             };
-            let panel = self.plugin_panel.as_mut().expect("plugin panel is present");
+            let panel = self
+                .panel_host
+                .plugin_panel
+                .as_mut()
+                .expect("plugin panel is present");
             let exposure = panel.exposure();
             panel.set_container_state(
-                if self.tabs.len() > 1 {
+                if self.title_bar.tabs.len() > 1 {
                     pecofence_plugin_api::Grouping::Tabbed
                 } else {
                     pecofence_plugin_api::Grouping::Single
@@ -961,7 +1008,7 @@ impl FenceViewState {
             return Ok(());
         };
         let max_scroll = grid.max_scroll(height_dip);
-        self.scroll_y = self.scroll_y.clamp(0.0, max_scroll);
+        self.file_view.scroll_y = self.file_view.scroll_y.clamp(0.0, max_scroll);
         self.ensure_icons_and_labels(grid.metrics.cell_w);
 
         let now = Instant::now();
@@ -969,32 +1016,37 @@ impl FenceViewState {
         let mut file_scene = self.prepare_file_scene(&layout, now);
         self.sync_scrollbar_alpha();
         let alphas = self.item_alphas(now);
-        let scroll = self.scroll_y;
-        let dragging = self.ole_drag;
-        let cut = self.cut.clone();
-        let pressed = match self.pressed {
-            Some(PressTarget::Item(i)) if self.press_inside => Some(i),
+        let scroll = self.file_view.scroll_y;
+        let dragging = self.file_view.ole_drag;
+        let cut = self.file_view.cut.clone();
+        let pressed = match self.title_bar.pressed {
+            Some(PressTarget::Item(i)) if self.title_bar.press_inside => Some(i),
             _ => None,
         };
-        let focused = self.focus_visible.then_some(self.anchor_index).flatten();
+        let focused = self
+            .file_view
+            .focus_visible
+            .then_some(self.file_view.anchor_index)
+            .flatten();
         // The selected anchor item shows its full name (Windows desktop): only when the fitted
         // label had to be shortened, and never under an open rename edit.
-        let unfold = self.anchor_index.filter(|&a| {
-            a < self.items.len()
-                && self.selected.contains(&a)
+        let unfold = self.file_view.anchor_index.filter(|&a| {
+            a < self.file_view.items.len()
+                && self.file_view.selected.contains(&a)
                 && !dragging
-                && self.renaming != Some(self.items[a].id)
+                && self.file_view.renaming != Some(self.file_view.items[a].id)
         });
         let shortened = unfold.filter(|&i| {
-            let it = &self.items[i];
+            let it = &self.file_view.items[i];
             it.label.as_deref().unwrap_or(&it.name) != it.name
         });
         if let Some(i) = shortened {
             self.refresh_unfold_cache(i, grid.metrics.cell_w);
         }
         let full: Option<(&str, u32)> = shortened.and_then(|i| {
-            let id = self.items[i].id;
-            self.unfold_cache
+            let id = self.file_view.items[i].id;
+            self.file_view
+                .unfold_cache
                 .as_ref()
                 .filter(|c| c.id == id)
                 .map(|c| (c.text.as_str(), c.lines))
@@ -1002,19 +1054,21 @@ impl FenceViewState {
         if let Some((index, (_, lines))) = shortened.zip(full) {
             file_scene.promote(
                 index,
-                (lines as f32 - self.label_lines as f32).max(0.0) * grid.metrics.line_h,
+                (lines as f32 - self.file_view.label_lines as f32).max(0.0) * grid.metrics.line_h,
             );
         }
         let keys: Vec<String> = {
-            let icons = self.icons.borrow();
-            let px = (self.icon_size as f32 * scale).round() as u32;
-            self.items
+            let icons = self.file_view.icons.borrow();
+            let px = (self.file_view.icon_size as f32 * scale).round() as u32;
+            self.file_view
+                .items
                 .iter()
                 .map(|i| icons.draw_key(&i.icon_key, px))
                 .collect()
         };
         // Removed items fade out beneath everything else (painted first).
         let mut cells: Vec<ItemCell<'_>> = self
+            .file_view
             .leaving
             .iter()
             .map(|l| ItemCell {
@@ -1037,7 +1091,7 @@ impl FenceViewState {
                 full_label: None,
             })
             .collect();
-        cells.extend(self.items.iter().enumerate().map(|(i, item)| {
+        cells.extend(self.file_view.items.iter().enumerate().map(|(i, item)| {
             let node = &file_scene.nodes[i];
             let c = node.geometry.bounds;
             ItemCell {
@@ -1065,17 +1119,17 @@ impl FenceViewState {
         let content = ContentDraw {
             items: &cells,
             group_headers: &group_headers,
-            icon_size: self.icon_size as f32,
-            label_lines: self.label_lines,
+            icon_size: self.file_view.icon_size as f32,
+            label_lines: self.file_view.label_lines,
             line_h: grid.metrics.line_h,
             icon_top: grid.metrics.icon_top,
             label_gap: grid.metrics.label_gap,
             scrollbar,
             empty_text: Some(self.empty_text()),
-            drop_highlight: self.drop_wash.value_at(now),
+            drop_highlight: self.file_view.drop_wash.value_at(now),
             marquee: self.marquee_rect_dip(),
             insert_caret: self.insert_caret_dip(0.0),
-            insert_caret_alpha: self.caret_alpha.value_at(now),
+            insert_caret_alpha: self.file_view.caret_alpha.value_at(now),
             selection_inactive: self.selection_inactive_now(now),
         };
         let theme = self.material_foreground();
@@ -1095,7 +1149,7 @@ impl FenceViewState {
                 )
             })?;
         if ok {
-            self.file_scene = Some(file_scene);
+            self.file_view.file_scene = Some(file_scene);
             self.publish_accessibility();
         }
         self.note_draw_result(ok);
@@ -1115,7 +1169,7 @@ impl FenceViewState {
         let layout = self.layout(width_dip);
         let view_h = (height_dip - metrics.header_h).max(1.0);
         let max_scroll = layout.max_scroll(view_h);
-        self.scroll_y = self.scroll_y.clamp(0.0, max_scroll);
+        self.file_view.scroll_y = self.file_view.scroll_y.clamp(0.0, max_scroll);
         let cols = self.columns_for(width_dip);
         let text_w = (cols.name_w - metrics.icon - 8.0 - 4.0).max(20.0);
         self.ensure_icons_and_labels(text_w);
@@ -1125,22 +1179,26 @@ impl FenceViewState {
         let file_scene = self.prepare_file_scene(&layout, now);
         self.sync_scrollbar_alpha();
         let alphas = self.item_alphas(now);
-        let scroll = self.scroll_y;
-        let dragging = self.ole_drag;
-        let cut = self.cut.clone();
-        let pressed_item = match self.pressed {
-            Some(PressTarget::Item(i)) if self.press_inside => Some(i),
+        let scroll = self.file_view.scroll_y;
+        let dragging = self.file_view.ole_drag;
+        let cut = self.file_view.cut.clone();
+        let pressed_item = match self.title_bar.pressed {
+            Some(PressTarget::Item(i)) if self.title_bar.press_inside => Some(i),
             _ => None,
         };
-        let header_pressed = match self.pressed {
-            Some(PressTarget::Header(c)) if self.press_inside => Some(header_column(c)),
+        let header_pressed = match self.title_bar.pressed {
+            Some(PressTarget::Header(c)) if self.title_bar.press_inside => Some(header_column(c)),
             _ => None,
         };
-        let focused = self.focus_visible.then_some(self.anchor_index).flatten();
+        let focused = self
+            .file_view
+            .focus_visible
+            .then_some(self.file_view.anchor_index)
+            .flatten();
         // Header cell hover fades (Details only).
         let header_alphas: Vec<(HeaderColumn, f32)> = if metrics.header_h > 0.0 {
             let animate = self.motion.enabled();
-            let hovered = self.header_hover.map(header_column);
+            let hovered = self.file_view.header_hover.map(header_column);
             let shown = [
                 Some(HeaderColumn::Name),
                 cols.date.map(|_| HeaderColumn::Date),
@@ -1148,30 +1206,33 @@ impl FenceViewState {
                 cols.size.map(|_| HeaderColumn::Size),
             ];
             for c in shown.into_iter().flatten() {
-                self.header_fades
+                self.file_view
+                    .header_fades
                     .set(animate, c, (hovered == Some(c)) as u8 as f32, now);
             }
             let out = shown
                 .into_iter()
                 .flatten()
-                .map(|c| (c, self.header_fades.value(&c, now)))
+                .map(|c| (c, self.file_view.header_fades.value(&c, now)))
                 .collect();
-            self.header_fades.prune(now, |_| true);
+            self.file_view.header_fades.prune(now, |_| true);
             out
         } else {
-            self.header_fades.clear();
+            self.file_view.header_fades.clear();
             Vec::new()
         };
         let icon_px = (metrics.icon * scale).round() as u32;
         let keys: Vec<String> = {
-            let icons = self.icons.borrow();
-            self.items
+            let icons = self.file_view.icons.borrow();
+            self.file_view
+                .items
                 .iter()
                 .map(|i| icons.draw_key(&i.icon_key, icon_px))
                 .collect()
         };
         // Removed rows fade out beneath everything else (painted first).
         let mut rows: Vec<RowCell<'_>> = self
+            .file_view
             .leaving
             .iter()
             .map(|l| RowCell {
@@ -1194,7 +1255,7 @@ impl FenceViewState {
                 icon_alpha: 1.0,
             })
             .collect();
-        rows.extend(self.items.iter().enumerate().map(|(i, item)| {
+        rows.extend(self.file_view.items.iter().enumerate().map(|(i, item)| {
             let node = &file_scene.nodes[i];
             let c = node.geometry.bounds;
             RowCell {
@@ -1238,16 +1299,16 @@ impl FenceViewState {
             },
             icon_size: metrics.icon,
             header_h: metrics.header_h,
-            sort_column: sort_column(self.sort),
-            sort_descending: self.sort_reverse,
+            sort_column: sort_column(self.file_view.sort),
+            sort_descending: self.file_view.sort_reverse,
             header_hover: &header_alphas,
             header_pressed,
             scrollbar,
             empty_text,
-            drop_highlight: self.drop_wash.value_at(now),
+            drop_highlight: self.file_view.drop_wash.value_at(now),
             marquee,
             insert_caret: self.insert_caret_dip(metrics.header_h),
-            insert_caret_alpha: self.caret_alpha.value_at(now),
+            insert_caret_alpha: self.file_view.caret_alpha.value_at(now),
             selection_inactive: self.selection_inactive_now(now),
         };
         let theme = self.material_foreground();
@@ -1286,7 +1347,7 @@ impl FenceViewState {
                 )
             })?;
         if ok {
-            self.file_scene = Some(file_scene);
+            self.file_view.file_scene = Some(file_scene);
             self.publish_accessibility();
         }
         self.note_draw_result(ok);

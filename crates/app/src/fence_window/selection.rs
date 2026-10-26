@@ -105,38 +105,42 @@ impl FenceViewState {
     /// (Shift) or moving the focus alone (Ctrl); shows the focus ring and scrolls into view.
     pub(super) fn cursor_to(&mut self, next: usize, mode: CursorMode) {
         apply_cursor_selection(
-            &mut self.selected,
-            &mut self.anchor_index,
-            &mut self.range_anchor,
+            &mut self.file_view.selected,
+            &mut self.file_view.anchor_index,
+            &mut self.file_view.range_anchor,
             next,
             mode,
         );
-        self.focus_visible = true;
+        self.file_view.focus_visible = true;
         self.scroll_into_view(next, true);
     }
 
     /// Ctrl+Space: toggles the focused item's membership in the selection.
     pub(super) fn toggle_focused(&mut self) {
-        let Some(a) = self.anchor_index.filter(|a| *a < self.items.len()) else {
+        let Some(a) = self
+            .file_view
+            .anchor_index
+            .filter(|a| *a < self.file_view.items.len())
+        else {
             return;
         };
-        if !self.selected.remove(&a) {
-            self.selected.insert(a);
+        if !self.file_view.selected.remove(&a) {
+            self.file_view.selected.insert(a);
         }
-        self.range_anchor = Some(a);
-        self.focus_visible = true;
+        self.file_view.range_anchor = Some(a);
+        self.file_view.focus_visible = true;
     }
 
     /// Moves the selection anchor by (dx, dy) cells (see [`CursorMode`]).
     pub(super) fn move_cursor(&mut self, dx: i32, dy: i32, mode: CursorMode) {
-        if self.items.is_empty() {
+        if self.file_view.items.is_empty() {
             return;
         }
         let scale = self.scale();
         let (cw, _) = self.content_size_px();
         let layout = self.layout(cw as f32 / scale);
-        let n = self.items.len();
-        let cur = match self.anchor_index {
+        let n = self.file_view.items.len();
+        let cur = match self.file_view.anchor_index {
             Some(i) => i.min(n - 1),
             None => {
                 self.cursor_to(0, mode);
@@ -150,17 +154,17 @@ impl FenceViewState {
     }
 
     pub(super) fn select_only(&mut self, index: usize) {
-        self.selected.clear();
-        self.selected.insert(index);
-        self.anchor_index = Some(index);
-        self.range_anchor = Some(index);
+        self.file_view.selected.clear();
+        self.file_view.selected.insert(index);
+        self.file_view.anchor_index = Some(index);
+        self.file_view.range_anchor = Some(index);
     }
 
     /// Ends a marquee (button release, capture loss, Esc), returning whether one was running.
     /// Releasing while the band was still edge-auto-scrolling leaves the offset between
     /// pixels, so it snaps here; the caller's redraw paints the snapped offset.
     pub(super) fn end_marquee(&mut self) -> bool {
-        let had = self.marquee.take().is_some();
+        let had = self.file_view.marquee.take().is_some();
         if had {
             self.snap_scroll();
         }
@@ -171,7 +175,7 @@ impl FenceViewState {
     /// whole page; Shift extends the range, Ctrl moves the focus only. Clamps to the first /
     /// last item.
     pub(super) fn page_cursor(&mut self, dir: i32, mode: CursorMode) {
-        if self.items.is_empty() {
+        if self.file_view.items.is_empty() {
             return;
         }
         let scale = self.scale();
@@ -179,8 +183,8 @@ impl FenceViewState {
         let layout = self.layout(cw as f32 / scale);
         let view_h = ch as f32 / scale - layout.fixed_top();
         let rows_per_page = ((view_h / layout.row_step()).floor() as i32).max(1);
-        let n = self.items.len();
-        let cur = match self.anchor_index {
+        let n = self.file_view.items.len();
+        let cur = match self.file_view.anchor_index {
             Some(i) => i.min(n - 1),
             None => {
                 let t = if dir > 0 { 0 } else { n - 1 };
@@ -200,19 +204,21 @@ impl FenceViewState {
     }
 
     pub(super) fn preview_path(&self) -> Option<&std::path::Path> {
-        if self.rolled_up {
+        if self.animation.rolled_up {
             return None;
         }
         let idx = self
+            .file_view
             .anchor_index
-            .filter(|i| self.selected.contains(i))
-            .or_else(|| self.selected.iter().min().copied())?;
-        self.items.get(idx).map(|it| it.path.as_path())
+            .filter(|i| self.file_view.selected.contains(i))
+            .or_else(|| self.file_view.selected.iter().min().copied())?;
+        self.file_view.items.get(idx).map(|it| it.path.as_path())
     }
 
     pub(super) fn typing_ahead(&self) -> bool {
-        !self.type_ahead.is_empty()
+        !self.file_view.type_ahead.is_empty()
             && self
+                .file_view
                 .type_ahead_at
                 .is_some_and(|t| t.elapsed() <= TYPE_AHEAD_TIMEOUT)
     }
@@ -223,36 +229,41 @@ impl FenceViewState {
     /// prefix stays on the current item while it still matches. Returns true when the selection
     /// moved.
     pub(super) fn type_ahead_char(&mut self, ch: char) -> bool {
-        if self.items.is_empty() || self.rolled_up {
+        if self.file_view.items.is_empty() || self.animation.rolled_up {
             return false;
         }
         if self
+            .file_view
             .type_ahead_at
             .is_none_or(|t| t.elapsed() > TYPE_AHEAD_TIMEOUT)
         {
-            self.type_ahead.clear();
+            self.file_view.type_ahead.clear();
         }
-        self.type_ahead_at = Some(Instant::now());
-        if self.type_ahead.is_empty() && ch == ' ' {
+        self.file_view.type_ahead_at = Some(Instant::now());
+        if self.file_view.type_ahead.is_empty() && ch == ' ' {
             return false;
         }
-        self.type_ahead.push(ch);
-        let lower = self.type_ahead.to_lowercase();
+        self.file_view.type_ahead.push(ch);
+        let lower = self.file_view.type_ahead.to_lowercase();
         let first = lower.chars().next().unwrap_or(ch);
         let single = lower.chars().count() == 1;
         let repeated = !single && lower.chars().all(|c| c == first);
-        let n = self.items.len();
+        let n = self.file_view.items.len();
         let (needle, start) = if single || repeated {
             (
                 first.to_string(),
-                self.anchor_index.map_or(0, |a| (a + 1) % n),
+                self.file_view.anchor_index.map_or(0, |a| (a + 1) % n),
             )
         } else {
-            (lower, self.anchor_index.unwrap_or(0).min(n - 1))
+            (lower, self.file_view.anchor_index.unwrap_or(0).min(n - 1))
         };
         for k in 0..n {
             let i = (start + k) % n;
-            if self.items[i].name.to_lowercase().starts_with(&needle) {
+            if self.file_view.items[i]
+                .name
+                .to_lowercase()
+                .starts_with(&needle)
+            {
                 self.cursor_to(i, CursorMode::Select);
                 return true;
             }
@@ -269,9 +280,9 @@ impl FenceViewState {
     /// the pointer, as those branches track the offset themselves.
     pub(super) fn request_hover_refresh(&self) {
         if !self.mouse_inside
-            || self.marquee.is_some()
-            || self.drag.is_some()
-            || self.ole_drag
+            || self.file_view.marquee.is_some()
+            || self.file_view.drag.is_some()
+            || self.file_view.ole_drag
             || self.scrollbar_pressed()
         {
             return;
@@ -287,16 +298,16 @@ impl FenceViewState {
 
     /// Cancels an armed slow-double-click rename.
     pub(super) fn cancel_pending_rename(&mut self) {
-        if self.pending_rename.take().is_some() {
+        if self.file_view.pending_rename.take().is_some() {
             window::kill_timer(self.hwnd, TIMER_RENAME);
         }
     }
 
     pub(super) fn selected_paths(&self) -> Vec<PathBuf> {
-        let mut v: Vec<usize> = self.selected.iter().copied().collect();
+        let mut v: Vec<usize> = self.file_view.selected.iter().copied().collect();
         v.sort_unstable();
         v.into_iter()
-            .filter_map(|i| self.items.get(i).map(|it| it.path.clone()))
+            .filter_map(|i| self.file_view.items.get(i).map(|it| it.path.clone()))
             .collect()
     }
 
@@ -304,7 +315,7 @@ impl FenceViewState {
     pub(super) fn redraw_for_press(&mut self, p: PressTarget) {
         match p {
             PressTarget::Item(_) | PressTarget::Header(_) => {
-                if !self.rolled_up {
+                if !self.animation.rolled_up {
                     let _ = self.redraw_content();
                 }
             }
@@ -331,15 +342,15 @@ impl FenceViewState {
         } else {
             return None;
         };
-        self.pressed = Some(p);
-        self.press_inside = true;
-        self.press_origin = (x_px, y_px);
+        self.title_bar.pressed = Some(p);
+        self.title_bar.press_inside = true;
+        self.title_bar.press_origin = (x_px, y_px);
         self.redraw_for_press(p);
         Some(p)
     }
 
     pub(super) fn take_pressed_at(&mut self, x: i32, y: i32) -> Option<(PressTarget, bool)> {
-        let target = self.pressed?;
+        let target = self.title_bar.pressed?;
         let inside = self.press_hit(target, x, y);
         self.take_pressed().map(|(target, _)| (target, inside))
     }
@@ -347,8 +358,8 @@ impl FenceViewState {
     /// Takes the pressed control without repainting: the caller folds the repaint into its own
     /// single redraw of the affected surface.
     pub(super) fn take_pressed(&mut self) -> Option<(PressTarget, bool)> {
-        let p = self.pressed.take()?;
-        let inside = std::mem::replace(&mut self.press_inside, false);
+        let p = self.title_bar.pressed.take()?;
+        let inside = std::mem::replace(&mut self.title_bar.press_inside, false);
         Some((p, inside))
     }
 
@@ -364,19 +375,20 @@ impl FenceViewState {
     /// folds it into its own redraw so a click rasterises the content once).
     #[must_use]
     pub(super) fn set_active(&mut self, on: bool) -> bool {
-        if self.win_active == on {
+        if self.file_view.win_active == on {
             return false;
         }
-        self.win_active = on;
+        self.file_view.win_active = on;
         let to = if on { 0.0 } else { 1.0 };
         let now = Instant::now();
-        if self.selected.is_empty() || !self.motion.enabled() {
-            self.selection_inactive = Tween::at(to, now);
+        if self.file_view.selected.is_empty() || !self.motion.enabled() {
+            self.file_view.selection_inactive = Tween::at(to, now);
         } else {
-            self.selection_inactive
+            self.file_view
+                .selection_inactive
                 .retarget(to, motion::FAST, Curve::Linear, now);
         }
-        !self.selected.is_empty() && !self.rolled_up
+        !self.file_view.selected.is_empty() && !self.animation.rolled_up
     }
 
     /// Pointer-initiated activation. Explorer processes WM_MOUSEACTIVATE / focus before the
@@ -386,12 +398,12 @@ impl FenceViewState {
     #[must_use]
     pub(super) fn activate_by_pointer(&mut self) -> bool {
         let now = Instant::now();
-        let changed = !self.win_active
-            || !self.selection_inactive.is_done(now)
-            || self.selection_inactive.target() != 0.0;
-        self.win_active = true;
-        self.selection_inactive = Tween::at(0.0, now);
-        changed && !self.selected.is_empty() && !self.rolled_up
+        let changed = !self.file_view.win_active
+            || !self.file_view.selection_inactive.is_done(now)
+            || self.file_view.selection_inactive.target() != 0.0;
+        self.file_view.win_active = true;
+        self.file_view.selection_inactive = Tween::at(0.0, now);
+        changed && !self.file_view.selected.is_empty() && !self.animation.rolled_up
     }
 
     /// Fade the frameless widget's grab handle towards shown (pointer over the window)
@@ -402,7 +414,7 @@ impl FenceViewState {
         } else {
             0.0
         };
-        if (self.grab_alpha.target() - target).abs() < f32::EPSILON {
+        if (self.animation.grab_alpha.target() - target).abs() < f32::EPSILON {
             return;
         }
         let now = Instant::now();
@@ -411,14 +423,14 @@ impl FenceViewState {
         } else {
             pecofence_render::motion::FAST
         };
-        self.grab_alpha = self.motion.tween(
-            self.grab_alpha.value_at(now),
+        self.animation.grab_alpha = self.motion.tween(
+            self.animation.grab_alpha.value_at(now),
             target,
             duration,
             pecofence_render::motion::Curve::Decelerate,
             now,
         );
-        self.grab_busy = true;
+        self.animation.grab_busy = true;
         self.frames.request();
     }
 
@@ -448,11 +460,11 @@ impl FenceViewState {
     pub(super) fn marquee_rect_dip(&self) -> Option<Rect> {
         let (cw, _) = self.content_size_px();
         let fixed = self.layout(cw as f32 / self.scale()).fixed_top();
-        self.marquee_rect_at(self.scroll_y, fixed)
+        self.marquee_rect_at(self.file_view.scroll_y, fixed)
     }
 
     fn marquee_rect_at(&self, scroll: f32, fixed: f32) -> Option<Rect> {
-        let m = self.marquee.as_ref()?;
+        let m = self.file_view.marquee.as_ref()?;
         let scale = self.scale();
         let title_h = self.title_h_px() as f32;
         let to_dip = |(x, y): (i32, i32)| (x as f32 / scale, (y as f32 - title_h) / scale - fixed);
@@ -479,7 +491,7 @@ impl FenceViewState {
         let Some(r) = self.marquee_rect_at(scene.scroll, fixed) else {
             return;
         };
-        let (base, mode) = match self.marquee.as_ref() {
+        let (base, mode) = match self.file_view.marquee.as_ref() {
             Some(m) => (m.base.clone(), m.mode),
             None => return,
         };
@@ -497,7 +509,7 @@ impl FenceViewState {
                 band.insert(index);
             }
         }
-        self.selected = match mode {
+        self.file_view.selected = match mode {
             MarqueeMode::Replace => band,
             MarqueeMode::Add => base.union(&band).copied().collect(),
             MarqueeMode::Toggle => base.symmetric_difference(&band).copied().collect(),
@@ -516,22 +528,22 @@ impl FenceViewState {
     /// Updates the item / title-row hover; returns `(item_changed, title_changed)` so the
     /// caller redraws only the surface that shows the change.
     pub(super) fn set_hover(&mut self, hover: Option<usize>, title_hover: bool) -> (bool, bool) {
-        if self.retired {
+        if self.animation.retired {
             // Fading out for good: no hover fades (they would only request frames nobody ticks).
             return (false, false);
         }
-        let item = self.hover != hover;
-        let title = self.title_hover != title_hover;
-        self.hover = hover;
-        self.title_hover = title_hover;
+        let item = self.file_view.hover != hover;
+        let title = self.title_bar.title_hover != title_hover;
+        self.file_view.hover = hover;
+        self.title_bar.title_hover = title_hover;
         (item, title)
     }
 
     pub(super) fn selected_ids(&self) -> Vec<ItemId> {
-        let mut v: Vec<usize> = self.selected.iter().copied().collect();
+        let mut v: Vec<usize> = self.file_view.selected.iter().copied().collect();
         v.sort_unstable();
         v.into_iter()
-            .filter_map(|i| self.items.get(i).map(|it| it.id))
+            .filter_map(|i| self.file_view.items.get(i).map(|it| it.id))
             .collect()
     }
 }

@@ -48,7 +48,7 @@ impl FenceViewState {
 
     /// Is the client-pixel point on item `index`'s label text (not its icon)?
     pub(super) fn label_hit(&self, x_px: i32, y_px: i32, index: usize) -> bool {
-        let Some(id) = self.items.get(index).map(|i| i.id) else {
+        let Some(id) = self.file_view.items.get(index).map(|i| i.id) else {
             return false;
         };
         let Some(r) = self.item_label_rect(id) else {
@@ -61,7 +61,7 @@ impl FenceViewState {
 
     /// Double-click on a header divider: size the column to its widest cell (Explorer).
     pub(super) fn auto_fit_column(&mut self, col: DetailColumn) {
-        if col == DetailColumn::Name || self.layout != ViewLayout::Details {
+        if col == DetailColumn::Name || self.file_view.layout != ViewLayout::Details {
             return;
         }
         let caption = match col {
@@ -74,7 +74,7 @@ impl FenceViewState {
         let fmt = chrome.row_format();
         // 12 DIPs of caption breathing room (the sort chevron sits above the caption).
         let mut w = pecofence_render::text::measure_width(caption, &fmt) + 12.0;
-        for item in &mut self.items {
+        for item in &mut self.file_view.items {
             let label = match col {
                 DetailColumn::Date => {
                     let text = item.date_text();
@@ -99,7 +99,7 @@ impl FenceViewState {
 
     /// Is the client-pixel point anywhere in the Details header band (column menu)?
     pub(super) fn header_band_hit(&self, x_px: i32, y_px: i32) -> bool {
-        if self.layout != ViewLayout::Details || !self.input_lifecycle().body() {
+        if self.file_view.layout != ViewLayout::Details || !self.input_lifecycle().body() {
             return false;
         }
         let (cw, _) = self.content_size_px();
@@ -114,7 +114,7 @@ impl FenceViewState {
 
     /// Is the client-pixel point on the portal "up" button?
     pub(super) fn up_button_at(&self, x_px: i32, y_px: i32) -> bool {
-        if !self.deco.up_button || self.tabs.len() > 1 {
+        if !self.title_bar.deco.up_button || self.title_bar.tabs.len() > 1 {
             return false;
         }
         self.committed_chrome_scene()
@@ -169,17 +169,17 @@ impl FenceViewState {
     }
 
     pub(super) fn grid_metrics(&self) -> GridMetrics {
-        GridMetrics::for_icon_size(self.icon_size, self.label_lines)
+        GridMetrics::for_icon_size(self.file_view.icon_size, self.file_view.label_lines)
             .with_line_h(self.chrome.label_line_h())
             .with_group_line_h(self.chrome.group_line_h())
-            .with_spacing(self.spacing)
+            .with_spacing(self.file_view.spacing)
     }
 
     /// "按时间分组" sections of the current items as delivered (sorted, possibly reversed):
     /// contiguous runs of one date bucket; the leading namespace items form a headerless run.
     /// Empty when grouping is off.
     pub(super) fn group_spans(&self) -> Vec<GroupSpan> {
-        if !self.group_by_date || self.items.is_empty() {
+        if !self.file_view.group_by_date || self.file_view.items.is_empty() {
             return Vec::new();
         }
         let now = std::time::SystemTime::now()
@@ -190,7 +190,8 @@ impl FenceViewState {
         };
         let today = CivilDate::new(y, m, d);
         group_spans(
-            self.items
+            self.file_view
+                .items
                 .iter()
                 .map(|it| it.local_date.map(|d| date_bucket(d, today))),
         )
@@ -198,8 +199,8 @@ impl FenceViewState {
 
     pub(super) fn layout(&self, width_dip: f32) -> ItemLayout {
         let spans = self.group_spans();
-        let n = self.items.len();
-        match self.layout {
+        let n = self.file_view.items.len();
+        match self.file_view.layout {
             ViewLayout::Icons => {
                 ItemLayout::Grid(Grid::grouped(self.grid_metrics(), width_dip, n, &spans))
             }
@@ -220,15 +221,15 @@ impl FenceViewState {
 
     /// Icon edge in DIPs for the current layout (rows use a small 20 DIP icon).
     pub(super) fn icon_dip(&self) -> f32 {
-        match self.layout {
-            ViewLayout::Icons => self.icon_size as f32,
+        match self.file_view.layout {
+            ViewLayout::Icons => self.file_view.icon_size as f32,
             ViewLayout::List => RowMetrics::list().icon,
             ViewLayout::Details => RowMetrics::details().icon,
         }
     }
 
     pub(super) fn row_metrics(&self) -> Option<RowMetrics> {
-        match self.layout {
+        match self.file_view.layout {
             ViewLayout::Icons => None,
             ViewLayout::List => Some(
                 RowMetrics::list()
@@ -243,7 +244,7 @@ impl FenceViewState {
 
     /// Details header column under a client-pixel point.
     pub(super) fn header_hit(&self, x_px: i32, y_px: i32) -> Option<DetailColumn> {
-        if self.layout != ViewLayout::Details || !self.input_lifecycle().body() {
+        if self.file_view.layout != ViewLayout::Details || !self.input_lifecycle().body() {
             return None;
         }
         let scale = self.scale();
@@ -258,7 +259,7 @@ impl FenceViewState {
 
     /// Details header divider under a client-pixel point (resize grip).
     pub(super) fn divider_hit(&self, x_px: i32, y_px: i32) -> Option<DetailColumn> {
-        if self.layout != ViewLayout::Details || !self.input_lifecycle().body() {
+        if self.file_view.layout != ViewLayout::Details || !self.input_lifecycle().body() {
             return None;
         }
         let scale = self.scale();
@@ -272,9 +273,9 @@ impl FenceViewState {
 
     pub(super) fn column_width(&self, col: DetailColumn) -> f32 {
         match col {
-            DetailColumn::Date => self.column_widths[0],
-            DetailColumn::Type => self.column_widths[1],
-            DetailColumn::Size => self.column_widths[2],
+            DetailColumn::Date => self.file_view.column_widths[0],
+            DetailColumn::Type => self.file_view.column_widths[1],
+            DetailColumn::Size => self.file_view.column_widths[2],
             DetailColumn::Name => 0.0,
         }
     }
@@ -282,18 +283,20 @@ impl FenceViewState {
     pub(super) fn set_column_width(&mut self, col: DetailColumn, w: f32) {
         let w = w.clamp(DetailColumns::MIN_COL_W, DetailColumns::MAX_COL_W);
         match col {
-            DetailColumn::Date => self.column_widths[0] = w,
-            DetailColumn::Type => self.column_widths[1] = w,
-            DetailColumn::Size => self.column_widths[2] = w,
+            DetailColumn::Date => self.file_view.column_widths[0] = w,
+            DetailColumn::Type => self.file_view.column_widths[1] = w,
+            DetailColumn::Size => self.file_view.column_widths[2] = w,
             DetailColumn::Name => {}
         }
     }
 
     /// Screen rectangle of an item's label (for the inline rename popup).
     pub(super) fn item_label_rect(&self, item: ItemId) -> Option<RECT> {
-        let index = self.items.iter().position(|i| i.id == item)?;
+        let index = self.file_view.items.iter().position(|i| i.id == item)?;
         let scale = self.scale();
-        let node = self.committed_file_scene()?.node(self.items[index].id)?;
+        let node = self
+            .committed_file_scene()?
+            .node(self.file_view.items[index].id)?;
         let label = node.geometry.label;
         let win = window::window_rect(self.hwnd);
         let title_h = self.title_h_px();
@@ -309,7 +312,10 @@ impl FenceViewState {
     /// Window height (device px) that fits every row of the grid at the current width, when
     /// auto-height applies (off while rolled or rolling).
     pub(super) fn auto_height_px(&self) -> Option<i32> {
-        if !self.auto_height || self.rolled_up || self.roll_anim.is_some() {
+        if !self.file_view.auto_height
+            || self.animation.rolled_up
+            || self.animation.roll_anim.is_some()
+        {
             return None;
         }
         Some(self.fitting_height_px())

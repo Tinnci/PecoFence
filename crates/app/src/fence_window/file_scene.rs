@@ -138,24 +138,25 @@ impl FenceViewState {
         let fixed = layout.fixed_top();
         let columns = self.columns_for(width);
         let nodes: Vec<FileNode> = self
+            .file_view
             .items
             .iter()
             .enumerate()
             .map(|(i, item)| {
                 let cell = layout.cell(i);
-                let (x, y, alpha) =
-                    self.item_motion
-                        .get(&item.id)
-                        .map_or((cell.x, cell.y, 1.0), |motion| {
-                            (
-                                motion.x.value_at(now),
-                                motion.y.value_at(now),
-                                motion.alpha.value_at(now),
-                            )
-                        });
+                let (x, y, alpha) = self.file_view.item_motion.get(&item.id).map_or(
+                    (cell.x, cell.y, 1.0),
+                    |motion| {
+                        (
+                            motion.x.value_at(now),
+                            motion.y.value_at(now),
+                            motion.alpha.value_at(now),
+                        )
+                    },
+                );
                 let bounds = RectDip {
                     x,
-                    y: y - self.scroll_y + fixed,
+                    y: y - self.file_view.scroll_y + fixed,
                     w: cell.w,
                     h: cell.h,
                 };
@@ -186,7 +187,7 @@ impl FenceViewState {
             .collect();
         let semantics = nodes
             .iter()
-            .zip(&self.items)
+            .zip(&self.file_view.items)
             .map(|(node, item)| SemanticNode {
                 id: node.id,
                 parent: None,
@@ -209,7 +210,7 @@ impl FenceViewState {
                 h: (size.1 as f32 / self.scale() - fixed).max(0.0),
             },
             columns: (fixed > 0.0).then_some(columns),
-            scroll: self.scroll_y,
+            scroll: self.file_view.scroll_y,
             nodes,
             visible: Vec::new(),
             by_id: HashMap::new(),
@@ -221,22 +222,27 @@ impl FenceViewState {
     }
 
     pub(super) fn committed_file_scene(&self) -> Option<&FileScene> {
-        self.file_scene.as_ref().filter(|scene| {
+        self.file_view.file_scene.as_ref().filter(|scene| {
             scene.matches(
                 self.active,
                 self.dpi,
                 self.stack.device_generation(),
                 self.content_panel.surface_epoch(),
                 self.content_size_px(),
-            ) && self.plugin_panel.is_none()
+            ) && self.panel_host.plugin_panel.is_none()
         })
     }
 
     pub(super) fn resolve_file_node(&self, index: usize, id: ItemId) -> Option<usize> {
-        if self.items.get(index).is_some_and(|item| item.id == id) {
+        if self
+            .file_view
+            .items
+            .get(index)
+            .is_some_and(|item| item.id == id)
+        {
             Some(index)
         } else {
-            self.items.iter().position(|item| item.id == id)
+            self.file_view.items.iter().position(|item| item.id == id)
         }
     }
 }

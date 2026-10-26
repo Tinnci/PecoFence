@@ -443,7 +443,7 @@ impl FenceDropHandler {
     fn current_identity(&self, pt: DragPoint, files: bool) -> Option<DropCommitIdentity> {
         let guard = self.view.try_borrow().ok()?;
         let v = guard.as_ref()?;
-        (v.plugin_panel.is_none() && v.drop_input_available(pt)).then(|| {
+        (v.panel_host.plugin_panel.is_none() && v.drop_input_available(pt)).then(|| {
             v.drop_commit_identity(v.drop_spot_with(pt.x, pt.y, Self::internal().as_ref(), files))
         })
     }
@@ -462,18 +462,18 @@ impl FenceDropHandler {
         let Some(v) = guard.as_mut() else {
             return none;
         };
-        if v.plugin_panel.is_some() || pt.is_some_and(|pt| !v.drop_input_available(pt)) {
-            v.drag_scroll = None;
+        if v.panel_host.plugin_panel.is_some() || pt.is_some_and(|pt| !v.drop_input_available(pt)) {
+            v.file_view.drag_scroll = None;
             v.apply_drop_feedback(None);
             return none;
         }
         let Some(pt) = pt else {
-            v.drag_scroll = None;
+            v.file_view.drag_scroll = None;
             if v.snap_scroll() {
                 let _ = v.redraw_content();
             }
             v.apply_drop_feedback(None);
-            if v.peeking {
+            if v.animation.peeking {
                 // Unrolled by the drag dwell: roll back once the drag has ended outside (the
                 // close timer re-arms itself while the button is still down).
                 window::set_timer(v.hwnd, TIMER_PEEK_CLOSE, PEEK_CLOSE_MS);
@@ -484,12 +484,12 @@ impl FenceDropHandler {
             };
         };
         let internal = Self::internal();
-        v.drop_launch = self.kind == DropKind::Files;
+        v.file_view.drop_launch = self.kind == DropKind::Files;
         let spot = v.drop_spot_at(pt.x, pt.y, internal.as_ref());
         v.apply_drop_feedback(Some(spot));
         v.update_drag_dwell(self.behavior.hover_peek.get());
         v.update_drag_scroll(pt);
-        if let Some(it) = spot.launch.and_then(|i| v.items.get(i)) {
+        if let Some(it) = spot.launch.and_then(|i| v.file_view.items.get(i)) {
             let effect = launch_effect(allowed);
             return Feedback {
                 effect,
@@ -512,23 +512,24 @@ impl FenceDropHandler {
                 } else {
                     let folder = spot
                         .folder
-                        .and_then(|i| v.items.get(i))
+                        .and_then(|i| v.file_view.items.get(i))
                         .map(|it| it.path.as_path());
                     folder_effect(folder, key_state, allowed)
                 }
             }
         };
         // What the badge names: the tab pill, the folder, or the fence being shown.
-        let insert = if let Some(t) = spot.tab.and_then(|i| v.tabs.get(i)) {
+        let insert = if let Some(t) = spot.tab.and_then(|i| v.title_bar.tabs.get(i)) {
             t.title.clone()
-        } else if let Some(it) = spot.folder.and_then(|i| v.items.get(i)) {
+        } else if let Some(it) = spot.folder.and_then(|i| v.file_view.items.get(i)) {
             it.name.clone()
         } else {
-            v.tabs
+            v.title_bar
+                .tabs
                 .iter()
                 .find(|t| t.id == v.active)
                 .map(|t| t.title.clone())
-                .unwrap_or_else(|| v.title.clone())
+                .unwrap_or_else(|| v.title_bar.title.clone())
         };
         Feedback {
             effect,
@@ -575,7 +576,7 @@ impl DropHandler for FenceDropHandler {
             .view
             .borrow()
             .as_ref()
-            .is_some_and(|v| v.plugin_panel.is_some())
+            .is_some_and(|v| v.panel_host.plugin_panel.is_some())
         {
             DropKind::None
         } else if dragdrop::has_hdrop(data) {
@@ -656,19 +657,19 @@ impl DropHandler for FenceDropHandler {
         // Resolve the target and clear the highlights under one borrow.
         let resolved = self.view.try_borrow_mut().ok().and_then(|mut g| {
             g.as_mut()
-                .filter(|v| v.drop_input_available(pt) && v.plugin_panel.is_none())
+                .filter(|v| v.drop_input_available(pt) && v.panel_host.plugin_panel.is_none())
                 .map(|v| {
                     let spot = v.drop_spot_with(pt.x, pt.y, internal.as_ref(), files);
-                    let tab_fence = spot.tab.and_then(|i| v.tabs.get(i)).map(|t| t.id);
+                    let tab_fence = spot.tab.and_then(|i| v.title_bar.tabs.get(i)).map(|t| t.id);
                     let folder = spot
                         .folder
-                        .and_then(|i| v.items.get(i))
+                        .and_then(|i| v.file_view.items.get(i))
                         .map(|it| it.path.clone());
                     let launch = spot
                         .launch
-                        .and_then(|i| v.items.get(i))
+                        .and_then(|i| v.file_view.items.get(i))
                         .map(|it| (it.id, it.path.clone(), it.name.clone()));
-                    v.drag_scroll = None;
+                    v.file_view.drag_scroll = None;
                     if v.snap_scroll() {
                         let _ = v.redraw_content();
                     }
@@ -885,18 +886,24 @@ impl FenceViewState {
     fn drop_commit_identity(&self, spot: DropSpot) -> DropCommitIdentity {
         DropCommitIdentity {
             active: self.active,
-            tab: spot.tab.and_then(|i| self.tabs.get(i)).map(|tab| tab.id),
+            tab: spot
+                .tab
+                .and_then(|i| self.title_bar.tabs.get(i))
+                .map(|tab| tab.id),
             folder: spot
                 .folder
-                .and_then(|i| self.items.get(i))
+                .and_then(|i| self.file_view.items.get(i))
                 .map(|item| (item.id, item.path.clone())),
             launch: spot
                 .launch
-                .and_then(|i| self.items.get(i))
+                .and_then(|i| self.file_view.items.get(i))
                 .map(|item| (item.id, item.path.clone())),
-            insertion: spot
-                .insert
-                .map(|index| (index, self.items.iter().map(|item| item.id).collect())),
+            insertion: spot.insert.map(|index| {
+                (
+                    index,
+                    self.file_view.items.iter().map(|item| item.id).collect(),
+                )
+            }),
             self_drop: spot.self_drop,
         }
     }
@@ -904,7 +911,10 @@ impl FenceViewState {
     /// Insertion index for reordering at a client-pixel point: only in a 手动-sorted virtual
     /// fence and only inside the item area.
     pub(super) fn insertion_at(&self, x_px: i32, y_px: i32) -> Option<usize> {
-        if self.rolled_up || self.sort != SortMode::Manual || self.is_portal {
+        if self.animation.rolled_up
+            || self.file_view.sort != SortMode::Manual
+            || self.file_view.is_portal
+        {
             return None;
         }
         let title_h = self.title_h_px();
@@ -919,20 +929,20 @@ impl FenceViewState {
         if y < 0.0 {
             return None;
         }
-        Some(layout.insertion_index(x, y + self.scroll_y, self.items.len()))
+        Some(layout.insertion_index(x, y + self.file_view.scroll_y, self.file_view.items.len()))
     }
 
     /// The insertion caret in visual content DIPs (`header_h` offsets rows below the header):
     /// at the live slot, or at the last slot while the caret fades out.
     pub(super) fn insert_caret_dip(&self, header_h: f32) -> Option<Rect> {
-        let i = self.drop_insert.or(self.caret_shown)?;
+        let i = self.file_view.drop_insert.or(self.file_view.caret_shown)?;
         let scale = self.scale();
         let (cw, _) = self.content_size_px();
         let layout = self.layout(cw as f32 / scale);
-        let c = layout.insertion_caret(i, self.items.len());
+        let c = layout.insertion_caret(i, self.file_view.items.len());
         Some(Rect::from_xywh(
             c.x,
-            c.y - self.scroll_y + header_h,
+            c.y - self.file_view.scroll_y + header_h,
             c.w,
             c.h,
         ))
@@ -948,7 +958,7 @@ impl FenceViewState {
         exclude: &[ItemId],
     ) -> Option<usize> {
         let i = self.hit_item(x_px, y_px)?;
-        let it = self.items.get(i)?;
+        let it = self.file_view.items.get(i)?;
         let target = it.is_folder || pecofence_platform::shell::is_recycle_bin_path(&it.path);
         (target && !exclude.contains(&it.id)).then_some(i)
     }
@@ -962,7 +972,7 @@ impl FenceViewState {
         exclude: &[ItemId],
     ) -> Option<usize> {
         let i = self.hit_item(x_px, y_px)?;
-        let it = self.items.get(i)?;
+        let it = self.file_view.items.get(i)?;
         (!exclude.contains(&it.id) && cached_opens_dropped_files(it)).then_some(i)
     }
 
@@ -973,7 +983,7 @@ impl FenceViewState {
         sy: i32,
         internal: Option<&InternalDrag>,
     ) -> DropSpot {
-        self.drop_spot_with(sx, sy, internal, self.drop_launch)
+        self.drop_spot_with(sx, sy, internal, self.file_view.drop_launch)
     }
 
     /// `drop_spot_at` with programs as targets or not (`launch`: the drag carries files).
@@ -987,12 +997,12 @@ impl FenceViewState {
         let r = window::window_rect(self.hwnd);
         let (cx, cy) = (sx - r.left, sy - r.top);
         let mut spot = DropSpot::default();
-        if self.tabs.len() > 1 {
+        if self.title_bar.tabs.len() > 1 {
             spot.tab = self.tab_at(cx, cy);
             // Items dragged onto the pill of the fence they already belong to: Explorer shows
             // "not allowed" for a same-folder drop, and the drop would be a no-op anyway.
             if let (Some(i), Some(d)) = (spot.tab, internal)
-                && self.tabs.get(i).map(|t| t.id) == Some(d.from)
+                && self.title_bar.tabs.get(i).map(|t| t.id) == Some(d.from)
             {
                 spot.tab = None;
                 spot.self_drop = true;
@@ -1051,54 +1061,60 @@ impl FenceViewState {
                     && !s.self_drop,
             ),
             None => {
-                self.drop_launch = false;
+                self.file_view.drop_launch = false;
                 (None, None, None, false)
             }
         };
         let now = Instant::now();
-        let chrome_changed = self.drop_tab != tab;
-        let content_changed =
-            self.drop_item != folder || self.drop_insert != insert || self.drop_hover != wash;
-        self.drop_tab = tab;
-        self.drop_item = folder;
-        self.drop_insert = insert;
-        if self.drop_hover != wash {
+        let chrome_changed = self.title_bar.drop_tab != tab;
+        let content_changed = self.file_view.drop_item != folder
+            || self.file_view.drop_insert != insert
+            || self.file_view.drop_hover != wash;
+        self.title_bar.drop_tab = tab;
+        self.file_view.drop_item = folder;
+        self.file_view.drop_insert = insert;
+        if self.file_view.drop_hover != wash {
             // Fluent fade in (83 ms) / direct exit (167 ms) for the fence-wide wash + ring.
-            self.drop_hover = wash;
+            self.file_view.drop_hover = wash;
             let (to, dur) = if wash {
                 (1.0, motion::FASTER)
             } else {
                 (0.0, motion::FAST)
             };
-            self.drop_wash
+            self.file_view
+                .drop_wash
                 .retarget(to, self.anim_dur(dur), Curve::Linear, now);
         }
         // The caret's position snaps between slots (a Win32 insert mark jumps too); only its
         // alpha fades, and it keeps its last slot while fading out.
         if insert.is_some() {
-            self.caret_shown = insert;
+            self.file_view.caret_shown = insert;
         }
         let caret_to = insert.is_some() as u8 as f32;
-        if (self.caret_alpha.target() - caret_to).abs() > f32::EPSILON {
-            self.caret_alpha
-                .retarget(caret_to, self.anim_dur(motion::FASTER), Curve::Linear, now);
+        if (self.file_view.caret_alpha.target() - caret_to).abs() > f32::EPSILON {
+            self.file_view.caret_alpha.retarget(
+                caret_to,
+                self.anim_dur(motion::FASTER),
+                Curve::Linear,
+                now,
+            );
         }
         // Own selection greys out while a foreign drag hovers anything in the fence (Explorer's
         // view is inactive then): 83 ms both ways, like the wash / caret / tab fades, so the
         // one remaining drop-feedback element no longer pops. `tick` repaints the content while
         // it runs (a tab-head hover alone changes no content flag).
-        let foreign =
-            !self.ole_drag && (wash || folder.is_some() || insert.is_some() || tab.is_some());
+        let foreign = !self.file_view.ole_drag
+            && (wash || folder.is_some() || insert.is_some() || tab.is_some());
         let inactive_to = foreign as u8 as f32;
-        if (self.drop_inactive.target() - inactive_to).abs() > f32::EPSILON {
-            self.drop_inactive.retarget(
+        if (self.file_view.drop_inactive.target() - inactive_to).abs() > f32::EPSILON {
+            self.file_view.drop_inactive.retarget(
                 inactive_to,
                 self.anim_dur(motion::FASTER),
                 Curve::Linear,
                 now,
             );
-            if !self.selected.is_empty() {
-                self.content_busy = true;
+            if !self.file_view.selected.is_empty() {
+                self.file_view.content_busy = true;
                 self.frames.request();
             }
         }
@@ -1110,8 +1126,8 @@ impl FenceViewState {
 
     /// Stops the drag dwell timer (drag left, dropped, or ended).
     pub(super) fn end_drag_dwell(&mut self) {
-        if self.drag_peek_armed {
-            self.drag_peek_armed = false;
+        if self.animation.drag_peek_armed {
+            self.animation.drag_peek_armed = false;
             window::kill_timer(self.hwnd, TIMER_DRAG_PEEK);
         }
     }
@@ -1122,14 +1138,14 @@ impl FenceViewState {
     /// a drop onto the head already lands in that tab's page); a switch mid-drag would also run
     /// the content cross-fade and clear the selection while the OLE loop is active.
     pub(super) fn update_drag_dwell(&mut self, hover_peek: bool) {
-        if self.rolled_up
-            && !self.peeking
-            && self.roll_anim.is_none()
+        if self.animation.rolled_up
+            && !self.animation.peeking
+            && self.animation.roll_anim.is_none()
             && hover_peek
-            && !self.drag_peek_armed
+            && !self.animation.drag_peek_armed
         {
             // A rolled fence is one title-bar target: any position within it keeps the dwell.
-            self.drag_peek_armed = true;
+            self.animation.drag_peek_armed = true;
             window::set_timer(self.hwnd, TIMER_DRAG_PEEK, Tooltip::hover_delay_ms());
         }
     }
@@ -1142,7 +1158,7 @@ impl FenceViewState {
     /// falls back to for more than `DRAG_IMAGE_MAX_ITEMS` items or a footprint wider / taller
     /// than `DRAG_IMAGE_MAX_DIP`, so the image never blankets the drop target.
     pub(super) fn render_drag_image(&self) -> Option<DragImage> {
-        if self.rolled_up || self.selected.is_empty() {
+        if self.animation.rolled_up || self.file_view.selected.is_empty() {
             return None;
         }
         let scale = self.scale();
@@ -1151,10 +1167,11 @@ impl FenceViewState {
         let layout = self.layout(width_dip);
         let fixed = layout.fixed_top();
         let mut idx: Vec<usize> = self
+            .file_view
             .selected
             .iter()
             .copied()
-            .filter(|i| *i < self.items.len())
+            .filter(|i| *i < self.file_view.items.len())
             .collect();
         idx.sort_unstable();
         // Cells in visual content DIPs, clipped to the viewport like a ListView's client area.
@@ -1162,7 +1179,7 @@ impl FenceViewState {
         let cells: Vec<(usize, CellRect)> = idx
             .iter()
             .filter_map(|&i| {
-                let node = scene.node(self.items[i].id)?;
+                let node = scene.node(self.file_view.items[i].id)?;
                 let bounds = node.geometry.bounds;
                 (node.alpha > 0.0).then_some((
                     i,
@@ -1208,7 +1225,7 @@ impl FenceViewState {
         // bitmap, so a press outside the footprint (a selection that scrolled away from the
         // grabbed item) would make the image jump to the cursor: fall back to the shell's.
         let win = window::window_rect(self.hwnd);
-        let (px, py) = self.ole_drag_press;
+        let (px, py) = self.file_view.ole_drag_press;
         let (press_x, press_y) = (win.left + px, win.top + py);
         let origin_x = win.left + (l * scale).round() as i32;
         let origin_y = win.top + self.title_h_px() + (t * scale).round() as i32;
@@ -1234,10 +1251,10 @@ impl FenceViewState {
         };
         let icon_px = (self.icon_dip() * scale).round() as u32;
         let keys: Vec<String> = {
-            let icons = self.icons.borrow();
+            let icons = self.file_view.icons.borrow();
             cells
                 .iter()
-                .map(|(i, _)| icons.draw_key(&self.items[*i].icon_key, icon_px))
+                .map(|(i, _)| icons.draw_key(&self.file_view.items[*i].icon_key, icon_px))
                 .collect()
         };
         let drawn = match &layout {
@@ -1246,7 +1263,7 @@ impl FenceViewState {
                     .iter()
                     .zip(keys.iter())
                     .map(|((i, c), key)| {
-                        let item = &self.items[*i];
+                        let item = &self.file_view.items[*i];
                         ItemCell {
                             x: c.x - l,
                             y: c.y - t,
@@ -1271,8 +1288,8 @@ impl FenceViewState {
                 let content = ContentDraw {
                     items: &items,
                     group_headers: &[],
-                    icon_size: self.icon_size as f32,
-                    label_lines: self.label_lines,
+                    icon_size: self.file_view.icon_size as f32,
+                    label_lines: self.file_view.label_lines,
                     line_h: grid.metrics.line_h,
                     icon_top: grid.metrics.icon_top,
                     label_gap: grid.metrics.label_gap,
@@ -1295,7 +1312,7 @@ impl FenceViewState {
                     .iter()
                     .zip(keys.iter())
                     .map(|((i, c), key)| {
-                        let item = &self.items[*i];
+                        let item = &self.file_view.items[*i];
                         RowCell {
                             y: c.y - t,
                             h: c.h,

@@ -177,13 +177,14 @@ impl FenceViewState {
     /// state: the half-faded page keeps fading from its current opacity (its slide finishes
     /// under the fade) and the new page starts as usual — nothing pops to rest first.
     pub(super) fn begin_content_swap(&mut self, dir: i8) {
-        if self.outgoing.len() >= 2 {
+        if self.animation.outgoing.len() >= 2 {
             // Third switch inside 167 ms: the oldest page is (nearly) transparent, park it so
             // live panels stay bounded at one content + two outgoing.
-            let oldest = self.outgoing.remove(0);
+            let oldest = self.animation.outgoing.remove(0);
             self.park_panel(oldest);
         }
         let mut incoming = match self
+            .animation
             .spares
             .pop()
             .map(Ok)
@@ -207,13 +208,13 @@ impl FenceViewState {
         self.root.children().insert_at_top(&incoming.visual);
         let outgoing = std::mem::replace(&mut self.content_panel, incoming);
         let (o, n) = (outgoing.visual.clone(), self.content_panel.visual.clone());
-        self.outgoing.push(outgoing);
-        self.swap_gen += 1;
-        self.swap_deadline =
+        self.animation.outgoing.push(outgoing);
+        self.animation.swap_gen += 1;
+        self.animation.swap_deadline =
             Some(Instant::now() + Duration::from_millis(COMPOSITION_FINISH_MS as u64));
         window::set_timer(self.hwnd, TIMER_CONTENT_FINISH, COMPOSITION_FINISH_MS);
         let motion = self.motion.clone();
-        let done = self.poster(WM_APP_TAB_SWAP_DONE, self.swap_gen);
+        let done = self.poster(WM_APP_TAB_SWAP_DONE, self.animation.swap_gen);
         let started = motion.batch(
             || {
                 motion.fade_to(&o, 0.0, motion::FASTER, Curve::Linear)?;
@@ -237,11 +238,11 @@ impl FenceViewState {
     /// re-lays the panels out or rolls the fence while a swap is still moving.
     pub(super) fn finish_content_swap_now(&mut self) {
         window::kill_timer(self.hwnd, TIMER_CONTENT_FINISH);
-        self.swap_deadline = None;
-        if self.outgoing.is_empty() {
+        self.animation.swap_deadline = None;
+        if self.animation.outgoing.is_empty() {
             return;
         }
-        for o in std::mem::take(&mut self.outgoing) {
+        for o in std::mem::take(&mut self.animation.outgoing) {
             self.park_panel(o);
         }
         let n = &self.content_panel.visual;
@@ -258,8 +259,8 @@ impl FenceViewState {
         self.root.children().remove(&o.visual);
         o.visual.set_opacity(1.0);
         o.visual.set_visible(false);
-        if self.spares.len() < 2 {
-            self.spares.push(o);
+        if self.animation.spares.len() < 2 {
+            self.animation.spares.push(o);
         }
     }
 
@@ -268,22 +269,25 @@ impl FenceViewState {
     /// fence back to the App. The caller releases the capture and pushes the commands with no
     /// borrow held. Returns None when neither drag is running.
     pub(super) fn cancel_tab_or_remote_drag(&mut self) -> Option<DragCancel> {
-        if self.tab_drag.is_some() {
+        if self.title_bar.tab_drag.is_some() {
             let now = Instant::now();
             let prev: Vec<(ContentId, f32)> = self
+                .title_bar
                 .tabs
                 .iter()
                 .map(|t| t.id)
                 .zip(self.tab_draw_xs(now))
                 .collect();
-            let td = self.tab_drag.take()?;
-            if td.index < self.tabs.len() {
-                let t = self.tabs.remove(td.index);
-                self.tabs.insert(td.start_index.min(self.tabs.len()), t);
+            let td = self.title_bar.tab_drag.take()?;
+            if td.index < self.title_bar.tabs.len() {
+                let t = self.title_bar.tabs.remove(td.index);
+                self.title_bar
+                    .tabs
+                    .insert(td.start_index.min(self.title_bar.tabs.len()), t);
             }
-            self.pressed = None;
-            self.press_inside = false;
-            self.tab_hover = None;
+            self.title_bar.pressed = None;
+            self.title_bar.press_inside = false;
+            self.title_bar.tab_hover = None;
             self.hide_tip();
             // The released pill slides from under the pointer back into its original slot along
             // with the neighbours it had displaced.
@@ -291,13 +295,13 @@ impl FenceViewState {
             let _ = self.redraw_chrome_only();
             return Some(DragCancel::Tab);
         }
-        if self.detach_pending {
-            self.detach_pending = false;
-            self.detach_cancelled = true;
+        if self.title_bar.detach_pending {
+            self.title_bar.detach_pending = false;
+            self.title_bar.detach_cancelled = true;
             return Some(DragCancel::Tab);
         }
-        let rd = self.remote_drag.take()?;
-        self.detach_pending = false;
+        let rd = self.title_bar.remote_drag.take()?;
+        self.title_bar.detach_pending = false;
         Some(match rd.origin {
             WindowDragOrigin::Tab(change) => DragCancel::Remote {
                 change,
@@ -315,13 +319,13 @@ impl FenceViewState {
     /// Natural width = caption + 16 padding, clamped to [48, 160]; when the strip does not fit
     /// beside the chevron zone every tab shrinks proportionally (captions ellipsize).
     pub(super) fn tab_rects(&self) -> Vec<(f32, f32)> {
-        self.tab_rects_with_gap(self.merge_gap)
+        self.tab_rects_with_gap(self.title_bar.merge_gap)
     }
 
     /// `tab_rects` with an explicit insertion gap (`tab_strip_rects`): pure arithmetic over the
     /// cached natural widths, so it is cheap enough for every pointer move of a merge drag.
     pub(super) fn tab_rects_with_gap(&self, gap: Option<usize>) -> Vec<(f32, f32)> {
-        if self.tabs.len() < 2 {
+        if self.title_bar.tabs.len() < 2 {
             return Vec::new();
         }
         let (_, end) = self.tab_strip_bounds();
@@ -337,8 +341,8 @@ impl FenceViewState {
             TAB_RIGHT_RESERVE
                 + pecofence_render::fence_chrome::header_count_width(
                     width,
-                    self.tabs.len(),
-                    self.deco.title_x(),
+                    self.title_bar.tabs.len(),
+                    self.title_bar.deco.title_x(),
                 )
         } else {
             TAB_RIGHT_RESERVE
@@ -351,16 +355,17 @@ impl FenceViewState {
     /// merge hint or a redraw re-uses them and only a new / renamed caption is measured. The
     /// cache also tracks title size and the theme's control padding.
     pub(super) fn tab_natural_widths(&self) -> Vec<f32> {
-        let mut cache = self.tab_natural_w.borrow_mut();
-        let hit = cache.len() == self.tabs.len()
+        let mut cache = self.title_bar.tab_natural_w.borrow_mut();
+        let hit = cache.len() == self.title_bar.tabs.len()
             && cache
                 .iter()
-                .zip(&self.tabs)
+                .zip(&self.title_bar.tabs)
                 .all(|((c, size, glass, _), t)| {
                     *c == t.title && *size == t.title_size && *glass == self.theme.is_liquid_glass()
                 });
         if !hit {
             let fresh: Vec<_> = self
+                .title_bar
                 .tabs
                 .iter()
                 .map(|t| {
@@ -402,8 +407,8 @@ impl FenceViewState {
     pub(super) fn merge_slot_at(&self, x_screen: i32) -> usize {
         // Menu/script merges have no pointer position and append. Handle the sentinel
         // before screen→client subtraction; MIN - positive_left overflows in debug.
-        if self.tabs.len() < 2 || x_screen == i32::MIN {
-            return self.tabs.len();
+        if self.title_bar.tabs.len() < 2 || x_screen == i32::MIN {
+            return self.title_bar.tabs.len();
         }
         let left = window::window_rect(self.hwnd).left;
         let x = x_screen.saturating_sub(left) as f32 / self.scale();
@@ -415,19 +420,20 @@ impl FenceViewState {
     /// true when the strip changed.
     pub(super) fn set_merge_gap(&mut self, x_screen: Option<i32>) -> bool {
         let gap = x_screen
-            .filter(|_| self.tabs.len() >= 2)
+            .filter(|_| self.title_bar.tabs.len() >= 2)
             .map(|x| self.merge_slot_at(x));
-        if gap == self.merge_gap {
+        if gap == self.title_bar.merge_gap {
             return false;
         }
         let now = Instant::now();
         let prev: Vec<(ContentId, f32)> = self
+            .title_bar
             .tabs
             .iter()
             .map(|t| t.id)
             .zip(self.tab_draw_xs(now))
             .collect();
-        self.merge_gap = gap;
+        self.title_bar.merge_gap = gap;
         self.sync_tab_slides(&prev, now);
         true
     }
@@ -440,7 +446,7 @@ impl FenceViewState {
         let super::chrome_scene::ChromeTarget::Tab(id) = target else {
             return None;
         };
-        self.tabs.iter().position(|tab| tab.id == id)
+        self.title_bar.tabs.iter().position(|tab| tab.id == id)
     }
 
     /// Where each tab pill is painted this frame (DIPs): its slot, or the tween sliding it into
@@ -451,18 +457,18 @@ impl FenceViewState {
         // `rects` is empty for a single tab (no strip), while a slide keyed by id could in
         // principle outlive a shrink: index by `get_mut`, never by position.
         let mut xs: Vec<f32> = rects.iter().map(|(x, _)| *x).collect();
-        let index_of = |id: ContentId| self.tabs.iter().position(|t| t.id == id);
-        for (id, t) in &self.tab_slide {
+        let index_of = |id: ContentId| self.title_bar.tabs.iter().position(|t| t.id == id);
+        for (id, t) in &self.title_bar.tab_slide {
             if let Some(x) = index_of(*id).and_then(|i| xs.get_mut(i)) {
                 *x = t.value_at(now);
             }
         }
-        if let Some((id, t)) = &self.tab_settle
+        if let Some((id, t)) = &self.title_bar.tab_settle
             && let Some(x) = index_of(*id).and_then(|i| xs.get_mut(i))
         {
             *x = t.value_at(now);
         }
-        if let Some(td) = &self.tab_drag
+        if let Some(td) = &self.title_bar.tab_drag
             && let Some(x) = self.dragged_tab_x(td, &rects)
             && let Some(slot) = xs.get_mut(td.index)
         {
@@ -490,17 +496,21 @@ impl FenceViewState {
     /// resting places, and Decelerate reads as a snap-then-drift over 60 DIP.
     pub(super) fn sync_tab_slides(&mut self, prev: &[(ContentId, f32)], now: Instant) {
         let rects = self.tab_rects();
-        let dragged = self.tab_drag.as_ref().map(|d| d.index);
+        let dragged = self.title_bar.tab_drag.as_ref().map(|d| d.index);
         let dur = self.anim_dur(motion::FAST);
         let mut live = false;
-        for (i, tab) in self.tabs.iter().enumerate() {
+        for (i, tab) in self.title_bar.tabs.iter().enumerate() {
             let Some(&(slot, _)) = rects.get(i) else {
                 continue;
             };
-            let slot_entry = self.tab_slide.iter().position(|(id, _)| *id == tab.id);
+            let slot_entry = self
+                .title_bar
+                .tab_slide
+                .iter()
+                .position(|(id, _)| *id == tab.id);
             if dragged == Some(i) {
                 if let Some(k) = slot_entry {
-                    self.tab_slide.remove(k);
+                    self.title_bar.tab_slide.remove(k);
                 }
                 continue;
             }
@@ -510,25 +520,27 @@ impl FenceViewState {
                 .map_or(slot, |(_, x)| *x);
             if (from - slot).abs() < 0.5 {
                 if let Some(k) = slot_entry {
-                    self.tab_slide.remove(k);
+                    self.title_bar.tab_slide.remove(k);
                 }
                 continue;
             }
             match slot_entry {
-                Some(k) => self.tab_slide[k]
-                    .1
-                    .retarget(slot, dur, Curve::PointToPoint, now),
-                None => self.tab_slide.push((
+                Some(k) => {
+                    self.title_bar.tab_slide[k]
+                        .1
+                        .retarget(slot, dur, Curve::PointToPoint, now)
+                }
+                None => self.title_bar.tab_slide.push((
                     tab.id,
                     Tween::new(from, slot, dur, Curve::PointToPoint, now),
                 )),
             }
             live = true;
         }
-        if let Some((id, _)) = &self.tab_settle
-            && self.tab_slide.iter().any(|(sid, _)| sid == id)
+        if let Some((id, _)) = &self.title_bar.tab_settle
+            && self.title_bar.tab_slide.iter().any(|(sid, _)| sid == id)
         {
-            self.tab_settle = None;
+            self.title_bar.tab_settle = None;
         }
         if live {
             self.frames.request();
@@ -542,18 +554,18 @@ impl FenceViewState {
         let (Some(from), Some(&(slot, _)), Some(tab)) = (
             self.dragged_tab_x(td, &rects),
             rects.get(td.index),
-            self.tabs.get(td.index),
+            self.title_bar.tabs.get(td.index),
         ) else {
             return;
         };
         let id = tab.id;
-        self.tab_slide.retain(|(sid, _)| *sid != id);
+        self.title_bar.tab_slide.retain(|(sid, _)| *sid != id);
         if (from - slot).abs() < 0.5 {
-            self.tab_settle = None;
+            self.title_bar.tab_settle = None;
             return;
         }
         let now = Instant::now();
-        self.tab_settle = Some((
+        self.title_bar.tab_settle = Some((
             id,
             self.motion
                 .tween(from, slot, motion::FAST, Curve::PointToPoint, now),
@@ -562,7 +574,8 @@ impl FenceViewState {
     }
 
     pub(super) fn active_index(&self) -> usize {
-        self.tabs
+        self.title_bar
+            .tabs
             .iter()
             .position(|t| t.id == self.active)
             .unwrap_or(0)

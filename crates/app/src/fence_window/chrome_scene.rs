@@ -202,7 +202,7 @@ impl ChromeScene {
 
 impl FenceViewState {
     pub(super) fn committed_chrome_scene(&self) -> Option<&ChromeScene> {
-        self.chrome_scene.as_ref().filter(|scene| {
+        self.title_bar.chrome_scene.as_ref().filter(|scene| {
             scene.matches(
                 self.active,
                 self.dpi,

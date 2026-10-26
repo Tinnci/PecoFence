@@ -131,141 +131,145 @@ impl FenceWindow {
         // Re-derive the rolled height with the window's real DPI.
         let theme = *ctx.theme.borrow();
         let mut state = FenceViewState {
-            title: title.to_string(),
-            tabs: Vec::new(),
-            tab_hover: None,
-            tab_drag: None,
-            tab_slide: Vec::new(),
-            merge_gap: None,
-            tab_natural_w: RefCell::new(Vec::new()),
-            tab_settle: None,
-            drop_tab: None,
-            title_renaming: false,
-            detach_pending: false,
-            detach_cancelled: false,
-            remote_drag: None,
-            deco: TitleDeco::default(),
-            up_hovered: false,
-            chevron_hovered: false,
-            panel_chrome: None,
-            command_hovered: None,
-            caption_hovered: None,
-            maximized: false,
-            pressed: None,
-            press_inside: false,
-            press_origin: (0, 0),
-            chrome_fades: Fades::new(motion::FASTER, motion::FASTER, Curve::Linear),
-            merge_hint: false,
-            merge_t: Tween::at(0.0, Instant::now()),
-            chrome_scene: None,
-            chrome_busy: false,
-            title_hover: false,
-            pill_anim: None,
-
-            is_panel: false,
-            plugin_panel: None,
-            input_capture_release: Rc::new(Cell::new(false)),
-
-            rolled_up,
-            expanded_h_px: expanded_h_px.max(1),
-            drag_peek_armed: false,
-            grab_alpha: Tween::at(0.0, Instant::now()),
-            grab_busy: false,
-            click_pending: None,
-            suppress_dblclk: false,
-            roll_anim: None,
-            roll_t: Tween::at(rolled_up as u8 as f32, Instant::now()),
-            height_anim: None,
-            vis_fade: None,
-            vis_gen: 0,
-            vis_deadline: None,
-            retired: false,
-            outgoing: Vec::new(),
-            spares: Vec::new(),
-            swap_gen: 0,
-            swap_deadline: None,
-            shadow_uploaded: None,
-            shadow_alpha: Tween::at(1.0, Instant::now()),
-            shadow_fading: false,
-            peeking: false,
-
-            is_inbox,
-            icon_size,
-            label_lines,
-            items,
-            rbutton_swallow: false,
-            renaming: None,
-            unfold_cache: None,
-            focus_visible: false,
-            win_active: false,
-            selection_inactive: Tween::at(1.0, Instant::now()),
-            drop_inactive: Tween::at(0.0, Instant::now()),
-            item_hover: Fades::new(motion::FASTER, motion::FASTER, Curve::Linear),
-            item_sel: Fades::new(motion::FASTER, motion::FASTER, Curve::Linear),
-            header_fades: Fades::new(motion::FASTER, motion::FASTER, Curve::Linear),
-            drop_fades: Fades::new(motion::FASTER, motion::FASTER, Curve::Linear),
-            drop_wash: Tween::at(0.0, Instant::now()),
-            caret_alpha: Tween::at(0.0, Instant::now()),
-            caret_shown: None,
-            item_motion: HashMap::new(),
-            file_scene: None,
-            leaving: Vec::new(),
-            content_busy: false,
-            last_scroll: None,
-            navigate_folders: false,
-            layout: ViewLayout::Icons,
-            sort: SortMode::Manual,
-            sort_reverse: false,
-            group_by_date: false,
-            header_hover: None,
-            column_widths: DetailColumns::DEFAULT_WIDTHS,
-            columns_visible: [true; 3],
-            col_drag: None,
-            is_portal: false,
-            portal_health: None,
-            label_w: 0.0,
-            hover: None,
-            selected: HashSet::new(),
-            scroll_y: 0.0,
-            scroll_memory: HashMap::new(),
-            scroll_restore: None,
-            scroll_anim: None,
-            icons: ctx.icons.clone(),
-            drag: None,
-            ole_drag: false,
-            ole_drag_press: (0, 0),
-            marquee: None,
-            drop_item: None,
-            drop_launch: false,
-            drop_insert: None,
-            scroll_drag: None,
-            page_repeat: None,
-            scrollbar_hot: false,
-            sb_width: Tween::at(ScrollbarDraw::REST_WIDTH, Instant::now()),
-            sb_alpha: Tween::at(
-                if ctx.behavior.hide_inactive_scrollbar.get() {
-                    0.0
-                } else {
-                    1.0
-                },
-                Instant::now(),
-            ),
-            sb_parts: Tween::at(0.0, Instant::now()),
-            sb_arrow_fades: Fades::new(motion::FASTER, motion::FASTER, Curve::Linear),
-            sb_pointer: None,
-            sb_busy: false,
-            drag_scroll: None,
-            type_ahead: String::new(),
-            type_ahead_at: None,
-            pending_rename: None,
-            cut: HashSet::new(),
-            wheel_zoom_accum: 0,
-            auto_height,
-            spacing: Spacing::Normal,
-            anchor_index: None,
-            range_anchor: None,
-            drop_hover: false,
-
+            title_bar: TitleBar {
+                title: title.to_string(),
+                tabs: Vec::new(),
+                tab_hover: None,
+                tab_drag: None,
+                tab_slide: Vec::new(),
+                merge_gap: None,
+                tab_natural_w: RefCell::new(Vec::new()),
+                tab_settle: None,
+                drop_tab: None,
+                title_renaming: false,
+                detach_pending: false,
+                detach_cancelled: false,
+                remote_drag: None,
+                deco: TitleDeco::default(),
+                up_hovered: false,
+                chevron_hovered: false,
+                panel_chrome: None,
+                command_hovered: None,
+                caption_hovered: None,
+                maximized: false,
+                pressed: None,
+                press_inside: false,
+                press_origin: (0, 0),
+                chrome_fades: Fades::new(motion::FASTER, motion::FASTER, Curve::Linear),
+                merge_hint: false,
+                merge_t: Tween::at(0.0, Instant::now()),
+                chrome_scene: None,
+                chrome_busy: false,
+                title_hover: false,
+                pill_anim: None,
+            },
+            panel_host: PanelHost {
+                is_panel: false,
+                plugin_panel: None,
+                input_capture_release: Rc::new(Cell::new(false)),
+            },
+            animation: WindowMotion {
+                rolled_up,
+                expanded_h_px: expanded_h_px.max(1),
+                drag_peek_armed: false,
+                grab_alpha: Tween::at(0.0, Instant::now()),
+                grab_busy: false,
+                click_pending: None,
+                suppress_dblclk: false,
+                roll_anim: None,
+                roll_t: Tween::at(rolled_up as u8 as f32, Instant::now()),
+                height_anim: None,
+                vis_fade: None,
+                vis_gen: 0,
+                vis_deadline: None,
+                retired: false,
+                outgoing: Vec::new(),
+                spares: Vec::new(),
+                swap_gen: 0,
+                swap_deadline: None,
+                shadow_uploaded: None,
+                shadow_alpha: Tween::at(1.0, Instant::now()),
+                shadow_fading: false,
+                peeking: false,
+            },
+            file_view: FileView {
+                is_inbox,
+                icon_size,
+                label_lines,
+                items,
+                rbutton_swallow: false,
+                renaming: None,
+                unfold_cache: None,
+                focus_visible: false,
+                win_active: false,
+                selection_inactive: Tween::at(1.0, Instant::now()),
+                drop_inactive: Tween::at(0.0, Instant::now()),
+                item_hover: Fades::new(motion::FASTER, motion::FASTER, Curve::Linear),
+                item_sel: Fades::new(motion::FASTER, motion::FASTER, Curve::Linear),
+                header_fades: Fades::new(motion::FASTER, motion::FASTER, Curve::Linear),
+                drop_fades: Fades::new(motion::FASTER, motion::FASTER, Curve::Linear),
+                drop_wash: Tween::at(0.0, Instant::now()),
+                caret_alpha: Tween::at(0.0, Instant::now()),
+                caret_shown: None,
+                item_motion: HashMap::new(),
+                file_scene: None,
+                leaving: Vec::new(),
+                content_busy: false,
+                last_scroll: None,
+                navigate_folders: false,
+                layout: ViewLayout::Icons,
+                sort: SortMode::Manual,
+                sort_reverse: false,
+                group_by_date: false,
+                header_hover: None,
+                column_widths: DetailColumns::DEFAULT_WIDTHS,
+                columns_visible: [true; 3],
+                col_drag: None,
+                is_portal: false,
+                portal_health: None,
+                label_w: 0.0,
+                hover: None,
+                selected: HashSet::new(),
+                scroll_y: 0.0,
+                scroll_memory: HashMap::new(),
+                scroll_restore: None,
+                scroll_anim: None,
+                icons: ctx.icons.clone(),
+                drag: None,
+                ole_drag: false,
+                ole_drag_press: (0, 0),
+                marquee: None,
+                drop_item: None,
+                drop_launch: false,
+                drop_insert: None,
+                scroll_drag: None,
+                page_repeat: None,
+                scrollbar_hot: false,
+                sb_width: Tween::at(ScrollbarDraw::REST_WIDTH, Instant::now()),
+                sb_alpha: Tween::at(
+                    if ctx.behavior.hide_inactive_scrollbar.get() {
+                        0.0
+                    } else {
+                        1.0
+                    },
+                    Instant::now(),
+                ),
+                sb_parts: Tween::at(0.0, Instant::now()),
+                sb_arrow_fades: Fades::new(motion::FASTER, motion::FASTER, Curve::Linear),
+                sb_pointer: None,
+                sb_busy: false,
+                drag_scroll: None,
+                type_ahead: String::new(),
+                type_ahead_at: None,
+                pending_rename: None,
+                cut: HashSet::new(),
+                wheel_zoom_accum: 0,
+                auto_height,
+                spacing: Spacing::Normal,
+                anchor_index: None,
+                range_anchor: None,
+                drop_hover: false,
+            },
             fence_id,
             accessibility: accessibility.publisher(),
             active: content_id,
@@ -366,11 +370,11 @@ impl FenceWindow {
     pub fn retire(&self) -> bool {
         let hwnd = self.hwnd();
         if let Some(v) = self.view.borrow_mut().as_mut() {
-            v.retired = true;
+            v.animation.retired = true;
             // A dying window is not ticked any more: freeze motion in flight and stop the
             // hover-peek timers instead of leaving them to fire into a fading window.
-            v.roll_anim = None;
-            v.height_anim = None;
+            v.animation.roll_anim = None;
+            v.animation.height_anim = None;
             window::kill_timer(hwnd, TIMER_PEEK_OPEN);
             window::kill_timer(hwnd, TIMER_PEEK_CLOSE);
         }
@@ -393,7 +397,7 @@ impl FenceWindow {
         let Some(v) = guard.as_ref() else {
             return "view=None".to_string();
         };
-        let fade = match v.vis_fade {
+        let fade = match v.animation.vis_fade {
             None => "none".to_string(),
             Some(VisFade::Showing) => "showing".to_string(),
             Some(VisFade::Hiding { destroy }) => format!("hiding(destroy={destroy})"),
@@ -408,26 +412,27 @@ impl FenceWindow {
         );
         format!(
             "title={:?} opacity={:.2} scale={:.3} fade={fade} retired={} rolled={} rolling={} peeking={} items={} tabs={} selected={} focused={:?} shadow_visible={} shadow_alpha={} layout={:?} locked={} auto_height={} active={} scroll={:.1} client={:?} client_offset=({},{}) chrome={:?} glass={:?} wallpaper_uploads={} title_size={} tab_fonts={:?} tab_rects={:?} capture={} tab_drag={} window_drag={} detach_pending={} semantic_nodes={} input_window={} input_body={} pressed={} marquee={} scrollbar_press={} frameless={} widget_grid={} title_height_px={} expanded_height_px={}",
-            v.title,
+            v.title_bar.title,
             v.root.opacity(),
             v.root.scale().x,
-            v.retired,
-            v.rolled_up,
-            v.roll_anim.is_some(),
-            v.peeking,
-            v.items.len(),
-            v.tabs.len(),
-            v.selected.len(),
-            v.anchor_index
-                .and_then(|i| v.items.get(i))
+            v.animation.retired,
+            v.animation.rolled_up,
+            v.animation.roll_anim.is_some(),
+            v.animation.peeking,
+            v.file_view.items.len(),
+            v.title_bar.tabs.len(),
+            v.file_view.selected.len(),
+            v.file_view
+                .anchor_index
+                .and_then(|i| v.file_view.items.get(i))
                 .map(|it| &it.name),
             desktop::is_visible(v.shadow.hwnd()),
             v.shadow.alpha(),
-            v.layout,
+            v.file_view.layout,
             v.locked,
-            v.auto_height,
+            v.file_view.auto_height,
             v.active,
-            v.scroll_y,
+            v.file_view.scroll_y,
             self.window.client_size(),
             -origin.x,
             -origin.y,
@@ -435,16 +440,17 @@ impl FenceWindow {
             v.gpu_glass.borrow().stats(),
             v.bitmaps.borrow().glass_wallpaper_uploads(),
             v.style.title_size,
-            v.tabs
+            v.title_bar
+                .tabs
                 .iter()
                 .map(|t| (&t.title, t.title_size))
                 .collect::<Vec<_>>(),
             v.tab_rects(),
             window::get_capture() == self.hwnd(),
-            v.tab_drag.is_some(),
-            v.remote_drag.is_some(),
-            v.detach_pending,
-            v.plugin_panel.as_ref().map_or_else(
+            v.title_bar.tab_drag.is_some(),
+            v.title_bar.remote_drag.is_some(),
+            v.title_bar.detach_pending,
+            v.panel_host.plugin_panel.as_ref().map_or_else(
                 || v.committed_file_scene()
                     .map_or(0, |scene| scene.semantics().len()),
                 |panel| panel.semantic_count(),
@@ -453,13 +459,13 @@ impl FenceWindow {
                 .map_or(0, |scene| scene.semantics().len()),
             v.input_lifecycle().window(),
             v.input_lifecycle().body(),
-            v.pressed.is_some(),
-            v.marquee.is_some(),
+            v.title_bar.pressed.is_some(),
+            v.file_view.marquee.is_some(),
             v.scrollbar_pressed(),
             v.frameless,
             v.widget_grid.is_some(),
             v.title_h_px(),
-            v.expanded_h_px,
+            v.animation.expanded_h_px,
         )
     }
 
@@ -525,7 +531,7 @@ impl FenceWindow {
         };
         match action {
             "pointer" => self.with_view(|v| {
-                if let Some(drag) = v.remote_drag.as_mut() {
+                if let Some(drag) = v.title_bar.remote_drag.as_mut() {
                     drag.track_pointer((x, y), window::drag_threshold());
                     if drag.pending_pointer.is_some() {
                         v.frames.request();
@@ -572,7 +578,7 @@ impl FenceWindow {
     /// Explicit geometry from the app (layout, snapping, monitor changes) takes precedence over
     /// a running auto-height settle.
     pub fn set_bounds(&self, r: RECT) {
-        self.with_view(|v| v.height_anim = None);
+        self.with_view(|v| v.animation.height_anim = None);
         let _ = self
             .window
             .set_bounds(r.left, r.top, r.right - r.left, r.bottom - r.top);
@@ -583,12 +589,12 @@ impl FenceWindow {
     pub fn restore_geometry(&self, mut rect: RECT, rolled: bool, expanded_h: i32) {
         self.with_view(|v| {
             v.finish_content_swap_now();
-            v.roll_anim = None;
-            v.height_anim = None;
-            v.peeking = false;
-            v.rolled_up = rolled;
-            v.expanded_h_px = expanded_h;
-            v.roll_t = Tween::at(rolled as u8 as f32, Instant::now());
+            v.animation.roll_anim = None;
+            v.animation.height_anim = None;
+            v.animation.peeking = false;
+            v.animation.rolled_up = rolled;
+            v.animation.expanded_h_px = expanded_h;
+            v.animation.roll_t = Tween::at(rolled as u8 as f32, Instant::now());
             let _ = v.motion.stop(&v.content_panel.visual, Prop::Opacity);
             v.content_panel.visual.set_opacity(1.0);
             v.content_panel.visual.set_visible(!rolled);
@@ -615,9 +621,9 @@ impl FenceWindow {
 
     pub fn release_panel_view(&self) {
         self.with_view(|view| {
-            view.plugin_panel = None;
-            view.panel_chrome = None;
-            view.command_hovered = None;
+            view.panel_host.plugin_panel = None;
+            view.title_bar.panel_chrome = None;
+            view.title_bar.command_hovered = None;
         });
     }
 
@@ -626,7 +632,7 @@ impl FenceWindow {
             .view
             .borrow()
             .as_ref()
-            .map(|view| view.input_capture_release.clone())
+            .map(|view| view.panel_host.input_capture_release.clone())
         else {
             return;
         };
@@ -646,19 +652,20 @@ impl FenceWindow {
             pecofence_core::FenceContentSpec::Files { .. } => None,
         };
         self.with_view(|v| {
-            v.is_panel = matches!(content, pecofence_core::FenceContentSpec::Panel { .. });
-            if v.plugin_panel.as_ref().map(|panel| panel.key())
+            v.panel_host.is_panel =
+                matches!(content, pecofence_core::FenceContentSpec::Panel { .. });
+            if v.panel_host.plugin_panel.as_ref().map(|panel| panel.key())
                 != panel.as_ref().map(|panel| panel.key())
             {
-                v.plugin_panel = panel;
-                v.panel_chrome = None;
-                v.command_hovered = None;
+                v.panel_host.plugin_panel = panel;
+                v.title_bar.panel_chrome = None;
+                v.title_bar.command_hovered = None;
                 // Back to the app-wide material until the new panel publishes chrome.
                 v.refresh_sheet();
             }
-            if v.plugin_panel.is_some() {
+            if v.panel_host.plugin_panel.is_some() {
                 v.replace_items(Vec::new());
-                v.auto_height = false;
+                v.file_view.auto_height = false;
             }
             let _ = v.redraw_content();
         });
@@ -668,8 +675,8 @@ impl FenceWindow {
     /// expanded (the popup is part of the fence); closing it restarts the close countdown.
     pub fn set_title_renaming(&self, on: bool) {
         self.with_view(|v| {
-            if v.title_renaming != on {
-                v.title_renaming = on;
+            if v.title_bar.title_renaming != on {
+                v.title_bar.title_renaming = on;
                 if !on {
                     v.resume_peek_close();
                 }
@@ -679,7 +686,7 @@ impl FenceWindow {
 
     pub fn set_title(&self, title: &str) {
         self.with_view(|v| {
-            v.title = title.to_string();
+            v.title_bar.title = title.to_string();
             let _ = v.redraw();
         });
     }
@@ -691,33 +698,33 @@ impl FenceWindow {
         self.with_view(|v| {
             let old_height = v.theme.title_height;
             v.theme.title_height = v.chrome.title_height();
-            for item in &mut v.items {
+            for item in &mut v.file_view.items {
                 item.label = None;
             }
-            v.unfold_cache = None;
-            v.tab_natural_w.borrow_mut().clear();
-            v.tab_slide.clear();
-            v.tab_settle = None;
+            v.file_view.unfold_cache = None;
+            v.title_bar.tab_natural_w.borrow_mut().clear();
+            v.title_bar.tab_slide.clear();
+            v.title_bar.tab_settle = None;
             v.hide_tip();
             v.tip = None;
             v.snap_item_motion();
             if old_height != v.theme.title_height {
                 // Settle a roll using its intended state. Resize only after the borrow
                 // ends: WM_SIZE can re-enter this window synchronously.
-                let rolling = v.roll_anim.is_some();
+                let rolling = v.animation.roll_anim.is_some();
                 let rolled = v.roll_target();
-                v.roll_anim = None;
-                v.height_anim = None;
-                v.rolled_up = rolled;
-                v.roll_t = Tween::at(rolled as u8 as f32, Instant::now());
+                v.animation.roll_anim = None;
+                v.animation.height_anim = None;
+                v.animation.rolled_up = rolled;
+                v.animation.roll_t = Tween::at(rolled as u8 as f32, Instant::now());
                 let _ = v.motion.stop(&v.content_panel.visual, Prop::Opacity);
                 v.content_panel.visual.set_opacity(1.0);
                 v.content_panel.visual.set_visible(!rolled);
-                v.expanded_h_px = v.expanded_h_px.max(v.title_h_px() + 1);
+                v.animation.expanded_h_px = v.animation.expanded_h_px.max(v.title_h_px() + 1);
                 let mut rect = window::window_rect(v.hwnd);
                 let height = text_change_height(
                     rect.bottom - rect.top,
-                    v.expanded_h_px,
+                    v.animation.expanded_h_px,
                     v.title_h_px(),
                     rolled,
                     rolling,
@@ -744,100 +751,120 @@ impl FenceWindow {
         self.with_view(|v| {
             // A tab drag in progress shows its own provisional order: a refresh with the same set
             // of tabs (the SwitchTab pushed on button-down) keeps that order, updating titles only.
-            if v.tab_drag.is_some()
-                && v.tabs.len() == tabs.len()
-                && v.tabs.iter().all(|t| tabs.iter().any(|n| n.id == t.id))
+            if v.title_bar.tab_drag.is_some()
+                && v.title_bar.tabs.len() == tabs.len()
+                && v.title_bar
+                    .tabs
+                    .iter()
+                    .all(|t| tabs.iter().any(|n| n.id == t.id))
             {
-                let order: Vec<ContentId> = v.tabs.iter().map(|t| t.id).collect();
+                let order: Vec<ContentId> = v.title_bar.tabs.iter().map(|t| t.id).collect();
                 tabs.sort_by_key(|t| order.iter().position(|id| *id == t.id).unwrap_or(0));
             }
-            let same_titles = v.tabs.len() == tabs.len()
-                && v.tabs.iter().zip(tabs.iter()).all(|(a, b)| {
+            let same_titles = v.title_bar.tabs.len() == tabs.len()
+                && v.title_bar.tabs.iter().zip(tabs.iter()).all(|(a, b)| {
                     a.id == b.id
                         && a.title == b.title
                         && a.color == b.color
                         && a.title_size == b.title_size
                         && a.title_color == b.title_color
                 });
-            let same_set = v.tabs.len() == tabs.len()
-                && v.tabs.iter().all(|t| tabs.iter().any(|n| n.id == t.id));
+            let same_set = v.title_bar.tabs.len() == tabs.len()
+                && v.title_bar
+                    .tabs
+                    .iter()
+                    .all(|t| tabs.iter().any(|n| n.id == t.id));
             let active_changed = v.active != active;
             let old_active = v.active;
-            let old_idx = v.tabs.iter().position(|t| t.id == v.active);
+            let old_idx = v.title_bar.tabs.iter().position(|t| t.id == v.active);
             let new_idx = tabs.iter().position(|t| t.id == active);
             let old_pill = old_idx.and_then(|i| v.tab_rects().get(i).copied());
             let now = Instant::now();
             // Painted x per tab before the change: a reorder (左移 / 右移, or a width change)
             // slides the pills from there to their new slots (167 ms point-to-point).
             let prev: Vec<(ContentId, f32)> = v
+                .title_bar
                 .tabs
                 .iter()
                 .map(|t| t.id)
                 .zip(v.tab_draw_xs(now))
                 .collect();
-            let old_ids: Vec<ContentId> = v.tabs.iter().map(|t| t.id).collect();
-            let had_strip = v.tabs.len() > 1;
-            v.tabs = tabs;
+            let old_ids: Vec<ContentId> = v.title_bar.tabs.iter().map(|t| t.id).collect();
+            let had_strip = v.title_bar.tabs.len() > 1;
+            v.title_bar.tabs = tabs;
             v.active = active;
             if !same_titles {
                 // Reorder, rename, or a tab added / removed (merge, tear-off, close): the
                 // survivors slide from where they were painted into their new slots (WinUI
                 // TabView neighbours moving into the vacated slot); a drag in progress keeps
                 // its own provisional positions.
-                if v.tab_drag.is_none() {
+                if v.title_bar.tab_drag.is_none() {
                     v.sync_tab_slides(&prev, now);
                 } else if !same_set {
-                    v.tab_slide.clear();
-                    v.tab_settle = None;
+                    v.title_bar.tab_slide.clear();
+                    v.title_bar.tab_settle = None;
                 }
             }
             if !same_set {
                 // Per-id state of tabs that left goes with them; index-keyed hover fades
                 // would otherwise replay on whichever neighbour inherited the index.
-                let ids: Vec<ContentId> = v.tabs.iter().map(|t| t.id).collect();
-                v.tab_slide.retain(|(id, _)| ids.contains(id));
-                if v.tab_settle.is_some_and(|(id, _)| !ids.contains(&id)) {
-                    v.tab_settle = None;
+                let ids: Vec<ContentId> = v.title_bar.tabs.iter().map(|t| t.id).collect();
+                v.title_bar.tab_slide.retain(|(id, _)| ids.contains(id));
+                if v.title_bar
+                    .tab_settle
+                    .is_some_and(|(id, _)| !ids.contains(&id))
+                {
+                    v.title_bar.tab_settle = None;
                 }
-                v.chrome_fades.prune(now, |k| {
+                v.title_bar.chrome_fades.prune(now, |k| {
                     !matches!(k, ChromeKey::Tab(_) | ChromeKey::TabDrop(_))
                 });
                 // Closed / merged / detached tabs take their remembered offsets with them.
-                v.scroll_memory.retain(|id, _| ids.contains(id));
+                v.file_view.scroll_memory.retain(|id, _| ids.contains(id));
                 // A pill that just joined a strip fades in (83 ms linear).
-                if had_strip || v.tabs.len() > 1 {
+                if had_strip || v.title_bar.tabs.len() > 1 {
                     let animate = v.motion.enabled();
                     for id in ids.iter().filter(|id| !old_ids.contains(id)) {
-                        v.chrome_fades.snap(ChromeKey::TabNew(*id), 1.0, now);
-                        v.chrome_fades
+                        v.title_bar
+                            .chrome_fades
+                            .snap(ChromeKey::TabNew(*id), 1.0, now);
+                        v.title_bar
+                            .chrome_fades
                             .set(animate, ChromeKey::TabNew(*id), 0.0, now);
                     }
                     v.frames.request();
                 }
             }
             if active_changed {
-                v.selected.clear();
-                v.anchor_index = None;
-                v.range_anchor = None;
-                v.focus_visible = false;
-                v.hover = None;
+                v.file_view.selected.clear();
+                v.file_view.anchor_index = None;
+                v.file_view.range_anchor = None;
+                v.file_view.focus_visible = false;
+                v.file_view.hover = None;
                 v.reset_item_fades();
                 // Explorer tabs keep their own scroll offset: remember the outgoing tab's and
                 // come back to the incoming tab's (0 when it was never shown). The incoming
                 // items arrive in `set_items`, which re-applies `scroll_restore`.
-                if v.tabs.iter().any(|t| t.id == old_active) {
-                    v.scroll_memory.insert(old_active, v.scroll_target());
+                if v.title_bar.tabs.iter().any(|t| t.id == old_active) {
+                    v.file_view
+                        .scroll_memory
+                        .insert(old_active, v.scroll_target());
                 }
-                let restored = v.scroll_memory.get(&active).copied().unwrap_or(0.0);
-                v.scroll_anim = None;
-                v.scroll_y = restored;
-                v.scroll_restore = Some(restored);
+                let restored = v
+                    .file_view
+                    .scroll_memory
+                    .get(&active)
+                    .copied()
+                    .unwrap_or(0.0);
+                v.file_view.scroll_anim = None;
+                v.file_view.scroll_y = restored;
+                v.file_view.scroll_restore = Some(restored);
                 // A real switch between two existing tabs (click, Ctrl+Tab) — not creation,
                 // merge, detach or closing the active tab — gets the content swap and the pill
                 // glide. Rolled / animating fences and animations-off snap as before.
                 if let (Some(o), Some(n)) = (old_idx, new_idx)
                     && o != n
-                    && !v.rolled_up
+                    && !v.animation.rolled_up
                     && !v.height_animating()
                     && v.motion.enabled()
                 {
@@ -846,6 +873,7 @@ impl FenceWindow {
                     // fill itself; otherwise the pill glides (167 ms decelerate, the Fluent
                     // selection-indicator curve).
                     let dragging = v
+                        .title_bar
                         .tab_drag
                         .as_ref()
                         .is_some_and(|d| d.index != d.start_index);
@@ -857,7 +885,7 @@ impl FenceWindow {
                             v.motion
                                 .tween(from, to, motion::FAST, Curve::Decelerate, now)
                         };
-                        v.pill_anim = Some((tween(ox, nx), tween(ow, nw)));
+                        v.title_bar.pill_anim = Some((tween(ox, nx), tween(ow, nw)));
                         v.frames.request();
                     }
                 }
@@ -865,11 +893,11 @@ impl FenceWindow {
             if !active_changed {
                 // A strip refresh with the same active tab must not leave a stale pending
                 // offset for a later `set_items`.
-                v.scroll_restore = None;
+                v.file_view.scroll_restore = None;
             }
             if !same_titles || active_changed {
-                v.tab_hover = None;
-                v.drop_tab = None;
+                v.title_bar.tab_hover = None;
+                v.title_bar.drop_tab = None;
                 let _ = v.redraw_chrome_only();
             }
         });
@@ -883,7 +911,7 @@ impl FenceWindow {
         self.view
             .borrow_mut()
             .as_mut()
-            .is_some_and(|v| std::mem::take(&mut v.detach_cancelled))
+            .is_some_and(|v| std::mem::take(&mut v.title_bar.detach_cancelled))
     }
 
     pub fn begin_remote_drag(&self, hwnd: HWND, change: pecofence_core::TabDetach) {
@@ -892,15 +920,15 @@ impl FenceWindow {
         let mut started = false;
         self.with_view(|v| {
             tracing::debug!(
-                pending = v.detach_pending,
+                pending = v.title_bar.detach_pending,
                 offset = ?(pt.x - r.left, pt.y - r.top),
                 "begin_remote_drag"
             );
-            if !v.detach_pending {
+            if !v.title_bar.detach_pending {
                 return;
             }
-            v.detach_pending = false;
-            v.remote_drag = Some(RemoteDrag {
+            v.title_bar.detach_pending = false;
+            v.title_bar.remote_drag = Some(RemoteDrag {
                 hwnd,
                 fence: change.detached,
                 offset: (pt.x - r.left, pt.y - r.top),
@@ -934,14 +962,15 @@ impl FenceWindow {
     pub fn set_merge_hint(&self, on: bool, x: i32) {
         self.with_view(|v| {
             let mut changed = v.set_merge_gap(on.then_some(x));
-            if v.merge_hint != on {
-                v.merge_hint = on;
+            if v.title_bar.merge_hint != on {
+                v.title_bar.merge_hint = on;
                 let (to, dur) = if on {
                     (1.0, motion::FASTER)
                 } else {
                     (0.0, motion::FAST)
                 };
-                v.merge_t
+                v.title_bar
+                    .merge_t
                     .retarget(to, v.anim_dur(dur), Curve::Linear, Instant::now());
                 changed = true;
             }
@@ -971,41 +1000,44 @@ impl FenceWindow {
 
     /// Item whose inline rename edit this window currently shows (see `set_renaming`).
     pub fn renaming_item(&self) -> Option<ItemId> {
-        self.view.borrow().as_ref().and_then(|v| v.renaming)
+        self.view
+            .borrow()
+            .as_ref()
+            .and_then(|v| v.file_view.renaming)
     }
 
     pub fn is_rolled(&self) -> bool {
         self.view
             .borrow()
             .as_ref()
-            .is_some_and(|v| v.rolled_up || v.peeking)
+            .is_some_and(|v| v.animation.rolled_up || v.animation.peeking)
     }
 
     pub fn icon_size(&self) -> u32 {
         self.view
             .borrow()
             .as_ref()
-            .map(|v| v.icon_size)
+            .map(|v| v.file_view.icon_size)
             .unwrap_or(48)
     }
 
     /// Ends a peek without rolling back (the fence stays expanded).
     pub fn commit_expanded(&self) {
         self.with_view(|v| {
-            v.peeking = false;
-            v.rolled_up = false;
+            v.animation.peeking = false;
+            v.animation.rolled_up = false;
         });
     }
 
     /// Animates to the rolled/expanded state.
     pub fn set_rolled(&self, rolled: bool) {
         self.with_view(|v| {
-            v.peeking = false;
-            if v.rolled_up == rolled && v.roll_anim.is_none() {
+            v.animation.peeking = false;
+            if v.animation.rolled_up == rolled && v.animation.roll_anim.is_none() {
                 return;
             }
-            if !rolled && v.expanded_h_px <= v.title_h_px() {
-                v.expanded_h_px = v.title_h_px() + (200.0 * v.scale()) as i32;
+            if !rolled && v.animation.expanded_h_px <= v.title_h_px() {
+                v.animation.expanded_h_px = v.title_h_px() + (200.0 * v.scale()) as i32;
             }
             v.start_roll_anim(rolled);
         });
@@ -1015,12 +1047,12 @@ impl FenceWindow {
         self.view
             .borrow()
             .as_ref()
-            .map(|v| v.expanded_h_px)
+            .map(|v| v.animation.expanded_h_px)
             .unwrap_or(0)
     }
 
     pub fn set_auto_height(&self, on: bool) {
-        self.with_view(|v| v.auto_height = on);
+        self.with_view(|v| v.file_view.auto_height = on);
     }
 
     pub fn set_locked(&self, on: bool) {
@@ -1030,8 +1062,8 @@ impl FenceWindow {
     /// Whether the caption Maximize button shows Restore.
     pub fn set_maximized(&self, on: bool) {
         self.with_view(|v| {
-            if v.maximized != on {
-                v.maximized = on;
+            if v.title_bar.maximized != on {
+                v.title_bar.maximized = on;
                 let _ = v.redraw_chrome_only();
             }
         });
@@ -1122,7 +1154,7 @@ impl FenceWindow {
     /// Drops every cached icon (global icon processing changed); they reload lazily.
     pub fn drop_icons(&self) {
         self.with_view(|v| {
-            for item in &mut v.items {
+            for item in &mut v.file_view.items {
                 item.icon = None;
                 item.icon_failed = false;
                 item.icon_waited = false;
@@ -1148,7 +1180,7 @@ impl FenceWindow {
             let mut guard = self.view.borrow_mut();
             match guard.as_mut() {
                 Some(v) => {
-                    v.expanded_h_px = height_px;
+                    v.animation.expanded_h_px = height_px;
                     animate && v.start_height_anim(height_px)
                 }
                 None => false,
@@ -1180,7 +1212,7 @@ impl FenceWindow {
             v.gpu_glass.borrow_mut().reset();
             // The spare panels belong to the lost device too; they are recreated on demand.
             v.finish_content_swap_now();
-            v.spares.clear();
+            v.animation.spares.clear();
             if let Err(e) = v
                 .chrome_panel
                 .recreate(stack)
@@ -1189,7 +1221,7 @@ impl FenceWindow {
                 tracing::error!(error = %e, "surface recreation failed");
                 return;
             }
-            for item in &mut v.items {
+            for item in &mut v.file_view.items {
                 item.icon = None;
                 item.icon_failed = false;
                 item.icon_waited = false;
@@ -1283,7 +1315,7 @@ impl FenceWindow {
         self.view
             .borrow()
             .as_ref()
-            .filter(|v| !v.is_panel)
+            .filter(|v| !v.panel_host.is_panel)
             .map(|_| FileWindow(self))
     }
     pub fn panel(&self) -> Option<PanelWindow<'_>> {
@@ -1298,7 +1330,7 @@ impl FenceWindow {
             .view
             .try_borrow()?
             .as_ref()
-            .filter(|v| v.is_panel)
+            .filter(|v| v.panel_host.is_panel)
             .map(|_| PanelWindow(self)))
     }
 }
@@ -1310,26 +1342,26 @@ impl FileWindow<'_> {
             // Selection / focus / hover ride along by item id (`remap_item_state`), so a sort,
             // a reorder drop, a rename or a watcher refresh keeps them on the same items while
             // the layout glide moves those items to their new cells.
-            v.replace_items(if v.plugin_panel.is_some() {
+            v.replace_items(if v.panel_host.plugin_panel.is_some() {
                 Vec::new()
             } else {
                 items
             });
-            v.drop_insert = None;
+            v.file_view.drop_insert = None;
             // The caret's slot index means nothing in the new list.
-            v.caret_shown = None;
-            v.caret_alpha = Tween::at(0.0, Instant::now());
-            if let Some(PressTarget::Item(_)) = v.pressed {
-                v.pressed = None;
-                v.press_inside = false;
+            v.file_view.caret_shown = None;
+            v.file_view.caret_alpha = Tween::at(0.0, Instant::now());
+            if let Some(PressTarget::Item(_)) = v.title_bar.pressed {
+                v.title_bar.pressed = None;
+                v.title_bar.press_inside = false;
             }
-            v.type_ahead.clear();
+            v.file_view.type_ahead.clear();
             v.cancel_pending_rename();
             v.hide_tip();
-            if let Some(s) = v.scroll_restore {
+            if let Some(s) = v.file_view.scroll_restore {
                 // Tab switch: the new tab's items are here, back to where that tab was
                 // (the redraw clamps to its content; `set_layout` consumes the value).
-                v.scroll_y = s;
+                v.file_view.scroll_y = s;
             }
             let _ = v.redraw();
             // The item under a stationary pointer may have changed: re-hit-test from the loop.
@@ -1343,17 +1375,17 @@ impl FileWindow<'_> {
             return;
         }
         self.0.with_view(|v| {
-            if let Some(item) = v.items.iter_mut().find(|it| it.id == old) {
+            if let Some(item) = v.file_view.items.iter_mut().find(|it| it.id == old) {
                 item.id = new;
-                if let Some(motion) = v.item_motion.remove(&old) {
-                    v.item_motion.insert(new, motion);
+                if let Some(motion) = v.file_view.item_motion.remove(&old) {
+                    v.file_view.item_motion.insert(new, motion);
                 }
                 let now = Instant::now();
-                v.item_hover.prune(now, |id| *id != old);
-                v.item_sel.prune(now, |id| *id != old);
-                v.drop_fades.prune(now, |id| *id != old);
-                if v.renaming == Some(old) {
-                    v.renaming = Some(new);
+                v.file_view.item_hover.prune(now, |id| *id != old);
+                v.file_view.item_sel.prune(now, |id| *id != old);
+                v.file_view.drop_fades.prune(now, |id| *id != old);
+                if v.file_view.renaming == Some(old) {
+                    v.file_view.renaming = Some(new);
                 }
             }
         });
@@ -1363,15 +1395,15 @@ impl FileWindow<'_> {
     /// edit opens).
     pub fn ensure_item_visible_now(&self, item: ItemId) {
         self.0.with_view(|v| {
-            let Some(i) = v.items.iter().position(|it| it.id == item) else {
+            let Some(i) = v.file_view.items.iter().position(|it| it.id == item) else {
                 return;
             };
-            if let Some(t) = v.scroll_anim.take() {
-                v.scroll_y = t.target().clamp(0.0, v.scroll_max());
+            if let Some(t) = v.file_view.scroll_anim.take() {
+                v.file_view.scroll_y = t.target().clamp(0.0, v.scroll_max());
             }
-            let before = v.scroll_y;
+            let before = v.file_view.scroll_y;
             v.scroll_into_view(i, false);
-            if v.scroll_y != before && !v.rolled_up {
+            if v.file_view.scroll_y != before && !v.animation.rolled_up {
                 let _ = v.redraw_content();
             }
         });
@@ -1379,8 +1411,8 @@ impl FileWindow<'_> {
     /// Items on the clipboard via 剪切: drawn at half alpha until the clipboard changes.
     pub fn set_cut_items(&self, cut: &HashSet<ItemId>) {
         self.0.with_view(|v| {
-            if &v.cut != cut {
-                v.cut = cut.clone();
+            if &v.file_view.cut != cut {
+                v.file_view.cut = cut.clone();
                 let _ = v.redraw_content();
             }
         });
@@ -1388,9 +1420,9 @@ impl FileWindow<'_> {
     /// Details columns shown (修改日期, 类型, 大小) for the fence being shown.
     pub fn set_columns_visible(&self, visible: [bool; 3]) {
         self.0.with_view(|v| {
-            if v.columns_visible != visible {
-                v.columns_visible = visible;
-                if v.layout == ViewLayout::Details {
+            if v.file_view.columns_visible != visible {
+                v.file_view.columns_visible = visible;
+                if v.file_view.layout == ViewLayout::Details {
                     let _ = v.redraw();
                 }
             }
@@ -1400,16 +1432,16 @@ impl FileWindow<'_> {
     /// the edit box instead of unfolding to the full name.
     pub fn set_renaming(&self, item: Option<ItemId>) {
         self.0.with_view(|v| {
-            if v.renaming != item {
-                v.renaming = item;
+            if v.file_view.renaming != item {
+                v.file_view.renaming = item;
                 if let Some(item) = item
-                    && let Some(index) = v.items.iter().position(|it| it.id == item)
+                    && let Some(index) = v.file_view.items.iter().position(|it| it.id == item)
                 {
                     // New items enter rename without a preceding click. Keep keyboard
                     // actions on the edited item after the popup closes.
                     v.select_only(index);
                 }
-                if !v.rolled_up {
+                if !v.animation.rolled_up {
                     let _ = v.redraw_content();
                 }
                 if item.is_none() {
@@ -1420,7 +1452,7 @@ impl FileWindow<'_> {
     }
     pub fn set_icon_size(&self, size: u32) {
         self.0.with_view(|v| {
-            v.icon_size = size;
+            v.file_view.icon_size = size;
             v.drop_icons_for_reload();
             v.snap_item_motion();
             let _ = v.redraw();
@@ -1429,9 +1461,9 @@ impl FileWindow<'_> {
     /// Details column widths (修改日期, 类型, 大小) for the fence being shown.
     pub fn set_column_widths(&self, widths: [f32; 3]) {
         self.0.with_view(|v| {
-            if v.column_widths != widths && v.col_drag.is_none() {
-                v.column_widths = widths;
-                if v.layout == ViewLayout::Details {
+            if v.file_view.column_widths != widths && v.file_view.col_drag.is_none() {
+                v.file_view.column_widths = widths;
+                if v.file_view.layout == ViewLayout::Details {
                     let _ = v.redraw_content();
                 }
             }
@@ -1450,23 +1482,24 @@ impl FileWindow<'_> {
                 up_button,
                 captions: false,
             };
-            let changed = v.deco != deco || v.navigate_folders != navigate_folders;
-            let portal_changed = v.portal_health != health;
-            v.deco = deco;
-            v.navigate_folders = navigate_folders;
-            v.is_portal = health.is_some();
-            v.portal_health = health;
+            let changed =
+                v.title_bar.deco != deco || v.file_view.navigate_folders != navigate_folders;
+            let portal_changed = v.file_view.portal_health != health;
+            v.title_bar.deco = deco;
+            v.file_view.navigate_folders = navigate_folders;
+            v.file_view.is_portal = health.is_some();
+            v.file_view.portal_health = health;
             if !up_button {
-                v.up_hovered = false;
-                if v.pressed == Some(PressTarget::Up) {
-                    v.pressed = None;
-                    v.press_inside = false;
+                v.title_bar.up_hovered = false;
+                if v.title_bar.pressed == Some(PressTarget::Up) {
+                    v.title_bar.pressed = None;
+                    v.title_bar.press_inside = false;
                 }
             }
             if changed {
                 let _ = v.redraw_chrome_only();
             }
-            if portal_changed && v.items.is_empty() && !v.rolled_up {
+            if portal_changed && v.file_view.items.is_empty() && !v.animation.rolled_up {
                 // Empty, loading and unavailable are different facts even with zero items.
                 let _ = v.redraw_content();
             }
@@ -1475,9 +1508,9 @@ impl FileWindow<'_> {
     /// Whether the fence being shown is the desktop Inbox (chooses the empty-state text).
     pub fn set_is_inbox(&self, on: bool) {
         self.0.with_view(|v| {
-            if v.is_inbox != on {
-                v.is_inbox = on;
-                if v.items.is_empty() {
+            if v.file_view.is_inbox != on {
+                v.file_view.is_inbox = on;
+                if v.file_view.items.is_empty() {
                     let _ = v.redraw();
                 }
             }
@@ -1487,17 +1520,17 @@ impl FileWindow<'_> {
     pub fn set_layout(&self, layout: ViewLayout) {
         self.0.with_view(|v| {
             // Consumes the tab switch's pending offset either way (see `set_tabs`).
-            let restore = v.scroll_restore.take();
-            if v.layout == layout {
+            let restore = v.file_view.scroll_restore.take();
+            if v.file_view.layout == layout {
                 return;
             }
-            v.layout = layout;
-            v.scroll_anim = None;
+            v.file_view.layout = layout;
+            v.file_view.scroll_anim = None;
             // A genuine layout change starts at the top; a tab switch between tabs of
             // different layouts keeps the restored offset (the redraw clamps it).
-            v.scroll_y = restore.unwrap_or(0.0);
-            v.header_hover = None;
-            v.header_fades.clear();
+            v.file_view.scroll_y = restore.unwrap_or(0.0);
+            v.file_view.header_hover = None;
+            v.file_view.header_fades.clear();
             v.reset_item_fades();
             v.drop_icons_for_reload();
             v.snap_item_motion();
@@ -1507,10 +1540,10 @@ impl FileWindow<'_> {
     /// Current sort, shown by the details header (chevron on the active column).
     pub fn set_sort_indicator(&self, sort: SortMode, reverse: bool) {
         self.0.with_view(|v| {
-            if v.sort != sort || v.sort_reverse != reverse {
-                v.sort = sort;
-                v.sort_reverse = reverse;
-                if v.layout == ViewLayout::Details {
+            if v.file_view.sort != sort || v.file_view.sort_reverse != reverse {
+                v.file_view.sort = sort;
+                v.file_view.sort_reverse = reverse;
+                if v.file_view.layout == ViewLayout::Details {
                     let _ = v.redraw_content();
                 }
             }
@@ -1520,10 +1553,10 @@ impl FileWindow<'_> {
     /// every layout. Push it before `set_items` so the layout glide targets the new sections.
     pub fn set_group_by_date(&self, on: bool) {
         self.0.with_view(|v| {
-            if v.group_by_date == on {
+            if v.file_view.group_by_date == on {
                 return;
             }
-            v.group_by_date = on;
+            v.file_view.group_by_date = on;
             // The cells a running glide was computed for no longer exist.
             v.snap_item_motion();
             let _ = v.redraw_content();
@@ -1531,9 +1564,9 @@ impl FileWindow<'_> {
     }
     pub fn set_spacing(&self, spacing: Spacing) {
         self.0.with_view(|v| {
-            if v.spacing != spacing {
-                v.spacing = spacing;
-                for item in &mut v.items {
+            if v.file_view.spacing != spacing {
+                v.file_view.spacing = spacing;
+                for item in &mut v.file_view.items {
                     item.label = None;
                 }
                 v.snap_item_motion();
@@ -1547,7 +1580,7 @@ impl PanelWindow<'_> {
     /// One-row widgets show their capsule layout; taller ones the full layout.
     pub fn set_presentation(&self, presentation: pecofence_plugin_api::Presentation) {
         self.0.with_view(|v| {
-            let Some(panel) = v.plugin_panel.as_mut() else {
+            let Some(panel) = v.panel_host.plugin_panel.as_mut() else {
                 return;
             };
             if panel.presentation() == presentation {
@@ -1577,7 +1610,13 @@ impl PanelWindow<'_> {
         let Some(view) = guard.as_mut() else {
             return Some(false);
         };
-        if view.plugin_panel.as_ref().map(|panel| panel.key()) != Some(key) {
+        if view
+            .panel_host
+            .plugin_panel
+            .as_ref()
+            .map(|panel| panel.key())
+            != Some(key)
+        {
             return Some(false);
         }
         if let Err(error) = view.apply_plugin_update(update.clone()) {

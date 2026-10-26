@@ -10,6 +10,76 @@ pub struct WidgetGrid {
 }
 
 pub struct FenceViewState {
+    pub(super) title_bar: TitleBar,
+    pub(super) panel_host: PanelHost,
+    pub(super) animation: WindowMotion,
+    pub(super) file_view: FileView,
+    #[allow(dead_code)]
+    pub fence_id: ContainerId,
+    pub(super) accessibility: pecofence_platform::accessibility::Publisher,
+    /// The mounted content instance; independent of the window/container identity.
+    pub(super) active: ContentId,
+    /// Mouse is somewhere over the window (title or content) — drives title-on-hover and the
+    /// inactive-scrollbar rule.
+    pub(super) mouse_inside: bool,
+    pub(super) dpi: u32,
+    pub(super) theme: Theme,
+    /// The app-wide theme before per-fence adjustments. A fence whose panel publishes
+    /// its chrome is an app window, so it draws as one paper sheet (`sheet_theme`).
+    pub(super) base_theme: Theme,
+    /// Last contrast choice for a clear plate; interior mutability keeps the draw API read-only.
+    pub(super) glass_dark_text: Cell<Option<bool>>,
+    pub(super) backdrops: Rc<BackdropSets>,
+    pub(super) backdrop_crop: Option<Image>,
+    /// Screen rect (left, top, width, height) `backdrop_crop` was cut for. While the height
+    /// animates the crop covers the taller end, so the per-frame chrome draws reuse it.
+    pub(super) backdrop_rect: Option<(i32, i32, i32, i32)>,
+    /// `BitmapCache` key of the uploaded crop (per window; dropped whenever the crop changes).
+    pub(super) backdrop_key: String,
+    pub(super) gpu_glass: RefCell<pecofence_render::gpu_glass::GpuGlass>,
+    pub(super) chrome_panel: Panel,
+    pub(super) content_panel: Panel,
+    pub(super) _target: DesktopWindowTarget,
+    /// Root of the window's visual tree: whole-window fades / scales animate this.
+    pub(super) root: ContainerVisual,
+    pub(super) chrome: Rc<FenceChrome>,
+    pub(super) bitmaps: Rc<RefCell<BitmapCache>>,
+    #[allow(dead_code)]
+    pub(super) queue: CommandQueue,
+    pub(super) tip: Option<Tooltip>,
+    pub(super) tip_target: Option<TipTarget>,
+    /// Visible tooltip lifetime, independent of queued TIMER_TIP_HIDE messages.
+    pub(super) tip_expires: Option<Instant>,
+    /// When a visible infotip was last hidden (fast re-show while sweeping between items).
+    pub(super) tip_hidden_at: Option<Instant>,
+    /// Client px where TIMER_TIP was armed and whether it is armed: like TME_HOVER the tip
+    /// shows only once the pointer has rested inside the SM_C[XY]MOUSEHOVER box for the delay.
+    pub(super) tip_wait: Option<super::tooltip::TipWait>,
+    /// Mouse move/resize disabled (menu "锁定位置和大小").
+    pub(super) locked: bool,
+    /// Per-fence material override; None follows the global setting.
+    pub(super) backdrop_override: Option<BackdropMode>,
+    /// Per-fence opacity multiplier for the glass layer (1.0 = default).
+    pub(super) opacity: f32,
+    /// Per-fence colour wash / title colour / title size.
+    pub(super) style: FenceStyle,
+    /// Widget windows: span rules and the live cell (docs/WIDGET_GRID.md).
+    pub(super) widget_grid: Option<WidgetGrid>,
+    /// Single-widget windows draw no title bar: the widget fills the window, empty
+    /// widget areas move it and the fence menu comes from a right-click.
+    pub(super) frameless: bool,
+    /// A draw hit `DXGI_ERROR_DEVICE_REMOVED`; surfaces must be recreated (task 6).
+    pub(super) device_lost: bool,
+    pub(super) stack: Rc<RenderStack>,
+    pub(super) motion: Rc<Motion>,
+    pub(super) frames: Rc<FrameClock>,
+    pub(super) hwnd: HWND,
+    pub(super) shadow: ShadowWindow,
+    pub(super) behavior: Rc<Behavior>,
+}
+
+/// Owned title bar state.
+pub(super) struct TitleBar {
     pub(super) title: String,
     /// Contents shown in the title row. One entry = plain title.
     pub(super) tabs: Vec<TabView>,
@@ -63,12 +133,18 @@ pub struct FenceViewState {
     pub(super) chrome_scene: Option<super::chrome_scene::ChromeScene>,
     /// Active-tab pill gliding to the newly selected tab: (x, w) in DIPs, 167 ms decelerate.
     pub(super) pill_anim: Option<(Tween, Tween)>,
+}
 
+/// Owned panel host state.
+pub(super) struct PanelHost {
     pub(super) is_panel: bool,
     pub(super) plugin_panel: Option<super::plugin_panel::PluginPanelContent>,
     /// Window-owned native effect; outlives any mounted panel or pending frame.
     pub(super) input_capture_release: Rc<Cell<bool>>,
+}
 
+/// Owned animation state.
+pub(super) struct WindowMotion {
     pub(super) rolled_up: bool,
     /// Expanded window height in physical pixels (restored when un-rolling).
     pub(super) expanded_h_px: i32,
@@ -113,7 +189,10 @@ pub struct FenceViewState {
     pub(super) shadow_fading: bool,
     /// Temporarily expanded by hovering a rolled fence (state stays "rolled" for persistence).
     pub(super) peeking: bool,
+}
 
+/// Owned file view state.
+pub(super) struct FileView {
     pub(super) is_inbox: bool,
     pub(super) icon_size: u32,
     pub(super) label_lines: u8,
@@ -252,78 +331,7 @@ pub struct FenceViewState {
     /// Start of a Shift range selection.
     pub(super) range_anchor: Option<usize>,
     pub(super) drop_hover: bool,
-
-    #[allow(dead_code)]
-    pub fence_id: ContainerId,
-    pub(super) accessibility: pecofence_platform::accessibility::Publisher,
-    /// The mounted content instance; independent of the window/container identity.
-    pub(super) active: ContentId,
-    /// Mouse is somewhere over the window (title or content) — drives title-on-hover and the
-    /// inactive-scrollbar rule.
-    pub(super) mouse_inside: bool,
-    pub(super) dpi: u32,
-    pub(super) theme: Theme,
-    /// The app-wide theme before per-fence adjustments. A fence whose panel publishes
-    /// its chrome is an app window, so it draws as one paper sheet (`sheet_theme`).
-    pub(super) base_theme: Theme,
-    /// Last contrast choice for a clear plate; interior mutability keeps the draw API read-only.
-    pub(super) glass_dark_text: Cell<Option<bool>>,
-    pub(super) backdrops: Rc<BackdropSets>,
-    pub(super) backdrop_crop: Option<Image>,
-    /// Screen rect (left, top, width, height) `backdrop_crop` was cut for. While the height
-    /// animates the crop covers the taller end, so the per-frame chrome draws reuse it.
-    pub(super) backdrop_rect: Option<(i32, i32, i32, i32)>,
-    /// `BitmapCache` key of the uploaded crop (per window; dropped whenever the crop changes).
-    pub(super) backdrop_key: String,
-    pub(super) gpu_glass: RefCell<pecofence_render::gpu_glass::GpuGlass>,
-    pub(super) chrome_panel: Panel,
-    pub(super) content_panel: Panel,
-    pub(super) _target: DesktopWindowTarget,
-    /// Root of the window's visual tree: whole-window fades / scales animate this.
-    pub(super) root: ContainerVisual,
-    pub(super) chrome: Rc<FenceChrome>,
-    pub(super) bitmaps: Rc<RefCell<BitmapCache>>,
-    #[allow(dead_code)]
-    pub(super) queue: CommandQueue,
-    pub(super) tip: Option<Tooltip>,
-    pub(super) tip_target: Option<TipTarget>,
-    /// Visible tooltip lifetime, independent of queued TIMER_TIP_HIDE messages.
-    pub(super) tip_expires: Option<Instant>,
-    /// When a visible infotip was last hidden (fast re-show while sweeping between items).
-    pub(super) tip_hidden_at: Option<Instant>,
-    /// Client px where TIMER_TIP was armed and whether it is armed: like TME_HOVER the tip
-    /// shows only once the pointer has rested inside the SM_C[XY]MOUSEHOVER box for the delay.
-    pub(super) tip_wait: Option<super::tooltip::TipWait>,
-    /// Mouse move/resize disabled (menu "锁定位置和大小").
-    pub(super) locked: bool,
-    /// Per-fence material override; None follows the global setting.
-    pub(super) backdrop_override: Option<BackdropMode>,
-    /// Per-fence opacity multiplier for the glass layer (1.0 = default).
-    pub(super) opacity: f32,
-    /// Per-fence colour wash / title colour / title size.
-    pub(super) style: FenceStyle,
-    /// Widget windows: span rules and the live cell (docs/WIDGET_GRID.md).
-    pub(super) widget_grid: Option<WidgetGrid>,
-    /// Single-widget windows draw no title bar: the widget fills the window, empty
-    /// widget areas move it and the fence menu comes from a right-click.
-    pub(super) frameless: bool,
-    /// A draw hit `DXGI_ERROR_DEVICE_REMOVED`; surfaces must be recreated (task 6).
-    pub(super) device_lost: bool,
-    pub(super) stack: Rc<RenderStack>,
-    pub(super) motion: Rc<Motion>,
-    pub(super) frames: Rc<FrameClock>,
-    pub(super) hwnd: HWND,
-    pub(super) shadow: ShadowWindow,
-    pub(super) behavior: Rc<Behavior>,
 }
-
-/// Owned title bar state.
-
-/// Owned panel host state.
-
-/// Owned animation state.
-
-/// Owned file view state.
 
 impl FenceViewState {
     /// Posts `msg` with `wparam` to this window from the compositor's callback thread.
@@ -349,7 +357,8 @@ impl FenceViewState {
         // The optical bezel and upload mask are measured in DIPs. A DPI change can keep
         // the same physical rectangle, so geometry alone cannot validate the old crop.
         self.backdrop_rect = None;
-        self.expanded_h_px = (self.expanded_h_px as f32 * new_dpi as f32 / old).round() as i32;
+        self.animation.expanded_h_px =
+            (self.animation.expanded_h_px as f32 * new_dpi as f32 / old).round() as i32;
         self.drop_icons_for_reload();
         self.snap_item_motion();
         // The infotip window scales its max width from the owner DPI at creation: rebuild it
@@ -361,21 +370,21 @@ impl FenceViewState {
 
     /// Drops every cached icon and fitted label (they reload lazily, without a cross-fade).
     pub(super) fn drop_icons_for_reload(&mut self) {
-        for item in &mut self.items {
+        for item in &mut self.file_view.items {
             item.icon = None;
             item.icon_failed = false;
             item.icon_waited = false;
             item.icon_fade = None;
             item.label = None;
         }
-        self.unfold_cache = None;
+        self.file_view.unfold_cache = None;
     }
 
     /// Ends the layout motion at once: the geometry it was computed for (cell size, layout,
     /// width, DPI) is gone, so old origins would glide to the wrong places.
     pub(super) fn snap_item_motion(&mut self) {
-        self.item_motion.clear();
-        self.leaving.clear();
+        self.file_view.item_motion.clear();
+        self.file_view.leaving.clear();
     }
 
     pub(super) fn backdrop_mode(&self) -> BackdropMode {

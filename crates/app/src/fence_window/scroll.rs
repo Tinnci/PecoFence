@@ -160,9 +160,9 @@ impl FenceViewState {
         let scale = self.scale();
         let (cw, ch) = self.content_size_px();
         let layout = self.layout(cw as f32 / scale);
-        let ch = if self.rolled_up && self.roll_anim.is_none() {
+        let ch = if self.animation.rolled_up && self.animation.roll_anim.is_none() {
             let title_h = self.title_h_px();
-            self.expanded_h_px.max(title_h + 40) - title_h
+            self.animation.expanded_h_px.max(title_h + 40) - title_h
         } else {
             ch
         };
@@ -178,7 +178,9 @@ impl FenceViewState {
     /// Where the scroll offset is heading: the glide's destination while one runs, else the
     /// offset itself. Input that adds to the scroll adds to this, so notches accumulate.
     pub(super) fn scroll_target(&self) -> f32 {
-        self.scroll_anim.map_or(self.scroll_y, |t| t.target())
+        self.file_view
+            .scroll_anim
+            .map_or(self.file_view.scroll_y, |t| t.target())
     }
 
     /// Animated scroll to `target` (clamped to the content): WinUI ScrollPresenter's glide,
@@ -188,7 +190,7 @@ impl FenceViewState {
     /// frame clock still coalesces a 120 Hz stream into one redraw per compositor frame. With
     /// animations off the offset snaps at once and `scroll_anim` stays None (callers redraw).
     pub(super) fn scroll_to(&mut self, target: f32, cap: Duration) {
-        if self.rolled_up && self.roll_anim.is_none() {
+        if self.animation.rolled_up && self.animation.roll_anim.is_none() {
             // Nothing to scroll: the content is hidden and must reappear where it was.
             return;
         }
@@ -199,27 +201,27 @@ impl FenceViewState {
             self.dismiss_rename_for_scroll();
         }
         let now = Instant::now();
-        let dist = (target - self.scroll_y).abs();
+        let dist = (target - self.file_view.scroll_y).abs();
         // Every scroll input counts as activity, including one pinned at an end: WinUI shows
         // the indicator on any wheel notch, so a hidden bar reappears even at the boundary.
         self.note_scroll_activity();
         if !self.motion.enabled() {
-            self.scroll_anim = None;
+            self.file_view.scroll_anim = None;
             if dist > 0.0 {
-                self.scroll_y = target;
+                self.file_view.scroll_y = target;
                 self.request_hover_refresh();
             }
             return;
         }
-        if self.scroll_anim.is_none() && dist < 0.01 {
+        if self.file_view.scroll_anim.is_none() && dist < 0.01 {
             return;
         }
         let dur = scroll_anim_duration(dist, cap);
-        match self.scroll_anim.as_mut() {
+        match self.file_view.scroll_anim.as_mut() {
             Some(t) if !t.is_done(now) => t.retarget(target, dur, Curve::Decelerate, now),
             _ => {
-                self.scroll_anim = Some(Tween::new(
-                    self.scroll_y,
+                self.file_view.scroll_anim = Some(Tween::new(
+                    self.file_view.scroll_y,
                     target,
                     dur,
                     Curve::Decelerate,
@@ -235,7 +237,7 @@ impl FenceViewState {
     /// floating over the wrong row. Taking `renaming` here keeps a second notch from posting
     /// again; the popup itself closes from the command loop, outside this borrow.
     pub(super) fn dismiss_rename_for_scroll(&mut self) {
-        if self.renaming.take().is_some() {
+        if self.file_view.renaming.take().is_some() {
             self.queue
                 .push(Command::Fence(FenceCmd::EndItemRename { commit: true }));
         }
@@ -244,9 +246,9 @@ impl FenceViewState {
     /// Rounds the offset to a whole device pixel and clamps it (WinUI ScrollPresenter rests on
     /// pixel boundaries). Returns whether it changed.
     pub(super) fn snap_scroll(&mut self) -> bool {
-        let old = self.scroll_y;
-        self.scroll_y = snap_offset(old, self.scale()).clamp(0.0, self.scroll_max());
-        self.scroll_y != old
+        let old = self.file_view.scroll_y;
+        self.file_view.scroll_y = snap_offset(old, self.scale()).clamp(0.0, self.scroll_max());
+        self.file_view.scroll_y != old
     }
 
     /// Scrolls so item `index` is fully visible (relative to where the offset is heading):
@@ -267,8 +269,8 @@ impl FenceViewState {
         if animate {
             self.scroll_to(target, motion::SLOW);
         } else {
-            self.scroll_anim = None;
-            self.scroll_y = target.clamp(0.0, layout.max_scroll(view_h));
+            self.file_view.scroll_anim = None;
+            self.file_view.scroll_y = target.clamp(0.0, layout.max_scroll(view_h));
             self.note_scroll_activity();
         }
     }
@@ -277,7 +279,7 @@ impl FenceViewState {
     /// ScrollView) and fades the indicator in if it was hidden. `SetTimer` neither re-enters
     /// the window procedure nor touches geometry, so `tick` may call this.
     pub(super) fn note_scroll_activity(&mut self) {
-        self.last_scroll = Some(Instant::now());
+        self.file_view.last_scroll = Some(Instant::now());
         if self.behavior.hide_inactive_scrollbar.get() {
             window::set_timer(self.hwnd, TIMER_SCROLLBAR, SCROLLBAR_LINGER_MS + 50);
         }
@@ -286,13 +288,13 @@ impl FenceViewState {
 
     /// Overlay scrollbar geometry (None when nothing overflows / rolled).
     pub(super) fn scrollbar_geometry(&self) -> Option<ScrollbarGeom> {
-        self.scrollbar_geometry_for(self.scroll_y)
+        self.scrollbar_geometry_for(self.file_view.scroll_y)
     }
 
     /// Geometry with the thumb placed for `scroll_y` (the glide's destination, for the
     /// track-repeat hit test).
     pub(super) fn scrollbar_geometry_for(&self, scroll_y: f32) -> Option<ScrollbarGeom> {
-        if self.rolled_up {
+        if self.animation.rolled_up {
             return None;
         }
         let (layout, view_h) = self.scroll_extent();
@@ -321,7 +323,7 @@ impl FenceViewState {
 
     /// Scrollbar part under a client-pixel point (the 12 DIP strip along the right edge).
     pub(super) fn scrollbar_hit(&self, x_px: i32, y_px: i32) -> Option<(ScrollHit, ScrollbarGeom)> {
-        self.scrollbar_hit_for(x_px, y_px, self.scroll_y)
+        self.scrollbar_hit_for(x_px, y_px, self.file_view.scroll_y)
     }
 
     pub(super) fn scrollbar_hit_for(
@@ -364,24 +366,30 @@ impl FenceViewState {
     pub(super) fn scrollbar_draw(&self) -> Option<ScrollbarDraw> {
         let g = self.scrollbar_geometry()?;
         let now = Instant::now();
-        let alpha = self.sb_alpha.value_at(now);
+        let alpha = self.file_view.sb_alpha.value_at(now);
         if alpha <= 0.0 {
             return None;
         }
         // Win32 button semantics: the pressed fill shows only while the pointer is on the
         // held button (the repeat pauses off it too).
-        let pressed = |h: ScrollHit| self.page_repeat == Some(h) && self.sb_pointer == Some(h);
+        let pressed = |h: ScrollHit| {
+            self.file_view.page_repeat == Some(h) && self.file_view.sb_pointer == Some(h)
+        };
         Some(ScrollbarDraw {
             thumb_y: g.thumb_y,
             thumb_h: g.thumb_h,
-            width: self.sb_width.value_at(now),
+            width: self.file_view.sb_width.value_at(now),
             alpha,
-            parts: self.sb_parts.value_at(now),
+            parts: self.file_view.sb_parts.value_at(now),
             band_top: g.band_top,
             band_h: g.band_h,
             arrow_hover: [
-                self.sb_arrow_fades.value(&ScrollHit::ArrowUp, now),
-                self.sb_arrow_fades.value(&ScrollHit::ArrowDown, now),
+                self.file_view
+                    .sb_arrow_fades
+                    .value(&ScrollHit::ArrowUp, now),
+                self.file_view
+                    .sb_arrow_fades
+                    .value(&ScrollHit::ArrowDown, now),
             ],
             arrow_pressed: [pressed(ScrollHit::ArrowUp), pressed(ScrollHit::ArrowDown)],
         })
@@ -398,13 +406,14 @@ impl FenceViewState {
             // Hover only while nothing else on the bar is held (a thumb drag passing over a
             // button must not light it).
             let on = hit == Some(arrow)
-                && self.scroll_drag.is_none()
-                && self.page_repeat.is_none_or(|h| h == arrow);
-            self.sb_arrow_fades
+                && self.file_view.scroll_drag.is_none()
+                && self.file_view.page_repeat.is_none_or(|h| h == arrow);
+            self.file_view
+                .sb_arrow_fades
                 .set(animate, arrow, on as u8 as f32, now);
         }
-        if std::mem::replace(&mut self.sb_pointer, hit) != hit
-            && (self.page_repeat.is_some() || self.sb_arrow_fades.busy(now))
+        if std::mem::replace(&mut self.file_view.sb_pointer, hit) != hit
+            && (self.file_view.page_repeat.is_some() || self.file_view.sb_arrow_fades.busy(now))
         {
             self.start_scrollbar_anim();
         }
@@ -413,11 +422,11 @@ impl FenceViewState {
 
     /// Thumb held (drag) or track held (page repeat): WinUI Pressed = expanded, no delays.
     pub(super) fn scrollbar_pressed(&self) -> bool {
-        self.scroll_drag.is_some() || self.page_repeat.is_some()
+        self.file_view.scroll_drag.is_some() || self.file_view.page_repeat.is_some()
     }
 
     pub(super) fn start_scrollbar_anim(&mut self) {
-        self.sb_busy = true;
+        self.file_view.sb_busy = true;
         self.frames.request();
     }
 
@@ -425,11 +434,12 @@ impl FenceViewState {
     /// ScrollBarOpacityChangeDuration). Cheap when nothing changes: called at draw time too.
     pub(super) fn sync_scrollbar_alpha(&mut self) {
         let want = if self.scrollbar_visible() { 1.0 } else { 0.0 };
-        if (self.sb_alpha.target() - want).abs() < f32::EPSILON {
+        if (self.file_view.sb_alpha.target() - want).abs() < f32::EPSILON {
             return;
         }
         let dur = self.anim_dur(motion::FASTER);
-        self.sb_alpha
+        self.file_view
+            .sb_alpha
             .retarget(want, dur, Curve::Linear, Instant::now());
         self.start_scrollbar_anim();
     }
@@ -438,18 +448,21 @@ impl FenceViewState {
     /// the track fill and arrow buttons fade in / out alongside (83 ms linear,
     /// ScrollBarOpacityChangeDuration).
     pub(super) fn scrollbar_width_to(&mut self, width: f32) {
-        if (self.sb_width.target() - width).abs() < f32::EPSILON {
+        if (self.file_view.sb_width.target() - width).abs() < f32::EPSILON {
             return;
         }
         let now = Instant::now();
         let dur = self.anim_dur(motion::FAST);
-        self.sb_width.retarget(width, dur, Curve::Decelerate, now);
+        self.file_view
+            .sb_width
+            .retarget(width, dur, Curve::Decelerate, now);
         let parts = if width >= ScrollbarDraw::EXPANDED_WIDTH {
             1.0
         } else {
             0.0
         };
-        self.sb_parts
+        self.file_view
+            .sb_parts
             .retarget(parts, self.anim_dur(motion::FASTER), Curve::Linear, now);
         self.start_scrollbar_anim();
     }
@@ -461,14 +474,14 @@ impl FenceViewState {
     /// animations off the width changes at once: the delays belong to the XAML expand /
     /// contract storyboards, which are disabled along with the motion.
     pub(super) fn set_scrollbar_zone(&mut self, inside: bool) {
-        if self.scrollbar_hot == inside {
+        if self.file_view.scrollbar_hot == inside {
             return;
         }
-        self.scrollbar_hot = inside;
+        self.file_view.scrollbar_hot = inside;
         let immediate = !self.motion.enabled();
         if inside {
             window::kill_timer(self.hwnd, TIMER_SCROLLBAR_CONTRACT);
-            if self.sb_width.target() < ScrollbarDraw::EXPANDED_WIDTH
+            if self.file_view.sb_width.target() < ScrollbarDraw::EXPANDED_WIDTH
                 && self.scrollbar_geometry().is_some()
             {
                 if immediate {
@@ -479,7 +492,9 @@ impl FenceViewState {
             }
         } else {
             window::kill_timer(self.hwnd, TIMER_SCROLLBAR_EXPAND);
-            if !self.scrollbar_pressed() && self.sb_width.target() > ScrollbarDraw::REST_WIDTH {
+            if !self.scrollbar_pressed()
+                && self.file_view.sb_width.target() > ScrollbarDraw::REST_WIDTH
+            {
                 if immediate {
                     self.scrollbar_width_to(ScrollbarDraw::REST_WIDTH);
                 } else {
@@ -511,11 +526,11 @@ impl FenceViewState {
         let repeat = match hit {
             ScrollHit::Thumb => {
                 // A glide in flight would fight the thumb: stop it.
-                self.scroll_anim = None;
+                self.file_view.scroll_anim = None;
                 self.snap_scroll();
-                self.scroll_drag = Some(ScrollDrag {
+                self.file_view.scroll_drag = Some(ScrollDrag {
                     start_y_px: y_px,
-                    start_scroll: self.scroll_y,
+                    start_scroll: self.file_view.scroll_y,
                 });
                 false
             }
@@ -528,12 +543,12 @@ impl FenceViewState {
             | ScrollHit::ArrowDown => {
                 let step = scroll_step_for(hit, g.view_h, self.scroll_extent().0.row_step());
                 self.scroll_to(self.scroll_target() + step, motion::SLOW);
-                self.page_repeat = Some(hit);
+                self.file_view.page_repeat = Some(hit);
                 self.set_scrollbar_pointer(Some(hit));
                 true
             }
         };
-        self.scrollbar_hot = true;
+        self.file_view.scrollbar_hot = true;
         self.scrollbar_press();
         let _ = self.redraw_content();
         Some(repeat)
@@ -543,11 +558,12 @@ impl FenceViewState {
     /// starts now unless the pointer is still on the bar, and the hide countdown restarts.
     /// Returns whether one was running.
     pub(super) fn end_scrollbar_press(&mut self) -> bool {
-        let had = self.scroll_drag.take().is_some() | self.page_repeat.take().is_some();
+        let had = self.file_view.scroll_drag.take().is_some()
+            | self.file_view.page_repeat.take().is_some();
         if had {
             self.snap_scroll();
             window::kill_timer(self.hwnd, TIMER_SCROLL_REPEAT);
-            if !self.scrollbar_hot {
+            if !self.file_view.scrollbar_hot {
                 window::set_timer(
                     self.hwnd,
                     TIMER_SCROLLBAR_CONTRACT,
@@ -568,22 +584,22 @@ impl FenceViewState {
         let zone_px = (DRAG_SCROLL_ZONE_DIP * self.scale()) as i32;
         let zone = drag_scroll_zone(cy, top, bottom, zone_px).filter(|_| self.scroll_max() > 0.0);
         let Some((dir, depth)) = zone else {
-            if self.drag_scroll.take().is_some() && self.snap_scroll() {
+            if self.file_view.drag_scroll.take().is_some() && self.snap_scroll() {
                 // Auto-scroll ended between pixels: `content_busy` makes the next tick redraw
                 // the content at the snapped offset (nothing else flags the content then).
-                self.content_busy = true;
+                self.file_view.content_busy = true;
                 self.frames.request();
             }
             return;
         };
-        match self.drag_scroll.as_mut() {
+        match self.file_view.drag_scroll.as_mut() {
             Some(ds) if ds.dir == dir => {
                 ds.depth = depth;
                 ds.pt = pt;
             }
             _ => {
                 let now = Instant::now();
-                self.drag_scroll = Some(DragScroll {
+                self.file_view.drag_scroll = Some(DragScroll {
                     dir,
                     depth,
                     armed_at: now,
@@ -598,11 +614,11 @@ impl FenceViewState {
     /// One frame of OLE drag edge auto-scroll. Returns true while it keeps scrolling; pinned
     /// at an end it stops ticking (the next DragOver re-requests a frame).
     pub(super) fn drag_autoscroll(&mut self, now: Instant) -> bool {
-        let Some(ds) = self.drag_scroll else {
+        let Some(ds) = self.file_view.drag_scroll else {
             return false;
         };
         if now.saturating_duration_since(ds.armed_at) < DRAG_SCROLL_ARM {
-            if let Some(d) = self.drag_scroll.as_mut() {
+            if let Some(d) = self.file_view.drag_scroll.as_mut() {
                 d.last = now;
             }
             // Still arming: nothing moved, so no redraw — only keep the clock ticking.
@@ -613,15 +629,16 @@ impl FenceViewState {
             .saturating_duration_since(ds.last)
             .as_secs_f32()
             .min(0.05);
-        if let Some(d) = self.drag_scroll.as_mut() {
+        if let Some(d) = self.file_view.drag_scroll.as_mut() {
             d.last = now;
         }
         let (layout, view_h) = self.scroll_extent();
         let speed = drag_scroll_speed(ds.depth, layout.row_step());
-        let old = self.scroll_y;
-        self.scroll_anim = None;
-        self.scroll_y = (old + ds.dir as f32 * speed * dt).clamp(0.0, layout.max_scroll(view_h));
-        if self.scroll_y == old {
+        let old = self.file_view.scroll_y;
+        self.file_view.scroll_anim = None;
+        self.file_view.scroll_y =
+            (old + ds.dir as f32 * speed * dt).clamp(0.0, layout.max_scroll(view_h));
+        if self.file_view.scroll_y == old {
             return false;
         }
         // The content moved under a (possibly stationary) pointer: the folder highlight /
@@ -639,7 +656,7 @@ impl FenceViewState {
     /// outside the item area, applied per frame so band and items glide. Returns true while
     /// it moved (pinned at an end it stops ticking; the next WM_MOUSEMOVE re-arms).
     pub(super) fn marquee_autoscroll(&mut self, now: Instant) -> bool {
-        let Some(m) = self.marquee.as_ref() else {
+        let Some(m) = self.file_view.marquee.as_ref() else {
             return false;
         };
         let Some(last) = m.auto_last else {
@@ -655,7 +672,7 @@ impl FenceViewState {
             0
         };
         if overshoot == 0 {
-            if let Some(m) = self.marquee.as_mut() {
+            if let Some(m) = self.file_view.marquee.as_mut() {
                 m.auto_last = None;
             }
             // Auto-scroll came to rest: land on a whole device pixel (one more redraw).
@@ -664,15 +681,15 @@ impl FenceViewState {
         let dt = now.saturating_duration_since(last).as_secs_f32().min(0.05);
         let speed = marquee_scroll_speed(overshoot as f32 / self.scale());
         let (layout, view_h) = self.scroll_extent();
-        let old = self.scroll_y;
-        self.scroll_anim = None;
-        self.scroll_y =
+        let old = self.file_view.scroll_y;
+        self.file_view.scroll_anim = None;
+        self.file_view.scroll_y =
             (old + overshoot.signum() as f32 * speed * dt).clamp(0.0, layout.max_scroll(view_h));
-        if let Some(m) = self.marquee.as_mut() {
+        if let Some(m) = self.file_view.marquee.as_mut() {
             m.auto_last = Some(now);
             m.cur = (px, py.clamp(top, bottom));
         }
-        if self.scroll_y == old {
+        if self.file_view.scroll_y == old {
             return false;
         }
         self.note_scroll_activity();
@@ -687,9 +704,10 @@ impl FenceViewState {
             return true;
         }
         self.mouse_inside
-            || self.scrollbar_hot
+            || self.file_view.scrollbar_hot
             || self.scrollbar_pressed()
             || self
+                .file_view
                 .last_scroll
                 .is_some_and(|t| t.elapsed().as_millis() < SCROLLBAR_LINGER_MS as u128)
     }

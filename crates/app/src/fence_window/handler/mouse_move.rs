@@ -26,12 +26,12 @@ pub(super) fn on_mousemove(
         return Some(0);
     };
     v.set_mouse_inside(true);
-    if v.marquee.is_some() {
+    if v.file_view.marquee.is_some() {
         // Pointer outside the item area: auto-scroll per frame while the
         // button is down (`marquee_autoscroll` in `tick`).
         let (top, bottom) = v.marquee_band_px();
         let outside = y < top || y > bottom;
-        if let Some(m) = v.marquee.as_mut() {
+        if let Some(m) = v.file_view.marquee.as_mut() {
             m.cur = (x, y);
             m.pointer = (x, y);
             if !outside {
@@ -47,7 +47,7 @@ pub(super) fn on_mousemove(
         let _ = v.redraw();
         return Some(0);
     }
-    if let Some(sd) = v.scroll_drag.as_ref() {
+    if let Some(sd) = v.file_view.scroll_drag.as_ref() {
         let (start_y, start_scroll) = (sd.start_y_px, sd.start_scroll);
         if let Some(g) = v.scrollbar_geometry()
             && g.track_h > g.thumb_h
@@ -56,15 +56,15 @@ pub(super) fn on_mousemove(
             // Direct manipulation: the thumb drives the offset, no glide;
             // every drag frame lands on a whole device pixel (Explorer
             // tracks the thumb in integer positions).
-            v.scroll_anim = None;
+            v.file_view.scroll_anim = None;
             let next = snap_offset(
                 start_scroll + dy * (g.content_h - g.view_h) / (g.track_h - g.thumb_h),
                 v.scale(),
             );
-            if (next - v.scroll_y).abs() > 0.01 {
+            if (next - v.file_view.scroll_y).abs() > 0.01 {
                 v.dismiss_rename_for_scroll();
             }
-            v.scroll_y = next;
+            v.file_view.scroll_y = next;
         }
         // Keep the hot zone current so a release with the pointer off
         // the bar starts the contract delay at once.
@@ -74,14 +74,14 @@ pub(super) fn on_mousemove(
         let _ = v.redraw_content();
         return Some(0);
     }
-    if v.page_repeat.is_some() {
+    if v.file_view.page_repeat.is_some() {
         // Holding the track / an arrow: only the hot zone and the button
         // states matter (the repeat timer hit-tests the pointer itself).
         let hit = v.scrollbar_hit(x, y).map(|(h, _)| h);
         v.set_scrollbar_pointer(hit);
         return Some(0);
     }
-    if v.remote_drag.is_some() && window::key_down(msg::VK_ESCAPE) {
+    if v.title_bar.remote_drag.is_some() && window::key_down(msg::VK_ESCAPE) {
         // Esc pressed while the focus session went elsewhere: cancel here.
         let cancel = v.cancel_tab_or_remote_drag();
         drop(guard);
@@ -90,7 +90,7 @@ pub(super) fn on_mousemove(
         }
         return Some(0);
     }
-    if let Some(drag) = v.remote_drag.as_mut() {
+    if let Some(drag) = v.title_bar.remote_drag.as_mut() {
         let pt = window::cursor_pos();
         let point = (pt.x, pt.y);
         drag.track_pointer(point, window::drag_threshold());
@@ -99,7 +99,7 @@ pub(super) fn on_mousemove(
         }
         return Some(0);
     }
-    if let Some(td) = v.tab_drag.as_ref() {
+    if let Some(td) = v.title_bar.tab_drag.as_ref() {
         // A dragged tab is the drag handle: it keeps its pressed look while
         // it follows the pointer along the strip (TabView), so press_inside
         // is not tracked for PressTarget::Tab; tear-off clears it below.
@@ -110,21 +110,21 @@ pub(super) fn on_mousemove(
         // Leaving the title row vertically (or the window sideways) tears the
         // tab off; moving along the strip reorders it.
         if (y - sy).abs() > far || x < 0 || x >= w_px {
-            let tab = v.tabs.get(index).map(|t| t.id);
-            v.tab_drag = None;
-            v.tab_slide.clear();
-            v.tab_settle = None;
-            v.tab_hover = None;
-            v.pressed = None;
-            v.press_inside = false;
+            let tab = v.title_bar.tabs.get(index).map(|t| t.id);
+            v.title_bar.tab_drag = None;
+            v.title_bar.tab_slide.clear();
+            v.title_bar.tab_settle = None;
+            v.title_bar.tab_hover = None;
+            v.title_bar.pressed = None;
+            v.title_bar.press_inside = false;
             v.hide_tip();
             let _ = v.redraw_chrome_only();
             if let Some(tab) = tab {
                 // Keep the capture: once the App has created the new
                 // window it calls begin_remote_drag and this window keeps
                 // moving it with the cursor until the button is released.
-                v.detach_pending = true;
-                v.detach_cancelled = false;
+                v.title_bar.detach_pending = true;
+                v.title_bar.detach_cancelled = false;
                 let pt = window::cursor_pos();
                 tracing::debug!(?hwnd, "tab torn off; waiting for the new window");
                 queue.push(Command::Fence(FenceCmd::DetachTab {
@@ -153,47 +153,48 @@ pub(super) fn on_mousemove(
         // message; `tab_reorder_step` is stable for any pair of widths.
         let now = Instant::now();
         let pointer_x = x as f32 / v.scale();
-        if let Some(td) = v.tab_drag.as_mut() {
+        if let Some(td) = v.title_bar.tab_drag.as_mut() {
             td.moved = true;
             td.pointer_x = pointer_x;
         }
         let prev: Vec<(ContentId, f32)> = v
+            .title_bar
             .tabs
             .iter()
             .map(|t| t.id)
             .zip(v.tab_draw_xs(now))
             .collect();
         let mut index = index;
-        let grab_dx = v.tab_drag.as_ref().map_or(0.0, |td| td.grab_dx);
+        let grab_dx = v.title_bar.tab_drag.as_ref().map_or(0.0, |td| td.grab_dx);
         let mut reordered = false;
-        for _ in 0..v.tabs.len() {
+        for _ in 0..v.title_bar.tabs.len() {
             let rects = v.tab_rects();
             let over = tab_reorder_at_pointer(index, pointer_x, grab_dx, &rects);
-            let Some(over) = over.filter(|o| *o < v.tabs.len()) else {
+            let Some(over) = over.filter(|o| *o < v.title_bar.tabs.len()) else {
                 break;
             };
-            let t = v.tabs.remove(index);
-            v.tabs.insert(over, t);
-            if let Some(td) = v.tab_drag.as_mut() {
+            let t = v.title_bar.tabs.remove(index);
+            v.title_bar.tabs.insert(over, t);
+            if let Some(td) = v.title_bar.tab_drag.as_mut() {
                 td.index = over;
             }
             index = over;
             reordered = true;
         }
         if reordered {
-            v.tab_hover = Some(index);
-            v.pressed = Some(PressTarget::Tab(index));
+            v.title_bar.tab_hover = Some(index);
+            v.title_bar.pressed = Some(PressTarget::Tab(index));
             v.hide_tip();
             v.sync_tab_slides(&prev, now);
         }
         // The chrome is rasterised once per frame by `tick`, not once per
         // mouse message (a 1000 Hz mouse would otherwise redraw it 16 times
         // per displayed frame on top of the slide tweens' own draw).
-        v.chrome_busy = true;
+        v.title_bar.chrome_busy = true;
         v.frames.request();
         return Some(0);
     }
-    if let Some(d) = v.drag.as_ref() {
+    if let Some(d) = v.file_view.drag.as_ref() {
         let (tx, ty) = window::drag_threshold();
         let (sx, sy) = d.start;
         let item = d.item;
@@ -203,8 +204,8 @@ pub(super) fn on_mousemove(
             // dragged keeps its look instead, see the tab_drag arm above).
             let p = PressTarget::Item(item);
             let inside = v.press_hit(p, x, y);
-            if v.pressed == Some(p) && inside != v.press_inside {
-                v.press_inside = inside;
+            if v.title_bar.pressed == Some(p) && inside != v.title_bar.press_inside {
+                v.title_bar.press_inside = inside;
                 v.redraw_for_press(p);
             }
             return Some(0);
@@ -213,22 +214,22 @@ pub(super) fn on_mousemove(
         // shell's own data object, so Explorer, the Recycle Bin, other
         // programs and our other fences all receive real files (with the
         // shell drag image and Move / Copy / Link cursors).
-        v.drag = None;
-        v.pressed = None;
-        v.press_inside = false;
+        v.file_view.drag = None;
+        v.title_bar.pressed = None;
+        v.title_bar.press_inside = false;
         v.cancel_pending_rename();
         v.hide_tip();
-        if !v.selected.contains(&item) {
-            v.selected.clear();
-            v.selected.insert(item);
+        if !v.file_view.selected.contains(&item) {
+            v.file_view.selected.clear();
+            v.file_view.selected.insert(item);
         }
         let ids = v.selected_ids();
         // A Recycle Bin dragged together with files would empty the CF_HDROP for every target.
         let paths = pecofence_platform::shell::paths_for_shell(v.selected_paths());
         let from = v.active;
-        let from_portal = v.is_portal;
-        v.ole_drag = true;
-        v.ole_drag_press = (sx, sy);
+        let from_portal = v.file_view.is_portal;
+        v.file_view.ole_drag = true;
+        v.file_view.ole_drag_press = (sx, sy);
         let _ = v.redraw();
         drop(guard);
         // ReleaseCapture sends WM_CAPTURECHANGED synchronously: no borrow held.
@@ -268,8 +269,8 @@ pub(super) fn on_mousemove(
         let Some(v) = guard.as_mut() else {
             return Some(0);
         };
-        v.ole_drag = false;
-        v.drag_scroll = None;
+        v.file_view.ole_drag = false;
+        v.file_view.drag_scroll = None;
         if v.snap_scroll() {
             let _ = v.redraw_content();
         }
@@ -318,7 +319,7 @@ pub(super) fn on_mousemove(
         }
         return Some(0);
     }
-    if let Some(cd) = v.col_drag.as_ref() {
+    if let Some(cd) = v.file_view.col_drag.as_ref() {
         // Divider sits on the column's left edge: dragging right shrinks it.
         let dx = (x - cd.start_x_px) as f32 / v.scale();
         let (col, w) = (cd.col, cd.start_w - dx);
@@ -331,7 +332,7 @@ pub(super) fn on_mousemove(
     // over it (Win32 button semantics: pressed fill and hover fill both go
     // when the pointer leaves, both return with it); no tip updates
     // meanwhile.
-    if let Some(p) = v.pressed
+    if let Some(p) = v.title_bar.pressed
         && matches!(
             p,
             PressTarget::Up
@@ -346,11 +347,11 @@ pub(super) fn on_mousemove(
             // a press that turns into a drag still moves the fence (the
             // click-to-expand press does the same in WM_NCMOUSEMOVE).
             let (tx, ty) = window::drag_threshold();
-            let (sx, sy) = v.press_origin;
+            let (sx, sy) = v.title_bar.press_origin;
             if (x - sx).abs() > tx || (y - sy).abs() > ty {
-                v.pressed = None;
-                v.press_inside = false;
-                v.chevron_hovered = false;
+                v.title_bar.pressed = None;
+                v.title_bar.press_inside = false;
+                v.title_bar.chevron_hovered = false;
                 let _ = v.redraw_chrome_only();
                 drop(guard);
                 // ReleaseCapture sends WM_CAPTURECHANGED synchronously.
@@ -366,14 +367,14 @@ pub(super) fn on_mousemove(
             }
         }
         let inside = v.press_hit(p, x, y);
-        if inside != v.press_inside {
-            v.press_inside = inside;
+        if inside != v.title_bar.press_inside {
+            v.title_bar.press_inside = inside;
             match p {
-                PressTarget::Up => v.up_hovered = inside,
-                PressTarget::Chevron => v.chevron_hovered = inside,
-                PressTarget::Command(i) => v.command_hovered = inside.then_some(i),
-                PressTarget::Caption(b) => v.caption_hovered = inside.then_some(b),
-                PressTarget::Header(c) => v.header_hover = inside.then_some(c),
+                PressTarget::Up => v.title_bar.up_hovered = inside,
+                PressTarget::Chevron => v.title_bar.chevron_hovered = inside,
+                PressTarget::Command(i) => v.title_bar.command_hovered = inside.then_some(i),
+                PressTarget::Caption(b) => v.title_bar.caption_hovered = inside.then_some(b),
+                PressTarget::Header(c) => v.file_view.header_hover = inside.then_some(c),
                 _ => {}
             }
             v.redraw_for_press(p);
@@ -388,7 +389,7 @@ pub(super) fn on_mousemove(
     let up = target == Some(ChromeTarget::Up);
     let chev = target == Some(ChromeTarget::Chevron);
     let tab = match target {
-        Some(ChromeTarget::Tab(id)) => v.tabs.iter().position(|tab| tab.id == id),
+        Some(ChromeTarget::Tab(id)) => v.title_bar.tabs.iter().position(|tab| tab.id == id),
         _ => None,
     };
     let command = match target {
@@ -400,11 +401,11 @@ pub(super) fn on_mousemove(
         _ => None,
     };
     // Evaluate every update: short-circuit OR leaves a previous control hovered.
-    let chrome_changed = (std::mem::replace(&mut v.up_hovered, up) != up)
-        | (std::mem::replace(&mut v.chevron_hovered, chev) != chev)
-        | (std::mem::replace(&mut v.tab_hover, tab) != tab)
-        | (std::mem::replace(&mut v.command_hovered, command) != command)
-        | (std::mem::replace(&mut v.caption_hovered, caption) != caption);
+    let chrome_changed = (std::mem::replace(&mut v.title_bar.up_hovered, up) != up)
+        | (std::mem::replace(&mut v.title_bar.chevron_hovered, chev) != chev)
+        | (std::mem::replace(&mut v.title_bar.tab_hover, tab) != tab)
+        | (std::mem::replace(&mut v.title_bar.command_hovered, command) != command)
+        | (std::mem::replace(&mut v.title_bar.caption_hovered, caption) != caption);
     let on_control = target.is_some();
     // The divider's SizeWE cursor is set by WM_SETCURSOR before this message.
     let divider = v.divider_hit(x, y);
@@ -427,7 +428,7 @@ pub(super) fn on_mousemove(
     } else {
         v.header_hit(x, y)
     };
-    let header_changed = std::mem::replace(&mut v.header_hover, header) != header;
+    let header_changed = std::mem::replace(&mut v.file_view.header_hover, header) != header;
     // Client-area pointer inside the title row (a control's box) still
     // counts as hovering the row, so the pill / chevron do not drop.
     let in_title = y < v.title_h_px();
@@ -435,16 +436,16 @@ pub(super) fn on_mousemove(
     if chrome_changed || title_changed {
         let _ = v.redraw_chrome_only();
     }
-    if (item_changed || header_changed) && !v.rolled_up {
+    if (item_changed || header_changed) && !v.animation.rolled_up {
         let _ = v.redraw_content();
     }
     // Hovering the title row of a rolled fence opens the peek, whether the
     // pointer is on the caption (WM_NCMOUSEMOVE) or on one of the row's
     // client-area controls (chevron box, tabs) handled here.
     if in_title
-        && v.rolled_up
-        && !v.peeking
-        && v.roll_anim.is_none()
+        && v.animation.rolled_up
+        && !v.animation.peeking
+        && v.animation.roll_anim.is_none()
         && behavior.hover_peek.get()
         && !behavior.click_to_expand.get()
         && !in_size_move.get()
@@ -453,7 +454,7 @@ pub(super) fn on_mousemove(
     {
         window::set_timer(hwnd, TIMER_PEEK_OPEN, Tooltip::hover_delay_ms());
     }
-    if v.peeking {
+    if v.animation.peeking {
         window::kill_timer(hwnd, TIMER_PEEK_CLOSE);
     }
     window::track_mouse_leave(hwnd);

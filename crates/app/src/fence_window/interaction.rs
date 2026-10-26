@@ -23,10 +23,10 @@ impl FenceViewState {
     pub(super) fn input_lifecycle(&self) -> InputLifecycle {
         InputLifecycle {
             visible: desktop::is_visible(self.hwnd),
-            retired: self.retired,
-            hiding: matches!(self.vis_fade, Some(VisFade::Hiding { .. })),
-            rolled: self.rolled_up,
-            rolling: self.roll_anim.is_some(),
+            retired: self.animation.retired,
+            hiding: matches!(self.animation.vis_fade, Some(VisFade::Hiding { .. })),
+            rolled: self.animation.rolled_up,
+            rolling: self.animation.roll_anim.is_some(),
         }
     }
 
@@ -34,28 +34,29 @@ impl FenceViewState {
     /// available so the transition can still be reversed from the title bar.
     pub(super) fn suspend_body_input(&mut self) -> bool {
         let body_press = matches!(
-            self.pressed,
+            self.title_bar.pressed,
             Some(PressTarget::Item(_) | PressTarget::Header(_))
         );
-        let captured = self.drag.take().is_some()
+        let captured = self.file_view.drag.take().is_some()
             | self.end_marquee()
             | self.end_scrollbar_press()
-            | self.col_drag.take().is_some()
+            | self.file_view.col_drag.take().is_some()
             | (body_press && self.take_pressed().is_some());
-        self.input_capture_release
-            .set(self.input_capture_release.get() || captured);
-        if let Some(panel) = self.plugin_panel.as_mut() {
+        self.panel_host
+            .input_capture_release
+            .set(self.panel_host.input_capture_release.get() || captured);
+        if let Some(panel) = self.panel_host.plugin_panel.as_mut() {
             panel.cancel_input();
             self.redraw_plugin_feedback();
         }
-        self.focus_visible = false;
-        self.type_ahead.clear();
+        self.file_view.focus_visible = false;
+        self.file_view.type_ahead.clear();
         self.cancel_pending_rename();
         self.hide_tip();
-        self.drag_scroll = None;
+        self.file_view.drag_scroll = None;
         self.set_drop_feedback(None);
         self.set_hover(None, false);
-        self.header_hover = None;
+        self.file_view.header_hover = None;
         captured
     }
 
@@ -65,11 +66,12 @@ impl FenceViewState {
         let cancelled_drag = self.cancel_tab_or_remote_drag();
         let captured =
             self.suspend_body_input() | self.take_pressed().is_some() | cancelled_drag.is_some();
-        self.input_capture_release
-            .set(self.input_capture_release.get() || captured);
-        self.up_hovered = false;
-        self.chevron_hovered = false;
-        self.tab_hover = None;
+        self.panel_host
+            .input_capture_release
+            .set(self.panel_host.input_capture_release.get() || captured);
+        self.title_bar.up_hovered = false;
+        self.title_bar.chevron_hovered = false;
+        self.title_bar.tab_hover = None;
         window::kill_timer(self.hwnd, TIMER_PEEK_OPEN);
         window::kill_timer(self.hwnd, TIMER_PEEK_CLOSE);
         cancelled_drag
@@ -123,7 +125,7 @@ pub(super) fn flush_capture_release(view: &ViewCell, hwnd: HWND) {
         };
         guard
             .as_mut()
-            .is_some_and(|view| view.input_capture_release.replace(false))
+            .is_some_and(|view| view.panel_host.input_capture_release.replace(false))
     };
     finish_capture_release(hwnd, requested);
 }

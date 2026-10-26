@@ -23,7 +23,7 @@ pub(super) fn on_getdragimage(
             return Some(0);
         };
         match guard.as_ref() {
-            Some(v) if v.ole_drag => v.render_drag_image(),
+            Some(v) if v.file_view.ole_drag => v.render_drag_image(),
             _ => None,
         }
     };
@@ -48,7 +48,7 @@ pub(super) fn on_showwindow(
         if wparam != 0 {
             // A fade-in shows the shadow itself (`show_with_fade`, at
             // alpha 0, fading with the plate).
-            if v.vis_fade == Some(VisFade::Showing) {
+            if v.animation.vis_fade == Some(VisFade::Showing) {
                 return None;
             }
             v.reset_root();
@@ -57,7 +57,7 @@ pub(super) fn on_showwindow(
             // Hidden (possibly from outside, mid-fade): a stale completion
             // must not show the shadow of a hidden window — and a retiring
             // window whose exit fade was cut short still has to be dropped.
-            if v.vis_fade.take() == Some(VisFade::Hiding { destroy: true }) {
+            if v.animation.vis_fade.take() == Some(VisFade::Hiding { destroy: true }) {
                 v.queue
                     .push(Command::Desktop(DesktopCmd::FadeOutDone(hwnd)));
             }
@@ -99,7 +99,7 @@ pub(super) fn on_app_tab_swap_done(
 ) -> Option<isize> {
     let HandlerCtx { view, .. } = h;
     if let Some(v) = view.borrow_mut().as_mut()
-        && v.swap_gen == wparam
+        && v.animation.swap_gen == wparam
     {
         v.finish_content_swap_now();
     }
@@ -120,12 +120,12 @@ pub(super) fn on_app_fade_done(
         let Some(v) = guard.as_mut() else {
             return Some(0);
         };
-        if v.vis_gen != wparam {
+        if v.animation.vis_gen != wparam {
             return Some(0);
         }
         window::kill_timer(hwnd, TIMER_VISIBILITY_FINISH);
-        v.vis_deadline = None;
-        match v.vis_fade.take() {
+        v.animation.vis_deadline = None;
+        match v.animation.vis_fade.take() {
             None => return Some(0),
             Some(VisFade::Showing) => {
                 v.reset_root();

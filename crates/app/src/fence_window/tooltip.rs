@@ -74,9 +74,9 @@ impl FenceViewState {
             return Some(TipTarget::Caption(self.active, b));
         }
         if let Some(t) = self.tab_at(x_px, y_px) {
-            return Some(TipTarget::Tab(self.tabs.get(t)?.id));
+            return Some(TipTarget::Tab(self.title_bar.tabs.get(t)?.id));
         }
-        hit.and_then(|i| self.items.get(i))
+        hit.and_then(|i| self.file_view.items.get(i))
             .map(|item| TipTarget::Item(self.active, item.id))
     }
 
@@ -175,7 +175,7 @@ impl FenceViewState {
                     .map(|node| node.name.clone())
             }
             TipTarget::Tab(id) => {
-                if !self.tabs.iter().any(|tab| tab.id == id) {
+                if !self.title_bar.tabs.iter().any(|tab| tab.id == id) {
                     return None;
                 }
                 self.committed_chrome_scene()?
@@ -186,7 +186,7 @@ impl FenceViewState {
                 if content != self.active {
                     return None;
                 }
-                let it = self.items.iter().find(|item| item.id == id)?;
+                let it = self.file_view.items.iter().find(|item| item.id == id)?;
                 let mut s = self.committed_file_scene()?.semantic(id)?.name.clone();
                 if let Some(t) = fileinfo::type_name(&it.path, it.is_folder) {
                     s.push_str(&pecofence_core::i18n::format(

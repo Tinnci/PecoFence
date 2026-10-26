@@ -32,7 +32,7 @@ pub(super) fn on_setcursor(
     let guard = view.try_borrow().ok()?;
     let v = guard.as_ref()?;
     let pt = window::screen_to_client(hwnd, window::cursor_pos());
-    if v.col_drag.is_some() || v.divider_hit(pt.x, pt.y).is_some() {
+    if v.file_view.col_drag.is_some() || v.divider_hit(pt.x, pt.y).is_some() {
         drop(guard);
         window::set_standard_cursor(StandardCursor::SizeWE);
         return Some(1);
@@ -66,23 +66,23 @@ pub(super) fn on_mouseleave(
             v.set_mouse_inside(false);
         }
         v.hide_tip();
-        let chrome_changed = std::mem::take(&mut v.up_hovered)
-            | std::mem::take(&mut v.chevron_hovered)
-            | v.tab_hover.take().is_some()
-            | v.command_hovered.take().is_some()
-            | v.caption_hovered.take().is_some();
+        let chrome_changed = std::mem::take(&mut v.title_bar.up_hovered)
+            | std::mem::take(&mut v.title_bar.chevron_hovered)
+            | v.title_bar.tab_hover.take().is_some()
+            | v.title_bar.command_hovered.take().is_some()
+            | v.title_bar.caption_hovered.take().is_some();
         // Leaving the bar starts the 0.5 s contract delay, not an
         // instant collapse.
         v.set_scrollbar_pointer(None);
-        let content_changed = v.header_hover.take().is_some();
+        let content_changed = v.file_view.header_hover.take().is_some();
         let (item_changed, title_changed) = v.set_hover(None, false);
         if chrome_changed || title_changed {
             let _ = v.redraw_chrome_only();
         }
-        if (content_changed || item_changed) && !v.rolled_up {
+        if (content_changed || item_changed) && !v.animation.rolled_up {
             let _ = v.redraw_content();
         }
-        if v.peeking {
+        if v.animation.peeking {
             window::set_timer(hwnd, TIMER_PEEK_CLOSE, PEEK_CLOSE_MS);
         }
     }
@@ -119,7 +119,8 @@ pub(super) fn on_lbuttondown(
         // Mouse interaction hides the keyboard focus ring (Explorer). The
         // ring lives on the content surface: arms that do not repaint it
         // anyway do so once below (one raster per click).
-        let focus_cleared = std::mem::take(&mut v.focus_visible) && !v.rolled_up;
+        let focus_cleared =
+            std::mem::take(&mut v.file_view.focus_visible) && !v.animation.rolled_up;
         // Up button / chevron: pressed look now, action on release inside.
         if v.title_button_at(x, y).is_some() {
             // A press on the chevron is about to toggle the roll-up: a
@@ -136,7 +137,7 @@ pub(super) fn on_lbuttondown(
             return Some(0);
         }
         if let Some(t) = v.tab_at(x, y) {
-            if let Some(tab) = v.tabs.get(t)
+            if let Some(tab) = v.title_bar.tabs.get(t)
                 && tab.id != v.active
             {
                 queue.push(Command::Fence(FenceCmd::SwitchTab {
@@ -147,9 +148,9 @@ pub(super) fn on_lbuttondown(
             let pointer_x = x as f32 / v.scale();
             let slot_x = v
                 .committed_chrome_scene()
-                .and_then(|scene| scene.tab(v.tabs[t].id))
+                .and_then(|scene| scene.tab(v.title_bar.tabs[t].id))
                 .map_or(pointer_x, |node| node.rect.x);
-            v.tab_drag = Some(TabDrag {
+            v.title_bar.tab_drag = Some(TabDrag {
                 start: (x, y),
                 moved: false,
                 index: t,
@@ -157,9 +158,9 @@ pub(super) fn on_lbuttondown(
                 grab_dx: pointer_x - slot_x,
                 pointer_x,
             });
-            v.tab_settle = None;
-            v.pressed = Some(PressTarget::Tab(t));
-            v.press_inside = true;
+            v.title_bar.tab_settle = None;
+            v.title_bar.pressed = Some(PressTarget::Tab(t));
+            v.title_bar.press_inside = true;
             // The click grants activation below; draw the accent now.
             if v.activate_by_pointer() || focus_cleared {
                 let _ = v.redraw_content();
@@ -176,12 +177,12 @@ pub(super) fn on_lbuttondown(
         }
         let in_content = v.input_lifecycle().body() && y >= v.title_h_px();
         if let Some(col) = v.divider_hit(x, y) {
-            v.col_drag = Some(ColDrag {
+            v.file_view.col_drag = Some(ColDrag {
                 col,
                 start_x_px: x,
                 start_w: v.column_width(col),
             });
-            v.header_hover = None;
+            v.file_view.header_hover = None;
             if focus_cleared {
                 let _ = v.redraw_content();
             }
@@ -216,40 +217,40 @@ pub(super) fn on_lbuttondown(
                 // dragging and collapses it on a release without a drag; a
                 // press on the sole selected item may become a slow
                 // double-click rename.
-                let plain = !shift && !ctrl && v.selected.contains(&i);
-                let collapse_on_up = plain && v.selected.len() > 1;
-                let was_sole_selected = plain && v.selected.len() == 1;
-                if shift && let Some(a) = v.range_anchor {
+                let plain = !shift && !ctrl && v.file_view.selected.contains(&i);
+                let collapse_on_up = plain && v.file_view.selected.len() > 1;
+                let was_sole_selected = plain && v.file_view.selected.len() == 1;
+                if shift && let Some(a) = v.file_view.range_anchor {
                     // Explorer-style range from the anchor to the clicked item.
                     let (lo, hi) = (a.min(i), a.max(i));
                     if !ctrl {
-                        v.selected.clear();
+                        v.file_view.selected.clear();
                     }
-                    v.selected.extend(lo..=hi);
+                    v.file_view.selected.extend(lo..=hi);
                 } else if ctrl {
-                    if !v.selected.remove(&i) {
-                        v.selected.insert(i);
+                    if !v.file_view.selected.remove(&i) {
+                        v.file_view.selected.insert(i);
                     }
-                    v.range_anchor = Some(i);
-                } else if !v.selected.contains(&i) {
-                    v.selected.clear();
-                    v.selected.insert(i);
-                    v.range_anchor = Some(i);
+                    v.file_view.range_anchor = Some(i);
+                } else if !v.file_view.selected.contains(&i) {
+                    v.file_view.selected.clear();
+                    v.file_view.selected.insert(i);
+                    v.file_view.range_anchor = Some(i);
                 }
-                v.anchor_index = Some(i);
-                v.drag = Some(DragState {
+                v.file_view.anchor_index = Some(i);
+                v.file_view.drag = Some(DragState {
                     start: (x, y),
                     item: i,
                     collapse_on_up,
                     was_sole_selected,
                 });
-                v.pressed = Some(PressTarget::Item(i));
-                v.press_inside = true;
+                v.title_bar.pressed = Some(PressTarget::Item(i));
+                v.title_bar.press_inside = true;
                 capture = true;
             }
             None => {
                 if !ctrl && !shift {
-                    v.selected.clear();
+                    v.file_view.selected.clear();
                 }
                 if in_content {
                     // Ctrl toggles, Shift adds (Ctrl wins when both are held).
@@ -260,14 +261,14 @@ pub(super) fn on_lbuttondown(
                     } else {
                         MarqueeMode::Replace
                     };
-                    v.marquee = Some(MarqueeState {
+                    v.file_view.marquee = Some(MarqueeState {
                         start: (x, y),
-                        start_scroll: v.scroll_y,
+                        start_scroll: v.file_view.scroll_y,
                         cur: (x, y),
                         pointer: (x, y),
                         auto_last: None,
                         base: if ctrl || shift {
-                            v.selected.clone()
+                            v.file_view.selected.clone()
                         } else {
                             HashSet::new()
                         },
@@ -282,7 +283,7 @@ pub(super) fn on_lbuttondown(
             // redraw that follows shows it, focus_session reconciles).
             let _ = v.activate_by_pointer();
         }
-        if !v.rolled_up {
+        if !v.animation.rolled_up {
             let _ = v.redraw_content();
         }
         (in_content, capture)
@@ -313,8 +314,8 @@ pub(super) fn on_lbuttonup(
     let release = window::client_to_screen(hwnd, pecofence_platform::POINT { x, y });
     flush_window_drag(view, hwnd, Instant::now(), Some((release.x, release.y)));
     let remote = view.borrow_mut().as_mut().and_then(|v| {
-        v.detach_pending = false;
-        v.remote_drag.take()
+        v.title_bar.detach_pending = false;
+        v.title_bar.remote_drag.take()
     });
     if let Some(drag) = remote {
         window::release_capture();
@@ -327,7 +328,7 @@ pub(super) fn on_lbuttonup(
                 }
             ) {
                 if let Some(v) = view.borrow_mut().as_mut() {
-                    v.suppress_dblclk = true;
+                    v.animation.suppress_dblclk = true;
                 }
                 queue.push(Command::Fence(FenceCmd::ToggleRollUp(drag.fence)));
             }
@@ -358,16 +359,23 @@ pub(super) fn on_lbuttonup(
         let mut guard = view.borrow_mut();
         match guard.as_mut() {
             Some(v) => {
-                let tab_drag = v.tab_drag.take().map(|td| {
+                let tab_drag = v.title_bar.tab_drag.take().map(|td| {
                     // The pill settles from under the pointer into its slot.
                     v.settle_dragged_tab(&td);
-                    (td.index, td.start_index, v.tabs.get(td.index).map(|t| t.id))
+                    (
+                        td.index,
+                        td.start_index,
+                        v.title_bar.tabs.get(td.index).map(|t| t.id),
+                    )
                 });
                 (
-                    v.drag.take(),
+                    v.file_view.drag.take(),
                     v.end_marquee(),
                     tab_drag,
-                    v.col_drag.take().map(|_| (v.active, v.column_widths)),
+                    v.file_view
+                        .col_drag
+                        .take()
+                        .map(|_| (v.active, v.file_view.column_widths)),
                     v.end_scrollbar_press(),
                     // Not repainted here: folded into the single redraw
                     // below, after the capture is released.
@@ -434,10 +442,10 @@ pub(super) fn on_lbuttonup(
             PressTarget::Command(i) => super::super::plugin_panel::invoke_chrome_command(v, i),
             PressTarget::Caption(button) => {
                 use pecofence_render::fence_chrome::CaptionButton;
-                v.caption_hovered = None;
+                v.title_bar.caption_hovered = None;
                 match button {
                     // A fence minimizes to its title strip (roll up), like the chevron.
-                    CaptionButton::Minimize if v.roll_anim.is_none() => {
+                    CaptionButton::Minimize if v.animation.roll_anim.is_none() => {
                         queue.push(Command::Fence(FenceCmd::ToggleRollUp(fence_id)))
                     }
                     CaptionButton::Minimize => {}
@@ -453,10 +461,10 @@ pub(super) fn on_lbuttonup(
                 fence: v.active,
                 sort: column_sort(col),
             })),
-            PressTarget::Chevron if v.roll_anim.is_none() => {
-                if v.peeking {
+            PressTarget::Chevron if v.animation.roll_anim.is_none() => {
+                if v.animation.peeking {
                     // Already expanded by peek: commit the expanded state.
-                    v.peeking = false;
+                    v.animation.peeking = false;
                     queue.push(Command::Fence(FenceCmd::CommitExpanded(fence_id)));
                 } else {
                     queue.push(Command::Fence(FenceCmd::ToggleRollUp(fence_id)));
@@ -471,15 +479,15 @@ pub(super) fn on_lbuttonup(
             v.select_only(d.item);
             need_content = true;
         } else if d.was_sole_selected
-            && v.selected.len() == 1
-            && v.selected.contains(&d.item)
+            && v.file_view.selected.len() == 1
+            && v.file_view.selected.contains(&d.item)
             && v.label_hit(x, y, d.item)
-            && let Some(it) = v.items.get(d.item)
+            && let Some(it) = v.file_view.items.get(d.item)
         {
             // Explorer's slow double-click: a second click on the label of
             // the already-selected item renames it once the double-click
             // interval has passed (a real double-click cancels this).
-            v.pending_rename = Some(it.id);
+            v.file_view.pending_rename = Some(it.id);
             window::set_timer(
                 hwnd,
                 TIMER_RENAME,
@@ -487,7 +495,7 @@ pub(super) fn on_lbuttonup(
             );
         }
     }
-    if need_content && !v.rolled_up {
+    if need_content && !v.animation.rolled_up {
         let _ = v.redraw_content();
     }
     if need_chrome {
@@ -506,19 +514,19 @@ pub(super) fn on_capturechanged(
     let fence_id = h.fence_id;
     let mut guard = view.borrow_mut();
     if let Some(v) = guard.as_mut() {
-        v.drag = None;
+        v.file_view.drag = None;
         v.clear_pressed();
-        if v.detach_pending || v.remote_drag.is_some() {
+        if v.title_bar.detach_pending || v.title_bar.remote_drag.is_some() {
             tracing::info!(
                 ?hwnd,
-                pending = v.detach_pending,
-                remote = v.remote_drag.is_some(),
+                pending = v.title_bar.detach_pending,
+                remote = v.title_bar.remote_drag.is_some(),
                 now = ?window::get_capture(),
                 "capture lost during tab tear-off"
             );
         }
-        v.detach_pending = false;
-        if let Some(rd) = v.remote_drag.take() {
+        v.title_bar.detach_pending = false;
+        if let Some(rd) = v.title_bar.remote_drag.take() {
             let rect = window::window_rect(rd.hwnd);
             queue.push(Command::Fence(FenceCmd::FenceBoundsChanged {
                 fence: rd.fence,
@@ -533,11 +541,11 @@ pub(super) fn on_capturechanged(
         }
         let marquee = v.end_marquee();
         // Losing capture mid tab-drag still commits the order shown.
-        if let Some(td) = v.tab_drag.take() {
+        if let Some(td) = v.title_bar.tab_drag.take() {
             v.settle_dragged_tab(&td);
             let _ = v.redraw_chrome_only();
             if td.index != td.start_index
-                && let Some(tab) = v.tabs.get(td.index).map(|t| t.id)
+                && let Some(tab) = v.title_bar.tabs.get(td.index).map(|t| t.id)
             {
                 queue.push(Command::Fence(FenceCmd::ReorderTab {
                     host: fence_id,
@@ -546,7 +554,7 @@ pub(super) fn on_capturechanged(
                 }));
             }
         }
-        v.col_drag = None;
+        v.file_view.col_drag = None;
         let scroll = v.end_scrollbar_press();
         if marquee || scroll {
             let _ = v.redraw();
@@ -570,12 +578,12 @@ pub(super) fn on_lbuttondblclk(
         // A real double-click launches; it never renames.
         v.cancel_pending_rename();
         v.hide_tip();
-        v.focus_visible = false;
+        v.file_view.focus_visible = false;
         if let Some(col) = v.divider_hit(x, y) {
             // Explorer: double-clicking a divider sizes the column to fit.
-            v.col_drag = None;
+            v.file_view.col_drag = None;
             v.auto_fit_column(col);
-            let (fence, widths) = (v.active, v.column_widths);
+            let (fence, widths) = (v.active, v.file_view.column_widths);
             let _ = v.redraw_content();
             queue.push(Command::Fence(FenceCmd::SetColumnWidths { fence, widths }));
             return Some(0);
@@ -606,9 +614,9 @@ pub(super) fn on_lbuttondblclk(
             return Some(0);
         }
         if let Some(i) = v.hit_item(x, y)
-            && let Some(item) = v.items.get(i)
+            && let Some(item) = v.file_view.items.get(i)
         {
-            if v.navigate_folders && item.is_folder {
+            if v.file_view.navigate_folders && item.is_folder {
                 queue.push(Command::Fence(FenceCmd::PortalEnter {
                     fence: v.active,
                     path: item.path.clone(),
@@ -638,7 +646,7 @@ pub(super) fn on_rbuttondown(
     if let Ok(mut guard) = view.try_borrow_mut()
         && let Some(v) = guard.as_mut()
     {
-        v.rbutton_swallow = false;
+        v.file_view.rbutton_swallow = false;
     }
     if window::get_capture() != hwnd {
         return None;
@@ -646,7 +654,7 @@ pub(super) fn on_rbuttondown(
     let cancel = view.borrow_mut().as_mut().and_then(|v| {
         let c = v.cancel_tab_or_remote_drag();
         if c.is_some() {
-            v.rbutton_swallow = true;
+            v.file_view.rbutton_swallow = true;
         }
         c
     });
@@ -672,7 +680,7 @@ pub(super) fn on_rbuttonup(
     let Some(v) = guard.as_mut() else {
         return Some(0);
     };
-    if std::mem::take(&mut v.rbutton_swallow) {
+    if std::mem::take(&mut v.file_view.rbutton_swallow) {
         return Some(0);
     }
     let pt = window::cursor_pos();
@@ -688,7 +696,7 @@ pub(super) fn on_rbuttonup(
         return Some(0);
     }
     if let Some(t) = v.tab_at(x, y) {
-        let fence = v.tabs.get(t).map(|t| t.id).unwrap_or(v.active);
+        let fence = v.title_bar.tabs.get(t).map(|t| t.id).unwrap_or(v.active);
         queue.push(Command::Fence(FenceCmd::FenceMenu {
             fence,
             x: pt.x,
@@ -696,14 +704,14 @@ pub(super) fn on_rbuttonup(
         }));
         return Some(0);
     }
-    v.focus_visible = false;
+    v.file_view.focus_visible = false;
     match v.hit_item(x, y) {
         Some(i) => {
-            if !v.selected.contains(&i) {
-                v.selected.clear();
-                v.selected.insert(i);
-                v.anchor_index = Some(i);
-                v.range_anchor = Some(i);
+            if !v.file_view.selected.contains(&i) {
+                v.file_view.selected.clear();
+                v.file_view.selected.insert(i);
+                v.file_view.anchor_index = Some(i);
+                v.file_view.range_anchor = Some(i);
             }
             // Like a left click, a right click on an item grants the focus
             // session (Explorer activates the view), so the selection shows
@@ -759,11 +767,11 @@ pub(super) fn on_mousewheel(
         if ctrl {
             // Ctrl+wheel never scrolls (Explorer); in Icons view it steps the
             // icon size, one step per whole notch (touchpads accumulate).
-            if v.layout == ViewLayout::Icons {
-                v.wheel_zoom_accum += delta;
-                while v.wheel_zoom_accum.abs() >= msg::WHEEL_DELTA {
-                    let larger = v.wheel_zoom_accum > 0;
-                    v.wheel_zoom_accum -= if larger {
+            if v.file_view.layout == ViewLayout::Icons {
+                v.file_view.wheel_zoom_accum += delta;
+                while v.file_view.wheel_zoom_accum.abs() >= msg::WHEEL_DELTA {
+                    let larger = v.file_view.wheel_zoom_accum > 0;
+                    v.file_view.wheel_zoom_accum -= if larger {
                         msg::WHEEL_DELTA
                     } else {
                         -msg::WHEEL_DELTA
@@ -776,7 +784,7 @@ pub(super) fn on_mousewheel(
             }
             return Some(0);
         }
-        if v.rolled_up || v.roll_anim.is_some() {
+        if v.animation.rolled_up || v.animation.roll_anim.is_some() {
             // A collapsed container has no viewport (WinUI Expander):
             // the wheel must not scroll the hidden content, and the
             // frozen surface of a rolling fence stays put.
@@ -813,9 +821,9 @@ pub(super) fn on_mousewheel(
             motion::NORMAL
         };
         v.scroll_to(v.scroll_target() - step, cap);
-        if v.scroll_anim.is_none() {
+        if v.file_view.scroll_anim.is_none() {
             // Animations off: the offset snapped, draw it now.
-            if v.marquee.is_some() {
+            if v.file_view.marquee.is_some() {
                 // The band is anchored to the content: re-select under it.
                 v.update_marquee_selection();
                 let _ = v.redraw();

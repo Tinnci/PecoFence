@@ -68,7 +68,9 @@ impl FenceViewState {
     /// motion): `layout(width).cell(i)` for every index.
     pub(super) fn cell_origins(&self, width_dip: f32) -> Vec<CellRect> {
         let layout = self.layout(width_dip);
-        (0..self.items.len()).map(|i| layout.cell(i)).collect()
+        (0..self.file_view.items.len())
+            .map(|i| layout.cell(i))
+            .collect()
     }
 
     /// Replaces the item list with layout motion (WinUI Reorder / AddDelete theme transitions):
@@ -83,15 +85,16 @@ impl FenceViewState {
         let (cw, _) = self.content_size_px();
         let width_dip = cw as f32 / scale;
         let animate = self.motion.enabled()
-            && !self.rolled_up
-            && self.roll_anim.is_none()
-            && !self.ole_drag
-            && self.marquee.is_none()
-            && !self.items.is_empty()
+            && !self.animation.rolled_up
+            && self.animation.roll_anim.is_none()
+            && !self.file_view.ole_drag
+            && self.file_view.marquee.is_none()
+            && !self.file_view.items.is_empty()
             && desktop::is_visible(self.hwnd);
         let old_pos: HashMap<ItemId, CellRect> = if animate {
             let cells = self.cell_origins(width_dip);
-            self.items
+            self.file_view
+                .items
                 .iter()
                 .zip(cells)
                 .map(|(it, c)| (it.id, c))
@@ -99,11 +102,12 @@ impl FenceViewState {
         } else {
             HashMap::new()
         };
-        let old_len = self.items.len();
-        let old_ids: Vec<ItemId> = self.items.iter().map(|i| i.id).collect();
+        let old_len = self.file_view.items.len();
+        let old_ids: Vec<ItemId> = self.file_view.items.iter().map(|i| i.id).collect();
         // Keep icons / labels for unchanged items.
-        let mut old: HashMap<ItemId, ItemView> = self.items.drain(..).map(|i| (i.id, i)).collect();
-        self.items = items
+        let mut old: HashMap<ItemId, ItemView> =
+            self.file_view.items.drain(..).map(|i| (i.id, i)).collect();
+        self.file_view.items = items
             .into_iter()
             .map(|mut n| {
                 if let Some(o) = old.remove(&n.id)
@@ -128,36 +132,45 @@ impl FenceViewState {
             .collect();
         // `old` now holds only the removed items: their fades leave with them.
         if !old.is_empty() {
-            self.item_hover.prune(now, |k| !old.contains_key(k));
-            self.item_sel.prune(now, |k| !old.contains_key(k));
-            self.drop_fades.prune(now, |k| !old.contains_key(k));
+            self.file_view
+                .item_hover
+                .prune(now, |k| !old.contains_key(k));
+            self.file_view.item_sel.prune(now, |k| !old.contains_key(k));
+            self.file_view
+                .drop_fades
+                .prune(now, |k| !old.contains_key(k));
         }
         self.remap_item_state(&old_ids);
         let added = self
+            .file_view
             .items
             .iter()
             .filter(|n| !old_pos.contains_key(&n.id))
             .count();
         let changed = old.len() + added;
-        let animate = animate && layout_motion_applies(changed, old_len, self.items.len());
-        if !animate && changed > 0 && layout_motion_applies(changed, old_len, self.items.len()) {
+        let animate =
+            animate && layout_motion_applies(changed, old_len, self.file_view.items.len());
+        if !animate
+            && changed > 0
+            && layout_motion_applies(changed, old_len, self.file_view.items.len())
+        {
             // A genuine rearrangement that snapped instead of gliding: say why.
             tracing::info!(
-                ole_drag = self.ole_drag,
-                rolled = self.rolled_up,
-                rolling = self.roll_anim.is_some(),
-                marquee = self.marquee.is_some(),
+                ole_drag = self.file_view.ole_drag,
+                rolled = self.animation.rolled_up,
+                rolling = self.animation.roll_anim.is_some(),
+                marquee = self.file_view.marquee.is_some(),
                 old_len,
-                new_len = self.items.len(),
+                new_len = self.file_view.items.len(),
                 changed,
                 "layout motion skipped"
             );
         } else {
             tracing::debug!(
                 animate,
-                ole_drag = self.ole_drag,
+                ole_drag = self.file_view.ole_drag,
                 old_len,
-                new_len = self.items.len(),
+                new_len = self.file_view.items.len(),
                 changed,
                 "replace_items"
             );
@@ -168,9 +181,9 @@ impl FenceViewState {
         }
         let cells = self.cell_origins(width_dip);
         let mut motion: HashMap<ItemId, ItemMotion> = HashMap::new();
-        for (n, c) in self.items.iter().zip(cells) {
+        for (n, c) in self.file_view.items.iter().zip(cells) {
             // A motion still in flight continues from where it is, not from the old slot.
-            let prev = self.item_motion.remove(&n.id);
+            let prev = self.file_view.item_motion.remove(&n.id);
             match old_pos.get(&n.id) {
                 Some(o) => {
                     let (fx, fy) =
@@ -215,12 +228,12 @@ impl FenceViewState {
         }
         // Survivors took their motions out of the old map: what is left belongs to the
         // removed items (a glide or fade-in still in flight when the item vanished).
-        let stale = std::mem::replace(&mut self.item_motion, motion);
+        let stale = std::mem::replace(&mut self.file_view.item_motion, motion);
         // Removed items fade out from where they are drawn — the mid-glide position and the
         // current alpha, not the layout cell (WinUI AddDeleteThemeTransition fades in place);
         // a removal mid fade-out just keeps fading.
         let icon_px = (self.icon_dip() * scale).round() as u32;
-        let icons = self.icons.borrow();
+        let icons = self.file_view.icons.borrow();
         for (id, o) in old {
             let Some(c) = old_pos.get(&id) else {
                 continue;
@@ -231,7 +244,7 @@ impl FenceViewState {
             if a0 <= 0.01 {
                 continue;
             }
-            self.leaving.push(LeavingItem {
+            self.file_view.leaving.push(LeavingItem {
                 x,
                 y,
                 w: c.w,
@@ -249,44 +262,45 @@ impl FenceViewState {
             });
         }
         drop(icons);
-        if !self.item_motion.is_empty() || !self.leaving.is_empty() {
+        if !self.file_view.item_motion.is_empty() || !self.file_view.leaving.is_empty() {
             self.frames.request();
         }
     }
 
     /// Carries every index-keyed item state (selection, focus / range anchors, hover, drop
     /// target, press, drag source, marquee base) from the list `old_ids` describes to the
-    /// current `self.items` by identity. Vanished items simply drop out; the focus ring hides
+    /// current `self.file_view.items` by identity. Vanished items simply drop out; the focus ring hides
     /// when its item is gone. The fades are keyed by id and need nothing here.
     pub(super) fn remap_item_state(&mut self, old_ids: &[ItemId]) {
         let new: HashMap<ItemId, usize> = self
+            .file_view
             .items
             .iter()
             .enumerate()
             .map(|(i, it)| (it.id, i))
             .collect();
         let map = |i: usize| remap_index(old_ids, &new, i);
-        self.selected = remap_indices(old_ids, &new, &self.selected);
-        self.anchor_index = self.anchor_index.and_then(map);
-        self.range_anchor = self.range_anchor.and_then(map);
-        if self.anchor_index.is_none() {
-            self.focus_visible = false;
+        self.file_view.selected = remap_indices(old_ids, &new, &self.file_view.selected);
+        self.file_view.anchor_index = self.file_view.anchor_index.and_then(map);
+        self.file_view.range_anchor = self.file_view.range_anchor.and_then(map);
+        if self.file_view.anchor_index.is_none() {
+            self.file_view.focus_visible = false;
         }
-        self.hover = self.hover.and_then(map);
-        self.drop_item = self.drop_item.and_then(map);
-        if let Some(PressTarget::Item(i)) = self.pressed {
-            self.pressed = map(i).map(PressTarget::Item);
-            if self.pressed.is_none() {
-                self.press_inside = false;
+        self.file_view.hover = self.file_view.hover.and_then(map);
+        self.file_view.drop_item = self.file_view.drop_item.and_then(map);
+        if let Some(PressTarget::Item(i)) = self.title_bar.pressed {
+            self.title_bar.pressed = map(i).map(PressTarget::Item);
+            if self.title_bar.pressed.is_none() {
+                self.title_bar.press_inside = false;
             }
         }
-        if let Some(d) = self.drag.as_mut() {
+        if let Some(d) = self.file_view.drag.as_mut() {
             match map(d.item) {
                 Some(i) => d.item = i,
-                None => self.drag = None,
+                None => self.file_view.drag = None,
             }
         }
-        if let Some(m) = self.marquee.as_mut() {
+        if let Some(m) = self.file_view.marquee.as_mut() {
             m.base = remap_indices(old_ids, &new, &m.base);
         }
     }
