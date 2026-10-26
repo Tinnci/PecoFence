@@ -81,9 +81,19 @@ impl Palette {
         match stage {
             BoardStage::NotStarted | BoardStage::Unmapped => self.skeleton,
             BoardStage::Implementation | BoardStage::Review => {
-                paper::mix(self.accent, self.base, 0.35)
+                if self.dark {
+                    paper::srgb(240, 162, 122)
+                } else {
+                    paper::srgb(232, 130, 75)
+                }
             }
-            BoardStage::Done => paper::mix(self.accent, self.primary, 0.35),
+            BoardStage::Done => {
+                if self.dark {
+                    paper::srgb(126, 58, 30)
+                } else {
+                    paper::srgb(92, 41, 20)
+                }
+            }
             _ => self.accent,
         }
     }

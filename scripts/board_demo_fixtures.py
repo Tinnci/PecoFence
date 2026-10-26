@@ -276,7 +276,7 @@ def r093(step: int) -> dict:
     dep = ref("meegle", "orion", "issue", "77104")
     ev_owner = evidence("ev:m-88193-owner", s, "workflow.nodes.develop.owners", "2026-10-16T02:00:00Z", EARLY,
                         "Meegle develop node owner set to Riley")
-    ev_block = evidence("ev:m-77104", dep, "fields.status", "2026-10-22T03:00:00Z", EARLY,
+    ev_block = evidence("ev:m-77104", dep, "fields.status", "2026-10-18T00:00:00Z", EARLY,
                         "Vendor issue 77104 (BSP drop 2026.11) is open; expected 11-08")
     relationships = [assigned_meegle("rel-093-meegle", "riley", s, "2026-10-16T02:00:00Z", ev_owner)]
     blockers = [{"reason": "Waiting for the vendor BSP drop 2026.11 (issue 77104)", "dependency": dep,
@@ -518,6 +518,20 @@ def timeline_projection(cards: list[dict], step: int) -> None:
                      | {e for b in c["blockers"] for e in b["evidence"]})
         c["event_marks"] = [{"at": EVIDENCE[e][2], "system": EVIDENCE[e][0]["system"], "evidence_id": e}
                             for e in ids if EVIDENCE[e][2] <= STEPS[step]["computed_at"]][:12]
+        extra_marks = []
+        if n == "103":
+            c["progress"] = {"code": code(1, 1), "build": "passed", "verification": "in_progress"}
+            c["next_action"] = {"text": "Run regression on build 1187", "owner": person("taylor")}
+            for day, summary in [("10-24", "Taylor approves change 4712"), ("10-25", "Change 4712 merged")]:
+                eid = evidence("ev:timeline-4712-" + day, change(4712), "status", date(day), EARLY, summary)
+                extra_marks.append({"at": date(day), "system": "gerrit", "evidence_id": eid})
+        if n in ("087", "124"):
+            day, build, summary = (("10-25", 1182, "Regression started on build 1182") if n == "087"
+                                   else ("10-26", 1190, "Regression failed on build 1190: Search hidden after rotation"))
+            eid = evidence("ev:timeline-build-" + n, build_ref(build), "result", date(day), EARLY, summary)
+            extra_marks.append({"at": date(day), "system": "jenkins", "evidence_id": eid})
+        c["event_marks"] = (c["event_marks"] + extra_marks)[-12:]
+        c["evidence_count"] += len(extra_marks)
         for blocker in c["blockers"]:
             blocker["since"] = date("10-18")
             blocker["expected_at"] = date("11-08")

@@ -260,3 +260,83 @@ pixel baselines during this audit. Multi-monitor DPI, on-screen Windows high
 contrast, screen readers and production daemon board delivery remain unverified.
 Navigation origins are implemented in `16cd9b0`; they still require deployment
 configuration. Host chrome, the paper title sheet and captions are in `ff79ef5`.
+
+## Delivery timeline (2026-10-27)
+
+The content header now offers **Board** and **Timeline**. The choice, zoom,
+selection, collapse and scroll state belong to the panel instance, not its
+configuration. Flow and Standup are not advertised. Refresh keeps selection by
+`card_id`; “Show on board” clears filters/collapses that would hide the selected
+card and scrolls it into view.
+
+`BoardCard` now carries an optional backend schedule (due, original due and
+source basis), ordered non-overlapping stage spans, and at most twelve evidence
+markers. `BoardSnapshot` carries milestones; blockers can carry an expected
+arrival date. Missing new fields default when reading older producers. The panel
+does not infer starts, due dates, dependencies or completion from activity.
+
+The separate `board/timeline.rs` renderer presents model lanes, stage bars in a
+three-step terracotta ramp, neutral dashed unstarted work, blocked hatching,
+dashed remaining plans, due/original ticks, dependency lines, source-shaped
+markers, milestone flags and a today guide. Week covers five weeks; month covers
+61 days; quarter covers 92 days. Calendar boundaries use the project timezone
+with the existing explicit UTC fallback for unsupported zones. Only week zoom
+shades weekends. The number uses the existing system condensed font role;
+measurement uses that same role, with no added font packaging.
+
+Narrow fences show milestone countdowns and due-sorted groups (overdue/tomorrow,
+this calendar week, later, unscheduled) on a fourteen-date track. Selecting a
+wide row opens a bottom drawer with stage durations, blocked days, signed days
+to due, next action and notes including the original due. Narrow details scroll
+when needed. Arrows select rows, Enter opens the drawer and Escape closes it.
+“Open evidence” uses the existing evidence detail. Marker hover/Tab focus sends
+an additive host `PanelEvent::Inspect` and loads revision-pinned evidence without
+changing selection. Bars have semantic descriptions; controls and markers have
+names and the host paints focus feedback. Stages and blockers also have words
+and glyphs in high contrast.
+
+The deterministic Orion producer includes R-103 10-28 → 10-30, R-124 10-24 →
+10-27, R-093 blocked from 10-18 awaiting BSP on 11-08, code freeze on 11-06,
+release on 11-13, and completed R-080/R-081/R-090/R-110/R-111. Existing scenarios
+remain (including R-102's assignment/start and R-108's acceptance on refresh),
+so the native demo contains more rows than the static HTML composition. The
+existing R-096 completion is retained. R-112 now belongs to the Lite lane as in
+the approved timeline.
+
+Verification on this implementation:
+
+- 312 Linux tests pass across core (80), plugin-api (20), plugin-kernel (13),
+  plugin-spm (54), widgets (88), contracts (37) and transport (20).
+- Two Python fixture tests verify reproducibility, checked-in JSON parity,
+  approved dates, current-stage consistency and lazy evidence pointers.
+- Strict Clippy passes for those Linux packages and the entire Windows workspace,
+  including all targets. `cargo fmt --check` passes.
+- Windows test binaries built with `scripts/build-windows.sh test pecofence
+  pecofence-render pecofence-spm-transport` and run through a local PowerShell
+  `-NoProfile -File` driver: 185 app tests pass (two existing live WinUI tests
+  ignored), 55 render tests pass, 20 transport tests pass.
+- New headless PNGs: `timeline-week`, `timeline-month`, `timeline-compact`,
+  `timeline-hc`, `timeline-drawer`. All ten headless baselines match. **Deviation:**
+  the five prior board PNGs were intentionally regenerated for the new content
+  header and approved fixture changes; they are not byte-identical to the old
+  baselines. The old native reference captures remain unchanged.
+- Real Direct2D/DirectWrite captures of week, month, drawer and compact in explicit
+  Light and Dark paper are under
+  [`tests/snapshots/native/timeline`](../crates/plugin-spm/tests/snapshots/native/timeline/).
+  Every capture was visually inspected. The driver uses Tab/Enter instead of
+  locale-sensitive click coordinates and sets the isolated instance's paper
+  preference (app `--light` alone does not override Adaptive paper).
+
+Reproduce the native tour by copying `scripts/demo-board.ps1` and the runtime
+manifest to a local Windows folder, then running the local script with
+`powershell.exe -NoProfile -File ... -Tour timeline -Theme light|dark -Out ...`.
+No execution-policy override is needed.
+
+Still unverified: production daemon delivery (there is no board producer), a
+screen reader, on-screen Windows high contrast, other monitor DPI settings,
+and a native Soft-paper tour. Soft uses the shared paper resolver; high contrast
+and 100/150/200-percent text layouts are exercised headlessly. The narrow drawer
+uses the available surface and scrolls rather than mirroring the HTML's wide
+three-column drawer. Evidence previews are a fixed bottom callout, not a floating
+bubble attached to the marker. Done items share a collapsed lane strip and may
+overlap in time; their individual identities remain in semantic descriptions.

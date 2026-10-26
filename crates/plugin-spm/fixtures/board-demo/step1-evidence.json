@@ -188,6 +188,36 @@
     "revision": 41,
     "items": [
       {
+        "id": "ev:timeline-4712-10-24",
+        "source": {
+          "system": "gerrit",
+          "tenant": "review.acme",
+          "project": "launcher",
+          "record_kind": "change",
+          "record_id": "4712"
+        },
+        "field_locator": "status",
+        "source_time": "2026-10-24T00:00:00Z",
+        "observed_at": "2026-10-26T01:40:00Z",
+        "summary": "Taylor approves change 4712",
+        "relationship_ids": []
+      },
+      {
+        "id": "ev:timeline-4712-10-25",
+        "source": {
+          "system": "gerrit",
+          "tenant": "review.acme",
+          "project": "launcher",
+          "record_kind": "change",
+          "record_id": "4712"
+        },
+        "field_locator": "status",
+        "source_time": "2026-10-25T00:00:00Z",
+        "observed_at": "2026-10-26T01:40:00Z",
+        "summary": "Change 4712 merged",
+        "relationship_ids": []
+      },
+      {
         "id": "ev:l-request",
         "source": {
           "system": "lark",
@@ -355,6 +385,21 @@
         "relationship_ids": [
           "rel-087-tester"
         ]
+      },
+      {
+        "id": "ev:timeline-build-087",
+        "source": {
+          "system": "jenkins",
+          "tenant": "acme",
+          "project": "orion-ci",
+          "record_kind": "build",
+          "record_id": "launcher-orion/1182"
+        },
+        "field_locator": "result",
+        "source_time": "2026-10-25T00:00:00Z",
+        "observed_at": "2026-10-26T01:40:00Z",
+        "summary": "Regression started on build 1182",
+        "relationship_ids": []
       }
     ],
     "next_cursor": null
@@ -431,7 +476,7 @@
           "record_id": "77104"
         },
         "field_locator": "fields.status",
-        "source_time": "2026-10-22T03:00:00Z",
+        "source_time": "2026-10-18T00:00:00Z",
         "observed_at": "2026-10-26T01:40:00Z",
         "summary": "Vendor issue 77104 (BSP drop 2026.11) is open; expected 11-08",
         "relationship_ids": []
@@ -740,6 +785,21 @@
         "relationship_ids": [
           "rel-124-verified"
         ]
+      },
+      {
+        "id": "ev:timeline-build-124",
+        "source": {
+          "system": "jenkins",
+          "tenant": "acme",
+          "project": "orion-ci",
+          "record_kind": "build",
+          "record_id": "launcher-orion/1190"
+        },
+        "field_locator": "result",
+        "source_time": "2026-10-26T00:00:00Z",
+        "observed_at": "2026-10-26T01:40:00Z",
+        "summary": "Regression failed on build 1190: Search hidden after rotation",
+        "relationship_ids": []
       }
     ],
     "next_cursor": null

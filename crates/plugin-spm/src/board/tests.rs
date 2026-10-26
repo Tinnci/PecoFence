@@ -1021,6 +1021,16 @@ fn delivery_geometry_tracks_supplied_dates_and_zoom_ranges() {
             h: 1.0,
         };
         assert!((due.rect.x - range.x(schedule.due, track)).abs() < 0.1);
+        let card = h.panel.board().unwrap().card("ORION-R-103").unwrap();
+        let span = &card.stage_history[0];
+        let bar = nodes
+            .iter()
+            .find(|n| n.key == format!("{key}:span:0"))
+            .unwrap();
+        let expected_left = range.x(span.from, track);
+        let expected_right = range.x(span.to.unwrap(), track);
+        assert!((bar.rect.x - expected_left).abs() < 0.1);
+        assert!((bar.rect.w - (expected_right - expected_left)).abs() < 0.1);
         assert!(
             nodes
                 .iter()
@@ -1048,8 +1058,12 @@ fn delivery_keyboard_drawer_and_evidence_reuse_existing_detail() {
     assert_ne!(first, h.panel.selected);
     h.frame(1440.0, 1200.0);
     h.key(PanelKey::Enter);
+    let blocked = h.card("ORION-R-093");
+    h.panel.select(blocked, true, h.now).unwrap();
     h.settle();
     let s = h.frame(1440.0, 1200.0);
+    assert!(texts(&s).iter().any(|s| s.contains("Blocked 8 days")));
+    assert!(texts(&s).iter().any(|s| s.contains("Days to due 5 days")));
     assert!(h.panel.detail_open);
     for word in ["Develop", "Verify", "Blocked", "Days to due"] {
         assert!(texts(&s).iter().any(|s| s.contains(word)), "{word}");
@@ -1208,5 +1222,109 @@ fn timeline_snapshots() {
             h.panel.palette.base,
         );
         pecofence_render::raster::assert_snapshot(&pixmap, &dir.join(format!("{name}.png")));
+    }
+}
+
+#[test]
+fn timeline_scroll_navigation_keeps_selected_row_visible() {
+    let mut h = timeline_harness(None, 1440.0, 700.0);
+    h.key(PanelKey::Down);
+    for _ in 0..10 {
+        h.frame(1440.0, 700.0);
+        h.key(PanelKey::Down);
+        h.frame(1440.0, 700.0);
+        let selected = h.panel.selected.as_ref().unwrap();
+        let nav = h.panel.last.nav.iter().find(|n| &n.id == selected).unwrap();
+        let region = h.panel.last.board.unwrap();
+        assert!(nav.y >= h.panel.scroll - 0.5);
+        assert!(nav.y + nav.h <= h.panel.scroll + region.h + 0.5);
+    }
+    h.key(PanelKey::Enter);
+    h.frame(1440.0, 700.0);
+    h.click(&Target::ShowOnBoard);
+    h.frame(1440.0, 700.0);
+    let selected = h.panel.selected.as_ref().unwrap();
+    let nav = h.panel.last.nav.iter().find(|n| &n.id == selected).unwrap();
+    let region = h.panel.last.board.unwrap();
+    assert!(nav.y >= h.panel.scroll - 0.5);
+    assert!(nav.y + nav.h <= h.panel.scroll + region.h + 0.5);
+}
+
+#[test]
+fn timeline_high_contrast_retains_patterns_words_and_named_schedule() {
+    let h = timeline_harness(Some(high_contrast()), 1440.0, 1200.0);
+    assert!(h.panel.palette.hc);
+    assert!(h.panel.last.nodes.iter().any(|n| n.key.contains(":hatch:")));
+    assert!(
+        h.panel
+            .last
+            .nodes
+            .iter()
+            .any(|n| n.key.contains(":outline:top:"))
+    );
+    assert!(
+        h.panel
+            .last
+            .nodes
+            .iter()
+            .any(|n| n.name.contains("Original due 10-28"))
+    );
+    assert!(
+        h.panel
+            .last
+            .nodes
+            .iter()
+            .any(|n| n.text.contains("⊘ Blocked"))
+    );
+    assert!(
+        h.panel
+            .last
+            .nodes
+            .iter()
+            .filter(|n| n.role == "img")
+            .all(|n| !n.name.is_empty())
+    );
+}
+
+#[test]
+fn timeline_calendar_uses_project_day_at_utc_midnight_boundary() {
+    let at = chrono::DateTime::parse_from_rfc3339("2026-10-25T18:00:00Z")
+        .unwrap()
+        .with_timezone(&chrono::Utc);
+    let range = layout::timeline::Range::for_zoom(at, Zoom::Week, "Asia/Shanghai");
+    assert_eq!(range.from.to_rfc3339(), "2026-10-11T16:00:00+00:00");
+    let mut h = timeline_harness(None, 1440.0, 1200.0);
+    h.panel.zoom = Zoom::Quarter;
+    let scene = h.frame(1440.0, 1200.0);
+    assert!(texts(&scene).iter().any(|t| t == "2026-10"));
+    assert!(!texts(&scene).iter().any(|t| t == "2026-09"));
+}
+
+#[test]
+fn timeline_and_drawer_stay_inside_scaled_fences() {
+    for theme in [light(), high_contrast()] {
+        for scale in [1.0, 1.5, 2.0] {
+            for (w, ht) in [(1440.0, 1000.0), (480.0, 700.0)] {
+                let mut h = timeline_harness(Some(theme.clone()), w, ht);
+                let id = h.card("ORION-R-124");
+                h.panel.select(id, true, h.now).unwrap();
+                let scene = h.panel.prepare(input(w, ht, scale), &Heuristic).unwrap();
+                for node in scene.nodes().iter().filter(|n| !n.text.is_empty()) {
+                    assert!(
+                        node.rect.x >= -0.5 && node.rect.y >= -0.5,
+                        "{} {:?}",
+                        node.name,
+                        node.rect
+                    );
+                    assert!(
+                        node.rect.x + node.rect.w <= w + 0.5
+                            && node.rect.y + node.rect.h <= ht + 0.5,
+                        "{} {:?} in {w} x {ht}",
+                        node.name,
+                        node.rect
+                    );
+                }
+            }
+        }
     }
 }

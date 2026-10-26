@@ -261,7 +261,7 @@ pub(super) fn workspace(b: &mut Builder, input: &Input, viewport: RectDip) {
     let chart_x = PAD + 260.0;
     let track = rect(chart_x, 82.0, viewport.w - chart_x - PAD, 1.0);
     let drawer_h = if input.detail_open && input.selected.is_some() {
-        182.0
+        if viewport.w < 732.0 { 212.0 } else { 182.0 }
     } else {
         0.0
     };
@@ -324,7 +324,7 @@ pub(super) fn workspace(b: &mut Builder, input: &Input, viewport: RectDip) {
             lane_name(&lane.swimlane),
             Target::ToggleLane(lane.swimlane.clone()),
         );
-        y += 30.0;
+        y += 26.0;
         if input.collapsed.contains(&lane.swimlane) {
             continue;
         }
@@ -342,7 +342,7 @@ pub(super) fn workspace(b: &mut Builder, input: &Input, viewport: RectDip) {
                 range,
                 area.y - input.scroll,
             );
-            y += 58.0;
+            y += 46.0;
         }
         let done: Vec<_> = items
             .iter()
@@ -381,7 +381,7 @@ pub(super) fn workspace(b: &mut Builder, input: &Input, viewport: RectDip) {
                 );
             }
         }
-        y += 30.0;
+        y += 24.0;
     }
     b.out.board_content = (y + input.scroll - area.y).max(0.0);
     for m in &board.milestones {
@@ -430,7 +430,7 @@ fn axis(b: &mut Builder, input: &Input, board: &BoardSnapshot, track: RectDip, r
         };
         if tick {
             let text = if input.zoom == Zoom::Quarter {
-                at.format("%Y-%m").to_string()
+                project_day(at, tz).format("%Y-%m").to_string()
             } else {
                 format!("W{} {}", project_day(at, tz).iso_week().week(), date(at))
             };
@@ -510,7 +510,7 @@ fn row(
     if selected {
         b.outline(
             &format!("{key}:selected"),
-            rect(PAD, y, track.x + track.w - PAD, 56.0),
+            rect(PAD, y, track.x + track.w - PAD, 44.0),
             b.pal.accent,
             1.5,
             3.0,
@@ -519,7 +519,7 @@ fn row(
     }
     b.hit(
         format!("{key}:hit"),
-        rect(PAD, y, track.x + track.w - PAD, 56.0),
+        rect(PAD, y, track.x + track.w - PAD, 44.0),
         "listitem",
         format!(
             "{} {} {}",
@@ -534,12 +534,12 @@ fn row(
         column: 0,
         lane,
         y: y - origin,
-        h: 58.0,
+        h: 46.0,
     });
     number(
         b,
         &format!("{key}:number"),
-        rect(PAD + 4.0, y, 86.0, 25.0),
+        rect(PAD + 4.0, y, 62.0, 25.0),
         c.business_number
             .as_deref()
             .unwrap_or(c.card_id.as_str())
@@ -549,7 +549,7 @@ fn row(
     label(
         b,
         &format!("{key}:title"),
-        rect(PAD + 96.0, y, 154.0, 25.0),
+        rect(PAD + 72.0, y, 178.0, 25.0),
         &c.title,
         12.0,
         b.pal.primary,
@@ -560,7 +560,7 @@ fn row(
     label(
         b,
         &format!("{key}:who"),
-        rect(PAD + 4.0, y + 26.0, 246.0, 24.0),
+        rect(PAD + 4.0, y + 24.0, 246.0, 20.0),
         who,
         12.0,
         b.pal.secondary,
@@ -634,7 +634,7 @@ fn row(
                 label(
                     b,
                     &format!("{key}:dependency:{i}:label"),
-                    rect(r.min(track.x + track.w - 160.0), y + 30.0, 160.0, 22.0),
+                    rect(r.min(track.x + track.w - 160.0), y + 24.0, 160.0, 20.0),
                     &format!("⊘ {} {}", b.lang.t("Expected"), date(expected)),
                     12.0,
                     b.pal.danger,
@@ -692,7 +692,7 @@ fn row(
     label(
         b,
         &format!("{key}:stage"),
-        rect(track.x, y + 30.0, 155.0, 22.0),
+        rect(track.x, y + 24.0, 155.0, 20.0),
         &status,
         11.0,
         b.pal.secondary,
@@ -798,9 +798,10 @@ fn drawer(b: &mut Builder, input: &Input, c: &BoardCard, r: RectDip) {
     ));
     if let Some(s) = &c.schedule {
         parts.push(format!(
-            "{} {} {}",
+            "{} {} {} · {}",
             b.lang.t("Days to due"),
             (project_day(s.due, tz) - project_day(input.now, tz)).num_days(),
+            b.lang.t("days"),
             date(s.due)
         ));
     }
@@ -902,14 +903,14 @@ fn drawer(b: &mut Builder, input: &Input, c: &BoardCard, r: RectDip) {
     );
     b.button(
         "drawer:close",
-        r.x + r.w - 44.0,
+        r.x + r.w - 76.0,
         r.y + 4.0,
         28.0,
         None,
         b.lang.t("Close"),
         false,
         Target::CloseDetail,
-        44.0,
+        76.0,
     );
 }
 
@@ -1128,16 +1129,30 @@ fn compact(b: &mut Builder, input: &Input, viewport: RectDip) {
         let who = c
             .assignee()
             .map_or(b.lang.t("Unassigned"), |a| a.person.display_name.as_str());
-        let status = info.signals.first().map_or_else(
-            || format!("▰ {}", model::stage_label(c.stage.stage, b.lang)),
-            |s| {
-                format!(
-                    "{} {}",
-                    if *s == Signal::Blocked { "⊘" } else { "!" },
-                    s.label(b.lang)
-                )
-            },
-        );
+        let mut status = format!("▰ {}", model::stage_label(c.stage.stage, b.lang));
+        if let Some(signal) = info.signals.iter().find(|s| s.needs_attention()) {
+            status = format!(
+                "{} {}",
+                if *signal == Signal::Blocked {
+                    "⊘"
+                } else {
+                    "!"
+                },
+                signal.label(b.lang)
+            );
+        }
+        if let Some(expected) = c.blockers.iter().find_map(|v| v.expected_at) {
+            status.push_str(&format!(" · {} {}", b.lang.t("Expected"), date(expected)));
+        } else if let Some(schedule) = &c.schedule
+            && let Some(base) = schedule.baseline_due.filter(|d| *d != schedule.due)
+        {
+            status.push_str(&format!(
+                " · {} {} → {}",
+                b.lang.t("Original due"),
+                date(base),
+                date(schedule.due)
+            ));
+        }
         label(
             b,
             &format!("{key}:meta"),
