@@ -6,7 +6,7 @@ param(
   [int]$TextScale = 0,
   # With -Out, run a scripted tour and save screenshots there, then exit.
   [string]$Out = '',
-  [ValidateSet('tour', 'scaled', 'live')][string]$Tour = 'tour'
+  [ValidateSet('tour', 'scaled', 'live', 'timeline')][string]$Tour = 'tour'
 )
 # Evidence board demo in an isolated, portable PecoFence instance. The board uses the
 # deterministic demo source (fictional Orion data); it does not contact SPM.
@@ -84,6 +84,14 @@ $steps = switch ($Tour) {
       @{ name = 'compact-detail'; lines = @($Down, $Enter) }
     )
   }
+  'timeline' {
+    @(
+      @{ name = 'timeline-week'; lines = @((Key 9), (Key 9), $Enter) },
+      @{ name = 'timeline-month'; lines = @((Key 9), (Key 9), $Enter) },
+      @{ name = 'timeline-drawer'; lines = @($Esc, $Down, $Down, $Enter) },
+      @{ name = 'timeline-compact'; lines = @($Esc, 'bounds Board 40 40 480 700') }
+    )
+  }
   'scaled' {
     @(
       @{ name = "scaled-$TextScale-board"; lines = @($F5) },
@@ -100,6 +108,10 @@ $steps = switch ($Tour) {
 $create = if ($Tour -eq 'live') { 'new-board 40 40 1200 760 live' } else { 'new-board 40 40 1460 960' }
 $lines = [Collections.Generic.List[string]]::new()
 $lines.Add('sleep 2500')
+# Paper is independent of app theme when Adaptive follows the wallpaper. Set the
+# isolated demo's own paper preference so -Theme names the pixels captured.
+$lines.Add('set-setting widgetPaperStyle "' + $Theme + '"')
+$lines.Add('sleep 400')
 $lines.Add($create)
 $lines.Add('sleep 400')
 $lines.Add('pin-test-windows')
