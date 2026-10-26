@@ -1021,6 +1021,16 @@ fn delivery_geometry_tracks_supplied_dates_and_zoom_ranges() {
             h: 1.0,
         };
         assert!((due.rect.x - range.x(schedule.due, track)).abs() < 0.1);
+        let card = h.panel.board().unwrap().card("ORION-R-103").unwrap();
+        let span = &card.stage_history[0];
+        let bar = nodes
+            .iter()
+            .find(|n| n.key == format!("{key}:span:0"))
+            .unwrap();
+        let expected_left = range.x(span.from, track);
+        let expected_right = range.x(span.to.unwrap(), track);
+        assert!((bar.rect.x - expected_left).abs() < 0.1);
+        assert!((bar.rect.w - (expected_right - expected_left)).abs() < 0.1);
         assert!(
             nodes
                 .iter()
@@ -1048,8 +1058,12 @@ fn delivery_keyboard_drawer_and_evidence_reuse_existing_detail() {
     assert_ne!(first, h.panel.selected);
     h.frame(1440.0, 1200.0);
     h.key(PanelKey::Enter);
+    let blocked = h.card("ORION-R-093");
+    h.panel.select(blocked, true, h.now).unwrap();
     h.settle();
     let s = h.frame(1440.0, 1200.0);
+    assert!(texts(&s).iter().any(|s| s.contains("Blocked 8 days")));
+    assert!(texts(&s).iter().any(|s| s.contains("Days to due 5 days")));
     assert!(h.panel.detail_open);
     for word in ["Develop", "Verify", "Blocked", "Days to due"] {
         assert!(texts(&s).iter().any(|s| s.contains(word)), "{word}");
