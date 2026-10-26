@@ -9,9 +9,11 @@ pecofence-plugin-api = { path = "../plugin-api" }
 spm-contracts.workspace = true
 serde = { workspace = true }
 serde_json = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
 
 [dev-dependencies]
-pecofence-render = { path = "../render" }
+pecofence-render = { path = "../render", features = ["raster"] }
 
 [lints]
 workspace = true

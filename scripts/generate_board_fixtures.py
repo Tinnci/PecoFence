@@ -355,14 +355,21 @@ def evidence_r102() -> dict:
     }
 
 
+def write(out: Path, values: dict) -> None:
+    out.mkdir(parents=True, exist_ok=True)
+    for name, value in values.items():
+        (out / name).write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
 def main() -> None:
-    OUT.mkdir(parents=True, exist_ok=True)
-    for name, value in {
+    write(OUT, {
         "orion-after-reply.json": after_reply(),
         "orion-after-meegle.json": after_meegle(),
         "orion-r102-evidence.json": evidence_r102(),
-    }.items():
-        (OUT / name).write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    })
+    import board_demo_fixtures
+
+    write(board_demo_fixtures.OUT, board_demo_fixtures.build())
 
 
 if __name__ == "__main__":

@@ -1,0 +1,788 @@
+[
+  {
+    "card_id": "meegle:acme/orion/story/88231",
+    "revision": 41,
+    "items": [
+      {
+        "id": "ev:g-4711",
+        "source": {
+          "system": "gerrit",
+          "tenant": "review.acme",
+          "project": "launcher",
+          "record_kind": "change",
+          "record_id": "4711"
+        },
+        "field_locator": "owner",
+        "source_time": "2026-10-14T03:20:00Z",
+        "observed_at": "2026-10-26T02:14:00Z",
+        "summary": "Change 4711 on launcher/orion-ir: owner Morgan; Gale listed as reviewer; merged by Gale",
+        "relationship_ids": [
+          "rel-4711-owner",
+          "rel-4711-reviewer-gale",
+          "rel-4711-submitter"
+        ]
+      },
+      {
+        "id": "ev:g-4711-ps1",
+        "source": {
+          "system": "gerrit",
+          "tenant": "review.acme",
+          "project": "launcher",
+          "record_kind": "patchset",
+          "record_id": "4711/1"
+        },
+        "field_locator": "revisions.1.commit.author",
+        "source_time": "2026-10-14T03:20:00Z",
+        "observed_at": "2026-10-26T02:14:00Z",
+        "summary": "Change 4711 patch set 1 authored by Morgan; touches regional-feature and search-position configuration",
+        "relationship_ids": [
+          "rel-101-history-morgan",
+          "rel-4711-ps1-author"
+        ]
+      },
+      {
+        "id": "ev:g-4711-ps1-labels",
+        "source": {
+          "system": "gerrit",
+          "tenant": "review.acme",
+          "project": "launcher",
+          "record_kind": "patchset",
+          "record_id": "4711/1"
+        },
+        "field_locator": "labels.Code-Review.all",
+        "source_time": "2026-10-14T05:00:00Z",
+        "observed_at": "2026-10-26T02:14:00Z",
+        "summary": "Gale votes Code-Review +2 on patch set 1",
+        "relationship_ids": [
+          "rel-4711-ps1-cr"
+        ]
+      },
+      {
+        "id": "ev:g-4711-ps2",
+        "source": {
+          "system": "gerrit",
+          "tenant": "review.acme",
+          "project": "launcher",
+          "record_kind": "patchset",
+          "record_id": "4711/2"
+        },
+        "field_locator": "revisions.2.uploader",
+        "source_time": "2026-10-15T01:00:00Z",
+        "observed_at": "2026-10-26T02:14:00Z",
+        "summary": "Patch set 2 (trivial rebase) uploaded by Morgan",
+        "relationship_ids": [
+          "rel-4711-ps2-uploader"
+        ]
+      },
+      {
+        "id": "ev:g-4711-ps2-labels",
+        "source": {
+          "system": "gerrit",
+          "tenant": "review.acme",
+          "project": "launcher",
+          "record_kind": "patchset",
+          "record_id": "4711/2"
+        },
+        "field_locator": "labels.Code-Review.all",
+        "source_time": "2026-10-15T01:00:00Z",
+        "observed_at": "2026-10-26T02:14:00Z",
+        "summary": "Gale's +2 is present on patch set 2; the vote date is before the patch set, so Gerrit copied it",
+        "relationship_ids": [
+          "rel-4711-ps2-cr"
+        ]
+      },
+      {
+        "id": "ev:l-request",
+        "source": {
+          "system": "lark",
+          "tenant": "acme",
+          "project": "orion-ir-chat",
+          "record_kind": "message",
+          "record_id": "om_request"
+        },
+        "field_locator": "content.text",
+        "source_time": "2026-10-26T02:01:00Z",
+        "observed_at": "2026-10-26T02:15:00Z",
+        "summary": "Taylor lists Orion IR tasks 1 to 4 in the Orion IR chat",
+        "relationship_ids": [
+          "rel-101-lark"
+        ]
+      },
+      {
+        "id": "ev:l-reply",
+        "source": {
+          "system": "lark",
+          "tenant": "acme",
+          "project": "orion-ir-chat",
+          "record_kind": "message",
+          "record_id": "om_reply"
+        },
+        "field_locator": "content.text",
+        "source_time": "2026-10-26T02:11:00Z",
+        "observed_at": "2026-10-26T02:15:00Z",
+        "summary": "Gale replies to that message: \"1 Casey 3 me 4 Morgan\"; task 2 is not named",
+        "relationship_ids": [
+          "rel-101-lark"
+        ]
+      }
+    ],
+    "next_cursor": null
+  },
+  {
+    "card_id": "meegle:acme/orion/story/88232",
+    "revision": 41,
+    "items": [
+      {
+        "id": "ev:g-4711-ps1",
+        "source": {
+          "system": "gerrit",
+          "tenant": "review.acme",
+          "project": "launcher",
+          "record_kind": "patchset",
+          "record_id": "4711/1"
+        },
+        "field_locator": "revisions.1.commit.author",
+        "source_time": "2026-10-14T03:20:00Z",
+        "observed_at": "2026-10-26T02:14:00Z",
+        "summary": "Change 4711 patch set 1 authored by Morgan; touches regional-feature and search-position configuration",
+        "relationship_ids": [
+          "rel-102-contact-morgan",
+          "rel-102-history-morgan"
+        ]
+      },
+      {
+        "id": "ev:l-request",
+        "source": {
+          "system": "lark",
+          "tenant": "acme",
+          "project": "orion-ir-chat",
+          "record_kind": "message",
+          "record_id": "om_request"
+        },
+        "field_locator": "content.text",
+        "source_time": "2026-10-26T02:01:00Z",
+        "observed_at": "2026-10-26T02:15:00Z",
+        "summary": "Taylor lists Orion IR tasks 1 to 4 in the Orion IR chat",
+        "relationship_ids": []
+      },
+      {
+        "id": "ev:l-reply",
+        "source": {
+          "system": "lark",
+          "tenant": "acme",
+          "project": "orion-ir-chat",
+          "record_kind": "message",
+          "record_id": "om_reply"
+        },
+        "field_locator": "content.text",
+        "source_time": "2026-10-26T02:11:00Z",
+        "observed_at": "2026-10-26T02:15:00Z",
+        "summary": "Gale replies to that message: \"1 Casey 3 me 4 Morgan\"; task 2 is not named",
+        "relationship_ids": []
+      }
+    ],
+    "next_cursor": null
+  },
+  {
+    "card_id": "meegle:acme/orion/story/88233",
+    "revision": 41,
+    "items": [
+      {
+        "id": "ev:l-request",
+        "source": {
+          "system": "lark",
+          "tenant": "acme",
+          "project": "orion-ir-chat",
+          "record_kind": "message",
+          "record_id": "om_request"
+        },
+        "field_locator": "content.text",
+        "source_time": "2026-10-26T02:01:00Z",
+        "observed_at": "2026-10-26T02:15:00Z",
+        "summary": "Taylor lists Orion IR tasks 1 to 4 in the Orion IR chat",
+        "relationship_ids": [
+          "rel-103-lark"
+        ]
+      },
+      {
+        "id": "ev:l-reply",
+        "source": {
+          "system": "lark",
+          "tenant": "acme",
+          "project": "orion-ir-chat",
+          "record_kind": "message",
+          "record_id": "om_reply"
+        },
+        "field_locator": "content.text",
+        "source_time": "2026-10-26T02:11:00Z",
+        "observed_at": "2026-10-26T02:15:00Z",
+        "summary": "Gale replies to that message: \"1 Casey 3 me 4 Morgan\"; task 2 is not named",
+        "relationship_ids": [
+          "rel-103-lark"
+        ]
+      }
+    ],
+    "next_cursor": null
+  },
+  {
+    "card_id": "meegle:acme/orion/story/88234",
+    "revision": 41,
+    "items": [
+      {
+        "id": "ev:l-request",
+        "source": {
+          "system": "lark",
+          "tenant": "acme",
+          "project": "orion-ir-chat",
+          "record_kind": "message",
+          "record_id": "om_request"
+        },
+        "field_locator": "content.text",
+        "source_time": "2026-10-26T02:01:00Z",
+        "observed_at": "2026-10-26T02:15:00Z",
+        "summary": "Taylor lists Orion IR tasks 1 to 4 in the Orion IR chat",
+        "relationship_ids": [
+          "rel-104-lark"
+        ]
+      },
+      {
+        "id": "ev:l-reply",
+        "source": {
+          "system": "lark",
+          "tenant": "acme",
+          "project": "orion-ir-chat",
+          "record_kind": "message",
+          "record_id": "om_reply"
+        },
+        "field_locator": "content.text",
+        "source_time": "2026-10-26T02:11:00Z",
+        "observed_at": "2026-10-26T02:15:00Z",
+        "summary": "Gale replies to that message: \"1 Casey 3 me 4 Morgan\"; task 2 is not named",
+        "relationship_ids": [
+          "rel-104-lark"
+        ]
+      }
+    ],
+    "next_cursor": null
+  },
+  {
+    "card_id": "meegle:acme/orion/story/88187",
+    "revision": 41,
+    "items": [
+      {
+        "id": "ev:m-88187-owner",
+        "source": {
+          "system": "meegle",
+          "tenant": "acme",
+          "project": "orion",
+          "record_kind": "story",
+          "record_id": "88187"
+        },
+        "field_locator": "workflow.nodes.develop.owners",
+        "source_time": "2026-10-20T02:00:00Z",
+        "observed_at": "2026-10-26T01:40:00Z",
+        "summary": "Meegle develop node owner set to Riley",
+        "relationship_ids": [
+          "rel-087-meegle"
+        ]
+      },
+      {
+        "id": "ev:g-4652",
+        "source": {
+          "system": "gerrit",
+          "tenant": "review.acme",
+          "project": "launcher",
+          "record_kind": "change",
+          "record_id": "4652"
+        },
+        "field_locator": "owner",
+        "source_time": "2026-10-21T03:00:00Z",
+        "observed_at": "2026-10-26T01:40:00Z",
+        "summary": "Change 4652 on launcher/orion-ir: owner Riley; reviewer Jordan; merged by Jordan",
+        "relationship_ids": [
+          "rel-087-owner",
+          "rel-087-reviewer",
+          "rel-087-submitter"
+        ]
+      },
+      {
+        "id": "ev:m-88187-link",
+        "source": {
+          "system": "meegle",
+          "tenant": "acme",
+          "project": "orion",
+          "record_kind": "story",
+          "record_id": "88187"
+        },
+        "field_locator": "links.gerrit",
+        "source_time": "2026-10-21T03:05:00Z",
+        "observed_at": "2026-10-26T01:40:00Z",
+        "summary": "Meegle story links change 4652 (confirmed by Riley)",
+        "relationship_ids": [
+          "rel-087-owner"
+        ]
+      },
+      {
+        "id": "ev:g-4652-ps3-labels",
+        "source": {
+          "system": "gerrit",
+          "tenant": "review.acme",
+          "project": "launcher",
+          "record_kind": "patchset",
+          "record_id": "4652/3"
+        },
+        "field_locator": "labels.Code-Review.all",
+        "source_time": "2026-10-22T07:30:00Z",
+        "observed_at": "2026-10-26T01:40:00Z",
+        "summary": "Jordan votes Code-Review +2 on patch set 3",
+        "relationship_ids": [
+          "rel-087-cr"
+        ]
+      },
+      {
+        "id": "ev:m-88187-test",
+        "source": {
+          "system": "meegle",
+          "tenant": "acme",
+          "project": "orion",
+          "record_kind": "story",
+          "record_id": "88187"
+        },
+        "field_locator": "workflow.nodes.regression.owners",
+        "source_time": "2026-10-24T01:00:00Z",
+        "observed_at": "2026-10-26T01:40:00Z",
+        "summary": "Meegle regression node started; tester 司马云澜",
+        "relationship_ids": [
+          "rel-087-tester"
+        ]
+      }
+    ],
+    "next_cursor": null
+  },
+  {
+    "card_id": "meegle:acme/orion/story/88190",
+    "revision": 41,
+    "items": [
+      {
+        "id": "ev:g-4711-ps1",
+        "source": {
+          "system": "gerrit",
+          "tenant": "review.acme",
+          "project": "launcher",
+          "record_kind": "patchset",
+          "record_id": "4711/1"
+        },
+        "field_locator": "revisions.1.commit.author",
+        "source_time": "2026-10-14T03:20:00Z",
+        "observed_at": "2026-10-26T02:14:00Z",
+        "summary": "Change 4711 patch set 1 authored by Morgan; touches regional-feature and search-position configuration",
+        "relationship_ids": [
+          "rel-090-contact"
+        ]
+      },
+      {
+        "id": "ev:m-88190",
+        "source": {
+          "system": "meegle",
+          "tenant": "acme",
+          "project": "orion",
+          "record_kind": "story",
+          "record_id": "88190"
+        },
+        "field_locator": "fields.description",
+        "source_time": "2026-10-25T09:00:00Z",
+        "observed_at": "2026-10-26T01:40:00Z",
+        "summary": "Follow-up of ORION-R-101 created by Taylor; no owner",
+        "relationship_ids": [
+          "rel-090-contact"
+        ]
+      }
+    ],
+    "next_cursor": null
+  },
+  {
+    "card_id": "meegle:acme/orion/story/88196",
+    "revision": 41,
+    "items": [
+      {
+        "id": "ev:m-88196-owner",
+        "source": {
+          "system": "meegle",
+          "tenant": "acme",
+          "project": "orion",
+          "record_kind": "story",
+          "record_id": "88196"
+        },
+        "field_locator": "workflow.nodes.develop.owners",
+        "source_time": "2026-10-12T02:00:00Z",
+        "observed_at": "2026-10-26T01:40:00Z",
+        "summary": "Meegle develop node owner set to Kai",
+        "relationship_ids": [
+          "rel-096-meegle"
+        ]
+      },
+      {
+        "id": "ev:m-88196-accept",
+        "source": {
+          "system": "meegle",
+          "tenant": "acme",
+          "project": "orion",
+          "record_kind": "story",
+          "record_id": "88196"
+        },
+        "field_locator": "workflow.nodes.accept.finished",
+        "source_time": "2026-10-23T08:00:00Z",
+        "observed_at": "2026-10-26T01:40:00Z",
+        "summary": "Taylor completes the acceptance node",
+        "relationship_ids": [
+          "rel-096-verified"
+        ]
+      }
+    ],
+    "next_cursor": null
+  },
+  {
+    "card_id": "meegle:acme/orion/story/88193",
+    "revision": 41,
+    "items": [
+      {
+        "id": "ev:m-88193-owner",
+        "source": {
+          "system": "meegle",
+          "tenant": "acme",
+          "project": "orion",
+          "record_kind": "story",
+          "record_id": "88193"
+        },
+        "field_locator": "workflow.nodes.develop.owners",
+        "source_time": "2026-10-16T02:00:00Z",
+        "observed_at": "2026-10-26T01:40:00Z",
+        "summary": "Meegle develop node owner set to Riley",
+        "relationship_ids": [
+          "rel-093-meegle"
+        ]
+      },
+      {
+        "id": "ev:m-77104",
+        "source": {
+          "system": "meegle",
+          "tenant": "acme",
+          "project": "orion",
+          "record_kind": "issue",
+          "record_id": "77104"
+        },
+        "field_locator": "fields.status",
+        "source_time": "2026-10-22T03:00:00Z",
+        "observed_at": "2026-10-26T01:40:00Z",
+        "summary": "Vendor issue 77104 (BSP drop 2026.11) is open; due 11-05",
+        "relationship_ids": []
+      }
+    ],
+    "next_cursor": null
+  },
+  {
+    "card_id": "meegle:acme/orion/story/88199",
+    "revision": 41,
+    "items": [
+      {
+        "id": "ev:m-88199-owner",
+        "source": {
+          "system": "meegle",
+          "tenant": "acme",
+          "project": "orion",
+          "record_kind": "story",
+          "record_id": "88199"
+        },
+        "field_locator": "workflow.nodes.develop.owners",
+        "source_time": "2026-10-23T02:00:00Z",
+        "observed_at": "2026-10-26T01:40:00Z",
+        "summary": "Meegle develop node owner set to Casey",
+        "relationship_ids": [
+          "rel-099-meegle"
+        ]
+      },
+      {
+        "id": "ev:l-dock",
+        "source": {
+          "system": "lark",
+          "tenant": "acme",
+          "project": "orion-pro-chat",
+          "record_kind": "message",
+          "record_id": "om_dock"
+        },
+        "field_locator": "content.text",
+        "source_time": "2026-10-25T02:05:00Z",
+        "observed_at": "2026-10-26T02:15:00Z",
+        "summary": "Taylor asks who takes the classic dock layout",
+        "relationship_ids": [
+          "rel-099-lark"
+        ]
+      },
+      {
+        "id": "ev:l-dock-reply",
+        "source": {
+          "system": "lark",
+          "tenant": "acme",
+          "project": "orion-pro-chat",
+          "record_kind": "message",
+          "record_id": "om_dock_reply"
+        },
+        "field_locator": "content.text",
+        "source_time": "2026-10-25T02:20:00Z",
+        "observed_at": "2026-10-26T02:15:00Z",
+        "summary": "Gale replies: \"Morgan takes it\"",
+        "relationship_ids": [
+          "rel-099-lark"
+        ]
+      }
+    ],
+    "next_cursor": null
+  },
+  {
+    "card_id": "meegle:acme/orion/story/88212",
+    "revision": 41,
+    "items": [
+      {
+        "id": "ev:m-88212-owner",
+        "source": {
+          "system": "meegle",
+          "tenant": "acme",
+          "project": "orion",
+          "record_kind": "story",
+          "record_id": "88212"
+        },
+        "field_locator": "workflow.nodes.develop.owners",
+        "source_time": "2026-10-19T02:00:00Z",
+        "observed_at": "2026-10-26T01:40:00Z",
+        "summary": "Meegle develop node owner set to Kai",
+        "relationship_ids": [
+          "rel-112-meegle"
+        ]
+      },
+      {
+        "id": "ev:g-4790",
+        "source": {
+          "system": "gerrit",
+          "tenant": "review.acme",
+          "project": "launcher",
+          "record_kind": "change",
+          "record_id": "4790"
+        },
+        "field_locator": "reviewers",
+        "source_time": "2026-10-25T08:00:00Z",
+        "observed_at": "2026-10-26T01:40:00Z",
+        "summary": "Change 4790 patch set 2 by Kai; Jordan listed as reviewer; no votes yet",
+        "relationship_ids": [
+          "rel-112-owner",
+          "rel-112-reviewer"
+        ]
+      }
+    ],
+    "next_cursor": null
+  },
+  {
+    "card_id": "meegle:acme/orion/story/88215",
+    "revision": 41,
+    "items": [
+      {
+        "id": "ev:m-88215-owner",
+        "source": {
+          "system": "meegle",
+          "tenant": "acme",
+          "project": "orion",
+          "record_kind": "story",
+          "record_id": "88215"
+        },
+        "field_locator": "workflow.nodes.develop.owners",
+        "source_time": "2026-10-26T01:00:00Z",
+        "observed_at": "2026-10-26T01:40:00Z",
+        "summary": "Meegle develop node owner set to Morgan",
+        "relationship_ids": [
+          "rel-115-meegle"
+        ]
+      }
+    ],
+    "next_cursor": null
+  },
+  {
+    "card_id": "meegle:acme/orion/story/88208",
+    "revision": 41,
+    "items": [
+      {
+        "id": "ev:m-88208-owner",
+        "source": {
+          "system": "meegle",
+          "tenant": "acme",
+          "project": "orion",
+          "record_kind": "story",
+          "record_id": "88208"
+        },
+        "field_locator": "workflow.nodes.develop.owners",
+        "source_time": "2026-10-13T02:00:00Z",
+        "observed_at": "2026-10-26T01:40:00Z",
+        "summary": "Meegle develop node owner set to Casey",
+        "relationship_ids": [
+          "rel-108-meegle"
+        ]
+      },
+      {
+        "id": "ev:m-88208-regression",
+        "source": {
+          "system": "meegle",
+          "tenant": "acme",
+          "project": "orion",
+          "record_kind": "story",
+          "record_id": "88208"
+        },
+        "field_locator": "workflow.nodes.regression.finished",
+        "source_time": "2026-10-24T09:00:00Z",
+        "observed_at": "2026-10-26T01:40:00Z",
+        "summary": "Regression passed on build 1176; tester 司马云澜",
+        "relationship_ids": [
+          "rel-108-verified"
+        ]
+      }
+    ],
+    "next_cursor": null
+  },
+  {
+    "card_id": "meegle:acme/orion/story/88220",
+    "revision": 41,
+    "items": [
+      {
+        "id": "ev:m-88220-owner",
+        "source": {
+          "system": "meegle",
+          "tenant": "acme",
+          "project": "orion",
+          "record_kind": "story",
+          "record_id": "88220"
+        },
+        "field_locator": "workflow.nodes.develop.owners",
+        "source_time": "2026-10-21T02:00:00Z",
+        "observed_at": "2026-10-26T01:40:00Z",
+        "summary": "Meegle develop node owner set to Kai; node not started",
+        "relationship_ids": [
+          "rel-120-meegle"
+        ]
+      },
+      {
+        "id": "ev:g-4801",
+        "source": {
+          "system": "gerrit",
+          "tenant": "review.acme",
+          "project": "launcher",
+          "record_kind": "change",
+          "record_id": "4801"
+        },
+        "field_locator": "revisions.1.created",
+        "source_time": "2026-10-24T06:00:00Z",
+        "observed_at": "2026-10-26T01:40:00Z",
+        "summary": "Change 4801 patch set 1 by Kai on launcher/orion-lite",
+        "relationship_ids": [
+          "rel-120-owner"
+        ]
+      }
+    ],
+    "next_cursor": null
+  },
+  {
+    "card_id": "meegle:acme/orion/story/88221",
+    "revision": 41,
+    "items": [
+      {
+        "id": "ev:m-88221-node",
+        "source": {
+          "system": "meegle",
+          "tenant": "acme",
+          "project": "orion",
+          "record_kind": "story",
+          "record_id": "88221"
+        },
+        "field_locator": "workflow.current_node",
+        "source_time": "2026-10-25T03:00:00Z",
+        "observed_at": "2026-10-26T01:40:00Z",
+        "summary": "Meegle node 待评审(新) has no board mapping in policy revision 3",
+        "relationship_ids": [
+          "rel-121-meegle"
+        ]
+      }
+    ],
+    "next_cursor": null
+  },
+  {
+    "card_id": "meegle:acme/orion/story/88224",
+    "revision": 41,
+    "items": [
+      {
+        "id": "ev:m-88224-owner",
+        "source": {
+          "system": "meegle",
+          "tenant": "acme",
+          "project": "orion",
+          "record_kind": "story",
+          "record_id": "88224"
+        },
+        "field_locator": "workflow.nodes.develop.owners",
+        "source_time": "2026-10-15T02:00:00Z",
+        "observed_at": "2026-10-26T01:40:00Z",
+        "summary": "Meegle develop node owner set to Kai",
+        "relationship_ids": [
+          "rel-124-meegle"
+        ]
+      },
+      {
+        "id": "ev:g-4766-ps2-labels",
+        "source": {
+          "system": "gerrit",
+          "tenant": "review.acme",
+          "project": "launcher",
+          "record_kind": "patchset",
+          "record_id": "4766/2"
+        },
+        "field_locator": "labels.Code-Review.all",
+        "source_time": "2026-10-22T03:30:00Z",
+        "observed_at": "2026-10-26T01:40:00Z",
+        "summary": "Riley votes Code-Review +2 on patch set 2",
+        "relationship_ids": [
+          "rel-124-cr"
+        ]
+      },
+      {
+        "id": "ev:g-4766",
+        "source": {
+          "system": "gerrit",
+          "tenant": "review.acme",
+          "project": "launcher",
+          "record_kind": "change",
+          "record_id": "4766"
+        },
+        "field_locator": "status",
+        "source_time": "2026-10-22T04:00:00Z",
+        "observed_at": "2026-10-26T01:40:00Z",
+        "summary": "Change 4766 merged; owner Kai; reviewer Riley",
+        "relationship_ids": [
+          "rel-124-owner"
+        ]
+      },
+      {
+        "id": "ev:m-88224-regression",
+        "source": {
+          "system": "meegle",
+          "tenant": "acme",
+          "project": "orion",
+          "record_kind": "story",
+          "record_id": "88224"
+        },
+        "field_locator": "workflow.nodes.regression.result",
+        "source_time": "2026-10-25T07:00:00Z",
+        "observed_at": "2026-10-26T01:40:00Z",
+        "summary": "Regression failed on build 1190: Search box hidden after rotation",
+        "relationship_ids": [
+          "rel-124-verified"
+        ]
+      }
+    ],
+    "next_cursor": null
+  }
+]

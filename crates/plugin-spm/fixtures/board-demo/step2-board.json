@@ -1,0 +1,2219 @@
+{
+  "project_id": "orion",
+  "delivery_scope_id": "orion-ir-2026-11",
+  "baseline_id": null,
+  "policy_revision": 3,
+  "daemon_session": "22222222-2222-4222-8222-222222222222",
+  "revision": 57,
+  "computed_at": "2026-10-27T06:10:00Z",
+  "project_timezone": "Asia/Shanghai",
+  "freshness_ttl_secs": 900,
+  "sources": [
+    {
+      "source": "meegle",
+      "tenant": "acme",
+      "observed_at": "2026-10-27T06:05:00Z",
+      "source_revision": null,
+      "watermark": "2026-10-27T06:05:00Z",
+      "coverage": "complete",
+      "page_complete": true,
+      "permission_complete": true,
+      "freshness_ttl_secs": 900,
+      "error": null
+    },
+    {
+      "source": "gerrit",
+      "tenant": "review.acme",
+      "observed_at": "2026-10-27T06:04:10Z",
+      "source_revision": null,
+      "watermark": "2026-10-27T06:04:10Z",
+      "coverage": "complete",
+      "page_complete": true,
+      "permission_complete": true,
+      "freshness_ttl_secs": 900,
+      "error": null
+    },
+    {
+      "source": "people",
+      "tenant": "acme",
+      "observed_at": "2026-10-26T02:15:00Z",
+      "source_revision": null,
+      "watermark": "changes:318",
+      "coverage": "complete",
+      "page_complete": true,
+      "permission_complete": true,
+      "freshness_ttl_secs": 900,
+      "error": null
+    }
+  ],
+  "lanes": [
+    {
+      "swimlane": {
+        "project": "orion",
+        "model": "orion-ir"
+      },
+      "counts": {
+        "todo": 3,
+        "doing": 3,
+        "done": 1,
+        "unclassified": 0,
+        "blocked": 0
+      }
+    },
+    {
+      "swimlane": {
+        "project": "orion",
+        "model": "orion-pro"
+      },
+      "counts": {
+        "todo": 2,
+        "doing": 3,
+        "done": 0,
+        "unclassified": 0,
+        "blocked": 1
+      }
+    },
+    {
+      "swimlane": {
+        "project": "orion",
+        "model": "orion-lite"
+      },
+      "counts": {
+        "todo": 0,
+        "doing": 2,
+        "done": 0,
+        "unclassified": 1,
+        "blocked": 0
+      }
+    }
+  ],
+  "totals_complete": true,
+  "cards": [
+    {
+      "card_id": "meegle:acme/orion/story/88231",
+      "source": {
+        "system": "meegle",
+        "tenant": "acme",
+        "project": "orion",
+        "record_kind": "story",
+        "record_id": "88231"
+      },
+      "business_number": "ORION-R-101",
+      "title": "Remove the regional feature",
+      "swimlane": {
+        "project": "orion",
+        "model": "orion-ir"
+      },
+      "workflow": {
+        "source_state": "开发中",
+        "node_key": "develop",
+        "source_time": "2026-10-27T06:00:00Z"
+      },
+      "column": "doing",
+      "stage": {
+        "stage": "implementation",
+        "basis": "workflow_node",
+        "overlays": [],
+        "raw_node": "develop",
+        "explanation": "Meegle node develop in progress; change 4711 is a candidate link"
+      },
+      "started_at": "2026-10-27T06:00:00Z",
+      "current_assignee": "rel-101-meegle",
+      "relationships": [
+        {
+          "id": "rel-101-lark",
+          "kind": "assigned",
+          "person": {
+            "person_id": "p:casey",
+            "account": null,
+            "display_name": "Casey"
+          },
+          "subject": {
+            "system": "meegle",
+            "tenant": "acme",
+            "project": "orion",
+            "record_kind": "story",
+            "record_id": "88231"
+          },
+          "basis": "explicit_statement",
+          "derivation": null,
+          "status": "current",
+          "source_time": "2026-10-26T02:11:00Z",
+          "observed_at": "2026-10-26T02:15:00Z",
+          "evidence": [
+            "ev:l-request",
+            "ev:l-reply"
+          ],
+          "supersedes": null,
+          "statement": {
+            "author": {
+              "person_id": "p:gale",
+              "account": null,
+              "display_name": "Gale"
+            },
+            "kind": "numbered_reply",
+            "authority": "unknown"
+          },
+          "approval": null
+        },
+        {
+          "id": "rel-101-meegle",
+          "kind": "assigned",
+          "person": {
+            "person_id": "p:casey",
+            "account": null,
+            "display_name": "Casey"
+          },
+          "subject": {
+            "system": "meegle",
+            "tenant": "acme",
+            "project": "orion",
+            "record_kind": "story",
+            "record_id": "88231"
+          },
+          "basis": "issue_field",
+          "derivation": null,
+          "status": "current",
+          "source_time": "2026-10-27T06:00:00Z",
+          "observed_at": "2026-10-27T06:05:00Z",
+          "evidence": [
+            "ev:m-88231-owner"
+          ],
+          "supersedes": null,
+          "statement": null,
+          "approval": null
+        },
+        {
+          "id": "rel-4711-owner",
+          "kind": "change_owner",
+          "person": {
+            "person_id": "p:morgan",
+            "account": {
+              "system": "gerrit",
+              "tenant": "review.acme",
+              "account_id": "1000231"
+            },
+            "display_name": "Morgan"
+          },
+          "subject": {
+            "system": "gerrit",
+            "tenant": "review.acme",
+            "project": "launcher",
+            "record_kind": "change",
+            "record_id": "4711"
+          },
+          "basis": "source_field",
+          "derivation": null,
+          "status": "current",
+          "source_time": "2026-10-14T03:20:00Z",
+          "observed_at": "2026-10-26T02:14:00Z",
+          "evidence": [
+            "ev:g-4711"
+          ],
+          "supersedes": null,
+          "statement": null,
+          "approval": null
+        },
+        {
+          "id": "rel-4711-ps1-author",
+          "kind": "patchset_author",
+          "person": {
+            "person_id": "p:morgan",
+            "account": null,
+            "display_name": "Morgan"
+          },
+          "subject": {
+            "system": "gerrit",
+            "tenant": "review.acme",
+            "project": "launcher",
+            "record_kind": "patchset",
+            "record_id": "4711/1"
+          },
+          "basis": "source_field",
+          "derivation": null,
+          "status": "current",
+          "source_time": "2026-10-14T03:20:00Z",
+          "observed_at": "2026-10-26T02:14:00Z",
+          "evidence": [
+            "ev:g-4711-ps1"
+          ],
+          "supersedes": null,
+          "statement": null,
+          "approval": null
+        },
+        {
+          "id": "rel-4711-ps2-uploader",
+          "kind": "patchset_uploader",
+          "person": {
+            "person_id": "p:morgan",
+            "account": {
+              "system": "gerrit",
+              "tenant": "review.acme",
+              "account_id": "1000231"
+            },
+            "display_name": "Morgan"
+          },
+          "subject": {
+            "system": "gerrit",
+            "tenant": "review.acme",
+            "project": "launcher",
+            "record_kind": "patchset",
+            "record_id": "4711/2"
+          },
+          "basis": "source_field",
+          "derivation": null,
+          "status": "current",
+          "source_time": "2026-10-15T01:00:00Z",
+          "observed_at": "2026-10-26T02:14:00Z",
+          "evidence": [
+            "ev:g-4711-ps2"
+          ],
+          "supersedes": null,
+          "statement": null,
+          "approval": null
+        },
+        {
+          "id": "rel-4711-reviewer-gale",
+          "kind": "reviewer_listed",
+          "person": {
+            "person_id": "p:gale",
+            "account": {
+              "system": "gerrit",
+              "tenant": "review.acme",
+              "account_id": "1000412"
+            },
+            "display_name": "Gale"
+          },
+          "subject": {
+            "system": "gerrit",
+            "tenant": "review.acme",
+            "project": "launcher",
+            "record_kind": "change",
+            "record_id": "4711"
+          },
+          "basis": "source_field",
+          "derivation": null,
+          "status": "current",
+          "source_time": "2026-10-14T03:25:00Z",
+          "observed_at": "2026-10-26T02:14:00Z",
+          "evidence": [
+            "ev:g-4711"
+          ],
+          "supersedes": null,
+          "statement": null,
+          "approval": null
+        },
+        {
+          "id": "rel-4711-ps1-cr",
+          "kind": "approval",
+          "person": {
+            "person_id": "p:gale",
+            "account": {
+              "system": "gerrit",
+              "tenant": "review.acme",
+              "account_id": "1000412"
+            },
+            "display_name": "Gale"
+          },
+          "subject": {
+            "system": "gerrit",
+            "tenant": "review.acme",
+            "project": "launcher",
+            "record_kind": "patchset",
+            "record_id": "4711/1"
+          },
+          "basis": "source_field",
+          "derivation": null,
+          "status": "current",
+          "source_time": "2026-10-14T05:00:00Z",
+          "observed_at": "2026-10-26T02:14:00Z",
+          "evidence": [
+            "ev:g-4711-ps1-labels"
+          ],
+          "supersedes": null,
+          "statement": null,
+          "approval": {
+            "patchset": 1,
+            "label": "Code-Review",
+            "value": 2,
+            "carried_over": "no",
+            "post_submit": false,
+            "self_approval": false
+          }
+        },
+        {
+          "id": "rel-4711-ps2-cr",
+          "kind": "approval",
+          "person": {
+            "person_id": "p:gale",
+            "account": {
+              "system": "gerrit",
+              "tenant": "review.acme",
+              "account_id": "1000412"
+            },
+            "display_name": "Gale"
+          },
+          "subject": {
+            "system": "gerrit",
+            "tenant": "review.acme",
+            "project": "launcher",
+            "record_kind": "patchset",
+            "record_id": "4711/2"
+          },
+          "basis": "source_field",
+          "derivation": null,
+          "status": "current",
+          "source_time": "2026-10-14T05:00:00Z",
+          "observed_at": "2026-10-26T02:14:00Z",
+          "evidence": [
+            "ev:g-4711-ps2-labels"
+          ],
+          "supersedes": null,
+          "statement": null,
+          "approval": {
+            "patchset": 2,
+            "label": "Code-Review",
+            "value": 2,
+            "carried_over": "inferred",
+            "post_submit": false,
+            "self_approval": false
+          }
+        },
+        {
+          "id": "rel-4711-submitter",
+          "kind": "submitter",
+          "person": {
+            "person_id": "p:gale",
+            "account": {
+              "system": "gerrit",
+              "tenant": "review.acme",
+              "account_id": "1000412"
+            },
+            "display_name": "Gale"
+          },
+          "subject": {
+            "system": "gerrit",
+            "tenant": "review.acme",
+            "project": "launcher",
+            "record_kind": "change",
+            "record_id": "4711"
+          },
+          "basis": "source_field",
+          "derivation": null,
+          "status": "current",
+          "source_time": "2026-10-15T01:30:00Z",
+          "observed_at": "2026-10-26T02:14:00Z",
+          "evidence": [
+            "ev:g-4711"
+          ],
+          "supersedes": null,
+          "statement": null,
+          "approval": null
+        },
+        {
+          "id": "rel-101-history-morgan",
+          "kind": "historical_contributor",
+          "person": {
+            "person_id": "p:morgan",
+            "account": null,
+            "display_name": "Morgan"
+          },
+          "subject": {
+            "system": "meegle",
+            "tenant": "acme",
+            "project": "orion",
+            "record_kind": "story",
+            "record_id": "88231"
+          },
+          "basis": "derived",
+          "derivation": "history@1",
+          "status": "current",
+          "source_time": "2026-10-14T03:20:00Z",
+          "observed_at": "2026-10-26T02:14:00Z",
+          "evidence": [
+            "ev:g-4711-ps1"
+          ],
+          "supersedes": null,
+          "statement": null,
+          "approval": null
+        }
+      ],
+      "progress": {
+        "code": {
+          "linked": 1,
+          "merged": 1,
+          "open": 0,
+          "abandoned": 0,
+          "relation": "candidate"
+        },
+        "build": "unknown",
+        "verification": "not_started"
+      },
+      "blockers": [],
+      "next_action": {
+        "text": "Confirm whether change 4711 covers this requirement",
+        "owner": {
+          "person_id": "p:taylor",
+          "account": null,
+          "display_name": "Taylor"
+        }
+      },
+      "conflicts": [],
+      "evidence_count": 8,
+      "observed_through": {
+        "gerrit": "2026-10-27T06:04:10Z",
+        "meegle": "2026-10-27T06:05:00Z",
+        "people": "2026-10-26T02:15:00Z"
+      }
+    },
+    {
+      "card_id": "meegle:acme/orion/story/88232",
+      "source": {
+        "system": "meegle",
+        "tenant": "acme",
+        "project": "orion",
+        "record_kind": "story",
+        "record_id": "88232"
+      },
+      "business_number": "ORION-R-102",
+      "title": "Move the Search box to the bottom",
+      "swimlane": {
+        "project": "orion",
+        "model": "orion-ir"
+      },
+      "workflow": {
+        "source_state": "开发中",
+        "node_key": "develop",
+        "source_time": "2026-10-27T06:00:00Z"
+      },
+      "column": "doing",
+      "stage": {
+        "stage": "implementation",
+        "basis": "workflow_node",
+        "overlays": [],
+        "raw_node": "develop",
+        "explanation": "Meegle node develop in progress; change 4711 is a candidate link"
+      },
+      "started_at": "2026-10-27T06:00:00Z",
+      "current_assignee": "rel-102-meegle",
+      "relationships": [
+        {
+          "id": "rel-102-meegle",
+          "kind": "assigned",
+          "person": {
+            "person_id": "p:casey",
+            "account": null,
+            "display_name": "Casey"
+          },
+          "subject": {
+            "system": "meegle",
+            "tenant": "acme",
+            "project": "orion",
+            "record_kind": "story",
+            "record_id": "88232"
+          },
+          "basis": "issue_field",
+          "derivation": null,
+          "status": "current",
+          "source_time": "2026-10-27T06:00:00Z",
+          "observed_at": "2026-10-27T06:05:00Z",
+          "evidence": [
+            "ev:m-88232-owner"
+          ],
+          "supersedes": null,
+          "statement": null,
+          "approval": null
+        },
+        {
+          "id": "rel-102-history-morgan",
+          "kind": "historical_contributor",
+          "person": {
+            "person_id": "p:morgan",
+            "account": null,
+            "display_name": "Morgan"
+          },
+          "subject": {
+            "system": "meegle",
+            "tenant": "acme",
+            "project": "orion",
+            "record_kind": "story",
+            "record_id": "88232"
+          },
+          "basis": "derived",
+          "derivation": "history@1",
+          "status": "current",
+          "source_time": "2026-10-14T03:20:00Z",
+          "observed_at": "2026-10-26T02:14:00Z",
+          "evidence": [
+            "ev:g-4711-ps1"
+          ],
+          "supersedes": null,
+          "statement": null,
+          "approval": null
+        },
+        {
+          "id": "rel-102-contact-morgan",
+          "kind": "implementation_contact",
+          "person": {
+            "person_id": "p:morgan",
+            "account": null,
+            "display_name": "Morgan"
+          },
+          "subject": {
+            "system": "meegle",
+            "tenant": "acme",
+            "project": "orion",
+            "record_kind": "story",
+            "record_id": "88232"
+          },
+          "basis": "derived",
+          "derivation": "contact-from-history@1",
+          "status": "current",
+          "source_time": "2026-10-14T03:20:00Z",
+          "observed_at": "2026-10-26T02:14:00Z",
+          "evidence": [
+            "ev:g-4711-ps1"
+          ],
+          "supersedes": null,
+          "statement": null,
+          "approval": null
+        }
+      ],
+      "progress": {
+        "code": {
+          "linked": 1,
+          "merged": 1,
+          "open": 0,
+          "abandoned": 0,
+          "relation": "candidate"
+        },
+        "build": "unknown",
+        "verification": "not_started"
+      },
+      "blockers": [],
+      "next_action": {
+        "text": "Confirm whether change 4711 covers this requirement",
+        "owner": {
+          "person_id": "p:taylor",
+          "account": null,
+          "display_name": "Taylor"
+        }
+      },
+      "conflicts": [],
+      "evidence_count": 4,
+      "observed_through": {
+        "gerrit": "2026-10-27T06:04:10Z",
+        "meegle": "2026-10-27T06:05:00Z",
+        "people": "2026-10-26T02:15:00Z"
+      }
+    },
+    {
+      "card_id": "meegle:acme/orion/story/88233",
+      "source": {
+        "system": "meegle",
+        "tenant": "acme",
+        "project": "orion",
+        "record_kind": "story",
+        "record_id": "88233"
+      },
+      "business_number": "ORION-R-103",
+      "title": "Rename the Home Settings entry",
+      "swimlane": {
+        "project": "orion",
+        "model": "orion-ir"
+      },
+      "workflow": {
+        "source_state": "待开发",
+        "node_key": "backlog",
+        "source_time": "2026-10-20T02:00:00Z"
+      },
+      "column": "todo",
+      "stage": {
+        "stage": "not_started",
+        "basis": "workflow_node",
+        "overlays": [],
+        "raw_node": "backlog",
+        "explanation": "Meegle node backlog; no confirmed change"
+      },
+      "started_at": null,
+      "current_assignee": "rel-103-lark",
+      "relationships": [
+        {
+          "id": "rel-103-lark",
+          "kind": "assigned",
+          "person": {
+            "person_id": "p:gale",
+            "account": null,
+            "display_name": "Gale"
+          },
+          "subject": {
+            "system": "meegle",
+            "tenant": "acme",
+            "project": "orion",
+            "record_kind": "story",
+            "record_id": "88233"
+          },
+          "basis": "explicit_statement",
+          "derivation": null,
+          "status": "current",
+          "source_time": "2026-10-26T02:11:00Z",
+          "observed_at": "2026-10-26T02:15:00Z",
+          "evidence": [
+            "ev:l-request",
+            "ev:l-reply"
+          ],
+          "supersedes": null,
+          "statement": {
+            "author": {
+              "person_id": "p:gale",
+              "account": null,
+              "display_name": "Gale"
+            },
+            "kind": "numbered_reply",
+            "authority": "unknown"
+          },
+          "approval": null
+        }
+      ],
+      "progress": {
+        "code": {
+          "linked": 0,
+          "merged": 0,
+          "open": 0,
+          "abandoned": 0,
+          "relation": "unrelated"
+        },
+        "build": "unknown",
+        "verification": "not_started"
+      },
+      "blockers": [],
+      "next_action": {
+        "text": "Record Gale as the Meegle owner",
+        "owner": {
+          "person_id": "p:taylor",
+          "account": null,
+          "display_name": "Taylor"
+        }
+      },
+      "conflicts": [],
+      "evidence_count": 2,
+      "observed_through": {
+        "gerrit": "2026-10-27T06:04:10Z",
+        "meegle": "2026-10-27T06:05:00Z",
+        "people": "2026-10-26T02:15:00Z"
+      }
+    },
+    {
+      "card_id": "meegle:acme/orion/story/88234",
+      "source": {
+        "system": "meegle",
+        "tenant": "acme",
+        "project": "orion",
+        "record_kind": "story",
+        "record_id": "88234"
+      },
+      "business_number": "ORION-R-104",
+      "title": "Add a Search box visibility switch",
+      "swimlane": {
+        "project": "orion",
+        "model": "orion-ir"
+      },
+      "workflow": {
+        "source_state": "待开发",
+        "node_key": "backlog",
+        "source_time": "2026-10-20T02:00:00Z"
+      },
+      "column": "todo",
+      "stage": {
+        "stage": "not_started",
+        "basis": "workflow_node",
+        "overlays": [],
+        "raw_node": "backlog",
+        "explanation": "Meegle node backlog; no confirmed change"
+      },
+      "started_at": null,
+      "current_assignee": "rel-104-lark",
+      "relationships": [
+        {
+          "id": "rel-104-lark",
+          "kind": "assigned",
+          "person": {
+            "person_id": "p:morgan",
+            "account": null,
+            "display_name": "Morgan"
+          },
+          "subject": {
+            "system": "meegle",
+            "tenant": "acme",
+            "project": "orion",
+            "record_kind": "story",
+            "record_id": "88234"
+          },
+          "basis": "explicit_statement",
+          "derivation": null,
+          "status": "current",
+          "source_time": "2026-10-26T02:11:00Z",
+          "observed_at": "2026-10-26T02:15:00Z",
+          "evidence": [
+            "ev:l-request",
+            "ev:l-reply"
+          ],
+          "supersedes": null,
+          "statement": {
+            "author": {
+              "person_id": "p:gale",
+              "account": null,
+              "display_name": "Gale"
+            },
+            "kind": "numbered_reply",
+            "authority": "unknown"
+          },
+          "approval": null
+        }
+      ],
+      "progress": {
+        "code": {
+          "linked": 0,
+          "merged": 0,
+          "open": 0,
+          "abandoned": 0,
+          "relation": "unrelated"
+        },
+        "build": "unknown",
+        "verification": "not_started"
+      },
+      "blockers": [],
+      "next_action": {
+        "text": "Record Morgan as the Meegle owner",
+        "owner": {
+          "person_id": "p:taylor",
+          "account": null,
+          "display_name": "Taylor"
+        }
+      },
+      "conflicts": [],
+      "evidence_count": 2,
+      "observed_through": {
+        "gerrit": "2026-10-27T06:04:10Z",
+        "meegle": "2026-10-27T06:05:00Z",
+        "people": "2026-10-26T02:15:00Z"
+      }
+    },
+    {
+      "card_id": "meegle:acme/orion/story/88187",
+      "source": {
+        "system": "meegle",
+        "tenant": "acme",
+        "project": "orion",
+        "record_kind": "story",
+        "record_id": "88187"
+      },
+      "business_number": "ORION-R-087",
+      "title": "Show the weather card on the lock screen",
+      "swimlane": {
+        "project": "orion",
+        "model": "orion-ir"
+      },
+      "workflow": {
+        "source_state": "回归测试",
+        "node_key": "regression",
+        "source_time": "2026-10-24T01:00:00Z"
+      },
+      "column": "doing",
+      "stage": {
+        "stage": "regression",
+        "basis": "workflow_node",
+        "overlays": [],
+        "raw_node": "regression",
+        "explanation": "Meegle node regression in progress; change 4652 merged; build 1182 passed"
+      },
+      "started_at": "2026-10-20T02:00:00Z",
+      "current_assignee": "rel-087-tester",
+      "relationships": [
+        {
+          "id": "rel-087-meegle",
+          "kind": "assigned",
+          "person": {
+            "person_id": "p:riley",
+            "account": null,
+            "display_name": "Riley"
+          },
+          "subject": {
+            "system": "meegle",
+            "tenant": "acme",
+            "project": "orion",
+            "record_kind": "story",
+            "record_id": "88187"
+          },
+          "basis": "issue_field",
+          "derivation": null,
+          "status": "current",
+          "source_time": "2026-10-20T02:00:00Z",
+          "observed_at": "2026-10-26T01:40:00Z",
+          "evidence": [
+            "ev:m-88187-owner"
+          ],
+          "supersedes": null,
+          "statement": null,
+          "approval": null
+        },
+        {
+          "id": "rel-087-owner",
+          "kind": "change_owner",
+          "person": {
+            "person_id": "p:riley",
+            "account": {
+              "system": "gerrit",
+              "tenant": "review.acme",
+              "account_id": "1000518"
+            },
+            "display_name": "Riley"
+          },
+          "subject": {
+            "system": "gerrit",
+            "tenant": "review.acme",
+            "project": "launcher",
+            "record_kind": "change",
+            "record_id": "4652"
+          },
+          "basis": "source_field",
+          "derivation": null,
+          "status": "current",
+          "source_time": "2026-10-21T03:00:00Z",
+          "observed_at": "2026-10-26T01:40:00Z",
+          "evidence": [
+            "ev:g-4652",
+            "ev:m-88187-link"
+          ],
+          "supersedes": null,
+          "statement": null,
+          "approval": null
+        },
+        {
+          "id": "rel-087-reviewer",
+          "kind": "reviewer_listed",
+          "person": {
+            "person_id": "p:jordan",
+            "account": {
+              "system": "gerrit",
+              "tenant": "review.acme",
+              "account_id": "1000377"
+            },
+            "display_name": "Jordan"
+          },
+          "subject": {
+            "system": "gerrit",
+            "tenant": "review.acme",
+            "project": "launcher",
+            "record_kind": "change",
+            "record_id": "4652"
+          },
+          "basis": "source_field",
+          "derivation": null,
+          "status": "current",
+          "source_time": "2026-10-21T03:10:00Z",
+          "observed_at": "2026-10-26T01:40:00Z",
+          "evidence": [
+            "ev:g-4652"
+          ],
+          "supersedes": null,
+          "statement": null,
+          "approval": null
+        },
+        {
+          "id": "rel-087-cr",
+          "kind": "approval",
+          "person": {
+            "person_id": "p:jordan",
+            "account": {
+              "system": "gerrit",
+              "tenant": "review.acme",
+              "account_id": "1000377"
+            },
+            "display_name": "Jordan"
+          },
+          "subject": {
+            "system": "gerrit",
+            "tenant": "review.acme",
+            "project": "launcher",
+            "record_kind": "patchset",
+            "record_id": "4652/3"
+          },
+          "basis": "source_field",
+          "derivation": null,
+          "status": "current",
+          "source_time": "2026-10-22T07:30:00Z",
+          "observed_at": "2026-10-26T01:40:00Z",
+          "evidence": [
+            "ev:g-4652-ps3-labels"
+          ],
+          "supersedes": null,
+          "statement": null,
+          "approval": {
+            "patchset": 3,
+            "label": "Code-Review",
+            "value": 2,
+            "carried_over": "no",
+            "post_submit": false,
+            "self_approval": false
+          }
+        },
+        {
+          "id": "rel-087-submitter",
+          "kind": "submitter",
+          "person": {
+            "person_id": "p:jordan",
+            "account": {
+              "system": "gerrit",
+              "tenant": "review.acme",
+              "account_id": "1000377"
+            },
+            "display_name": "Jordan"
+          },
+          "subject": {
+            "system": "gerrit",
+            "tenant": "review.acme",
+            "project": "launcher",
+            "record_kind": "change",
+            "record_id": "4652"
+          },
+          "basis": "source_field",
+          "derivation": null,
+          "status": "current",
+          "source_time": "2026-10-22T08:00:00Z",
+          "observed_at": "2026-10-26T01:40:00Z",
+          "evidence": [
+            "ev:g-4652"
+          ],
+          "supersedes": null,
+          "statement": null,
+          "approval": null
+        },
+        {
+          "id": "rel-087-tester",
+          "kind": "assigned",
+          "person": {
+            "person_id": "p:quinn",
+            "account": null,
+            "display_name": "司马云澜"
+          },
+          "subject": {
+            "system": "meegle",
+            "tenant": "acme",
+            "project": "orion",
+            "record_kind": "story",
+            "record_id": "88187"
+          },
+          "basis": "issue_field",
+          "derivation": null,
+          "status": "current",
+          "source_time": "2026-10-24T01:00:00Z",
+          "observed_at": "2026-10-26T01:40:00Z",
+          "evidence": [
+            "ev:m-88187-test"
+          ],
+          "supersedes": null,
+          "statement": null,
+          "approval": null
+        }
+      ],
+      "progress": {
+        "code": {
+          "linked": 1,
+          "merged": 1,
+          "open": 0,
+          "abandoned": 0,
+          "relation": "confirmed"
+        },
+        "build": "passed",
+        "verification": "in_progress"
+      },
+      "blockers": [],
+      "next_action": {
+        "text": "Run the regression cases on build 1182",
+        "owner": {
+          "person_id": "p:quinn",
+          "account": null,
+          "display_name": "司马云澜"
+        }
+      },
+      "conflicts": [],
+      "evidence_count": 5,
+      "observed_through": {
+        "meegle": "2026-10-26T01:40:00Z",
+        "gerrit": "2026-10-26T01:40:00Z",
+        "people": "2026-10-26T02:15:00Z"
+      }
+    },
+    {
+      "card_id": "meegle:acme/orion/story/88190",
+      "source": {
+        "system": "meegle",
+        "tenant": "acme",
+        "project": "orion",
+        "record_kind": "story",
+        "record_id": "88190"
+      },
+      "business_number": "ORION-R-090",
+      "title": "Follow-up: remove the regional feature strings from the Settings search index",
+      "swimlane": {
+        "project": "orion",
+        "model": "orion-ir"
+      },
+      "workflow": {
+        "source_state": "待开发",
+        "node_key": "backlog",
+        "source_time": "2026-10-25T09:00:00Z"
+      },
+      "column": "todo",
+      "stage": {
+        "stage": "not_started",
+        "basis": "workflow_node",
+        "overlays": [],
+        "raw_node": "backlog",
+        "explanation": "Meegle node backlog"
+      },
+      "started_at": null,
+      "current_assignee": null,
+      "relationships": [
+        {
+          "id": "rel-090-contact",
+          "kind": "implementation_contact",
+          "person": {
+            "person_id": "p:morgan",
+            "account": null,
+            "display_name": "Morgan"
+          },
+          "subject": {
+            "system": "meegle",
+            "tenant": "acme",
+            "project": "orion",
+            "record_kind": "story",
+            "record_id": "88190"
+          },
+          "basis": "derived",
+          "derivation": "contact-from-history@1",
+          "status": "current",
+          "source_time": "2026-10-14T03:20:00Z",
+          "observed_at": "2026-10-26T01:40:00Z",
+          "evidence": [
+            "ev:m-88190",
+            "ev:g-4711-ps1"
+          ],
+          "supersedes": null,
+          "statement": null,
+          "approval": null
+        }
+      ],
+      "progress": {
+        "code": {
+          "linked": 0,
+          "merged": 0,
+          "open": 0,
+          "abandoned": 0,
+          "relation": "unrelated"
+        },
+        "build": "unknown",
+        "verification": "not_started"
+      },
+      "blockers": [],
+      "next_action": {
+        "text": "Assign the follow-up; Morgan knows the code",
+        "owner": {
+          "person_id": "p:taylor",
+          "account": null,
+          "display_name": "Taylor"
+        }
+      },
+      "conflicts": [],
+      "evidence_count": 2,
+      "observed_through": {
+        "meegle": "2026-10-26T01:40:00Z",
+        "gerrit": "2026-10-26T01:40:00Z",
+        "people": "2026-10-26T02:15:00Z"
+      }
+    },
+    {
+      "card_id": "meegle:acme/orion/story/88196",
+      "source": {
+        "system": "meegle",
+        "tenant": "acme",
+        "project": "orion",
+        "record_kind": "story",
+        "record_id": "88196"
+      },
+      "business_number": "ORION-R-096",
+      "title": "Fix the clock widget overlap at 200% display scale",
+      "swimlane": {
+        "project": "orion",
+        "model": "orion-ir"
+      },
+      "workflow": {
+        "source_state": "已完成",
+        "node_key": "done",
+        "source_time": "2026-10-23T08:00:00Z"
+      },
+      "column": "done",
+      "stage": {
+        "stage": "done",
+        "basis": "workflow_node",
+        "overlays": [],
+        "raw_node": "done",
+        "explanation": "Meegle acceptance node completed"
+      },
+      "started_at": "2026-10-12T02:00:00Z",
+      "current_assignee": "rel-096-meegle",
+      "relationships": [
+        {
+          "id": "rel-096-meegle",
+          "kind": "assigned",
+          "person": {
+            "person_id": "p:kai",
+            "account": null,
+            "display_name": "Kai"
+          },
+          "subject": {
+            "system": "meegle",
+            "tenant": "acme",
+            "project": "orion",
+            "record_kind": "story",
+            "record_id": "88196"
+          },
+          "basis": "issue_field",
+          "derivation": null,
+          "status": "current",
+          "source_time": "2026-10-12T02:00:00Z",
+          "observed_at": "2026-10-26T01:40:00Z",
+          "evidence": [
+            "ev:m-88196-owner"
+          ],
+          "supersedes": null,
+          "statement": null,
+          "approval": null
+        },
+        {
+          "id": "rel-096-verified",
+          "kind": "verified",
+          "person": {
+            "person_id": "p:quinn",
+            "account": null,
+            "display_name": "司马云澜"
+          },
+          "subject": {
+            "system": "meegle",
+            "tenant": "acme",
+            "project": "orion",
+            "record_kind": "story",
+            "record_id": "88196"
+          },
+          "basis": "issue_field",
+          "derivation": null,
+          "status": "current",
+          "source_time": "2026-10-22T06:00:00Z",
+          "observed_at": "2026-10-26T01:40:00Z",
+          "evidence": [
+            "ev:m-88196-accept"
+          ],
+          "supersedes": null,
+          "statement": null,
+          "approval": null
+        }
+      ],
+      "progress": {
+        "code": {
+          "linked": 2,
+          "merged": 2,
+          "open": 0,
+          "abandoned": 0,
+          "relation": "confirmed"
+        },
+        "build": "passed",
+        "verification": "passed"
+      },
+      "blockers": [],
+      "next_action": null,
+      "conflicts": [],
+      "evidence_count": 2,
+      "observed_through": {
+        "meegle": "2026-10-26T01:40:00Z",
+        "gerrit": "2026-10-26T01:40:00Z",
+        "people": "2026-10-26T02:15:00Z"
+      }
+    },
+    {
+      "card_id": "meegle:acme/orion/story/88193",
+      "source": {
+        "system": "meegle",
+        "tenant": "acme",
+        "project": "orion",
+        "record_kind": "story",
+        "record_id": "88193"
+      },
+      "business_number": "ORION-R-093",
+      "title": "Support the LC3 audio codec in Car Mode",
+      "swimlane": {
+        "project": "orion",
+        "model": "orion-pro"
+      },
+      "workflow": {
+        "source_state": "开发中",
+        "node_key": "develop",
+        "source_time": "2026-10-16T02:00:00Z"
+      },
+      "column": "doing",
+      "stage": {
+        "stage": "implementation",
+        "basis": "workflow_node",
+        "overlays": [
+          "blocked"
+        ],
+        "raw_node": "develop",
+        "explanation": "Meegle node develop in progress; blocked"
+      },
+      "started_at": "2026-10-16T02:00:00Z",
+      "current_assignee": "rel-093-meegle",
+      "relationships": [
+        {
+          "id": "rel-093-meegle",
+          "kind": "assigned",
+          "person": {
+            "person_id": "p:riley",
+            "account": null,
+            "display_name": "Riley"
+          },
+          "subject": {
+            "system": "meegle",
+            "tenant": "acme",
+            "project": "orion",
+            "record_kind": "story",
+            "record_id": "88193"
+          },
+          "basis": "issue_field",
+          "derivation": null,
+          "status": "current",
+          "source_time": "2026-10-16T02:00:00Z",
+          "observed_at": "2026-10-26T01:40:00Z",
+          "evidence": [
+            "ev:m-88193-owner"
+          ],
+          "supersedes": null,
+          "statement": null,
+          "approval": null
+        }
+      ],
+      "progress": {
+        "code": {
+          "linked": 0,
+          "merged": 0,
+          "open": 0,
+          "abandoned": 0,
+          "relation": "unrelated"
+        },
+        "build": "unknown",
+        "verification": "not_started"
+      },
+      "blockers": [
+        {
+          "reason": "Waiting for the vendor BSP drop 2026.11 (issue 77104)",
+          "dependency": {
+            "system": "meegle",
+            "tenant": "acme",
+            "project": "orion",
+            "record_kind": "issue",
+            "record_id": "77104"
+          },
+          "contact": {
+            "person_id": "p:avery",
+            "account": null,
+            "display_name": "Alexandria Montgomery-Okafor"
+          },
+          "since": "2026-10-22T03:00:00Z",
+          "evidence": [
+            "ev:m-77104"
+          ]
+        }
+      ],
+      "next_action": {
+        "text": "Ask the vendor for the BSP drop date",
+        "owner": {
+          "person_id": "p:avery",
+          "account": null,
+          "display_name": "Alexandria Montgomery-Okafor"
+        }
+      },
+      "conflicts": [],
+      "evidence_count": 2,
+      "observed_through": {
+        "meegle": "2026-10-26T01:40:00Z",
+        "gerrit": "2026-10-26T01:40:00Z",
+        "people": "2026-10-26T02:15:00Z"
+      }
+    },
+    {
+      "card_id": "meegle:acme/orion/story/88199",
+      "source": {
+        "system": "meegle",
+        "tenant": "acme",
+        "project": "orion",
+        "record_kind": "story",
+        "record_id": "88199"
+      },
+      "business_number": "ORION-R-099",
+      "title": "Restore the classic dock layout",
+      "swimlane": {
+        "project": "orion",
+        "model": "orion-pro"
+      },
+      "workflow": {
+        "source_state": "待开发",
+        "node_key": "backlog",
+        "source_time": "2026-10-23T02:00:00Z"
+      },
+      "column": "todo",
+      "stage": {
+        "stage": "not_started",
+        "basis": "workflow_node",
+        "overlays": [],
+        "raw_node": "backlog",
+        "explanation": "Meegle node backlog"
+      },
+      "started_at": null,
+      "current_assignee": "rel-099-meegle",
+      "relationships": [
+        {
+          "id": "rel-099-meegle",
+          "kind": "assigned",
+          "person": {
+            "person_id": "p:casey",
+            "account": null,
+            "display_name": "Casey"
+          },
+          "subject": {
+            "system": "meegle",
+            "tenant": "acme",
+            "project": "orion",
+            "record_kind": "story",
+            "record_id": "88199"
+          },
+          "basis": "issue_field",
+          "derivation": null,
+          "status": "current",
+          "source_time": "2026-10-23T02:00:00Z",
+          "observed_at": "2026-10-26T01:40:00Z",
+          "evidence": [
+            "ev:m-88199-owner"
+          ],
+          "supersedes": null,
+          "statement": null,
+          "approval": null
+        },
+        {
+          "id": "rel-099-lark",
+          "kind": "assigned",
+          "person": {
+            "person_id": "p:morgan",
+            "account": null,
+            "display_name": "Morgan"
+          },
+          "subject": {
+            "system": "meegle",
+            "tenant": "acme",
+            "project": "orion",
+            "record_kind": "story",
+            "record_id": "88199"
+          },
+          "basis": "explicit_statement",
+          "derivation": null,
+          "status": "conflicting",
+          "source_time": "2026-10-25T02:20:00Z",
+          "observed_at": "2026-10-26T02:15:00Z",
+          "evidence": [
+            "ev:l-dock",
+            "ev:l-dock-reply"
+          ],
+          "supersedes": null,
+          "statement": {
+            "author": {
+              "person_id": "p:gale",
+              "account": null,
+              "display_name": "Gale"
+            },
+            "kind": "direct",
+            "authority": "unknown"
+          },
+          "approval": null
+        }
+      ],
+      "progress": {
+        "code": {
+          "linked": 0,
+          "merged": 0,
+          "open": 0,
+          "abandoned": 0,
+          "relation": "unrelated"
+        },
+        "build": "unknown",
+        "verification": "not_started"
+      },
+      "blockers": [],
+      "next_action": {
+        "text": "Confirm the owner: Meegle says Casey, Gale said Morgan",
+        "owner": {
+          "person_id": "p:taylor",
+          "account": null,
+          "display_name": "Taylor"
+        }
+      },
+      "conflicts": [
+        {
+          "field": "assignee",
+          "relationship_ids": [
+            "rel-099-meegle",
+            "rel-099-lark"
+          ],
+          "explanation": "Gale named Morgan in Lark on 10-25 10:20; the Meegle owner is Casey"
+        }
+      ],
+      "evidence_count": 3,
+      "observed_through": {
+        "meegle": "2026-10-26T01:40:00Z",
+        "gerrit": "2026-10-26T01:40:00Z",
+        "people": "2026-10-26T02:15:00Z"
+      }
+    },
+    {
+      "card_id": "meegle:acme/orion/story/88212",
+      "source": {
+        "system": "meegle",
+        "tenant": "acme",
+        "project": "orion",
+        "record_kind": "story",
+        "record_id": "88212"
+      },
+      "business_number": "ORION-R-112",
+      "title": "桌面搜索框在横屏模式与深色主题切换后保持位置一致，并同步到副屏",
+      "swimlane": {
+        "project": "orion",
+        "model": "orion-pro"
+      },
+      "workflow": {
+        "source_state": "代码评审",
+        "node_key": "review",
+        "source_time": "2026-10-25T08:00:00Z"
+      },
+      "column": "doing",
+      "stage": {
+        "stage": "review",
+        "basis": "workflow_node",
+        "overlays": [],
+        "raw_node": "review",
+        "explanation": "Meegle node review; change 4790 open"
+      },
+      "started_at": "2026-10-19T02:00:00Z",
+      "current_assignee": "rel-112-meegle",
+      "relationships": [
+        {
+          "id": "rel-112-meegle",
+          "kind": "assigned",
+          "person": {
+            "person_id": "p:kai",
+            "account": null,
+            "display_name": "Kai"
+          },
+          "subject": {
+            "system": "meegle",
+            "tenant": "acme",
+            "project": "orion",
+            "record_kind": "story",
+            "record_id": "88212"
+          },
+          "basis": "issue_field",
+          "derivation": null,
+          "status": "current",
+          "source_time": "2026-10-19T02:00:00Z",
+          "observed_at": "2026-10-26T01:40:00Z",
+          "evidence": [
+            "ev:m-88212-owner"
+          ],
+          "supersedes": null,
+          "statement": null,
+          "approval": null
+        },
+        {
+          "id": "rel-112-owner",
+          "kind": "change_owner",
+          "person": {
+            "person_id": "p:kai",
+            "account": {
+              "system": "gerrit",
+              "tenant": "review.acme",
+              "account_id": "1000602"
+            },
+            "display_name": "Kai"
+          },
+          "subject": {
+            "system": "gerrit",
+            "tenant": "review.acme",
+            "project": "launcher",
+            "record_kind": "change",
+            "record_id": "4790"
+          },
+          "basis": "source_field",
+          "derivation": null,
+          "status": "current",
+          "source_time": "2026-10-24T03:00:00Z",
+          "observed_at": "2026-10-26T01:40:00Z",
+          "evidence": [
+            "ev:g-4790"
+          ],
+          "supersedes": null,
+          "statement": null,
+          "approval": null
+        },
+        {
+          "id": "rel-112-reviewer",
+          "kind": "reviewer_listed",
+          "person": {
+            "person_id": "p:jordan",
+            "account": {
+              "system": "gerrit",
+              "tenant": "review.acme",
+              "account_id": "1000377"
+            },
+            "display_name": "Jordan"
+          },
+          "subject": {
+            "system": "gerrit",
+            "tenant": "review.acme",
+            "project": "launcher",
+            "record_kind": "change",
+            "record_id": "4790"
+          },
+          "basis": "source_field",
+          "derivation": null,
+          "status": "current",
+          "source_time": "2026-10-25T08:00:00Z",
+          "observed_at": "2026-10-26T01:40:00Z",
+          "evidence": [
+            "ev:g-4790"
+          ],
+          "supersedes": null,
+          "statement": null,
+          "approval": null
+        }
+      ],
+      "progress": {
+        "code": {
+          "linked": 1,
+          "merged": 0,
+          "open": 1,
+          "abandoned": 0,
+          "relation": "confirmed"
+        },
+        "build": "passed",
+        "verification": "not_started"
+      },
+      "blockers": [],
+      "next_action": {
+        "text": "Review change 4790",
+        "owner": {
+          "person_id": "p:jordan",
+          "account": null,
+          "display_name": "Jordan"
+        }
+      },
+      "conflicts": [],
+      "evidence_count": 2,
+      "observed_through": {
+        "meegle": "2026-10-26T01:40:00Z",
+        "gerrit": "2026-10-26T01:40:00Z",
+        "people": "2026-10-26T02:15:00Z"
+      }
+    },
+    {
+      "card_id": "meegle:acme/orion/story/88215",
+      "source": {
+        "system": "meegle",
+        "tenant": "acme",
+        "project": "orion",
+        "record_kind": "story",
+        "record_id": "88215"
+      },
+      "business_number": "ORION-R-115",
+      "title": "Follow-up: count how often people use the Search visibility switch",
+      "swimlane": {
+        "project": "orion",
+        "model": "orion-pro"
+      },
+      "workflow": {
+        "source_state": "待开发",
+        "node_key": "backlog",
+        "source_time": "2026-10-26T01:00:00Z"
+      },
+      "column": "todo",
+      "stage": {
+        "stage": "not_started",
+        "basis": "workflow_node",
+        "overlays": [],
+        "raw_node": "backlog",
+        "explanation": "Meegle node backlog"
+      },
+      "started_at": null,
+      "current_assignee": "rel-115-meegle",
+      "relationships": [
+        {
+          "id": "rel-115-meegle",
+          "kind": "assigned",
+          "person": {
+            "person_id": "p:morgan",
+            "account": null,
+            "display_name": "Morgan"
+          },
+          "subject": {
+            "system": "meegle",
+            "tenant": "acme",
+            "project": "orion",
+            "record_kind": "story",
+            "record_id": "88215"
+          },
+          "basis": "issue_field",
+          "derivation": null,
+          "status": "current",
+          "source_time": "2026-10-26T01:00:00Z",
+          "observed_at": "2026-10-26T01:40:00Z",
+          "evidence": [
+            "ev:m-88215-owner"
+          ],
+          "supersedes": null,
+          "statement": null,
+          "approval": null
+        }
+      ],
+      "progress": {
+        "code": {
+          "linked": 0,
+          "merged": 0,
+          "open": 0,
+          "abandoned": 0,
+          "relation": "unrelated"
+        },
+        "build": "unknown",
+        "verification": "not_started"
+      },
+      "blockers": [],
+      "next_action": null,
+      "conflicts": [],
+      "evidence_count": 1,
+      "observed_through": {
+        "meegle": "2026-10-26T01:40:00Z",
+        "gerrit": "2026-10-26T01:40:00Z",
+        "people": "2026-10-26T02:15:00Z"
+      }
+    },
+    {
+      "card_id": "meegle:acme/orion/story/88208",
+      "source": {
+        "system": "meegle",
+        "tenant": "acme",
+        "project": "orion",
+        "record_kind": "story",
+        "record_id": "88208"
+      },
+      "business_number": "ORION-R-108",
+      "title": "Add a per-app notification summary",
+      "swimlane": {
+        "project": "orion",
+        "model": "orion-pro"
+      },
+      "workflow": {
+        "source_state": "待验收",
+        "node_key": "accept",
+        "source_time": "2026-10-24T09:00:00Z"
+      },
+      "column": "doing",
+      "stage": {
+        "stage": "acceptance",
+        "basis": "workflow_node",
+        "overlays": [],
+        "raw_node": "accept",
+        "explanation": "Meegle node accept; regression passed"
+      },
+      "started_at": "2026-10-13T02:00:00Z",
+      "current_assignee": "rel-108-meegle",
+      "relationships": [
+        {
+          "id": "rel-108-meegle",
+          "kind": "assigned",
+          "person": {
+            "person_id": "p:casey",
+            "account": null,
+            "display_name": "Casey"
+          },
+          "subject": {
+            "system": "meegle",
+            "tenant": "acme",
+            "project": "orion",
+            "record_kind": "story",
+            "record_id": "88208"
+          },
+          "basis": "issue_field",
+          "derivation": null,
+          "status": "current",
+          "source_time": "2026-10-13T02:00:00Z",
+          "observed_at": "2026-10-26T01:40:00Z",
+          "evidence": [
+            "ev:m-88208-owner"
+          ],
+          "supersedes": null,
+          "statement": null,
+          "approval": null
+        },
+        {
+          "id": "rel-108-verified",
+          "kind": "verified",
+          "person": {
+            "person_id": "p:quinn",
+            "account": null,
+            "display_name": "司马云澜"
+          },
+          "subject": {
+            "system": "meegle",
+            "tenant": "acme",
+            "project": "orion",
+            "record_kind": "story",
+            "record_id": "88208"
+          },
+          "basis": "issue_field",
+          "derivation": null,
+          "status": "current",
+          "source_time": "2026-10-24T09:00:00Z",
+          "observed_at": "2026-10-26T01:40:00Z",
+          "evidence": [
+            "ev:m-88208-regression"
+          ],
+          "supersedes": null,
+          "statement": null,
+          "approval": null
+        }
+      ],
+      "progress": {
+        "code": {
+          "linked": 3,
+          "merged": 3,
+          "open": 0,
+          "abandoned": 0,
+          "relation": "confirmed"
+        },
+        "build": "passed",
+        "verification": "passed"
+      },
+      "blockers": [],
+      "next_action": {
+        "text": "Accept or reject the notification summary",
+        "owner": {
+          "person_id": "p:taylor",
+          "account": null,
+          "display_name": "Taylor"
+        }
+      },
+      "conflicts": [],
+      "evidence_count": 2,
+      "observed_through": {
+        "meegle": "2026-10-26T01:40:00Z",
+        "gerrit": "2026-10-26T01:40:00Z",
+        "people": "2026-10-26T02:15:00Z"
+      }
+    },
+    {
+      "card_id": "meegle:acme/orion/story/88220",
+      "source": {
+        "system": "meegle",
+        "tenant": "acme",
+        "project": "orion",
+        "record_kind": "story",
+        "record_id": "88220"
+      },
+      "business_number": "ORION-R-120",
+      "title": "Start the Launcher cold in under 800 ms on Orion Lite",
+      "swimlane": {
+        "project": "orion",
+        "model": "orion-lite"
+      },
+      "workflow": {
+        "source_state": "待开发",
+        "node_key": "backlog",
+        "source_time": "2026-10-21T02:00:00Z"
+      },
+      "column": "doing",
+      "stage": {
+        "stage": "implementation",
+        "basis": "activity_evidence",
+        "overlays": [
+          "workflow_lag"
+        ],
+        "raw_node": "backlog",
+        "explanation": "Change 4801 has a patch set; Meegle node is still backlog"
+      },
+      "started_at": "2026-10-24T06:00:00Z",
+      "current_assignee": "rel-120-meegle",
+      "relationships": [
+        {
+          "id": "rel-120-meegle",
+          "kind": "assigned",
+          "person": {
+            "person_id": "p:kai",
+            "account": null,
+            "display_name": "Kai"
+          },
+          "subject": {
+            "system": "meegle",
+            "tenant": "acme",
+            "project": "orion",
+            "record_kind": "story",
+            "record_id": "88220"
+          },
+          "basis": "issue_field",
+          "derivation": null,
+          "status": "current",
+          "source_time": "2026-10-21T02:00:00Z",
+          "observed_at": "2026-10-26T01:40:00Z",
+          "evidence": [
+            "ev:m-88220-owner"
+          ],
+          "supersedes": null,
+          "statement": null,
+          "approval": null
+        },
+        {
+          "id": "rel-120-owner",
+          "kind": "change_owner",
+          "person": {
+            "person_id": "p:kai",
+            "account": {
+              "system": "gerrit",
+              "tenant": "review.acme",
+              "account_id": "1000602"
+            },
+            "display_name": "Kai"
+          },
+          "subject": {
+            "system": "gerrit",
+            "tenant": "review.acme",
+            "project": "launcher",
+            "record_kind": "change",
+            "record_id": "4801"
+          },
+          "basis": "source_field",
+          "derivation": null,
+          "status": "current",
+          "source_time": "2026-10-24T06:00:00Z",
+          "observed_at": "2026-10-26T01:40:00Z",
+          "evidence": [
+            "ev:g-4801"
+          ],
+          "supersedes": null,
+          "statement": null,
+          "approval": null
+        }
+      ],
+      "progress": {
+        "code": {
+          "linked": 1,
+          "merged": 0,
+          "open": 1,
+          "abandoned": 0,
+          "relation": "confirmed"
+        },
+        "build": "unknown",
+        "verification": "not_started"
+      },
+      "blockers": [],
+      "next_action": {
+        "text": "Start the develop node in Meegle",
+        "owner": {
+          "person_id": "p:kai",
+          "account": null,
+          "display_name": "Kai"
+        }
+      },
+      "conflicts": [],
+      "evidence_count": 2,
+      "observed_through": {
+        "meegle": "2026-10-26T01:40:00Z",
+        "gerrit": "2026-10-26T01:40:00Z",
+        "people": "2026-10-26T02:15:00Z"
+      }
+    },
+    {
+      "card_id": "meegle:acme/orion/story/88221",
+      "source": {
+        "system": "meegle",
+        "tenant": "acme",
+        "project": "orion",
+        "record_kind": "story",
+        "record_id": "88221"
+      },
+      "business_number": "ORION-R-121",
+      "title": "Move the wallpaper picker to the new storage API",
+      "swimlane": {
+        "project": "orion",
+        "model": "orion-lite"
+      },
+      "workflow": {
+        "source_state": "待评审(新)",
+        "node_key": "review_new",
+        "source_time": "2026-10-25T03:00:00Z"
+      },
+      "column": "unclassified",
+      "stage": {
+        "stage": "unmapped",
+        "basis": "unmapped",
+        "overlays": [],
+        "raw_node": "待评审(新)",
+        "explanation": "Meegle node 待评审(新) is not in the stage mapping"
+      },
+      "started_at": null,
+      "current_assignee": "rel-121-meegle",
+      "relationships": [
+        {
+          "id": "rel-121-meegle",
+          "kind": "assigned",
+          "person": {
+            "person_id": "p:riley",
+            "account": null,
+            "display_name": "Riley"
+          },
+          "subject": {
+            "system": "meegle",
+            "tenant": "acme",
+            "project": "orion",
+            "record_kind": "story",
+            "record_id": "88221"
+          },
+          "basis": "issue_field",
+          "derivation": null,
+          "status": "current",
+          "source_time": "2026-10-25T03:00:00Z",
+          "observed_at": "2026-10-26T01:40:00Z",
+          "evidence": [
+            "ev:m-88221-node"
+          ],
+          "supersedes": null,
+          "statement": null,
+          "approval": null
+        }
+      ],
+      "progress": {
+        "code": {
+          "linked": 0,
+          "merged": 0,
+          "open": 0,
+          "abandoned": 0,
+          "relation": "unrelated"
+        },
+        "build": "unknown",
+        "verification": "not_started"
+      },
+      "blockers": [],
+      "next_action": {
+        "text": "Add 待评审(新) to the board stage mapping",
+        "owner": {
+          "person_id": "p:taylor",
+          "account": null,
+          "display_name": "Taylor"
+        }
+      },
+      "conflicts": [],
+      "evidence_count": 1,
+      "observed_through": {
+        "meegle": "2026-10-26T01:40:00Z",
+        "gerrit": "2026-10-26T01:40:00Z",
+        "people": "2026-10-26T02:15:00Z"
+      }
+    },
+    {
+      "card_id": "meegle:acme/orion/story/88224",
+      "source": {
+        "system": "meegle",
+        "tenant": "acme",
+        "project": "orion",
+        "record_kind": "story",
+        "record_id": "88224"
+      },
+      "business_number": "ORION-R-124",
+      "title": "Keep the Search box visible in Simple Mode",
+      "swimlane": {
+        "project": "orion",
+        "model": "orion-lite"
+      },
+      "workflow": {
+        "source_state": "回归测试",
+        "node_key": "regression",
+        "source_time": "2026-10-25T07:00:00Z"
+      },
+      "column": "doing",
+      "stage": {
+        "stage": "regression",
+        "basis": "workflow_node",
+        "overlays": [],
+        "raw_node": "regression",
+        "explanation": "Meegle node regression; result failed"
+      },
+      "started_at": "2026-10-15T02:00:00Z",
+      "current_assignee": "rel-124-meegle",
+      "relationships": [
+        {
+          "id": "rel-124-meegle",
+          "kind": "assigned",
+          "person": {
+            "person_id": "p:kai",
+            "account": null,
+            "display_name": "Kai"
+          },
+          "subject": {
+            "system": "meegle",
+            "tenant": "acme",
+            "project": "orion",
+            "record_kind": "story",
+            "record_id": "88224"
+          },
+          "basis": "issue_field",
+          "derivation": null,
+          "status": "current",
+          "source_time": "2026-10-15T02:00:00Z",
+          "observed_at": "2026-10-26T01:40:00Z",
+          "evidence": [
+            "ev:m-88224-owner"
+          ],
+          "supersedes": null,
+          "statement": null,
+          "approval": null
+        },
+        {
+          "id": "rel-124-owner",
+          "kind": "change_owner",
+          "person": {
+            "person_id": "p:kai",
+            "account": {
+              "system": "gerrit",
+              "tenant": "review.acme",
+              "account_id": "1000602"
+            },
+            "display_name": "Kai"
+          },
+          "subject": {
+            "system": "gerrit",
+            "tenant": "review.acme",
+            "project": "launcher",
+            "record_kind": "change",
+            "record_id": "4766"
+          },
+          "basis": "source_field",
+          "derivation": null,
+          "status": "current",
+          "source_time": "2026-10-20T02:00:00Z",
+          "observed_at": "2026-10-26T01:40:00Z",
+          "evidence": [
+            "ev:g-4766"
+          ],
+          "supersedes": null,
+          "statement": null,
+          "approval": null
+        },
+        {
+          "id": "rel-124-cr",
+          "kind": "approval",
+          "person": {
+            "person_id": "p:riley",
+            "account": {
+              "system": "gerrit",
+              "tenant": "review.acme",
+              "account_id": "1000518"
+            },
+            "display_name": "Riley"
+          },
+          "subject": {
+            "system": "gerrit",
+            "tenant": "review.acme",
+            "project": "launcher",
+            "record_kind": "patchset",
+            "record_id": "4766/2"
+          },
+          "basis": "source_field",
+          "derivation": null,
+          "status": "current",
+          "source_time": "2026-10-22T03:30:00Z",
+          "observed_at": "2026-10-26T01:40:00Z",
+          "evidence": [
+            "ev:g-4766-ps2-labels"
+          ],
+          "supersedes": null,
+          "statement": null,
+          "approval": {
+            "patchset": 2,
+            "label": "Code-Review",
+            "value": 2,
+            "carried_over": "no",
+            "post_submit": false,
+            "self_approval": false
+          }
+        },
+        {
+          "id": "rel-124-verified",
+          "kind": "verified",
+          "person": {
+            "person_id": "p:quinn",
+            "account": null,
+            "display_name": "司马云澜"
+          },
+          "subject": {
+            "system": "meegle",
+            "tenant": "acme",
+            "project": "orion",
+            "record_kind": "story",
+            "record_id": "88224"
+          },
+          "basis": "issue_field",
+          "derivation": null,
+          "status": "current",
+          "source_time": "2026-10-25T07:00:00Z",
+          "observed_at": "2026-10-26T01:40:00Z",
+          "evidence": [
+            "ev:m-88224-regression"
+          ],
+          "supersedes": null,
+          "statement": null,
+          "approval": null
+        }
+      ],
+      "progress": {
+        "code": {
+          "linked": 1,
+          "merged": 1,
+          "open": 0,
+          "abandoned": 0,
+          "relation": "confirmed"
+        },
+        "build": "passed",
+        "verification": "failed"
+      },
+      "blockers": [],
+      "next_action": {
+        "text": "Fix the regression failure from build 1190",
+        "owner": {
+          "person_id": "p:kai",
+          "account": null,
+          "display_name": "Kai"
+        }
+      },
+      "conflicts": [],
+      "evidence_count": 4,
+      "observed_through": {
+        "meegle": "2026-10-26T01:40:00Z",
+        "gerrit": "2026-10-26T01:40:00Z",
+        "people": "2026-10-26T02:15:00Z"
+      }
+    }
+  ],
+  "next_cursor": null
+}

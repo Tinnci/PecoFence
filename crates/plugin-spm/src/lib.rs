@@ -3,6 +3,7 @@
 //! Business decisions remain daemon-owned. This crate consumes versioned read-model snapshots and
 //! turns them into layout, hit-test, semantic, and paint data without depending on Win32.
 
+pub mod board;
 pub mod navigation;
 
 use pecofence_plugin_api::design::{self, ContentScale, LayoutTracker};
@@ -134,9 +135,9 @@ pub fn decode_event(bytes: &[u8]) -> Result<Envelope> {
     Ok(envelope)
 }
 
-/// Semantic colour tokens the view builders consume. Values are derived from
-/// the host `ThemeSnapshot` — the design system owns colours, the panel only
-/// maps business state onto roles, never onto concrete RGBA values.
+/// Semantic colour tokens the view builders consume. Values come from the board
+/// palette (warm paper, or the system palette in high contrast), so the summary
+/// panel and the board share one set of colours.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PanelTokens {
     pub panel: [f32; 4],
@@ -153,17 +154,32 @@ pub struct PanelTokens {
 
 impl PanelTokens {
     pub fn from_snapshot(snapshot: &ThemeSnapshot) -> Self {
+        if snapshot.high_contrast {
+            return Self {
+                panel: snapshot.surface_panel,
+                subtle: snapshot.surface_subtle,
+                primary: snapshot.text_primary,
+                secondary: snapshot.text_secondary,
+                accent: snapshot.accent,
+                stroke: snapshot.stroke,
+                danger: snapshot.danger,
+                warning: snapshot.warning,
+                success: snapshot.success,
+                unknown: snapshot.unknown,
+            };
+        }
+        let p = board::layout::Palette::from_theme(snapshot);
         Self {
-            panel: snapshot.surface_panel,
-            subtle: snapshot.surface_subtle,
-            primary: snapshot.text_primary,
-            secondary: snapshot.text_secondary,
-            accent: snapshot.accent,
-            stroke: snapshot.stroke,
-            danger: snapshot.danger,
-            warning: snapshot.warning,
-            success: snapshot.success,
-            unknown: snapshot.unknown,
+            panel: p.base,
+            subtle: p.card,
+            primary: p.primary,
+            secondary: p.secondary,
+            accent: p.accent_ink,
+            stroke: p.rule,
+            danger: p.danger,
+            warning: p.warning,
+            success: p.success,
+            unknown: p.secondary,
         }
     }
 

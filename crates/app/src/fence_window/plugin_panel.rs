@@ -547,6 +547,10 @@ impl FenceViewState {
         for command in update.commands {
             match command {
                 HostCommand::Invalidate => redraw_content = true,
+                HostCommand::SetChrome(chrome) => {
+                    self.title = chrome.title;
+                    redraw_chrome = true;
+                }
                 HostCommand::SetTitle(title) => {
                     if self.title != title {
                         self.title = title.clone();

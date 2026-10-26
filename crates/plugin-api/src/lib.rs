@@ -570,6 +570,10 @@ pub enum PanelEvent {
         action: u64,
         layout_revision: u64,
     },
+    /// A command the panel published in its [`PanelChrome`] was clicked or invoked.
+    Command {
+        id: u64,
+    },
     TextSubmitted {
         action: u64,
         text: String,
@@ -589,6 +593,35 @@ pub enum PanelEvent {
         visible: bool,
     },
     SuspendInput,
+    /// A navigation key that no host control consumed (Tab, and Enter/Space on a
+    /// focused control, stay with the host).
+    Key {
+        key: PanelKey,
+        shift: bool,
+    },
+    /// Mouse wheel over the content, in content DIPs. Positive `lines` scroll
+    /// the content up (towards later items), as a downward wheel turn does.
+    Scroll {
+        x: f32,
+        y: f32,
+        lines: f32,
+    },
+}
+
+/// Keys the host forwards to the content for in-panel navigation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PanelKey {
+    Left,
+    Right,
+    Up,
+    Down,
+    PageUp,
+    PageDown,
+    Home,
+    End,
+    Enter,
+    Escape,
+    Refresh,
 }
 
 /// Typeface of a styled native editor; the host maps it to the same face the
@@ -659,12 +692,47 @@ pub enum ChromeSeverity {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct ChromeStatus {
+    pub text: String,
+    pub severity: ChromeSeverity,
+}
+
+/// A panel command shown in the host's title area (fence title strip or window
+/// title bar). Clicks come back as [`PanelEvent::Command`] with `id`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ChromeCommand {
+    pub id: u64,
+    /// Accessible name and tooltip.
+    pub label: String,
+    /// Segoe Fluent Icons glyph.
+    pub glyph: char,
+    pub enabled: bool,
+}
+
+/// The panel's header as data. The host decides where it goes: a fence draws it in
+/// its title strip, a standalone window in its title bar. The panel then draws
+/// only its content.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct PanelChrome {
+    pub title: String,
+    pub subtitle: String,
+    pub status: Option<ChromeStatus>,
+    pub commands: Vec<ChromeCommand>,
+    /// The opaque ground the panel paints under its content (sRGB 0..1). The host
+    /// paints its title area in the same colour, so header and content read as one
+    /// sheet, like a Windows Settings window. `None` keeps the host's material.
+    pub surface: Option<[f32; 4]>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub enum HostCommand {
     Invalidate,
     SetTitle(String),
     RequestMode(Presentation),
     /// Save provider-owned JSON alongside the fence geometry in the host configuration.
     PersistConfig(Arc<[u8]>),
+    /// Replace the panel's header (title, subtitle, status, commands) drawn by the host.
+    SetChrome(PanelChrome),
     /// Open the host's native editor and return TextSubmitted on commit.
     RequestTextInput {
         action: u64,
@@ -701,6 +769,10 @@ impl PanelUpdate {
                 HostCommand::PersistConfig(_) => {
                     self.commands
                         .retain(|old| !matches!(old, HostCommand::PersistConfig(_)));
+                }
+                HostCommand::SetChrome(_) => {
+                    self.commands
+                        .retain(|old| !matches!(old, HostCommand::SetChrome(_)));
                 }
                 _ => {}
             }
@@ -872,6 +944,10 @@ mod tests {
                 commands: vec![
                     HostCommand::Invalidate,
                     HostCommand::SetTitle(format!("title-{i}")),
+                    HostCommand::SetChrome(PanelChrome {
+                        title: format!("chrome-{i}"),
+                        ..PanelChrome::default()
+                    }),
                     HostCommand::RequestMode(if i % 2 == 0 {
                         Presentation::Compact
                     } else {
@@ -882,8 +958,17 @@ mod tests {
             });
         }
         assert!(pending.relayout);
-        assert_eq!(pending.commands.len(), 3);
+        assert_eq!(pending.commands.len(), 4);
         assert!(pending.commands.contains(&HostCommand::Invalidate));
+        let chromes: Vec<_> = pending
+            .commands
+            .iter()
+            .filter_map(|c| match c {
+                HostCommand::SetChrome(chrome) => Some(chrome.title.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(chromes, ["chrome-999"]);
         assert!(
             pending
                 .commands
