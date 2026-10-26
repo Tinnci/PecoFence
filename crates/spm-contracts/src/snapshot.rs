@@ -10,6 +10,9 @@ pub enum SourceSystem {
     Jira,
     Meegle,
     Gerrit,
+    Jenkins,
+    Lark,
+    People,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]

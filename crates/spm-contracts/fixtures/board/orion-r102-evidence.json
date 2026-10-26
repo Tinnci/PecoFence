@@ -1,0 +1,72 @@
+{
+  "card_id": "meegle:acme/orion/story/88232",
+  "revision": 57,
+  "items": [
+    {
+      "id": "ev:g-4711-ps1",
+      "source": {
+        "system": "gerrit",
+        "tenant": "review.acme",
+        "project": "launcher",
+        "record_kind": "patchset",
+        "record_id": "4711/1"
+      },
+      "field_locator": "revisions.1.commit.author",
+      "source_time": "2026-10-14T03:20:00Z",
+      "observed_at": "2026-10-26T02:14:00Z",
+      "summary": "Change 4711 patch set 1 authored by Morgan; touches search-position configuration",
+      "relationship_ids": [
+        "rel-102-history-morgan",
+        "rel-102-contact-morgan"
+      ]
+    },
+    {
+      "id": "ev:l-request",
+      "source": {
+        "system": "lark",
+        "tenant": "acme",
+        "project": "orion-ir-chat",
+        "record_kind": "message",
+        "record_id": "om_request"
+      },
+      "field_locator": "content.text",
+      "source_time": "2026-10-26T02:01:00Z",
+      "observed_at": "2026-10-26T02:15:00Z",
+      "summary": "Taylor lists Orion IR tasks 1 to 4; task 2 is moving the Search box to the bottom",
+      "relationship_ids": []
+    },
+    {
+      "id": "ev:l-reply",
+      "source": {
+        "system": "lark",
+        "tenant": "acme",
+        "project": "orion-ir-chat",
+        "record_kind": "message",
+        "record_id": "om_reply"
+      },
+      "field_locator": "content.text",
+      "source_time": "2026-10-26T02:11:00Z",
+      "observed_at": "2026-10-26T02:15:00Z",
+      "summary": "Gale replies to that message: \"1 Casey 3 me 4 Morgan\"; task 2 is not named",
+      "relationship_ids": []
+    },
+    {
+      "id": "ev:m-88232-owner",
+      "source": {
+        "system": "meegle",
+        "tenant": "acme",
+        "project": "orion",
+        "record_kind": "story",
+        "record_id": "88232"
+      },
+      "field_locator": "workflow.nodes.develop.owners",
+      "source_time": "2026-10-27T06:00:00Z",
+      "observed_at": "2026-10-27T06:05:00Z",
+      "summary": "Meegle develop node owner set to Casey",
+      "relationship_ids": [
+        "rel-102-meegle"
+      ]
+    }
+  ],
+  "next_cursor": null
+}

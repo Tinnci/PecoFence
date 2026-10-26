@@ -8,6 +8,7 @@ pub enum ViewKind {
     WorkItems,
     Verification,
     Trend,
+    Board,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]

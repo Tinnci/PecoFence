@@ -764,6 +764,8 @@ fn response_method(response: &Response) -> RpcMethod {
         Response::ResolveNavigation(_) => RpcMethod::ResolveNavigation,
         Response::BuildBriefing(_) => RpcMethod::BuildBriefing,
         Response::Ping(_) => RpcMethod::Ping,
+        Response::QueryBoardPage(_) => RpcMethod::QueryBoardPage,
+        Response::GetCardEvidence(_) => RpcMethod::GetCardEvidence,
     }
 }
 

@@ -122,6 +122,26 @@ impl Envelope {
                 }
                 snapshot.validate()?;
             }
+            Body::Event(Event::Board(board)) => {
+                if direction != Direction::ServerToClient
+                    || self.request_id.is_some()
+                    || self.daemon_session.is_none()
+                    || self.subscription_id.is_none()
+                    || self.revision.is_none()
+                {
+                    return Err(ContractError::InvalidEnvelope(
+                        "board event fields are incomplete".into(),
+                    ));
+                }
+                if self.daemon_session != Some(board.daemon_session)
+                    || self.revision != Some(board.revision)
+                {
+                    return Err(ContractError::InvalidEnvelope(
+                        "board identity differs from envelope".into(),
+                    ));
+                }
+                board.validate()?;
+            }
             Body::Event(Event::OperationCompleted(_)) => {
                 if direction != Direction::ServerToClient
                     || self.daemon_session.is_none()

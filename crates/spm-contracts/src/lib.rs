@@ -1,5 +1,6 @@
 //! Stable, runtime-independent SPM v2 wire contracts.
 
+mod board;
 mod canonical;
 mod endpoint;
 mod envelope;
@@ -11,6 +12,7 @@ mod rpc;
 mod snapshot;
 mod version;
 
+pub use board::*;
 pub use canonical::*;
 pub use endpoint::*;
 pub use envelope::*;

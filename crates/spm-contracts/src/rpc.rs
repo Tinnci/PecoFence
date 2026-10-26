@@ -12,6 +12,7 @@ pub enum Feature {
     RefreshEvents,
     Navigation,
     Briefing,
+    Board,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -26,6 +27,8 @@ pub enum RpcMethod {
     ResolveNavigation,
     BuildBriefing,
     Ping,
+    QueryBoardPage,
+    GetCardEvidence,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -199,6 +202,8 @@ pub enum Request {
     ResolveNavigation(ResolveNavigationRequest),
     BuildBriefing(BuildBriefingRequest),
     Ping(PingRequest),
+    QueryBoardPage(QueryPageRequest),
+    GetCardEvidence(GetCardEvidenceRequest),
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -213,6 +218,8 @@ pub enum Response {
     ResolveNavigation(ResolveNavigationResponse),
     BuildBriefing(BuildBriefingResponse),
     Ping(PingResponse),
+    QueryBoardPage(BoardPageResponse),
+    GetCardEvidence(CardEvidenceResponse),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -239,6 +246,7 @@ pub struct OperationCompleted {
 #[allow(clippy::large_enum_variant)]
 pub enum Event {
     Snapshot(ProjectSnapshot),
+    Board(BoardSnapshot),
     OperationCompleted(OperationCompleted),
 }
 
@@ -256,22 +264,27 @@ impl Request {
             Self::ResolveNavigation(_) => RpcMethod::ResolveNavigation,
             Self::BuildBriefing(_) => RpcMethod::BuildBriefing,
             Self::Ping(_) => RpcMethod::Ping,
+            Self::QueryBoardPage(_) => RpcMethod::QueryBoardPage,
+            Self::GetCardEvidence(_) => RpcMethod::GetCardEvidence,
         }
     }
     pub fn validate(&self) -> Result<(), ContractError> {
-        if let Self::QueryPage(q) = self {
-            if q.revision.0 == 0 {
-                return Err(ContractError::InvalidField {
-                    field: "revision",
-                    reason: "page revision must be nonzero".into(),
-                });
-            }
-            if !(1..=MAX_PAGE_SIZE).contains(&q.page_size) {
-                return Err(ContractError::InvalidField {
-                    field: "page_size",
-                    reason: format!("must be 1..={MAX_PAGE_SIZE}"),
-                });
-            }
+        let (revision, page_size) = match self {
+            Self::QueryPage(q) | Self::QueryBoardPage(q) => (q.revision, q.page_size),
+            Self::GetCardEvidence(q) => (q.revision, q.page_size),
+            _ => return Ok(()),
+        };
+        if revision.0 == 0 {
+            return Err(ContractError::InvalidField {
+                field: "revision",
+                reason: "page revision must be nonzero".into(),
+            });
+        }
+        if !(1..=MAX_PAGE_SIZE).contains(&page_size) {
+            return Err(ContractError::InvalidField {
+                field: "page_size",
+                reason: format!("must be 1..={MAX_PAGE_SIZE}"),
+            });
         }
         Ok(())
     }
