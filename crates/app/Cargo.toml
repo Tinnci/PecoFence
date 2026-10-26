@@ -10,6 +10,7 @@ path = "src/main.rs"
 
 [dependencies]
 chrono.workspace = true
+pecofence-spm-transport = { path = "../spm-transport" }
 spm-contracts.workspace = true
 windows-core = { workspace = true }
 windows-reactor = { workspace = true }

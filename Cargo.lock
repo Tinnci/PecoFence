@@ -360,6 +360,7 @@ dependencies = [
  "pecofence-plugin-widgets",
  "pecofence-render",
  "pecofence-shell-contract",
+ "pecofence-spm-transport",
  "serde_json",
  "spm-contracts",
  "tokio",
@@ -470,6 +471,20 @@ version = "0.0.6"
 dependencies = [
  "pecofence-shell-contract",
  "windows-core 0.100.0",
+]
+
+[[package]]
+name = "pecofence-spm-transport"
+version = "0.0.6"
+dependencies = [
+ "pecofence-core",
+ "pecofence-platform",
+ "pecofence-plugin-api",
+ "pecofence-plugin-kernel",
+ "serde_json",
+ "spm-contracts",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

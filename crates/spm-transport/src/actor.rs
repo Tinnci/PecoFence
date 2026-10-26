@@ -1,5 +1,8 @@
-use crate::app::panel_manager::PipeState;
-use pecofence_plugin_api::{Error, ScopeId, Token};
+//! Bounded protocol actor; native connection setup is Windows-only.
+use super::*;
+#[cfg(test)]
+use pecofence_plugin_api::ScopeId;
+use pecofence_plugin_api::{Error, Token};
 use pecofence_plugin_kernel::CancellationToken;
 use spm_contracts::{
     Body, DaemonSessionId, Direction, Envelope, Event, Feature, HelloRequest, PROTOCOL_MAJOR,
@@ -18,7 +21,6 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
-pub(crate) const MAX_OPERATIONS: usize = 64;
 const OPERATION_TIMEOUT: Duration = Duration::from_secs(15);
 
 /// Keep retrying independently of diagnostics: report the first/changed error,
@@ -42,134 +44,6 @@ impl ConnectFailureLog {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u8)]
-pub enum ConnectionState {
-    Connecting = 0,
-    Connected = 1,
-    Reconnecting = 2,
-    Disconnected = 3,
-}
-
-#[derive(Clone)]
-pub struct TransportHandle {
-    data_sender: mpsc::Sender<Command>,
-    control_sender: mpsc::UnboundedSender<Command>,
-    state: Arc<AtomicU8>,
-}
-
-impl TransportHandle {
-    pub fn subscribe(
-        &self,
-        local: Token,
-        owner: ScopeId,
-        generation: u64,
-        query: ProjectQuery,
-    ) -> Result<(), ()> {
-        self.data_sender
-            .try_send(Command::Subscribe {
-                local,
-                route: Route { owner, generation },
-                query,
-            })
-            .map_err(send_error)
-    }
-
-    pub fn unsubscribe(&self, local: Token) -> Result<(), ()> {
-        self.control_sender
-            .send(Command::Unsubscribe { local })
-            .map_err(|_| ())
-    }
-
-    pub fn request(
-        &self,
-        local: Token,
-        owner: ScopeId,
-        generation: u64,
-        request: Request,
-    ) -> Result<(), ()> {
-        self.data_sender
-            .try_send(Command::Request {
-                local,
-                route: Route { owner, generation },
-                request,
-            })
-            .map_err(send_error)
-    }
-
-    pub fn cancel_operation(&self, local: Token) -> Result<(), ()> {
-        self.control_sender
-            .send(Command::CancelOperation { local })
-            .map_err(|_| ())
-    }
-
-    #[allow(dead_code)]
-    pub fn connection_state(&self) -> ConnectionState {
-        match self.state.load(Ordering::Acquire) {
-            0 => ConnectionState::Connecting,
-            1 => ConnectionState::Connected,
-            2 => ConnectionState::Reconnecting,
-            _ => ConnectionState::Disconnected,
-        }
-    }
-}
-
-fn send_error(error: mpsc::error::TrySendError<Command>) {
-    if matches!(error, mpsc::error::TrySendError::Full(_)) {
-        tracing::warn!("transport.data_commands_full");
-    }
-}
-
-pub struct Receivers {
-    pub(crate) data: mpsc::Receiver<Command>,
-    pub(crate) control: mpsc::UnboundedReceiver<Command>,
-}
-
-// PipeState::token uses a checked, increasing u64 counter; tokens never repeat.
-// An unsubscribe may overtake its subscribe across these independent channels.
-pub fn channel() -> (TransportHandle, Receivers) {
-    let (data_sender, data) = mpsc::channel(64);
-    let (control_sender, control) = mpsc::unbounded_channel();
-    let state = Arc::new(AtomicU8::new(ConnectionState::Disconnected as u8));
-    (
-        TransportHandle {
-            data_sender,
-            control_sender,
-            state,
-        },
-        Receivers { data, control },
-    )
-}
-
-#[derive(Clone, Copy)]
-pub(crate) struct Route {
-    owner: ScopeId,
-    generation: u64,
-}
-
-// ProjectQuery/Envelope payloads dominate the variant size; the transport
-// clones these commands across the actor boundary and boxing would churn
-// every construction site for no measurable benefit.
-#[allow(clippy::large_enum_variant)]
-pub enum Command {
-    Subscribe {
-        local: Token,
-        route: Route,
-        query: ProjectQuery,
-    },
-    Unsubscribe {
-        local: Token,
-    },
-    Request {
-        local: Token,
-        route: Route,
-        request: Request,
-    },
-    CancelOperation {
-        local: Token,
-    },
-}
-
 struct PendingOperation {
     local: Token,
     route: Route,
@@ -184,6 +58,7 @@ struct ActiveQuery {
     latest: Option<Arc<[u8]>>,
 }
 
+#[cfg_attr(not(windows), allow(dead_code))]
 struct Actor {
     endpoint: String,
     receivers: Receivers,
@@ -198,6 +73,7 @@ struct Actor {
     daemon_session: Option<DaemonSessionId>,
 }
 
+#[cfg(windows)]
 pub async fn run(
     endpoint: String,
     receivers: Receivers,
@@ -293,6 +169,7 @@ impl Actor {
         }
     }
 
+    #[cfg_attr(not(windows), allow(dead_code))]
     fn set_state(&self, state: ConnectionState) {
         let previous = self.connection_state.swap(state as u8, Ordering::AcqRel);
         if previous != state as u8 {
@@ -300,6 +177,7 @@ impl Actor {
         }
     }
 
+    #[cfg_attr(not(windows), allow(dead_code))]
     fn reset_remote(&mut self) {
         self.fail_operations("connection lost; remote outcome unknown");
         self.remote_queries.clear();
@@ -365,9 +243,10 @@ impl Actor {
         }
     }
 
+    #[cfg_attr(not(windows), allow(dead_code))]
     async fn connected(
         &mut self,
-        pipe: tokio::net::windows::named_pipe::NamedPipeClient,
+        pipe: impl AsyncRead + AsyncWrite + Unpin + Send + 'static,
         cancel: &CancellationToken,
     ) -> Result<(), ()> {
         let (reader, mut writer) = tokio::io::split(pipe);
@@ -769,6 +648,7 @@ fn response_method(response: &Response) -> RpcMethod {
     }
 }
 
+#[cfg_attr(not(windows), allow(dead_code))]
 fn jitter(base: Duration) -> Duration {
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -835,6 +715,7 @@ async fn write_envelope(
 }
 
 /// A candidate binary can verify its own pinned SPM contract before replacing the desktop UI.
+#[cfg(windows)]
 pub async fn probe_current() -> std::io::Result<()> {
     let endpoint = spm_contracts::v2_pipe_name(&spm_contracts::EndpointIdentity {
         user_sid: pecofence_platform::named_pipe::current_user_sid()?,
@@ -962,9 +843,7 @@ mod tests {
             endpoint: String::new(),
             receivers,
             connection_state: Arc::new(AtomicU8::new(0)),
-            sink: Arc::new(PipeState::new(pecofence_platform::HWND(
-                std::ptr::null_mut(),
-            ))),
+            sink: Arc::new(PipeState::new(|| {})),
             active: HashMap::new(),
             local_queries: HashMap::new(),
             cancelled_tokens: HashSet::new(),

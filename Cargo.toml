@@ -4,6 +4,7 @@ members = [
     "crates/core",
     "crates/cli",
     "crates/spm-contracts",
+    "crates/spm-transport",
     "crates/plugin-api",
     "crates/plugin-kernel",
     "crates/plugin-spm",

@@ -21,7 +21,7 @@ mod rename;
 mod settings_host;
 mod settings_ui;
 mod shadow;
-mod spm_transport;
+use pecofence_spm_transport as spm_transport;
 mod state;
 
 use pecofence_platform::com::OleGuard;
