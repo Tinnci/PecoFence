@@ -1,7 +1,9 @@
 # Evidence-backed work board
 
 Status: architecture proposal, revised 2026-10-26. Phase 0 (the public board
-contract and its synthetic fixtures) is implemented; later phases are not.
+contract and its synthetic fixtures) is implemented. The native view of Phase 2 exists
+on a deterministic demo source; see [the board design](EVIDENCE_BOARD_DESIGN.md), which
+also revises this document's view rules. The backend phases are not implemented.
 It refines the first draft of this document after inspecting the PecoFence
 workspace (`crates/spm-contracts`, `crates/plugin-spm`, `crates/plugin-api`,
 `crates/app/src/spm_transport.rs`) and the people-cli repository. The private SPM
