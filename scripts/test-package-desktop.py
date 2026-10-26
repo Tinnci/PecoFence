@@ -12,7 +12,7 @@ import zipfile
 import package_desktop as pkg
 
 
-def image(web=False, dll=False, delay=False, architecture="x64"):
+def image(web=False, dll=False, delay=False, architecture="x64", subsystem=2):
     data = bytearray(1024)
     data[:2] = b"MZ"
     struct.pack_into("<I", data, 0x3C, 0x80)
@@ -28,7 +28,7 @@ def image(web=False, dll=False, delay=False, architecture="x64"):
     else:
         struct.pack_into("<I", data, optional + 28, 0x400000)
         directory_count, directory_offset = 92, 96
-    struct.pack_into("<H", data, optional + 68, 2)
+    struct.pack_into("<H", data, optional + 68, subsystem)
     struct.pack_into("<I", data, optional + directory_count, 16)
     section = optional + 240
     struct.pack_into("<IIII", data, section + 8, 512, 0x1000, 512, 512)
@@ -129,7 +129,7 @@ class PackagingTests(unittest.TestCase):
         web_exe = web_exe or pkg.EXES[0]
         for name in pkg.BINARIES:
             (self.release / name).write_bytes(
-                image(web=web and name == web_exe, delay=delay, architecture=architecture, dll=name == pkg.SHELL_DLL)
+                image(web=web and name == web_exe, delay=delay, architecture=architecture, dll=name == pkg.SHELL_DLL, subsystem=3 if name == "pecofence-cli.exe" else 2)
             )
         captured = self.root / "inputs.json"
         captured.write_bytes(pkg.json_bytes(self.inputs))
@@ -167,9 +167,19 @@ class PackagingTests(unittest.TestCase):
                 ):
                     self.receipt(web=True, delay=delay, web_exe=name)
 
+    def test_product_subsystems_match_each_binary_role(self):
+        for name in pkg.EXES:
+            expected = 3 if name == "pecofence-cli.exe" else 2
+            with self.subTest(name=name):
+                self.assertTrue(pkg.valid_product_image(name, pkg.pe_image(image(subsystem=expected))))
+                self.assertFalse(pkg.valid_product_image(name, pkg.pe_image(image(subsystem=5 - expected))))
+                self.assertFalse(pkg.valid_product_image(name, pkg.pe_image(image(dll=True, subsystem=expected))))
+                self.assertFalse(pkg.valid_product_image(name, pkg.pe_image(image(architecture="x86", subsystem=expected))))
+        self.assertFalse(pkg.valid_product_image("unknown.exe", pkg.pe_image(image())))
+
     def test_build_rejects_x86_gui_executables_even_when_the_pe_is_well_formed(self):
         self.assertEqual(pkg.pe_image(image(architecture="x86"))["architecture"], "x86")
-        with self.assertRaisesRegex(ValueError, "x64 GUI executable"):
+        with self.assertRaisesRegex(ValueError, "invalid x64 product image type"):
             self.receipt(architecture="x86")
 
     def test_invalid_architecture_and_truncated_images_rejected(self):
@@ -245,7 +255,7 @@ class PackagingTests(unittest.TestCase):
                 with self.subTest(executable=name, delay=delay):
                     archive, _, _ = self.package(suffix=f"-{name}-{delay}")
                     def add_import(files):
-                        data = image(web=True, delay=delay, dll=name == pkg.SHELL_DLL)
+                        data = image(web=True, delay=delay, dll=name == pkg.SHELL_DLL, subsystem=3 if name == "pecofence-cli.exe" else 2)
                         files[name] = data
                         manifest = json.loads(files[pkg.MANIFEST])
                         manifest["images"][name] = pkg.pe_image(data)

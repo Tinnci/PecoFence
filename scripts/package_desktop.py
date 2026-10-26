@@ -214,7 +214,8 @@ def valid_product_image(name: str, image: dict) -> bool:
         return False
     if name == SHELL_DLL:
         return image["dll"]
-    return not image["dll"] and image["subsystem"] == 2
+    subsystem = 3 if name == "pecofence-cli.exe" else 2
+    return name in EXES and not image["dll"] and image["subsystem"] == subsystem
 
 
 def record_build(release: Path, captured: Path, root: Path = ROOT) -> dict:
@@ -226,7 +227,7 @@ def record_build(release: Path, captured: Path, root: Path = ROOT) -> dict:
     reject_webview_imports(images)
     for name, image in images.items():
         if not valid_product_image(name, image):
-            raise ValueError(f"{name} must be an x64 GUI executable or the declared shell DLL")
+            raise ValueError(f"{name} has an invalid x64 product image type (GUI app/watchdog, console CLI, shell DLL)")
     _, _, runtime_receipt = _runtime_snapshot(release)
     receipt = {
         "schema": 2,
