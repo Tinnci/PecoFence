@@ -17,6 +17,11 @@
 //! bounds <title> <x> <y> <w> <h>  set a test window's physical rectangle
 //! input <title> <action> <x> <y>  debug-only native mouse/cancel regression input
 //! pace <ms>                  debug-only script timer interval (default 50 ms)
+//! display-change-layout <index> debug-only monitor layout switch without changing OS displays
+//! display-change            debug-only work-area notification with the current layout
+//! hide-window <title>       debug-only external window-hide fault
+//! quick-hide-exclude <title> <bool> debug-only exclusion through the application setter
+//! new-collection <x> <y> <w> <h> debug-only create without the interactive creation menu
 //! reorder <title> <index>    same command as the tab menu
 //! detach <title>             tear the tab out into its own fence (menu path)
 //! merge <title> <into-title> merge a fence into another one's tab strip
@@ -115,6 +120,73 @@ impl App {
                     }
                 }
                 ["dump", tag] => self.test_dump(tag),
+                #[cfg(debug_assertions)]
+                ["new-collection", x, y, w, h] => {
+                    if pecofence_core::brand::var_os("PECOFENCE_UI_TEST_WINDOWS").is_some()
+                        && let (Ok(x), Ok(y), Ok(w), Ok(h)) = (
+                            x.parse::<i32>(),
+                            y.parse::<i32>(),
+                            w.parse::<i32>(),
+                            h.parse::<i32>(),
+                        )
+                        && w > 0
+                        && h > 0
+                        && let (Some(right), Some(bottom)) = (x.checked_add(w), y.checked_add(h))
+                    {
+                        self.create_fence_at(RECT {
+                            left: x,
+                            top: y,
+                            right,
+                            bottom,
+                        });
+                    }
+                }
+                #[cfg(debug_assertions)]
+                ["display-change"] => {
+                    if pecofence_core::brand::var_os("PECOFENCE_UI_TEST_WINDOWS").is_some() {
+                        self.on_display_changed();
+                    }
+                }
+                #[cfg(debug_assertions)]
+                ["hide-window", title] => {
+                    if pecofence_core::brand::var_os("PECOFENCE_UI_TEST_WINDOWS").is_some()
+                        && let Some(id) = self.test_fence(title)
+                        && let Some(w) = self.window_for(id)
+                    {
+                        desktop::hide_window(w.hwnd());
+                    }
+                }
+                #[cfg(debug_assertions)]
+                ["quick-hide-exclude", title, excluded] => {
+                    if pecofence_core::brand::var_os("PECOFENCE_UI_TEST_WINDOWS").is_some()
+                        && let Some(id) = self.test_fence(title)
+                        && let Ok(excluded) = excluded.parse::<bool>()
+                    {
+                        self.set_fence_quick_hide_excluded(id, excluded);
+                    }
+                }
+                #[cfg(debug_assertions)]
+                ["display-change-layout", index] => {
+                    if pecofence_core::brand::var_os("PECOFENCE_UI_TEST_WINDOWS").is_some()
+                        && let Ok(index) = index.parse::<usize>()
+                        && index < self.state.config.layouts.len()
+                    {
+                        // Give the target layout the current monitor fingerprint so the real
+                        // display-change handler selects it, keeping HWND creation, retirement,
+                        // anchoring and quick-hide behavior on the production path.
+                        let fingerprint = self.state.config.layouts[self.state.layout]
+                            .fingerprint
+                            .clone();
+                        for (i, layout) in self.state.config.layouts.iter_mut().enumerate() {
+                            layout.fingerprint = fingerprint.clone();
+                            for monitor in &mut layout.fingerprint {
+                                monitor.device_path.push_str(&format!("-test-inactive-{i}"));
+                            }
+                        }
+                        self.state.config.layouts[index].fingerprint = fingerprint;
+                        self.on_display_changed();
+                    }
+                }
                 #[cfg(debug_assertions)]
                 ["pace", ms] => {
                     if pecofence_core::brand::var_os("PECOFENCE_UI_TEST_WINDOWS").is_some()

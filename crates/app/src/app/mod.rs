@@ -1089,9 +1089,7 @@ impl App {
         }
         if let Some(a) = app.anchor.borrow_mut().as_mut() {
             a.reanchor("startup");
-        }
-        for f in app.fences.values() {
-            f.show(false);
+            a.reconcile_visibility(&[]);
         }
         if let Some(a) = app.anchor.borrow_mut().as_mut() {
             a.reanchor("after show");

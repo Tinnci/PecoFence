@@ -192,13 +192,20 @@ impl App {
     pub(super) fn resync_windows(&mut self) {
         let before: Vec<HWND> = self.fences.values().map(|w| w.hwnd()).collect();
         self.sync_fence_windows();
+        self.finish_window_sync(&before);
+    }
+
+    /// Geometry/content must be applied before a new or retained window becomes visible.
+    fn finish_window_sync(&mut self, before: &[HWND]) {
+        let entrances: Vec<HWND> = self
+            .fences
+            .values()
+            .map(|w| w.hwnd())
+            .filter(|hwnd| !before.contains(hwnd))
+            .collect();
         if let Some(a) = self.anchor.borrow_mut().as_mut() {
             a.reanchor("windows resynced");
-        }
-        for w in self.fences.values() {
-            if !before.contains(&w.hwnd()) {
-                w.show(true);
-            }
+            a.reconcile_visibility(&entrances);
         }
         self.push_settings_state();
     }
@@ -619,7 +626,12 @@ impl App {
             return;
         }
         self.state.ensure_layout();
-        // A different monitor set may select a different layout: sync windows first.
+        self.sync_layout_windows();
+    }
+
+    /// One ordered layout transition for monitor changes and restored/imported layouts.
+    fn sync_layout_windows(&mut self) {
+        let before: Vec<HWND> = self.fences.values().map(|w| w.hwnd()).collect();
         self.sync_fence_windows();
         for fence in self.state.host_fences() {
             if let Some(w) = self.fences.get(&fence.container_id) {
@@ -641,6 +653,7 @@ impl App {
         }
         // Wallpaper regions moved with the monitors: rebuild the backdrops unconditionally.
         self.refresh_visuals(true);
+        self.finish_window_sync(&before);
     }
 
     pub fn toggle_all_fences(&mut self) {
@@ -693,24 +706,7 @@ impl App {
             return;
         }
         self.state.ensure_layout();
-        self.resync_windows();
-        for fence in self.state.host_fences() {
-            if let Some(w) = self.fences.get(&fence.container_id) {
-                let px = self.state.fence_px_rect(&fence);
-                let h = if fence.rolled_up {
-                    window::window_rect_size(w.hwnd()).1
-                } else {
-                    px.height()
-                };
-                w.set_bounds(RECT {
-                    left: px.left,
-                    top: px.top,
-                    right: px.right,
-                    bottom: px.top + h,
-                });
-            }
-            self.apply_fence_view(fence.container_id);
-        }
+        self.sync_layout_windows();
         self.refresh_all();
         self.push_settings_state();
     }
@@ -792,11 +788,8 @@ impl App {
             .unwrap_or((0, 0));
         let rect = self.place_new_fence(3, 200.0, x, y, inbox);
         match self.state.add_template(template, rect) {
-            Ok(id) => {
+            Ok(_) => {
                 self.resync_windows();
-                if let Some(w) = self.window_for(id) {
-                    w.show(true);
-                }
                 let entries = shell::enumerate_desktop();
                 let moved = self.state.apply_rules_all(&entries);
                 self.refresh_all();
@@ -820,14 +813,12 @@ impl App {
     }
 
     pub(super) fn create_fence_at(&mut self, rect: RECT) {
-        if let Some(id) = self
+        if self
             .state
             .new_fence(pecofence_core::i18n::text("新栅栏"), rect)
+            .is_some()
         {
             self.resync_windows();
-            if let Some(w) = self.window_for(id) {
-                w.show(true);
-            }
             self.schedule_save();
         }
     }
@@ -924,11 +915,6 @@ impl App {
                 });
             }
             self.resync_windows();
-            if let Some(host) = self.state.host_of(id)
-                && let Some(window) = self.fences.get(&host)
-            {
-                window.show(true);
-            }
             self.schedule_save();
             if matches!(
                 provider,

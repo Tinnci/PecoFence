@@ -27,7 +27,7 @@ impl App {
         window::kill_timer(self.control.hwnd(), TIMER_EXIT_WATCHDOG);
         self.persistence.keep_running();
         crate::lifecycle::set_closing(false);
-        self.sync_fence_windows();
+        self.resync_windows();
         window::post_message(self.control.hwnd(), WM_APP_FS_CHANGED, 0, 0);
         self.push_settings_state();
     }

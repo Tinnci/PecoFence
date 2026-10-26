@@ -87,15 +87,15 @@ impl App {
             })
             .map(|f| f.id)
         {
-            // Already shown: just bring attention to it (switch to its tab if hosted).
+            // Already present: activate its tab, preserving the current visibility policy.
             let Some(host) = self.state.host_of(existing) else {
                 return;
             };
             if self.state.active_tab_of(host) != Some(existing) {
                 self.switch_tab(host, existing);
             }
-            if let Some(w) = self.fences.get(&host) {
-                w.show(false);
+            if let Some(a) = self.anchor.borrow().as_ref() {
+                a.reconcile_visibility(&[]);
             }
             return;
         }
@@ -109,9 +109,6 @@ impl App {
         if let Some(id) = self.state.new_portal_fence(&folder, rect) {
             tracing::info!(folder = %folder.display(), %id, "folder portal created");
             self.resync_windows();
-            if let Some(w) = self.window_for(id) {
-                w.show(true);
-            }
             self.schedule_save();
         }
     }

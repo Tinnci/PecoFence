@@ -33,8 +33,8 @@ thread_local! {
 /// Shows / hides a fence through its own window (`WM_APP_SET_VISIBLE`): the fence fades and
 /// shows / hides its shadow itself. A window that does not answer (not ours, or gone) gets the
 /// plain `ShowWindow` for itself and its shadow.
-fn set_fence_visible(fence: HWND, shadow: Option<HWND>, show: bool) {
-    if window::send_message(fence, WM_APP_SET_VISIBLE, show as usize, 0) == 1 {
+fn set_fence_visible(fence: HWND, shadow: Option<HWND>, show: bool, entrance: bool) {
+    if window::send_message(fence, WM_APP_SET_VISIBLE, show as usize, entrance as isize) == 1 {
         return;
     }
     for h in std::iter::once(fence).chain(shadow) {
@@ -155,8 +155,6 @@ pub struct DesktopAnchor {
     quick_hide_excluded: std::collections::HashSet<isize>,
     /// Peek in progress: fences are topmost and anchoring is suspended.
     peeking: bool,
-    /// Fences (hidden by quick hide) that Peek showed and must hide again afterwards.
-    peek_shown: Vec<HWND>,
     /// Called when another application takes the foreground during a peek.
     pub on_peek_interrupted: Option<Box<dyn Fn()>>,
     /// Foreground transitions also signal virtual-desktop switches before registry writes.
@@ -258,7 +256,6 @@ impl DesktopAnchor {
             on_marquee: None,
             quick_hide_excluded: std::collections::HashSet::new(),
             peeking: false,
-            peek_shown: Vec::new(),
             on_peek_interrupted: None,
             on_foreground_changed: None,
         };
@@ -504,11 +501,6 @@ impl DesktopAnchor {
                     let _ = desktop::set_topmost(*w, true);
                 }
                 for (f, shadow) in s.fences.clone() {
-                    if !desktop::is_visible(f) {
-                        // Quick-hidden: fade it in for the peek (its shadow follows on its own).
-                        set_fence_visible(f, shadow, true);
-                        s.peek_shown.push(f);
-                    }
                     for h in std::iter::once(f).chain(shadow) {
                         let _ = desktop::set_topmost(h, true);
                     }
@@ -526,14 +518,12 @@ impl DesktopAnchor {
                         let _ = desktop::set_topmost(h, false);
                     }
                 }
-                for h in std::mem::take(&mut s.peek_shown) {
-                    let shadow = s.fences.iter().find(|(f, _)| *f == h).and_then(|(_, s)| *s);
-                    set_fence_visible(h, shadow, false);
-                }
             });
             self.reanchor("peek off");
             tracing::info!("peek off");
         }
+        // Restore from current policy, including windows/exclusions changed during Peek.
+        self.reconcile_visibility(&[]);
     }
 
     /// Re-anchors only if the host changed or our block is no longer directly above it.
@@ -557,16 +547,7 @@ impl DesktopAnchor {
         let resolved = desktop::resolve_icon_host(self.generation);
         if resolved != self.host || !self.is_anchored() {
             self.reanchor(reason);
-            for (w, _) in self.fences.clone() {
-                if desktop::is_cloaked(w) {
-                    tracing::info!(hwnd = ?w, "fence was cloaked; uncloaking");
-                    let _ = desktop::set_cloak(w, false);
-                }
-                if (!desktop::is_visible(w) || desktop::is_iconic(w)) && !self.quick.fences_hidden {
-                    tracing::info!(hwnd = ?w, "fence hidden/minimized; showing");
-                    desktop::show_no_activate(w);
-                }
-            }
+            self.reconcile_visibility(&[]);
         }
     }
 
@@ -679,6 +660,26 @@ impl DesktopAnchor {
         self.quick.fences_hidden
     }
 
+    /// Applies visibility to every live registered window, including retained HWNDs.
+    /// Retired windows unregister before fading out and must never be revived here.
+    /// `entrances` only selects the animation; it does not decide visibility.
+    pub fn reconcile_visibility(&self, entrances: &[HWND]) {
+        for &(fence, shadow) in &self.fences {
+            let show = self.peeking
+                || !self.quick.fences_hidden
+                || self.quick_hide_excluded.contains(&(fence.0 as isize));
+            if show {
+                if desktop::is_cloaked(fence) {
+                    let _ = desktop::set_cloak(fence, false);
+                }
+                if desktop::is_iconic(fence) {
+                    desktop::show_no_activate(fence);
+                }
+            }
+            set_fence_visible(fence, shadow, show, entrances.contains(&fence));
+        }
+    }
+
     /// Marks a fence as exempt from quick hide (Fences "排除出快速隐藏").
     pub fn set_quick_hide_excluded(&mut self, hwnd: HWND, excluded: bool) {
         if excluded {
@@ -691,15 +692,10 @@ impl DesktopAnchor {
     pub fn toggle_fences_hidden(&mut self) {
         let hide = !self.quick.fences_hidden;
         self.quick.fences_hidden = hide;
-        for (w, shadow) in self.fences.clone() {
-            if self.quick_hide_excluded.contains(&(w.0 as isize)) {
-                continue;
-            }
-            set_fence_visible(w, shadow, !hide);
-        }
         if !hide {
             self.reanchor("fences shown again");
         }
+        self.reconcile_visibility(&[]);
         tracing::info!(
             hidden = hide,
             count = self.fences.len(),

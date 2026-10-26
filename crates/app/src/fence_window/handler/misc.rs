@@ -76,12 +76,12 @@ pub(super) fn on_app_set_visible(
     h: &HandlerCtx,
     hwnd: HWND,
     wparam: usize,
-    _lparam: isize,
+    lparam: isize,
 ) -> Option<isize> {
     let HandlerCtx { view, .. } = h;
     // Desktop anchor (quick hide / show, Peek): fade rather than snap.
     if wparam != 0 {
-        show_with_fade(view, hwnd, false);
+        show_with_fade(view, hwnd, lparam != 0);
     } else {
         hide_with_fade(view, hwnd, false, false);
     }

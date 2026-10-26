@@ -41,7 +41,7 @@ pub(super) fn show_with_fade(view: &ViewCell, hwnd: HWND, entrance: bool) {
             // A retired window is on its way out: nothing may bring it back.
             Some(v) if v.retired => return,
             // Visible and not mid fade-out: nothing to do.
-            Some(v) if visible && v.vis_fade.is_none() => return,
+            Some(v) if visible && !matches!(v.vis_fade, Some(VisFade::Hiding { .. })) => return,
             Some(v) => v.prepare_fade_in(entrance),
             None => false,
         }
@@ -85,6 +85,9 @@ pub(super) fn hide_with_fade(view: &ViewCell, hwnd: HWND, exit: bool, destroy: b
     let (animated, shadow, cancel) = {
         let mut guard = view.borrow_mut();
         match guard.as_mut() {
+            Some(v) if !destroy && matches!(v.vis_fade, Some(VisFade::Hiding { .. })) => {
+                return true;
+            }
             Some(v) => {
                 let cancelled = v
                     .suspend_window_input()

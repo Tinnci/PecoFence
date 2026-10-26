@@ -41,6 +41,7 @@ impl App {
             && let Some(a) = self.anchor.borrow_mut().as_mut()
         {
             a.set_quick_hide_excluded(w.hwnd(), on);
+            a.reconcile_visibility(&[]);
         }
         self.schedule_save();
     }

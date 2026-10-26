@@ -329,12 +329,6 @@ impl FenceWindow {
         self.window.hwnd()
     }
 
-    /// Shows the window with a 167 ms fade; `entrance` (a fence that did not exist a moment
-    /// ago: new, torn off, new portal) adds the Fluent 0.97 → 1 scale. No-op when visible.
-    pub fn show(&self, entrance: bool) {
-        show_with_fade(&self.view, self.hwnd(), entrance);
-    }
-
     /// Fades the window out (167 ms, shrinking to 0.97) ahead of its destruction. Returns
     /// true when the fade runs — the owner must keep the `FenceWindow` alive until
     /// `Command::FadeOutDone` arrives for its hwnd; false = already hidden, drop it now.

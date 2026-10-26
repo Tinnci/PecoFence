@@ -120,6 +120,14 @@ records the decision and migration history for native Settings.
 Some platform tests use real Windows APIs and a desktop session. They are not a
 substitute for testing native menus, multiple monitors and supported Windows builds.
 
+`powershell -File scripts/test-display-layout.ps1` runs an isolated debug instance
+and switches monitor-specific layouts through the display-change handler without
+changing the OS displays. It checks recreated clock/note windows, a retained
+collection window, retained-window recovery, per-layout quick-hide exclusions,
+windows created during Peek and restoring current visibility policy afterwards. Logs and
+the passing report are written under `.cache/display-layout-audit/`. This is a
+native window regression check, not physical monitor hot-plug coverage.
+
 After building the package binaries, `python scripts/test-language-smoke.py`
 opens an isolated portable Settings window, changes the configured languages
 through the typed Settings application handler, and checks saved preferences and
