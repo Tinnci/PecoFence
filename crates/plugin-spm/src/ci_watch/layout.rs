@@ -592,13 +592,18 @@ pub fn build(
                         11.0,
                         FontRole::Text,
                     );
-                    let mut x = w - 14.0 - 150.0;
+                    let mut x = w - 14.0 - 166.0;
                     for (label, value) in &change.labels {
                         let short = if label == "Verified" { "V" } else { "CR" };
                         let text = format!("{short}{value:+}");
                         b.node(
                             &format!("{key}:pill:{label}"),
-                            r(x, y + 25.0, 38.0, 18.0),
+                            r(
+                                x,
+                                y + 25.0,
+                                if label == "Code-Review" { 46.0 } else { 34.0 },
+                                18.0,
+                            ),
                             "text",
                             format!("{label} {value:+}"),
                             text,
@@ -615,7 +620,7 @@ pub fn build(
                             Some(p.base),
                             None,
                         );
-                        x += 40.0;
+                        x += if label == "Code-Review" { 48.0 } else { 36.0 };
                     }
                     b.label(
                         &format!("{key}:status"),
@@ -881,7 +886,15 @@ pub fn build(
                             source.source,
                             source.observed_at.map_or_else(
                                 || lang.t("Not observed").into(),
-                                |at| crate::board::text::short_time(at, &config.timezone)
+                                |at| text::freshness(
+                                    at,
+                                    if config.demo {
+                                        s.observed_through.unwrap_or(at)
+                                    } else {
+                                        chrono::Utc::now()
+                                    },
+                                    lang
+                                )
                             ),
                             lang.health(source.health)
                         )

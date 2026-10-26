@@ -39,13 +39,19 @@ pub struct Config {
     pub navigation_origins: crate::navigation::NavigationOrigins,
 }
 fn timezone() -> String {
-    "+08:00".into()
+    "Asia/Shanghai".into()
 }
 pub fn demo_config() -> (u16, serde_json::Value) {
-    (1, serde_json::json!({"demo":true,"timezone":"+08:00"}))
+    (
+        1,
+        serde_json::json!({"demo":true,"timezone":"Asia/Shanghai"}),
+    )
 }
 pub fn live_config() -> (u16, serde_json::Value) {
-    (1, serde_json::json!({"demo":false,"timezone":"+08:00"}))
+    (
+        1,
+        serde_json::json!({"demo":false,"timezone":"Asia/Shanghai"}),
+    )
 }
 pub fn demo_snapshot() -> CiWatchSnapshot {
     serde_json::from_str(include_str!("../../fixtures/ci-watch-demo.json"))
@@ -120,6 +126,8 @@ pub struct Panel {
     view_revision: u64,
     prepared_view: u64,
     frame_revision: u64,
+    published_chrome: bool,
+    chrome_warmup_until: Instant,
     pending: HashSet<Token>,
     last_refresh: Instant,
     stopped: bool,
@@ -156,6 +164,8 @@ impl Panel {
             view_revision: 1,
             prepared_view: 0,
             frame_revision: 0,
+            published_chrome: false,
+            chrome_warmup_until: Instant::now() + Duration::from_secs(3),
             pending: HashSet::new(),
             last_refresh: Instant::now(),
             stopped: false,
@@ -339,7 +349,8 @@ impl Panel {
         self.changed();
         Ok(self.update())
     }
-    fn update(&self) -> PanelUpdate {
+    fn update(&mut self) -> PanelUpdate {
+        self.published_chrome = true;
         PanelUpdate {
             commands: vec![
                 HostCommand::Invalidate,
@@ -390,7 +401,15 @@ impl Panel {
                     s.user.jenkins_user,
                     s.observed_through.map_or_else(
                         || lang.t("Not observed").into(),
-                        |at| crate::board::text::short_time(at, &self.config.timezone)
+                        |at| text::freshness(
+                            at,
+                            if self.config.demo {
+                                at
+                            } else {
+                                chrono::Utc::now()
+                            },
+                            lang
+                        )
                     ),
                     if self.config.demo {
                         format!(" · {}", lang.t("Demo data"))
@@ -658,6 +677,14 @@ impl PanelInstance for Panel {
         }
     }
     fn next_wake_after(&self) -> Option<Duration> {
+        // The first host wake can precede the fence HWND. Publish again after it
+        // mounts, so an early chrome update cannot leave the generic title behind.
+        if !self.stopped && Instant::now() < self.chrome_warmup_until {
+            return Some(Duration::from_millis(500));
+        }
+        if !self.published_chrome && !self.stopped {
+            return Some(Duration::from_millis(10));
+        }
         (!self.config.demo && !self.stopped).then(|| {
             self.cadence()
                 .saturating_sub(self.last_refresh.elapsed())

@@ -118,10 +118,34 @@ pub fn eta(build: &spm_contracts::CiBuild, lang: Lang, timezone: &str) -> String
                 "{} {} · {} {}",
                 if lang.zh { "约" } else { "About" },
                 lang.minutes(remaining),
-                crate::board::text::short_time(at, timezone),
+                crate::board::text::short_time(at, timezone)
+                    .split_once(' ')
+                    .map_or_else(|| "?".into(), |(_, time)| time.to_owned()),
                 if lang.zh { "完成" } else { "finish" }
             )
         }
         None => lang.state(build.state).into(),
+    }
+}
+
+pub fn freshness(
+    at: chrono::DateTime<chrono::Utc>,
+    now: chrono::DateTime<chrono::Utc>,
+    lang: Lang,
+) -> String {
+    let seconds = (now - at).num_seconds().max(0) as u64;
+    let (value, zh, en) = if seconds < 60 {
+        (seconds, "秒", "s")
+    } else if seconds < 3600 {
+        (seconds / 60, "分钟", "min")
+    } else if seconds < 86400 {
+        (seconds / 3600, "小时", "h")
+    } else {
+        (seconds / 86400, "天", "d")
+    };
+    if lang.zh {
+        format!("{value} {zh}前")
+    } else {
+        format!("{value} {en} ago")
     }
 }

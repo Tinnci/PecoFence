@@ -157,6 +157,8 @@ fn ci_geometry_views_and_accessible_status() {
             .any(|n| n.role == "progressbar" && n.name.contains("launcher"))
     );
     assert!(scene.nodes().iter().any(|n| n.name.contains("#913")));
+    assert!(scene.nodes().iter().any(|n| n.name.contains("14:33")));
+    assert!(scene.nodes().iter().any(|n| n.text == "CR+1"));
     assert!(scene.nodes().iter().any(|n| n.name.contains("超出预计")));
     for hit in scene.hit_tree() {
         assert!(hit.rect.x >= 0.0 && hit.rect.x + hit.rect.w <= 480.0);
