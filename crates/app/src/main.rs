@@ -23,6 +23,8 @@ mod settings_ui;
 mod shadow;
 use pecofence_spm_transport as spm_transport;
 mod state;
+#[cfg(debug_assertions)]
+mod workspace_spike;
 
 use pecofence_platform::com::OleGuard;
 use pecofence_platform::window;

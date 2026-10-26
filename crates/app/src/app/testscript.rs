@@ -242,6 +242,29 @@ impl App {
                 ["settings"] => self
                     .queue
                     .push(Command::Settings(SettingsCmd::OpenSettings)),
+                #[cfg(debug_assertions)]
+                ["workspace-spike", title] => {
+                    if let Some(id) = self.test_fence(title)
+                        && let Some(host) = self.state.host_of(id)
+                    {
+                        self.open_spike(host);
+                    }
+                }
+                #[cfg(debug_assertions)]
+                ["spike-probe", label, path] => self.spike_probe(label, path),
+                #[cfg(debug_assertions)]
+                ["spike-move", x, y, w, h] => {
+                    let p = |s: &str| s.parse::<i32>().unwrap_or(0);
+                    self.spike_move(p(x), p(y), p(w), p(h));
+                }
+                #[cfg(debug_assertions)]
+                ["spike-dialog", state] => self.spike_dialog(*state == "on"),
+                #[cfg(debug_assertions)]
+                ["spike-activate"] => {
+                    if let Some(host) = self.spike_host() {
+                        window::bring_to_front(host);
+                    }
+                }
                 ["set-content", content, property, ..] => {
                     let value = line.splitn(4, ' ').nth(3);
                     match (

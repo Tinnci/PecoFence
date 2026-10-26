@@ -320,6 +320,9 @@ pub enum DesktopCmd {
     Quit,
     /// A retired fence window (deleted / merged) finished fading out: destroy it now.
     FadeOutDone(HWND),
+    /// The hosting-spike workspace window has a native handle or a new size.
+    #[cfg(debug_assertions)]
+    WorkspaceSpikeLayout,
 }
 
 #[derive(Clone)]

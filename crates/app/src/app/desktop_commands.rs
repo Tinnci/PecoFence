@@ -90,6 +90,8 @@ impl App {
                     self.cancel_document_close();
                 }
             }
+            #[cfg(debug_assertions)]
+            DesktopCmd::WorkspaceSpikeLayout => self.spike_layout(),
             DesktopCmd::FadeOutDone(hwnd) => {
                 // Dropping the window destroys it (RevokeDragDrop + DestroyWindow).
                 self.dying.retain(|w| w.hwnd() != hwnd);

@@ -32,6 +32,8 @@ pub mod accessibility;
 mod uia_bindings;
 
 pub mod autostart;
+#[cfg(debug_assertions)]
+pub mod child_host;
 pub mod clipboard;
 pub mod com;
 pub mod crashlog;

@@ -65,6 +65,8 @@ mod peek;
 mod persistence;
 mod portals;
 mod settings;
+#[cfg(debug_assertions)]
+mod spike;
 mod suggestions;
 mod sync;
 mod tabs;
@@ -198,6 +200,8 @@ pub struct App {
     /// Finished shell file operations from the worker threads (see `fileops.rs`).
     fileops_done: fileops::FileOpResults,
     settings: Option<SettingsHost>,
+    #[cfg(debug_assertions)]
+    spike: Option<spike::SpikeState>,
     settings_session: pecofence_core::settings_protocol::SettingsSession,
     /// Coalesce projections until a typed command's decision has been delivered.
     settings_dispatching: Rc<Cell<bool>>,
@@ -1001,6 +1005,8 @@ impl App {
             fs_pending,
             fileops_done: Arc::new(Mutex::new(Vec::new())),
             settings: None,
+            #[cfg(debug_assertions)]
+            spike: None,
             settings_session: Default::default(),
             settings_dispatching: Rc::new(Cell::new(false)),
             reactor_context,
