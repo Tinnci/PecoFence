@@ -1,6 +1,6 @@
 //! WM_MOUSEMOVE: marquee, scrollbar drag, remote and tab drags, item drag → OLE, column drag, pressed-button tracking, hover / tip / peek.
 
-use crate::commands::Command;
+use crate::commands::{DesktopCmd, FenceCmd};
 
 use super::*;
 
@@ -127,12 +127,12 @@ pub(super) fn on_mousemove(
                 v.detach_cancelled = false;
                 let pt = window::cursor_pos();
                 tracing::debug!(?hwnd, "tab torn off; waiting for the new window");
-                queue.push(Command::DetachTab {
+                queue.push(Command::Fence(FenceCmd::DetachTab {
                     tab,
                     x: pt.x,
                     y: pt.y,
                     from_drag: true,
-                });
+                }));
             }
             return Some(0);
         }
@@ -297,13 +297,13 @@ pub(super) fn on_mousemove(
                     && !from_portal
                     && matches!(r.effect, DropEffect::None | DropEffect::Move) =>
             {
-                queue.push(Command::MoveItemsToInbox { items: ids });
+                queue.push(Command::Fence(FenceCmd::MoveItemsToInbox { items: ids }));
             }
             Some(r)
                 if matches!(r.effect, DropEffect::Move | DropEffect::Copy)
                     && class != anchor::FENCE_CLASS =>
             {
-                queue.push(Command::DragOutFinished);
+                queue.push(Command::Desktop(DesktopCmd::DragOutFinished));
             }
             _ => {}
         }

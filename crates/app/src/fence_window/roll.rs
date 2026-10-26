@@ -76,7 +76,7 @@ pub(super) fn show_with_fade(view: &ViewCell, hwnd: HWND, entrance: bool) {
 }
 
 /// Hides a fence window with a 167 ms fade; `exit` adds the 0.97 scale of a window going
-/// away for good, `destroy` makes the completion post `Command::FadeOutDone` so the app can
+/// away for good, `destroy` makes the completion post `Command::Desktop(DesktopCmd::FadeOutDone)` so the app can
 /// drop the window. Returns false when the window was hidden at once (animations off, or not
 /// visible) — the caller may then destroy it immediately. While the fade runs the shadow stays
 /// visible and fades with the plate (its HWND is hidden on completion); on a plain hide it is

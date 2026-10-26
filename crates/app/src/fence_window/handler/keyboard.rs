@@ -1,5 +1,7 @@
 //! Keyboard, char, context-menu key and activation / focus messages.
 
+use crate::commands::FenceCmd;
+
 use super::*;
 use pecofence_platform::quicklook;
 
@@ -134,15 +136,17 @@ pub(super) fn on_keydown(
         }
         VK_C | VK_X if ctrl => {
             if !ids.is_empty() {
-                queue.push(Command::ClipboardVerb {
+                queue.push(Command::Fence(FenceCmd::ClipboardVerb {
                     fence: v.active,
                     items: ids,
                     cut: vk == VK_X,
-                });
+                }));
             }
         }
-        VK_V if ctrl => queue.push(Command::Paste { fence: v.active }),
-        VK_N if ctrl && shift => queue.push(Command::NewFolder { fence: v.active }),
+        VK_V if ctrl => queue.push(Command::Fence(FenceCmd::Paste { fence: v.active })),
+        VK_N if ctrl && shift => {
+            queue.push(Command::Fence(FenceCmd::NewFolder { fence: v.active }))
+        }
         VK_TAB if ctrl && v.tabs.len() > 1 => {
             // Ctrl+Tab / Ctrl+Shift+Tab cycle the tabs (Explorer).
             let n = v.tabs.len();
@@ -152,18 +156,18 @@ pub(super) fn on_keydown(
             } else {
                 (cur + 1) % n
             };
-            queue.push(Command::SwitchTab {
+            queue.push(Command::Fence(FenceCmd::SwitchTab {
                 host: fence_id,
                 tab: v.tabs[next].id,
-            });
+            }));
         }
-        VK_F5 => queue.push(Command::RefreshFence(v.active)),
+        VK_F5 => queue.push(Command::Fence(FenceCmd::RefreshFence(v.active))),
         k if k == msg::VK_F2 => {
             if let [item] = ids[..] {
-                queue.push(Command::RenameItem {
+                queue.push(Command::Fence(FenceCmd::RenameItem {
                     fence: v.active,
                     item,
-                });
+                }));
             }
         }
         k if k == msg::VK_RETURN => {
@@ -176,27 +180,27 @@ pub(super) fn on_keydown(
                 })
                 .flatten();
             match folder {
-                Some(path) => queue.push(Command::PortalEnter {
+                Some(path) => queue.push(Command::Fence(FenceCmd::PortalEnter {
                     fence: v.active,
                     path,
-                }),
+                })),
                 None => {
                     for id in ids {
-                        queue.push(Command::LaunchItem(id));
+                        queue.push(Command::Fence(FenceCmd::LaunchItem(id)));
                     }
                 }
             }
         }
         VK_BACK if v.deco.up_button => {
-            queue.push(Command::PortalUp(v.active));
+            queue.push(Command::Fence(FenceCmd::PortalUp(v.active)));
         }
         k if k == msg::VK_DELETE => {
             if !ids.is_empty() {
-                queue.push(Command::DeleteItems {
+                queue.push(Command::Fence(FenceCmd::DeleteItems {
                     fence: v.active,
                     items: ids,
                     permanent: shift,
-                });
+                }));
             }
         }
         k if k == msg::VK_ESCAPE => {
@@ -283,15 +287,15 @@ pub(super) fn on_syskeydown(
         }
         let ids = v.selected_ids();
         if !ids.is_empty() {
-            queue.push(Command::ItemProperties {
+            queue.push(Command::Fence(FenceCmd::ItemProperties {
                 fence: v.active,
                 items: ids,
-            });
+            }));
         }
         return Some(0);
     }
     if vk == VK_UP && v.deco.up_button {
-        queue.push(Command::PortalUp(v.active));
+        queue.push(Command::Fence(FenceCmd::PortalUp(v.active)));
         return Some(0);
     }
     None
@@ -322,11 +326,11 @@ pub(super) fn on_contextmenu(
         // Background menu at the content's top-left.
         let win = window::window_rect(hwnd);
         let pad = (8.0 * v.scale()) as i32;
-        queue.push(Command::FenceMenu {
+        queue.push(Command::Fence(FenceCmd::FenceMenu {
             fence: v.active,
             x: win.left + pad,
             y: win.top + v.title_h_px() + pad,
-        });
+        }));
         return Some(0);
     }
     // Anchor at the focused item's label (Explorer: bottom-left of the item).
@@ -346,11 +350,11 @@ pub(super) fn on_contextmenu(
             (p.x, p.y)
         }
     };
-    queue.push(Command::ItemMenu {
+    queue.push(Command::Fence(FenceCmd::ItemMenu {
         fence: v.active,
         items: ids,
         x,
         y,
-    });
+    }));
     Some(0)
 }

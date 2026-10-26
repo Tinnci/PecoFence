@@ -1,5 +1,7 @@
 //! Client-area mouse buttons, wheel, cursor and leave messages.
 
+use crate::commands::FenceCmd;
+
 use super::*;
 
 // The cursor is decided here, before each mouse message (Explorer's header
@@ -130,17 +132,17 @@ pub(super) fn on_lbuttondown(
             }
             drop(guard);
             window::set_capture(hwnd);
-            queue.push(Command::RaiseFence(hwnd));
+            queue.push(Command::Fence(FenceCmd::RaiseFence(hwnd)));
             return Some(0);
         }
         if let Some(t) = v.tab_at(x, y) {
             if let Some(tab) = v.tabs.get(t)
                 && tab.id != v.active
             {
-                queue.push(Command::SwitchTab {
+                queue.push(Command::Fence(FenceCmd::SwitchTab {
                     host: fence_id,
                     tab: tab.id,
-                });
+                }));
             }
             let pointer_x = x as f32 / v.scale();
             let slot_x = v
@@ -169,7 +171,7 @@ pub(super) fn on_lbuttondown(
             // the tab just switched to. Focus, then capture, then raise.
             focus_session(view, hwnd);
             window::set_capture(hwnd);
-            queue.push(Command::RaiseFence(hwnd));
+            queue.push(Command::Fence(FenceCmd::RaiseFence(hwnd)));
             return Some(0);
         }
         let in_content = v.input_lifecycle().body() && y >= v.title_h_px();
@@ -203,7 +205,7 @@ pub(super) fn on_lbuttondown(
             if repeat {
                 window::set_timer(hwnd, TIMER_SCROLL_REPEAT, SCROLL_PAGE_FIRST_MS);
             }
-            queue.push(Command::RaiseFence(hwnd));
+            queue.push(Command::Fence(FenceCmd::RaiseFence(hwnd)));
             return Some(0);
         }
         let hit = v.hit_item(x, y);
@@ -294,7 +296,7 @@ pub(super) fn on_lbuttondown(
     if capture {
         window::set_capture(hwnd);
     }
-    queue.push(Command::RaiseFence(hwnd));
+    queue.push(Command::Fence(FenceCmd::RaiseFence(hwnd)));
     Some(0)
 }
 
@@ -327,28 +329,28 @@ pub(super) fn on_lbuttonup(
                 if let Some(v) = view.borrow_mut().as_mut() {
                     v.suppress_dblclk = true;
                 }
-                queue.push(Command::ToggleRollUp(drag.fence));
+                queue.push(Command::Fence(FenceCmd::ToggleRollUp(drag.fence)));
             }
             return Some(0);
         }
         let rect = window::window_rect(drag.hwnd);
-        queue.push(Command::FenceBoundsChanged {
+        queue.push(Command::Fence(FenceCmd::FenceBoundsChanged {
             fence: drag.fence,
             rect,
-        });
+        }));
         if drag.merge_target != 0 {
-            queue.push(Command::MergeHint {
+            queue.push(Command::Fence(FenceCmd::MergeHint {
                 target: HWND(std::ptr::null_mut()),
                 x: 0,
-            });
+            }));
         }
         if let Some(into) = merge_target_at(drag.hwnd, HWND::default(), (release.x, release.y)) {
             let x = release.x;
-            queue.push(Command::MergeFence {
+            queue.push(Command::Fence(FenceCmd::MergeFence {
                 fence: drag.fence,
                 into,
                 x,
-            });
+            }));
         }
         return Some(0);
     }
@@ -378,17 +380,17 @@ pub(super) fn on_lbuttonup(
         }
     };
     if let Some((fence, widths)) = col_done {
-        queue.push(Command::SetColumnWidths { fence, widths });
+        queue.push(Command::Fence(FenceCmd::SetColumnWidths { fence, widths }));
     }
     // A tab dragged past its neighbours: persist the new strip order.
     if let Some((index, start, Some(tab))) = tab_drag
         && index != start
     {
-        queue.push(Command::ReorderTab {
+        queue.push(Command::Fence(FenceCmd::ReorderTab {
             host: fence_id,
             tab,
             to: index,
-        });
+        }));
     }
     if drag.is_some()
         || had_marquee
@@ -428,7 +430,7 @@ pub(super) fn on_lbuttonup(
     // Release-fired controls act only when released over the same control.
     if let Some((p, true)) = press {
         match p {
-            PressTarget::Up => queue.push(Command::PortalUp(v.active)),
+            PressTarget::Up => queue.push(Command::Fence(FenceCmd::PortalUp(v.active))),
             PressTarget::Command(i) => super::super::plugin_panel::invoke_chrome_command(v, i),
             PressTarget::Caption(button) => {
                 use pecofence_render::fence_chrome::CaptionButton;
@@ -436,24 +438,28 @@ pub(super) fn on_lbuttonup(
                 match button {
                     // A fence minimizes to its title strip (roll up), like the chevron.
                     CaptionButton::Minimize if v.roll_anim.is_none() => {
-                        queue.push(Command::ToggleRollUp(fence_id))
+                        queue.push(Command::Fence(FenceCmd::ToggleRollUp(fence_id)))
                     }
                     CaptionButton::Minimize => {}
-                    CaptionButton::Maximize => queue.push(Command::ToggleMaximize(fence_id)),
-                    CaptionButton::Close => queue.push(Command::CloseFence(fence_id)),
+                    CaptionButton::Maximize => {
+                        queue.push(Command::Fence(FenceCmd::ToggleMaximize(fence_id)))
+                    }
+                    CaptionButton::Close => {
+                        queue.push(Command::Fence(FenceCmd::CloseFence(fence_id)))
+                    }
                 }
             }
-            PressTarget::Header(col) => queue.push(Command::SortColumn {
+            PressTarget::Header(col) => queue.push(Command::Fence(FenceCmd::SortColumn {
                 fence: v.active,
                 sort: column_sort(col),
-            }),
+            })),
             PressTarget::Chevron if v.roll_anim.is_none() => {
                 if v.peeking {
                     // Already expanded by peek: commit the expanded state.
                     v.peeking = false;
-                    queue.push(Command::CommitExpanded(fence_id));
+                    queue.push(Command::Fence(FenceCmd::CommitExpanded(fence_id)));
                 } else {
-                    queue.push(Command::ToggleRollUp(fence_id));
+                    queue.push(Command::Fence(FenceCmd::ToggleRollUp(fence_id)));
                 }
             }
             _ => {}
@@ -514,15 +520,15 @@ pub(super) fn on_capturechanged(
         v.detach_pending = false;
         if let Some(rd) = v.remote_drag.take() {
             let rect = window::window_rect(rd.hwnd);
-            queue.push(Command::FenceBoundsChanged {
+            queue.push(Command::Fence(FenceCmd::FenceBoundsChanged {
                 fence: rd.fence,
                 rect,
-            });
+            }));
             if rd.merge_target != 0 {
-                queue.push(Command::MergeHint {
+                queue.push(Command::Fence(FenceCmd::MergeHint {
                     target: HWND(std::ptr::null_mut()),
                     x: 0,
-                });
+                }));
             }
         }
         let marquee = v.end_marquee();
@@ -533,11 +539,11 @@ pub(super) fn on_capturechanged(
             if td.index != td.start_index
                 && let Some(tab) = v.tabs.get(td.index).map(|t| t.id)
             {
-                queue.push(Command::ReorderTab {
+                queue.push(Command::Fence(FenceCmd::ReorderTab {
                     host: fence_id,
                     tab,
                     to: td.index,
-                });
+                }));
             }
         }
         v.col_drag = None;
@@ -571,7 +577,7 @@ pub(super) fn on_lbuttondblclk(
             v.auto_fit_column(col);
             let (fence, widths) = (v.active, v.column_widths);
             let _ = v.redraw_content();
-            queue.push(Command::SetColumnWidths { fence, widths });
+            queue.push(Command::Fence(FenceCmd::SetColumnWidths { fence, widths }));
             return Some(0);
         }
         // The chevron's toggle is one action per click pair: the second
@@ -596,22 +602,22 @@ pub(super) fn on_lbuttondblclk(
             if repeat {
                 window::set_timer(hwnd, TIMER_SCROLL_REPEAT, SCROLL_PAGE_FIRST_MS);
             }
-            queue.push(Command::RaiseFence(hwnd));
+            queue.push(Command::Fence(FenceCmd::RaiseFence(hwnd)));
             return Some(0);
         }
         if let Some(i) = v.hit_item(x, y)
             && let Some(item) = v.items.get(i)
         {
             if v.navigate_folders && item.is_folder {
-                queue.push(Command::PortalEnter {
+                queue.push(Command::Fence(FenceCmd::PortalEnter {
                     fence: v.active,
                     path: item.path.clone(),
-                });
+                }));
             } else {
-                queue.push(Command::LaunchItem(item.id));
+                queue.push(Command::Fence(FenceCmd::LaunchItem(item.id)));
             }
         } else if v.tab_at(x, y).is_some() {
-            queue.push(Command::ToggleRollUp(fence_id));
+            queue.push(Command::Fence(FenceCmd::ToggleRollUp(fence_id)));
         }
     }
     Some(0)
@@ -674,20 +680,20 @@ pub(super) fn on_rbuttonup(
     v.hide_tip();
     if v.header_band_hit(x, y) {
         // Explorer: right-click on the column header = column chooser.
-        queue.push(Command::HeaderMenu {
+        queue.push(Command::Fence(FenceCmd::HeaderMenu {
             fence: v.active,
             x: pt.x,
             y: pt.y,
-        });
+        }));
         return Some(0);
     }
     if let Some(t) = v.tab_at(x, y) {
         let fence = v.tabs.get(t).map(|t| t.id).unwrap_or(v.active);
-        queue.push(Command::FenceMenu {
+        queue.push(Command::Fence(FenceCmd::FenceMenu {
             fence,
             x: pt.x,
             y: pt.y,
-        });
+        }));
         return Some(0);
     }
     v.focus_visible = false;
@@ -704,21 +710,21 @@ pub(super) fn on_rbuttonup(
             // in the accent under the menu.
             let _ = v.activate_by_pointer();
             let _ = v.redraw_content();
-            let cmd = Command::ItemMenu {
+            let cmd = Command::Fence(FenceCmd::ItemMenu {
                 fence: v.active,
                 items: v.selected_ids(),
                 x: pt.x,
                 y: pt.y,
-            };
+            });
             drop(guard);
             focus_session(view, hwnd);
             queue.push(cmd);
         }
-        None => queue.push(Command::FenceMenu {
+        None => queue.push(Command::Fence(FenceCmd::FenceMenu {
             fence: v.active,
             x: pt.x,
             y: pt.y,
-        }),
+        })),
     }
     Some(0)
 }
@@ -762,10 +768,10 @@ pub(super) fn on_mousewheel(
                     } else {
                         -msg::WHEEL_DELTA
                     };
-                    queue.push(Command::StepIconSize {
+                    queue.push(Command::Fence(FenceCmd::StepIconSize {
                         fence: v.active,
                         larger,
-                    });
+                    }));
                 }
             }
             return Some(0);

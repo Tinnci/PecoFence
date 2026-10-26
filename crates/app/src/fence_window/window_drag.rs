@@ -1,6 +1,8 @@
 //! Latest-pointer window movement, applied once per compositor tick.
 use super::*;
 
+use crate::commands::FenceCmd;
+
 pub(super) fn passed_drag_threshold(
     start: (i32, i32),
     point: (i32, i32),
@@ -113,10 +115,10 @@ pub(super) fn flush_window_drag(
         );
     }
     if hint_changed {
-        queue.push(Command::MergeHint {
+        queue.push(Command::Fence(FenceCmd::MergeHint {
             target: HWND(target as *mut core::ffi::c_void),
             x: point.0,
-        });
+        }));
     }
     tracing::trace!(target: "pecofence::drag_frame", requests, applied, finish = release.is_some(),
         target_us = target_done.duration_since(began).as_micros(),

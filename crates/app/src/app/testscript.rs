@@ -56,9 +56,10 @@
 //! `<title>` matches the first fence whose title contains it. Commands run on the control
 //! window's timer between message-loop iterations, exactly like user-driven commands.
 
-use crate::commands::Command;
+use crate::commands::{DesktopCmd, FenceCmd, PanelCmd, SettingsCmd};
 
 use super::App;
+use crate::commands::Command;
 use pecofence_core::ContentId;
 #[cfg(debug_assertions)]
 use pecofence_platform::window;
@@ -213,7 +214,8 @@ impl App {
                     if let (Some(tab), Ok(to)) = (self.test_fence(title), index.parse())
                         && let Some(host) = self.state.host_of(tab)
                     {
-                        self.queue.push(Command::ReorderTab { host, tab, to });
+                        self.queue
+                            .push(Command::Fence(FenceCmd::ReorderTab { host, tab, to }));
                     }
                 }
                 ["housekeeping"] => self.housekeeping(),
@@ -237,7 +239,9 @@ impl App {
                         });
                     }
                 }
-                ["settings"] => self.queue.push(Command::OpenSettings),
+                ["settings"] => self
+                    .queue
+                    .push(Command::Settings(SettingsCmd::OpenSettings)),
                 ["set-content", content, property, ..] => {
                     let value = line.splitn(4, ' ').nth(3);
                     match (
@@ -337,7 +341,7 @@ impl App {
                         self.toggle_all_fences();
                     }
                 }
-                ["peek"] => self.queue.push(Command::TogglePeek),
+                ["peek"] => self.queue.push(Command::Desktop(DesktopCmd::TogglePeek)),
                 ["pin-test-windows"] | ["pin-test-windows", "raw"] => {
                     if cfg!(debug_assertions)
                         && pecofence_core::brand::var_os("PECOFENCE_UI_TEST_WINDOWS").is_some()
@@ -350,7 +354,7 @@ impl App {
                         }
                     }
                 }
-                ["end-peek"] => self.queue.push(Command::EndPeek),
+                ["end-peek"] => self.queue.push(Command::Desktop(DesktopCmd::EndPeek)),
                 ["roll", title] | ["unroll", title] => {
                     let want = words[0] == "roll";
                     if let Some(id) = self.test_fence(title)
@@ -358,7 +362,8 @@ impl App {
                         && let Some(w) = self.fences.get(&host)
                         && w.is_rolled() != want
                     {
-                        self.queue.push(Command::ToggleRollUp(host));
+                        self.queue
+                            .push(Command::Fence(FenceCmd::ToggleRollUp(host)));
                     }
                 }
                 ["detach", title] => {
@@ -371,7 +376,8 @@ impl App {
                     if let Some(tab) = self.test_fence(title)
                         && let Some(host) = self.state.host_of(tab)
                     {
-                        self.queue.push(Command::SwitchTab { host, tab });
+                        self.queue
+                            .push(Command::Fence(FenceCmd::SwitchTab { host, tab }));
                     }
                 }
                 ["merge", title, into] => {
@@ -380,27 +386,27 @@ impl App {
                         && let Some(host) = self.state.host_of(b)
                         && let Some(w) = self.fences.get(&host)
                     {
-                        self.queue.push(Command::MergeFence {
+                        self.queue.push(Command::Fence(FenceCmd::MergeFence {
                             fence: source,
                             into: w.hwnd(),
                             x: i32::MIN,
-                        });
+                        }));
                     }
                 }
                 ["delete", title] => {
                     if let Some(id) = self.test_fence(title) {
-                        self.queue.push(Command::DeleteFence(id));
+                        self.queue.push(Command::Fence(FenceCmd::DeleteFence(id)));
                     }
                 }
                 ["new-fence", x, y, w, h] => {
                     let p = |s: &str| s.parse::<i32>().unwrap_or(0);
                     let (x, y, w, h) = (p(x), p(y), p(w), p(h));
-                    self.queue.push(Command::NewFenceRect(RECT {
+                    self.queue.push(Command::Fence(FenceCmd::NewFenceRect(RECT {
                         left: x,
                         top: y,
                         right: x + w,
                         bottom: y + h,
-                    }));
+                    })));
                 }
                 ["new-board", x, y, w, h, source @ ..] => {
                     // The evidence board on its deterministic demo source, or with `live`
@@ -443,11 +449,11 @@ impl App {
                             self.test_panel_key(pecofence_plugin_widgets::NOTE_PROVIDER)
                     {
                         crate::rename::end_active(false);
-                        self.queue.push(Command::PanelTextCommit {
+                        self.queue.push(Command::Panel(PanelCmd::TextCommit {
                             key,
                             action: 1,
                             text,
-                        });
+                        }));
                     }
                 }
                 ["note-open"] => self.test_panel_invoke(pecofence_plugin_widgets::NOTE_PROVIDER, 1),
@@ -461,11 +467,11 @@ impl App {
                     if let Some(title) = line.strip_prefix("todo-add ")
                         && let Some(key) = self.test_todo_key()
                     {
-                        self.queue.push(Command::PanelTextCommit {
+                        self.queue.push(Command::Panel(PanelCmd::TextCommit {
                             key,
                             action: 1,
                             text: title.to_string(),
-                        });
+                        }));
                     }
                 }
                 ["todo-edit", ..] => {
@@ -475,11 +481,11 @@ impl App {
                         && index < 128
                         && let Some(key) = self.test_todo_key()
                     {
-                        self.queue.push(Command::PanelTextCommit {
+                        self.queue.push(Command::Panel(PanelCmd::TextCommit {
                             key,
                             action: 2_000 + index,
                             text: title.to_string(),
-                        });
+                        }));
                     }
                 }
                 [command, args @ ..]
@@ -533,8 +539,9 @@ impl App {
                             .fence(id)
                             .and_then(|f| f.items.first().map(|r| r.item_id))
                     {
-                        self.queue
-                            .push(Command::MoveItemsToInbox { items: vec![item] });
+                        self.queue.push(Command::Fence(FenceCmd::MoveItemsToInbox {
+                            items: vec![item],
+                        }));
                     }
                 }
                 ["move", title, into] => {
@@ -546,10 +553,10 @@ impl App {
                             .fence(from)
                             .and_then(|f| f.items.first().map(|r| r.item_id))
                     {
-                        self.queue.push(Command::MoveItems {
+                        self.queue.push(Command::Fence(FenceCmd::MoveItems {
                             items: vec![item],
                             to,
-                        });
+                        }));
                     }
                 }
                 ["transfer", path, into] => {
@@ -620,17 +627,19 @@ impl App {
                     }
                 }
                 ["cancel-rename"] => {
-                    self.queue.push(Command::EndItemRename { commit: false });
+                    self.queue
+                        .push(Command::Fence(FenceCmd::EndItemRename { commit: false }));
                 }
                 ["rename-active", name] => {
                     if let Some(crate::rename::RenameTarget::Item(item)) =
                         crate::rename::active_target()
                     {
-                        self.queue.push(Command::EndItemRename { commit: false });
-                        self.queue.push(Command::RenameItemCommit {
+                        self.queue
+                            .push(Command::Fence(FenceCmd::EndItemRename { commit: false }));
+                        self.queue.push(Command::Fence(FenceCmd::RenameItemCommit {
                             item,
                             name: (*name).to_string(),
-                        });
+                        }));
                     }
                 }
                 ["edit-item", title, name] => {
@@ -643,7 +652,8 @@ impl App {
                                 .map(|it| it.id)
                         })
                     {
-                        self.queue.push(Command::RenameItem { fence, item });
+                        self.queue
+                            .push(Command::Fence(FenceCmd::RenameItem { fence, item }));
                     }
                 }
                 ["crash"] => {
@@ -675,13 +685,13 @@ impl App {
                 ["exit-if-file", path] => {
                     if std::path::Path::new(path).is_file() {
                         self.test = None;
-                        self.queue.push(Command::Quit);
+                        self.queue.push(Command::Desktop(DesktopCmd::Quit));
                         return;
                     }
                 }
                 ["exit"] => {
                     self.test = None;
-                    self.queue.push(Command::Quit);
+                    self.queue.push(Command::Desktop(DesktopCmd::Quit));
                     return;
                 }
                 _ => tracing::warn!(target: "pecofence::test", "unknown script line: {line}"),

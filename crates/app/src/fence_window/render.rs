@@ -1,5 +1,7 @@
 //! Everything that rasterises a surface: chrome panel, content grid, rows, backdrop crop, icon / label fitting and per-item fade sampling.
 
+use crate::commands::DesktopCmd;
+
 use super::*;
 
 fn portal_empty_text(health: &pecofence_core::portal::PortalHealth) -> &'static str {
@@ -827,7 +829,7 @@ impl FenceViewState {
         if !ok && !self.device_lost {
             self.device_lost = true;
             tracing::warn!(fence = %self.fence_id, "composition surface lost its device");
-            self.queue.push(Command::DeviceLost);
+            self.queue.push(Command::Desktop(DesktopCmd::DeviceLost));
         }
     }
 

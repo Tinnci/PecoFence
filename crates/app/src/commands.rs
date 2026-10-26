@@ -55,6 +55,15 @@ pub enum TransferMode {
 #[derive(Debug)]
 #[allow(dead_code)]
 pub enum Command {
+    Fence(FenceCmd),
+    Panel(PanelCmd),
+    Settings(SettingsCmd),
+    Desktop(DesktopCmd),
+}
+
+#[derive(Debug)]
+#[allow(dead_code)]
+pub enum FenceCmd {
     /// A fence window finished a move/resize; persist its geometry.
     FenceBoundsChanged {
         fence: ContainerId,
@@ -248,29 +257,37 @@ pub enum Command {
     /// Title-bar caption buttons of a fence window.
     CloseFence(pecofence_core::ContainerId),
     ToggleMaximize(pecofence_core::ContainerId),
+}
 
-    PanelConfigChanged {
+#[derive(Debug)]
+#[allow(dead_code)]
+pub enum PanelCmd {
+    ConfigChanged {
         key: InstanceKey,
         bytes: Arc<[u8]>,
     },
     /// A panel changed its content in response to input; re-read its wake interval
     /// so animations started by a click get their next frame.
-    PanelWakeChanged {
+    WakeChanged {
         key: InstanceKey,
     },
-    PanelTextRequested {
+    TextRequested {
         key: InstanceKey,
         action: u64,
         initial: String,
         multiline: bool,
         style: Option<pecofence_plugin_api::TextInputStyle>,
     },
-    PanelTextCommit {
+    TextCommit {
         key: InstanceKey,
         action: u64,
         text: String,
     },
+}
 
+#[derive(Debug)]
+#[allow(dead_code)]
+pub enum SettingsCmd {
     OpenSettings,
     /// Settings window on the 「栅栏」 page with this fence selected.
     OpenOptionsForFence(ContentId),
@@ -282,7 +299,11 @@ pub enum Command {
     SettingsClosed {
         source: uuid::Uuid,
     },
+}
 
+#[derive(Debug)]
+#[allow(dead_code)]
+pub enum DesktopCmd {
     /// An OLE drag out of a fence ended with a Move/Copy performed by a foreign target: resync
     /// the desktop right away instead of waiting for the watcher.
     DragOutFinished,

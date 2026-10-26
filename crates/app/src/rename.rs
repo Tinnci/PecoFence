@@ -3,6 +3,8 @@
 //!
 //! Enter commits, Esc cancels, losing focus commits.
 
+use crate::commands::{DesktopCmd, FenceCmd, PanelCmd};
+
 use crate::commands::{Command, CommandQueue};
 use pecofence_core::{FenceId, ItemId};
 use pecofence_platform::window::{
@@ -419,18 +421,21 @@ pub fn end_active(commit: bool) {
             s.committed = true;
             let text = s.edit.text();
             match s.target {
-                RenameTarget::Fence(fence) => {
-                    s.queue.push(Command::RenameFence { fence, title: text })
-                }
+                RenameTarget::Fence(fence) => s
+                    .queue
+                    .push(Command::Fence(FenceCmd::RenameFence { fence, title: text })),
                 RenameTarget::Item(item) => {
-                    s.queue.push(Command::RenameItemCommit { item, name: text })
+                    s.queue.push(Command::Fence(FenceCmd::RenameItemCommit {
+                        item,
+                        name: text,
+                    }))
                 }
-                RenameTarget::PanelInput { key, action } => {
-                    s.queue.push(Command::PanelTextCommit { key, action, text })
-                }
+                RenameTarget::PanelInput { key, action } => s
+                    .queue
+                    .push(Command::Panel(PanelCmd::TextCommit { key, action, text })),
             }
         } else {
-            s.queue.push(Command::RedrawAll);
+            s.queue.push(Command::Desktop(DesktopCmd::RedrawAll));
         }
         drop(s.edit);
         drop(s.window);

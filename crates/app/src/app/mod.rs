@@ -1,4 +1,10 @@
 //! The application: owns state, fence windows, tray, watchers; drains the command queue.
+mod desktop_commands;
+mod fence_commands;
+mod panel_commands;
+mod settings_commands;
+
+use crate::commands::{DesktopCmd, FenceCmd, SettingsCmd};
 
 use crate::anchor::{self, AnchorCell, DesktopAnchor, ShowDesktopBehavior, ZMode};
 use crate::commands::{
@@ -172,7 +178,7 @@ pub struct App {
     /// Physical panel mounts follow active containers; logical provider instances do not.
     panel_mounts: HashMap<u128, ContainerId>,
     /// Windows of deleted / merged fences, kept alive while they fade out; dropped (destroyed)
-    /// on `Command::FadeOutDone`.
+    /// on `Command::Desktop(DesktopCmd::FadeOutDone)`.
     dying: Vec<FenceWindow>,
     /// `--test-script` state while a script runs.
     test: Option<testscript::TestScript>,
@@ -249,7 +255,12 @@ pub type AppCell = Rc<RefCell<Option<App>>>;
 
 /// The variant name of a command (its `Debug` form up to the first `{`, `(` or space).
 fn command_name(cmd: &Command) -> String {
-    let s = format!("{cmd:?}");
+    let s = match cmd {
+        Command::Fence(cmd) => format!("{cmd:?}"),
+        Command::Panel(cmd) => format!("{cmd:?}"),
+        Command::Settings(cmd) => format!("{cmd:?}"),
+        Command::Desktop(cmd) => format!("{cmd:?}"),
+    };
     s.split(['{', '(', ' ']).next().unwrap_or("").to_string()
 }
 
@@ -353,12 +364,13 @@ impl App {
                 move |hwnd: HWND, message: u32, wparam: usize, lparam: isize| -> Option<isize> {
                     match message {
                         WM_APP_UPDATE_QUIT => {
-                            update_quit_queue.push(Command::Quit);
+                            update_quit_queue.push(Command::Desktop(DesktopCmd::Quit));
                             Some(0)
                         }
                         pecofence_shell_contract::WM_APP_SHELL_COMMAND_AT => {
                             if let Some(command) = ShellCommand::from_wire(wparam, lparam) {
-                                shell_command_queue.push(Command::ShellAction(command));
+                                shell_command_queue
+                                    .push(Command::Desktop(DesktopCmd::ShellAction(command)));
                                 Some(1)
                             } else {
                                 Some(0)
@@ -369,9 +381,11 @@ impl App {
                                 u32::try_from(wparam).ok().and_then(ShellAction::from_id)
                             {
                                 let point = window::cursor_pos();
-                                shell_command_queue.push(Command::ShellAction(ShellCommand::new(
-                                    action, point.x, point.y,
-                                )));
+                                shell_command_queue.push(Command::Desktop(
+                                    DesktopCmd::ShellAction(ShellCommand::new(
+                                        action, point.x, point.y,
+                                    )),
+                                ));
                                 Some(1)
                             } else {
                                 Some(0)
@@ -468,7 +482,7 @@ impl App {
                             match wparam {
                                 TIMER_EXIT => {
                                     window::kill_timer(hwnd, TIMER_EXIT);
-                                    timed_commands.push(Command::Quit);
+                                    timed_commands.push(Command::Desktop(DesktopCmd::Quit));
                                 }
                                 TIMER_REACTOR_EXIT => {
                                     window::kill_timer(hwnd, TIMER_REACTOR_EXIT);
@@ -770,7 +784,9 @@ impl App {
         std::mem::forget(sentinel_class);
         if let Some(a) = anchor_cell.borrow_mut().as_mut() {
             let q = queue.clone();
-            a.on_marquee = Some(Box::new(move |rect| q.push(Command::NewFenceRect(rect))));
+            a.on_marquee = Some(Box::new(move |rect| {
+                q.push(Command::Fence(FenceCmd::NewFenceRect(rect)))
+            }));
         }
 
         let motion = Rc::new(Motion::new(&stack)?);
@@ -1042,7 +1058,9 @@ impl App {
         app.sync_peek_hotkey();
         if let Some(a) = app.anchor.borrow_mut().as_mut() {
             let q = app.queue.clone();
-            a.on_peek_interrupted = Some(Box::new(move || q.push(Command::EndPeek)));
+            a.on_peek_interrupted = Some(Box::new(move || {
+                q.push(Command::Desktop(DesktopCmd::EndPeek))
+            }));
             let control_hwnd = app.control.hwnd().0 as isize;
             a.on_foreground_changed = Some(Box::new(move || {
                 window::post_message(
@@ -1149,10 +1167,11 @@ impl App {
         window::post_message(app.control.hwnd(), WM_APP_WALLPAPER, 0, 0);
 
         if args.open_settings || !app.state.save_allowed {
-            app.queue.push(Command::OpenSettings);
+            app.queue.push(Command::Settings(SettingsCmd::OpenSettings));
         }
         if let Some(action) = args.shell_action {
-            app.queue.push(Command::ShellAction(action));
+            app.queue
+                .push(Command::Desktop(DesktopCmd::ShellAction(action)));
         }
         if let Some(path) = args.test_script.as_deref() {
             app.test = testscript::TestScript::load(path);
@@ -1311,512 +1330,21 @@ impl App {
         if !self.mutations_allowed()
             && !matches!(
                 &cmd,
-                Command::OpenSettings
-                    | Command::SettingsRequest { .. }
-                    | Command::SettingsClosed { .. }
-                    | Command::Quit
-                    | Command::FadeOutDone(_)
-                    | Command::RedrawAll
+                Command::Settings(SettingsCmd::OpenSettings)
+                    | Command::Settings(SettingsCmd::SettingsRequest { .. })
+                    | Command::Settings(SettingsCmd::SettingsClosed { .. })
+                    | Command::Desktop(DesktopCmd::Quit)
+                    | Command::Desktop(DesktopCmd::FadeOutDone(_))
+                    | Command::Desktop(DesktopCmd::RedrawAll)
             )
         {
             return;
         }
         match cmd {
-            Command::FenceBoundsChanged { fence, rect }
-            | Command::FenceRollFinished { fence, rect } => {
-                let roll_finished = matches!(cmd, Command::FenceRollFinished { .. });
-                let (rolled, expanded) = self
-                    .fences
-                    .get(&fence)
-                    .map(|w| (w.is_rolled(), w.expanded_height_px()))
-                    .unwrap_or((false, rect.bottom - rect.top));
-                self.state.set_fence_bounds(fence, rect, rolled, expanded);
-                // Moving or resizing a maximized fence leaves the maximized state, as on
-                // Windows: Maximize shows again and Restore has nothing to return to.
-                if !roll_finished
-                    && self
-                        .state
-                        .container(fence)
-                        .is_some_and(|c| c.restore.is_some())
-                    && self
-                        .work_area_at((rect.left + rect.right) / 2, (rect.top + rect.bottom) / 2)
-                        .is_some_and(|wa| {
-                            (wa.left, wa.top, wa.right, wa.bottom)
-                                != (rect.left, rect.top, rect.right, rect.bottom)
-                        })
-                {
-                    if let Some(c) = self.state.container_mut(fence) {
-                        c.restore = None;
-                    }
-                    self.state.mark_dirty();
-                    if let Some(w) = self.fences.get(&fence) {
-                        w.set_maximized(false);
-                    }
-                }
-                // A resized widget keeps the span it was snapped to.
-                if !roll_finished
-                    && !rolled
-                    && let Some(grid) = self.widget_grid(fence)
-                {
-                    let scale = self.fences.get(&fence).map_or(1.0, |w| {
-                        monitors::dpi_for_window(w.hwnd()).max(96) as f32 / 96.0
-                    });
-                    let span = grid.rules.span_for_size(
-                        (rect.right - rect.left) as f32 / scale,
-                        (rect.bottom - rect.top) as f32 / scale,
-                        grid.cell,
-                        self.ctx.behavior.text_scale.get(),
-                    );
-                    if let Some(container) = self.state.container_mut(fence) {
-                        container.span = Some(pecofence_core::WidgetSpan {
-                            columns: span.columns,
-                            rows: span.rows,
-                        });
-                    }
-                    self.apply_widget_grid(fence);
-                }
-                self.schedule_save();
-                self.apply_auto_height(fence);
-            }
-            Command::ToggleRollUp(fence) => self.toggle_roll(fence),
-            Command::CommitExpanded(fence) => {
-                if let Some(w) = self.fences.get(&fence) {
-                    w.commit_expanded();
-                }
-                if let Some(f) = self.state.container_mut(fence) {
-                    f.rolled_up = false;
-                }
-                self.state.mark_dirty();
-                self.schedule_save();
-                // A committed peek keeps whatever height the peek had; apply the auto-height
-                // rule like every other path that expands a fence.
-                self.apply_auto_height(fence);
-            }
-            Command::LaunchItem(item) => self.launch(item),
-            Command::LaunchDrop { item, name, opened } => {
-                self.launch_drop_finished(item, &name, opened)
-            }
-            Command::MoveItems { items, to } => self.move_items(&items, to),
-            Command::ReorderItems {
-                fence,
-                items,
-                index,
-            } => {
-                if self.state.reorder_items(fence, &items, index) {
-                    self.refresh_fence(fence);
-                    self.schedule_save();
-                }
-            }
-            Command::DropIntoFolder {
-                paths,
-                folder,
-                fence,
-                mode,
-            } => self.transfer_files_into_folder(paths, folder, fence, mode),
-            Command::PortalEnter { fence, path } => self.portal_enter(fence, &path),
-            Command::PortalUp(fence) => self.portal_up(fence),
-            Command::SwitchTab { host, tab } => self.switch_tab(host, tab),
-            Command::SetColumnWidths { fence, widths } => {
-                self.state.set_column_widths(fence, widths);
-                self.schedule_save();
-            }
-            Command::MergeHint { target, x } => {
-                for w in self.fences.values() {
-                    w.set_merge_hint(!target.0.is_null() && w.hwnd() == target, x);
-                }
-            }
-            Command::MergeFence { fence, into, x } => {
-                // The slot the gap sat at (read before the hints — and the gap — are cleared).
-                let host = self.fence_of_hwnd(into);
-                let index = host
-                    .and_then(|h| self.fences.get(&h))
-                    .map(|w| w.merge_slot_at(x));
-                for w in self.fences.values() {
-                    w.set_merge_hint(false, 0);
-                }
-                if let Some(host) = host
-                    && host != fence
-                {
-                    if self.state.container(fence).is_none() || self.state.container(host).is_none()
-                    {
-                        return;
-                    }
-                    let tabs = self.state.tabs_of(fence);
-                    let Some(active) = self.state.active_tab_of(fence) else {
-                        return;
-                    };
-                    let start = index.unwrap_or(self.state.tabs_of(host).len());
-                    for (slot, content) in (start..).zip(tabs) {
-                        if let Err(error) = self.state.attach_tab(content, host) {
-                            self.settings_error(&error.to_string());
-                            break;
-                        }
-                        // Land where the insertion gap was, preserving the source tab order.
-                        if let Err(error) = self.state.reorder_tab(host, content, slot) {
-                            self.settings_error(&error.to_string());
-                            break;
-                        }
-                    }
-                    if self
-                        .state
-                        .fence(active)
-                        .is_some_and(|f| f.container_id == host)
-                    {
-                        let _ = self.state.set_active_tab(host, active);
-                    }
-                    self.resync_windows();
-                    self.apply_fence_view_with_snap(host, false);
-                    if let Some(w) = self.fences.get(&host) {
-                        self.queue.push(Command::RaiseFence(w.hwnd()));
-                    }
-                    self.schedule_save();
-                }
-            }
-            Command::DetachTab {
-                tab,
-                x,
-                y,
-                from_drag,
-            } => self.detach_tab(tab, x, y, from_drag),
-            Command::CancelDetach { change } => self.cancel_tab_detach(*change),
-            Command::ReorderTab { host, tab, to } => self.reorder_tab(host, tab, to),
-            Command::MoveItemsToInbox { items } => {
-                // Dropped on the bare desktop: back to the inbox, then straight through the
-                // rules — the same routing a new desktop item gets, now instead of whenever the
-                // watcher next reconciles (which used to leave the icon in the rolled-up inbox
-                // for a second or two).
-                if let Some(inbox) = self.state.inbox_id() {
-                    self.move_items(&items, inbox);
-                    let entries = shell::enumerate_desktop();
-                    let touched = self.state.apply_rules_to(&items, &entries);
-                    tracing::debug!(
-                        items = items.len(),
-                        refiled = ?touched,
-                        "dropped on the desktop: inbox, then rules"
-                    );
-                    for id in touched {
-                        self.refresh_fence(id);
-                    }
-                    self.schedule_save();
-                }
-            }
-            Command::ExternalDrop { paths, to, mode } if self.state.portal_path(to).is_some() => {
-                self.transfer_files_into_portal(paths, to, mode);
-            }
-            Command::ExternalDrop {
-                paths,
-                to,
-                mode: TransferMode::Link,
-            } => {
-                // Create shortcut: the .lnk lands on the desktop and goes straight into `to`
-                // (a PendingRoute bypasses the rules), the originals stay where they are.
-                if let Some(desktop) = shell::user_desktop() {
-                    let made = self.create_shortcuts_in(&paths, &desktop);
-                    for path in made {
-                        self.pending_routes.push(PendingRoute {
-                            fence: to,
-                            path,
-                            since: Instant::now(),
-                            rename: false,
-                        });
-                    }
-                    let report = self.sync_desktop_if_available("shortcut drop");
-                    self.route_pending_creation();
-                    if report.changed() {
-                        self.refresh_all();
-                        self.schedule_save();
-                    }
-                }
-            }
-            Command::ExternalDrop { paths, to, mode } => {
-                let copy = mode == TransferMode::Copy;
-                let desktop_dirs: Vec<PathBuf> = [shell::user_desktop(), shell::public_desktop()]
-                    .into_iter()
-                    .flatten()
-                    .collect();
-                let mut ids = Vec::new();
-                let mut foreign = Vec::new();
-                for p in paths {
-                    if let Some(id) = self.state.item_by_path(&p) {
-                        ids.push(id);
-                    } else if p
-                        .parent()
-                        .is_some_and(|parent| desktop_dirs.iter().any(|d| d == parent))
-                    {
-                        // On the desktop but not yet synced: sync then retry.
-                        let entries = shell::enumerate_desktop();
-                        self.state.sync_desktop(&entries);
-                        if let Some(id) = self.state.item_by_path(&p) {
-                            ids.push(id);
-                        }
-                    } else {
-                        foreign.push(p);
-                    }
-                }
-                if !foreign.is_empty() {
-                    // Like Fences: dropping a file from elsewhere onto a fence moves it to the
-                    // desktop and puts it in that fence (a PendingRoute bypasses the rules).
-                    if let Some(desktop) = shell::user_desktop() {
-                        let routed: Vec<PathBuf> = foreign
-                            .iter()
-                            .filter_map(|p| p.file_name().map(|n| desktop.join(n)))
-                            .collect();
-                        for path in &routed {
-                            self.pending_routes.push(PendingRoute {
-                                fence: to,
-                                path: path.clone(),
-                                since: Instant::now(),
-                                rename: false,
-                            });
-                        }
-                        let owner = self.window_for(to).map(|w| w.hwnd());
-                        self.start_fileop(FileOp {
-                            paths: foreign,
-                            dest: desktop,
-                            copy,
-                            rename_on_collision: false,
-                            owner,
-                            then: FileOpThen::ToDesktop {
-                                routed,
-                                copy,
-                                what: "dropped files placed on the desktop",
-                            },
-                        });
-                    }
-                }
-                if !ids.is_empty() {
-                    self.move_items(&ids, to);
-                }
-            }
-            Command::ExternalUrlDrop { url, name, to } => self.create_url_shortcut(url, name, to),
-            Command::FenceMenu { fence, x, y } => self.show_fence_menu(fence, x, y),
-            Command::HeaderMenu { fence, x, y } => self.show_header_menu(fence, x, y),
-            Command::ItemMenu { fence, items, x, y } => self.show_item_menu(fence, items, x, y),
-            Command::ClipboardVerb { fence, items, cut } => self.clipboard_verb(fence, &items, cut),
-            Command::Paste { fence } => self.paste_into(fence),
-            Command::NewFolder { fence } => self.create_desktop_item(fence, true),
-            Command::StepIconSize { fence, larger } => self.step_icon_size(fence, larger),
-            Command::ItemProperties { fence, items } => self.show_properties(fence, &items),
-            Command::RefreshFence(fence) => self.manual_refresh(fence),
-            Command::RenameFence { fence, title } => {
-                self.end_item_rename_visuals();
-                let title = title.trim();
-                if !title.is_empty() {
-                    self.state.rename_fence(fence, title);
-                    self.refresh_fence(fence);
-                    self.schedule_save();
-                    self.push_settings_state();
-                }
-                if let Some(w) = self.window_for(fence) {
-                    w.redraw();
-                }
-            }
-            Command::DeleteFence(fence) => self.delete_fence(fence),
-            Command::NewFence { x, y } => self.new_fence_near(x, y),
-            Command::NewFenceRect(rect) => self.offer_new_fence(rect),
-            Command::RaiseFence(hwnd) => {
-                if let Some(a) = self.anchor.borrow_mut().as_mut() {
-                    a.raise_fence(hwnd);
-                }
-            }
-            Command::SortColumn { fence, sort } => {
-                // Explorer: clicking the active column flips the direction.
-                if let Some(f) = self.state.fence(fence) {
-                    let reverse = f.view.sort == sort && !f.view.reverse;
-                    self.state.set_sort(fence, sort);
-                    self.state.set_reverse(fence, reverse);
-                    self.refresh_fence(fence);
-                    self.schedule_save();
-                }
-            }
-            Command::RenameItem { fence, item } => self.begin_item_rename(fence, item),
-            Command::RenameItemCommit { item, name } => {
-                self.end_item_rename_visuals();
-                self.rename_item_file(item, &name);
-            }
-            Command::EndItemRename { commit } => crate::rename::end_active(commit),
-            Command::DeleteItems {
-                fence,
-                items,
-                permanent,
-            } => self.delete_items(fence, &items, permanent),
-            Command::CloseFence(host) => self.close_fence(host),
-            Command::ToggleMaximize(host) => self.toggle_maximize(host),
-
-            Command::PanelConfigChanged { key, bytes } => {
-                let active_fence = self.state.fences().iter().find_map(|f| match &f.content {
-                    pecofence_core::FenceContentSpec::Panel { panel }
-                        if panel.instance_id.as_u128() == key.id =>
-                    {
-                        Some(f.id)
-                    }
-                    _ => None,
-                });
-                if active_fence.is_some() {
-                    let outcome = self.panel_manager.borrow_mut().persist_config(key, bytes);
-                    match outcome {
-                        Ok(config) => {
-                            if self.state.update_panel_config(key.id, config) {
-                                self.schedule_save();
-                            }
-                        }
-                        Err(error) => tracing::warn!(%error, "panel config update rejected"),
-                    }
-                }
-            }
-            Command::PanelWakeChanged { key } => {
-                self.panel_manager.borrow_mut().refresh_wake(key);
-            }
-            Command::PanelTextRequested {
-                key,
-                action,
-                initial,
-                multiline,
-                style,
-            } => {
-                let hwnd = self.state.fences().iter().find_map(|f| match &f.content {
-                    pecofence_core::FenceContentSpec::Panel { panel }
-                        if panel.instance_id.as_u128() == key.id =>
-                    {
-                        self.window_for(f.id)
-                            .map(|w| (w.hwnd(), w.title_height_dip()))
-                    }
-                    _ => None,
-                });
-                if let Some((hwnd, title_height)) = hwnd {
-                    crate::rename::begin_panel_input(
-                        hwnd,
-                        key,
-                        action,
-                        initial,
-                        self.queue.clone(),
-                        self.theme_mode,
-                        multiline,
-                        title_height,
-                        style,
-                    );
-                }
-            }
-            Command::PanelTextCommit { key, action, text } => {
-                match self.panel_manager.borrow().submit_text(key, action, text) {
-                    Ok(update) => {
-                        self.pending_panel_updates
-                            .entry(key)
-                            .or_default()
-                            .merge(update);
-                    }
-                    Err(error) => tracing::warn!(%error, "panel text input rejected"),
-                }
-                self.process_panel_events();
-            }
-
-            Command::OpenSettings => self.open_settings(),
-            Command::OpenOptionsForFence(fence) => self.open_fence_options(fence),
-            Command::SettingsClosed { source } => {
-                if self.settings.as_ref().is_some_and(|h| h.source() == source) {
-                    self.settings = None;
-                    self.settings_session.close();
-                }
-            }
-            Command::SettingsRequest { source, request } => {
-                if self
-                    .settings
-                    .as_ref()
-                    .is_some_and(|host| host.source() == source && host.is_alive())
-                {
-                    self.on_settings_request(*request);
-                }
-            }
-
-            Command::DragOutFinished => {
-                // The shell performs the file operation itself, often asynchronously: what is
-                // not on the desktop yet arrives through the folder watcher a moment later.
-                let report = self.sync_desktop_if_available("drag out");
-                self.route_pending_creation();
-                self.refresh_portals();
-                if report.changed() {
-                    tracing::info!(?report, "desktop resynced right after the drag-out");
-                    self.refresh_all();
-                    self.schedule_save();
-                }
-            }
-            Command::DeviceLost => self.recover_device(),
-            Command::ToggleAllFences => self.toggle_all_fences(),
-            Command::TogglePeek => self.toggle_peek(),
-            Command::EndPeek => self.end_peek(),
-            Command::ApplyRulesNow => {
-                let entries = shell::enumerate_desktop();
-                let moved = self.state.apply_rules_all(&entries);
-                self.refresh_all();
-                self.schedule_save();
-                if let Some(t) = &self.tray {
-                    t.show_info(
-                        "PecoFence",
-                        &pecofence_core::i18n::format(
-                            "已按规则整理 {0} 个项目。",
-                            &[moved.to_string()],
-                        ),
-                        false,
-                    );
-                }
-            }
-            Command::ShellAction(command) => {
-                // The private window can receive messages from other processes. Keep an
-                // out-of-range coordinate from reaching placement arithmetic.
-                let (x, y) = self
-                    .work_area_at(command.x, command.y)
-                    .map(|work| {
-                        (
-                            command.x.clamp(work.left, work.right.saturating_sub(1)),
-                            command.y.clamp(work.top, work.bottom.saturating_sub(1)),
-                        )
-                    })
-                    .unwrap_or((0, 0));
-                match command.action {
-                    ShellAction::NewFence => self.new_fence_near(x, y),
-                    ShellAction::NewTodo => {
-                        self.new_widget_near(pecofence_plugin_widgets::TODO_PROVIDER, x, y, None)
-                    }
-                    ShellAction::NewNote => {
-                        self.new_widget_near(pecofence_plugin_widgets::NOTE_PROVIDER, x, y, None)
-                    }
-                    ShellAction::OpenSettings => self.open_settings(),
-                }
-            }
-            Command::RedrawAll => {
-                // Also the rename edit's cancel path: the edited label may unfold again.
-                self.end_item_rename_visuals();
-                for w in self.fences.values() {
-                    w.redraw();
-                }
-            }
-            Command::Quit => {
-                if self.persistence.closing() == Closing::Open {
-                    if matches!(
-                        crate::rename::active_target(),
-                        Some(crate::rename::RenameTarget::PanelInput { .. })
-                    ) {
-                        // The native editor still owns unsent text. Deliver its
-                        // commit before closing the document mutation gate.
-                        crate::rename::end_active(true);
-                        // Provider submission can enqueue PersistConfig in a second
-                        // drain pass. Re-enter after those commands, not beside them.
-                        window::post_message(self.control.hwnd(), WM_APP_UPDATE_QUIT, 0, 0);
-                        return;
-                    }
-                    window::kill_timer(self.control.hwnd(), TIMER_SAVE);
-                    crate::lifecycle::set_closing(true);
-                    self.persistence.begin_close();
-                    self.push_settings_state();
-                    self.pump_persistence();
-                } else {
-                    self.cancel_document_close();
-                }
-            }
-            Command::FadeOutDone(hwnd) => {
-                // Dropping the window destroys it (RevokeDragDrop + DestroyWindow).
-                self.dying.retain(|w| w.hwnd() != hwnd);
-            }
+            Command::Fence(cmd) => self.handle_fence(cmd),
+            Command::Panel(cmd) => self.handle_panel(cmd),
+            Command::Settings(cmd) => self.handle_settings(cmd),
+            Command::Desktop(cmd) => self.handle_desktop(cmd),
         }
     }
 

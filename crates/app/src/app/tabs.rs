@@ -1,5 +1,7 @@
 //! Container tab transitions and native HWND/capture reconciliation.
 
+use crate::commands::FenceCmd;
+
 use super::*;
 
 impl App {
@@ -83,7 +85,8 @@ impl App {
             if let Some(height) = w.auto_height_px() {
                 w.restore_geometry(w.rect(), false, height);
             }
-            self.queue.push(Command::RaiseFence(w.hwnd()));
+            self.queue
+                .push(Command::Fence(FenceCmd::RaiseFence(w.hwnd())));
             if from_drag && window::key_down(msg::VK_LBUTTON) {
                 let hwnd = w.hwnd();
                 let current = w.rect();
@@ -117,7 +120,8 @@ impl App {
         self.resync_windows();
         self.apply_fence_view_with_snap(change.source, false);
         if let Some(window) = self.fences.get(&change.source) {
-            self.queue.push(Command::RaiseFence(window.hwnd()));
+            self.queue
+                .push(Command::Fence(FenceCmd::RaiseFence(window.hwnd())));
         }
         self.schedule_save();
     }

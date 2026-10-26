@@ -8,6 +8,8 @@
 //! smoke-layer / Fluent fade) as a client tween: a layered window has no compositor visual, so
 //! `App::on_frame` samples the tween and re-applies the alpha each frame.
 
+use crate::commands::DesktopCmd;
+
 use crate::anchor;
 use crate::commands::{Command, CommandQueue, WM_APP_PEEK_FOCUSED};
 use pecofence_platform::window::{
@@ -66,7 +68,7 @@ impl PeekOverlay {
                     move |_hwnd: HWND, message: u32, wparam: usize, lparam: isize| {
                         match message {
                             msg::WM_LBUTTONDOWN | msg::WM_RBUTTONDOWN | msg::WM_MBUTTONDOWN => {
-                                queue.push(Command::EndPeek);
+                                queue.push(Command::Desktop(DesktopCmd::EndPeek));
                                 Some(0)
                             }
                             // Esc ends the peek (no auto-repeats). Modifier keys must NOT: the
@@ -76,7 +78,7 @@ impl PeekOverlay {
                             msg::WM_KEYDOWN
                                 if wparam as u32 == msg::VK_ESCAPE && lparam & (1 << 30) == 0 =>
                             {
-                                queue.push(Command::EndPeek);
+                                queue.push(Command::Desktop(DesktopCmd::EndPeek));
                                 Some(0)
                             }
                             msg::WM_SETFOCUS => {
@@ -93,7 +95,7 @@ impl PeekOverlay {
                                     && cls != PEEK_CLASS
                                     && cls != "PecoFence.Rename"
                                 {
-                                    queue.push(Command::EndPeek);
+                                    queue.push(Command::Desktop(DesktopCmd::EndPeek));
                                 }
                                 None
                             }

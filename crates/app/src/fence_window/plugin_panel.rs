@@ -1,5 +1,7 @@
 //! Generic bridge between object-safe panel instances and the host composition surface.
 
+use crate::commands::PanelCmd;
+
 #[cfg(test)]
 use super::interaction::finish_capture_release;
 use super::interaction::flush_capture_release;
@@ -581,10 +583,10 @@ impl FenceViewState {
                 }
                 HostCommand::PersistConfig(bytes) => {
                     if let Some(panel) = &self.plugin_panel {
-                        self.queue.push(Command::PanelConfigChanged {
+                        self.queue.push(Command::Panel(PanelCmd::ConfigChanged {
                             key: panel.key(),
                             bytes,
-                        });
+                        }));
                     }
                 }
                 HostCommand::RequestTextInput {
@@ -594,20 +596,20 @@ impl FenceViewState {
                     style,
                 } => {
                     if let Some(panel) = &self.plugin_panel {
-                        self.queue.push(Command::PanelTextRequested {
+                        self.queue.push(Command::Panel(PanelCmd::TextRequested {
                             key: panel.key(),
                             action,
                             initial,
                             multiline,
                             style,
-                        });
+                        }));
                     }
                 }
             }
         }
         if redraw_content && let Some(panel) = &self.plugin_panel {
             self.queue
-                .push(Command::PanelWakeChanged { key: panel.key() });
+                .push(Command::Panel(PanelCmd::WakeChanged { key: panel.key() }));
         }
         if redraw_content && let Some(panel) = &mut self.plugin_panel {
             panel.invalidation.request(if relayout {

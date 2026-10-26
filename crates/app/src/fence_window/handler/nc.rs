@@ -1,5 +1,7 @@
 //! Non-client / title-row / sizing / moving / geometry messages.
 
+use crate::commands::FenceCmd;
+
 use super::*;
 
 // Keep DWM materials in their "active" state even though we never activate.
@@ -269,7 +271,7 @@ pub(super) fn on_nclbuttondown(
         v.hide_tip();
         v.cancel_pending_rename();
     }
-    queue.push(Command::RaiseFence(hwnd));
+    queue.push(Command::Fence(FenceCmd::RaiseFence(hwnd)));
     if wparam as isize == msg::HTCAPTION {
         let start = (msg::lo_i16(lparam), msg::hi_i16(lparam));
         let rect = window::window_rect(hwnd);
@@ -350,7 +352,7 @@ pub(super) fn on_nclbuttonup(
         e
     });
     if expand {
-        queue.push(Command::ToggleRollUp(fence_id));
+        queue.push(Command::Fence(FenceCmd::ToggleRollUp(fence_id)));
         return Some(0);
     }
     None
@@ -389,9 +391,9 @@ pub(super) fn on_nclbuttondblclk(
         });
         if was_peeking == Some(true) {
             // Already expanded by peek: commit the expanded state.
-            queue.push(Command::CommitExpanded(fence_id));
+            queue.push(Command::Fence(FenceCmd::CommitExpanded(fence_id)));
         } else {
-            queue.push(Command::ToggleRollUp(fence_id));
+            queue.push(Command::Fence(FenceCmd::ToggleRollUp(fence_id)));
         }
         return Some(0);
     }
@@ -421,11 +423,11 @@ pub(super) fn on_ncrbuttonup(
         else {
             return Some(0);
         };
-        queue.push(Command::FenceMenu {
+        queue.push(Command::Fence(FenceCmd::FenceMenu {
             fence,
             x: msg::lo_i16(lparam),
             y: msg::hi_i16(lparam),
-        });
+        }));
         return Some(0);
     }
     None
@@ -594,10 +596,10 @@ pub(super) fn on_exitsizemove(
         None
     };
     if merge_target.replace(0) != 0 {
-        queue.push(Command::MergeHint {
+        queue.push(Command::Fence(FenceCmd::MergeHint {
             target: HWND(std::ptr::null_mut()),
             x: 0,
-        });
+        }));
     }
     let peeking = {
         let mut guard = view.borrow_mut();
@@ -613,16 +615,16 @@ pub(super) fn on_exitsizemove(
             None => false,
         }
     };
-    queue.push(Command::FenceBoundsChanged {
+    queue.push(Command::Fence(FenceCmd::FenceBoundsChanged {
         fence: fence_id,
         rect,
-    });
+    }));
     if let Some(into) = merge_into {
-        queue.push(Command::MergeFence {
+        queue.push(Command::Fence(FenceCmd::MergeFence {
             fence: fence_id,
             into,
             x: window::cursor_pos().x,
-        });
+        }));
     }
     if peeking {
         // The close timer was cancelled on WM_ENTERSIZEMOVE; its arm
@@ -803,10 +805,10 @@ pub(super) fn on_moving(
     let target_changed = merge_target.replace(target) != target;
     if target_changed || (target != 0 && merge_x.replace(pt.x) != pt.x) {
         merge_x.set(pt.x);
-        queue.push(Command::MergeHint {
+        queue.push(Command::Fence(FenceCmd::MergeHint {
             target: HWND(target as *mut core::ffi::c_void),
             x: pt.x,
-        });
+        }));
     }
     Some(1)
 }

@@ -1,5 +1,7 @@
 //! Scroll offset and glide, overlay scrollbar geometry / hit / draw / press, wheel step, and the per-frame auto-scrolls (marquee edge, OLE drag edge).
 
+use crate::commands::FenceCmd;
+
 use super::*;
 
 /// Wheel distance (DIPs, positive = content moves up) for `notches` notches (fractional for
@@ -234,7 +236,8 @@ impl FenceViewState {
     /// again; the popup itself closes from the command loop, outside this borrow.
     pub(super) fn dismiss_rename_for_scroll(&mut self) {
         if self.renaming.take().is_some() {
-            self.queue.push(Command::EndItemRename { commit: true });
+            self.queue
+                .push(Command::Fence(FenceCmd::EndItemRename { commit: true }));
         }
     }
 

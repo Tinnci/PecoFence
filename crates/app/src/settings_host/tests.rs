@@ -3,6 +3,8 @@ use super::*;
 use pecofence_core::settings_protocol::{Rejection, TitleColor};
 use windows_reactor::{ComponentHost, RecordingAdapter, component};
 
+use crate::commands::SettingsCmd;
+
 fn input() -> ComponentInput {
     ComponentInput {
         activation: Uuid::new_v4(),
@@ -83,7 +85,7 @@ fn sent(ui: &SettingsComponent) -> Request {
     let commands = ui.queue.drain();
     assert_eq!(commands.len(), 1, "only one request may be in flight");
     match commands.into_iter().next().unwrap() {
-        Command::SettingsRequest { source, request } => {
+        Command::Settings(SettingsCmd::SettingsRequest { source, request }) => {
             assert_eq!(source, ui.source);
             *request
         }
@@ -787,7 +789,7 @@ fn headless_reactor_mounts_all_pages_and_full_rule_editor() {
     assert!(!input.shared.alive.get());
     assert!(matches!(
         input.queue.drain().as_slice(),
-        [Command::SettingsClosed { .. }]
+        [Command::Settings(SettingsCmd::SettingsClosed { .. })]
     ));
 }
 
@@ -891,7 +893,7 @@ fn immediate_switch_emits_one_typed_request_and_tracks_read_only_projection() {
     host.drain(100).unwrap();
     let commands = input.queue.drain();
     assert!(
-        matches!(commands.as_slice(), [Command::SettingsRequest { request, .. }]
+        matches!(commands.as_slice(), [Command::Settings(SettingsCmd::SettingsRequest { request, .. })]
         if request.command == SettingsCommand::SetSetting { change: SettingChange::QuickHideEnabled(false) })
     );
     view.writable = false;
@@ -1151,11 +1153,10 @@ fn live_self_contained_pages_close_and_reopen_without_desktop_side_effects() {
     assert!(completed.get(), "{:?}", failure.borrow());
     let commands = queue.drain();
     assert_eq!(commands.len(), 3);
-    assert!(
-        commands
-            .iter()
-            .all(|command| matches!(command, Command::SettingsClosed { .. }))
-    );
+    assert!(commands.iter().all(|command| matches!(
+        command,
+        Command::Settings(SettingsCmd::SettingsClosed { .. })
+    )));
 }
 
 #[test]

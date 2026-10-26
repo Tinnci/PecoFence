@@ -1,5 +1,7 @@
 //! Lifecycle, app-posted and shell messages.
 
+use crate::commands::DesktopCmd;
+
 use super::*;
 
 // SHDoDragDrop asks the source window for its drag image before the drag
@@ -56,7 +58,8 @@ pub(super) fn on_showwindow(
             // must not show the shadow of a hidden window — and a retiring
             // window whose exit fade was cut short still has to be dropped.
             if v.vis_fade.take() == Some(VisFade::Hiding { destroy: true }) {
-                v.queue.push(Command::FadeOutDone(hwnd));
+                v.queue
+                    .push(Command::Desktop(DesktopCmd::FadeOutDone(hwnd)));
             }
             // Ready for a plain ShowWindow later: opaque, unscaled,
             // shadow alpha back at 255 (same rest as the fade-done path).
@@ -146,7 +149,7 @@ pub(super) fn on_app_fade_done(
         v.reset_root();
     }
     if destroy {
-        queue.push(Command::FadeOutDone(hwnd));
+        queue.push(Command::Desktop(DesktopCmd::FadeOutDone(hwnd)));
     }
     Some(0)
 }

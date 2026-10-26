@@ -1,5 +1,7 @@
 //! Window procedure: `HandlerCtx` (the closure state) and the message dispatch; the per-message bodies live in the child modules.
 
+use crate::commands::FenceCmd;
+
 use super::*;
 
 mod keyboard;
@@ -33,16 +35,16 @@ pub(super) fn finish_drag_cancel(owner: HWND, cancel: DragCancel, queue: &Comman
     super::interaction::finish_capture_release(owner, true);
     let clear_hint = |hinted| {
         if hinted {
-            queue.push(Command::MergeHint {
+            queue.push(Command::Fence(FenceCmd::MergeHint {
                 target: HWND(std::ptr::null_mut()),
                 x: 0,
-            });
+            }));
         }
     };
     match cancel {
         DragCancel::Remote { change, hinted } => {
             clear_hint(hinted);
-            queue.push(Command::CancelDetach { change });
+            queue.push(Command::Fence(FenceCmd::CancelDetach { change }));
         }
         DragCancel::Window { hwnd, rect, hinted } => {
             clear_hint(hinted);

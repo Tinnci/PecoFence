@@ -1,5 +1,7 @@
 //! WM_TIMER arms (one per TIMER_* id) and the menu-loop bracket that gates the peek timers.
 
+use crate::commands::FenceCmd;
+
 use super::*;
 
 pub(super) fn on_timer_composition_finish(
@@ -55,10 +57,10 @@ pub(super) fn on_timer_rename(
         && v.selected.contains(&i)
         && !window::key_down(msg::VK_LBUTTON)
     {
-        queue.push(Command::RenameItem {
+        queue.push(Command::Fence(FenceCmd::RenameItem {
             fence: v.active,
             item: id,
-        });
+        }));
     }
     Some(0)
 }

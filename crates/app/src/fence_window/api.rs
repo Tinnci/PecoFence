@@ -360,7 +360,7 @@ impl FenceWindow {
 
     /// Fades the window out (167 ms, shrinking to 0.97) ahead of its destruction. Returns
     /// true when the fade runs — the owner must keep the `FenceWindow` alive until
-    /// `Command::FadeOutDone` arrives for its hwnd; false = already hidden, drop it now.
+    /// `Command::Desktop(DesktopCmd::FadeOutDone)` arrives for its hwnd; false = already hidden, drop it now.
     /// The window leaves the desktop anchor at once so quick hide / show, Peek and re-anchoring
     /// no longer touch it, and nothing may show it again (`retired`).
     pub fn retire(&self) -> bool {

@@ -1,5 +1,7 @@
 //! Per-frame plumbing: the client-tween tick and the window-height animation phases.
 
+use crate::commands::FenceCmd;
+
 use super::*;
 
 impl FenceViewState {
@@ -166,7 +168,7 @@ fn animation_bounds_command(
     rect: RECT,
     rolled_at_end: Option<bool>,
 ) -> Option<Command> {
-    rolled_at_end.map(|_| Command::FenceRollFinished { fence, rect })
+    rolled_at_end.map(|_| Command::Fence(FenceCmd::FenceRollFinished { fence, rect }))
 }
 
 #[cfg(test)]
@@ -180,7 +182,7 @@ mod tests {
         for rolled in [true, false] {
             assert!(matches!(
                 animation_bounds_command(fence, RECT::default(), Some(rolled)),
-                Some(Command::FenceRollFinished { fence: id, .. }) if id == fence
+                Some(Command::Fence(FenceCmd::FenceRollFinished { fence: id, .. })) if id == fence
             ));
         }
     }

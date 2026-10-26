@@ -1,6 +1,8 @@
 //! Item commands: launch, inline rename, shell verbs, clipboard, moving items between fences,
 //! routing of newly created desktop items, item view builder.
 
+use crate::commands::FenceCmd;
+
 use super::*;
 
 impl App {
@@ -74,7 +76,8 @@ impl App {
                             .map(|it| it.id)
                     });
                     if let Some(item) = item {
-                        self.queue.push(Command::RenameItem { fence, item });
+                        self.queue
+                            .push(Command::Fence(FenceCmd::RenameItem { fence, item }));
                     }
                     return;
                 }
@@ -471,7 +474,7 @@ impl App {
                 return;
             }
         }
-        self.handle(Command::ExternalDrop {
+        self.handle(Command::Fence(FenceCmd::ExternalDrop {
             paths,
             to: fence,
             mode: if cut {
@@ -479,7 +482,7 @@ impl App {
             } else {
                 TransferMode::Copy
             },
-        });
+        }));
         if cut {
             // Explorer empties the clipboard after pasting cut files.
             clipboard::clear();

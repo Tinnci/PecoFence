@@ -1,5 +1,7 @@
 //! OLE drop target: internal-drag thread-local, drop-spot resolution and highlight feedback, drag dwell, in-place drag image, right-button drop menu, effect / transfer mapping, `FenceDropHandler`.
 
+use crate::commands::FenceCmd;
+
 use super::*;
 
 pub(super) fn drag_image_fits(w_dip: f32, h_dip: f32) -> bool {
@@ -716,11 +718,11 @@ impl DropHandler for FenceDropHandler {
                         tracing::warn!(program = %target.display(), error = %e, "drop on program failed");
                         DropEffect::None
                     });
-                self.queue.push(Command::LaunchDrop {
+                self.queue.push(Command::Fence(FenceCmd::LaunchDrop {
                     item,
                     name,
                     opened: effect != DropEffect::None,
-                });
+                }));
             }
             tracing::info!(
                 ?effect,
@@ -753,7 +755,7 @@ impl DropHandler for FenceDropHandler {
                         }
                     }
                     let name = dragdrop::file_group_descriptor_name(data);
-                    pending = Some(Command::ExternalUrlDrop { url, name, to });
+                    pending = Some(Command::Fence(FenceCmd::ExternalUrlDrop { url, name, to }));
                     effect
                 }
                 DropKind::Files if internal.is_some() => {
@@ -771,26 +773,26 @@ impl DropHandler for FenceDropHandler {
                         let (Some(mode), false) = (transfer_mode(effect), paths.is_empty()) else {
                             break 'resolve DropEffect::None;
                         };
-                        pending = Some(Command::DropIntoFolder {
+                        pending = Some(Command::Fence(FenceCmd::DropIntoFolder {
                             paths,
                             folder,
                             fence: active,
                             mode,
-                        });
+                        }));
                         break 'resolve effect;
                     }
                     if let Some(index) = spot.insert {
-                        pending = Some(Command::ReorderItems {
+                        pending = Some(Command::Fence(FenceCmd::ReorderItems {
                             fence: active,
                             items: d.items,
                             index,
-                        });
+                        }));
                         break 'resolve DropEffect::Move;
                     }
                     if to == d.from {
                         break 'resolve DropEffect::None;
                     }
-                    pending = Some(Command::MoveItems { items: d.items, to });
+                    pending = Some(Command::Fence(FenceCmd::MoveItems { items: d.items, to }));
                     DropEffect::Move
                 }
                 DropKind::Files => {
@@ -828,14 +830,17 @@ impl DropHandler for FenceDropHandler {
                     };
                     match (folder, folder_paths) {
                         (Some(folder), Some(paths)) => {
-                            pending = Some(Command::DropIntoFolder {
+                            pending = Some(Command::Fence(FenceCmd::DropIntoFolder {
                                 paths,
                                 folder,
                                 fence: active,
                                 mode,
-                            })
+                            }))
                         }
-                        _ => pending = Some(Command::ExternalDrop { paths, to, mode }),
+                        _ => {
+                            pending =
+                                Some(Command::Fence(FenceCmd::ExternalDrop { paths, to, mode }))
+                        }
                     }
                     effect
                 }
@@ -1450,10 +1455,10 @@ mod identity_tests {
             self_drop: false,
         };
         let command = || {
-            Some(Command::MoveItems {
+            Some(Command::Fence(FenceCmd::MoveItems {
                 items: vec![ItemId::from_u128(10)],
                 to: original.active,
-            })
+            }))
         };
         assert_eq!(
             commit_drop(
@@ -1466,7 +1471,7 @@ mod identity_tests {
             DropEffect::Move
         );
         assert!(
-            matches!(queue.drain().as_slice(), [Command::MoveItems { to, .. }] if *to == original.active)
+            matches!(queue.drain().as_slice(), [Command::Fence(FenceCmd::MoveItems { to, .. })] if *to == original.active)
         );
         // None represents a hidden, retired, removed or inaccessible target after a native callback.
         assert_eq!(

@@ -3,6 +3,8 @@
 //! The component owns transient editor state only. Application settings, workspace identity,
 //! persistence, OS integrations, and use cases remain owned by `App`.
 
+use crate::commands::SettingsCmd;
+
 mod pages;
 mod rule_editor;
 #[cfg(test)]
@@ -813,9 +815,10 @@ impl Drop for SettingsComponent {
         self.shared.alive.set(false);
         self.shared.hwnd.set(None);
         *self.shared.sender.borrow_mut() = None;
-        self.queue.push(Command::SettingsClosed {
-            source: self.source,
-        });
+        self.queue
+            .push(Command::Settings(SettingsCmd::SettingsClosed {
+                source: self.source,
+            }));
     }
 }
 
@@ -1371,10 +1374,11 @@ impl SettingsComponent {
             if let Some(pending) = &mut self.inflight {
                 self.next_sequence += 1;
                 pending.request.sequence = self.next_sequence;
-                self.queue.push(Command::SettingsRequest {
-                    source: self.source,
-                    request: Box::new(pending.request.clone()),
-                });
+                self.queue
+                    .push(Command::Settings(SettingsCmd::SettingsRequest {
+                        source: self.source,
+                        request: Box::new(pending.request.clone()),
+                    }));
             }
         }
     }

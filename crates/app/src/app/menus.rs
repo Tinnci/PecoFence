@@ -1,6 +1,6 @@
 //! Popup menus (tray, item, fence, details header) and their command ids.
 
-use crate::commands::Command;
+use crate::commands::{DesktopCmd, FenceCmd, SettingsCmd};
 
 use super::*;
 
@@ -214,8 +214,10 @@ impl App {
         }
         match cmd {
             CMD_TOGGLE_FENCES => self.toggle_all_fences(),
-            CMD_PEEK => self.queue.push(Command::TogglePeek),
-            CMD_NEW_FENCE => self.queue.push(Command::NewFence { x, y: y - 300 }),
+            CMD_PEEK => self.queue.push(Command::Desktop(DesktopCmd::TogglePeek)),
+            CMD_NEW_FENCE => self
+                .queue
+                .push(Command::Fence(FenceCmd::NewFence { x, y: y - 300 })),
             CMD_NEW_CLOCK => {
                 self.new_widget_near(pecofence_plugin_widgets::CLOCK_PROVIDER, x, y, None)
             }
@@ -231,7 +233,7 @@ impl App {
             CMD_NEW_DIAGRAM => {
                 self.new_widget_near(pecofence_plugin_widgets::DIAGRAM_PROVIDER, x, y, None)
             }
-            CMD_APPLY_RULES => self.queue.push(Command::ApplyRulesNow),
+            CMD_APPLY_RULES => self.queue.push(Command::Desktop(DesktopCmd::ApplyRulesNow)),
             CMD_REPAIR_ICONS => {
                 let _ = self.set_desktop_icons_hidden(false);
             }
@@ -240,8 +242,10 @@ impl App {
                     !pecofence_platform::shell_icons::desktop_icons_hidden(),
                 );
             }
-            CMD_SETTINGS => self.queue.push(Command::OpenSettings),
-            CMD_EXIT => self.queue.push(Command::Quit),
+            CMD_SETTINGS => self
+                .queue
+                .push(Command::Settings(SettingsCmd::OpenSettings)),
+            CMD_EXIT => self.queue.push(Command::Desktop(DesktopCmd::Quit)),
             id if (CMD_REOPEN_BASE..CMD_REOPEN_BASE + closed.len() as u32).contains(&id) => {
                 self.reopen_fence(closed[(id - CMD_REOPEN_BASE) as usize].0);
             }
@@ -901,7 +905,8 @@ impl App {
                             self.resync_windows();
                             self.apply_fence_view(target);
                             if let Some(w) = self.fences.get(&target) {
-                                self.queue.push(Command::RaiseFence(w.hwnd()));
+                                self.queue
+                                    .push(Command::Fence(FenceCmd::RaiseFence(w.hwnd())));
                             }
                             self.schedule_save();
                         }
