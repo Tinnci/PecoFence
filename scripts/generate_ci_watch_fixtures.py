@@ -8,7 +8,7 @@ NOW = "2026-10-27T06:21:00Z"
 
 
 def build(job, number, state, elapsed=0, estimate=None, started=None, eta=None, overdue=False, commits=None):
-    return dict(job=job, number=number, url_origin="jenkins-work", path="/" + "/".join("job/" + p for p in job.split("/")) + (f"/{number}" if number else ""), state=state, started_at=started, elapsed_ms=elapsed*60000, estimated_ms=estimate*60000 if estimate else None, eta_at=eta, overdue=overdue, queue_reason=None, node="node-07" if state == "running" else None, trigger={"kind":"user", "id":"tianchi"}, commit_ids=commits or [])
+    return dict(job=job, number=number, url_origin="jenkins-work", path="/" + "/".join("job/" + p for p in job.split("/")) + (f"/{number}" if number else ""), state=state, started_at=started, elapsed_ms=elapsed*60000, estimated_ms=estimate*60000 if estimate else None, eta_at=eta, remaining_ms=(estimate-elapsed)*60000 if eta else None, overdue=overdue, queue_reason=None, node="node-07" if state == "running" else None, trigger={"kind":"user", "id":"tianchi"}, commit_ids=commits or [])
 
 
 def snapshot():

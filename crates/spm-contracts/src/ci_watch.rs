@@ -110,6 +110,9 @@ pub struct CiBuild {
     pub estimated_ms: Option<u64>,
     #[serde(default)]
     pub eta_at: Option<DateTime<Utc>>,
+    /// Backend-projected time remaining, for presentation without UI ETA arithmetic.
+    #[serde(default)]
+    pub remaining_ms: Option<u64>,
     #[serde(default)]
     pub overdue: bool,
     #[serde(default)]

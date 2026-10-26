@@ -17,6 +17,7 @@
             "overdue": false,
             "path": "/job/orion/job/launcher-gerrit-verify/913",
             "queue_reason": null,
+            "remaining_ms": null,
             "started_at": "2026-10-27T04:00:00Z",
             "state": "failure",
             "trigger": {
@@ -54,6 +55,7 @@
             "overdue": false,
             "path": "/job/orion/job/launcher-gerrit-verify/913",
             "queue_reason": null,
+            "remaining_ms": null,
             "started_at": "2026-10-27T04:00:00Z",
             "state": "failure",
             "trigger": {
@@ -91,6 +93,7 @@
             "overdue": false,
             "path": "/job/orion/job/launcher-gerrit-verify/913",
             "queue_reason": null,
+            "remaining_ms": null,
             "started_at": "2026-10-27T04:00:00Z",
             "state": "failure",
             "trigger": {
@@ -128,6 +131,7 @@
             "overdue": false,
             "path": "/job/orion/job/launcher-gerrit-verify/913",
             "queue_reason": null,
+            "remaining_ms": null,
             "started_at": "2026-10-27T04:00:00Z",
             "state": "failure",
             "trigger": {
@@ -165,6 +169,7 @@
             "overdue": false,
             "path": "/job/orion/job/launcher-gerrit-verify/913",
             "queue_reason": null,
+            "remaining_ms": null,
             "started_at": "2026-10-27T04:00:00Z",
             "state": "failure",
             "trigger": {
@@ -202,6 +207,7 @@
             "overdue": false,
             "path": "/job/orion/job/launcher-gerrit-verify/913",
             "queue_reason": null,
+            "remaining_ms": null,
             "started_at": "2026-10-27T04:00:00Z",
             "state": "failure",
             "trigger": {
@@ -239,6 +245,7 @@
             "overdue": false,
             "path": "/job/orion/job/launcher-gerrit-verify/913",
             "queue_reason": null,
+            "remaining_ms": null,
             "started_at": "2026-10-27T04:00:00Z",
             "state": "failure",
             "trigger": {
@@ -276,6 +283,7 @@
             "overdue": false,
             "path": "/job/orion/job/launcher-gerrit-verify/913",
             "queue_reason": null,
+            "remaining_ms": null,
             "started_at": "2026-10-27T04:00:00Z",
             "state": "failure",
             "trigger": {
@@ -313,6 +321,7 @@
             "overdue": false,
             "path": "/job/orion/job/launcher-gerrit-verify/913",
             "queue_reason": null,
+            "remaining_ms": null,
             "started_at": "2026-10-27T04:00:00Z",
             "state": "failure",
             "trigger": {
@@ -350,6 +359,7 @@
             "overdue": false,
             "path": "/job/orion/job/launcher-gerrit-verify/913",
             "queue_reason": null,
+            "remaining_ms": null,
             "started_at": "2026-10-27T04:00:00Z",
             "state": "failure",
             "trigger": {
@@ -387,6 +397,7 @@
             "overdue": false,
             "path": "/job/orion/job/launcher-gerrit-verify/913",
             "queue_reason": null,
+            "remaining_ms": null,
             "started_at": "2026-10-27T04:00:00Z",
             "state": "failure",
             "trigger": {
@@ -424,6 +435,7 @@
             "overdue": false,
             "path": "/job/orion/job/launcher-gerrit-verify/913",
             "queue_reason": null,
+            "remaining_ms": null,
             "started_at": "2026-10-27T04:00:00Z",
             "state": "failure",
             "trigger": {
@@ -461,6 +473,7 @@
             "overdue": false,
             "path": "/job/orion/job/launcher-gerrit-verify/913",
             "queue_reason": null,
+            "remaining_ms": null,
             "started_at": "2026-10-27T04:00:00Z",
             "state": "failure",
             "trigger": {
@@ -498,6 +511,7 @@
             "overdue": false,
             "path": "/job/orion/job/launcher-gerrit-verify/913",
             "queue_reason": null,
+            "remaining_ms": null,
             "started_at": "2026-10-27T04:00:00Z",
             "state": "failure",
             "trigger": {
@@ -535,6 +549,7 @@
             "overdue": false,
             "path": "/job/orion/job/launcher-gerrit-verify/913",
             "queue_reason": null,
+            "remaining_ms": null,
             "started_at": "2026-10-27T04:00:00Z",
             "state": "failure",
             "trigger": {
@@ -572,6 +587,7 @@
             "overdue": false,
             "path": "/job/orion/job/launcher-gerrit-verify/913",
             "queue_reason": null,
+            "remaining_ms": null,
             "started_at": "2026-10-27T04:00:00Z",
             "state": "failure",
             "trigger": {
@@ -609,6 +625,7 @@
             "overdue": false,
             "path": "/job/orion/job/launcher-gerrit-verify/913",
             "queue_reason": null,
+            "remaining_ms": null,
             "started_at": "2026-10-27T04:00:00Z",
             "state": "failure",
             "trigger": {
@@ -646,6 +663,7 @@
             "overdue": false,
             "path": "/job/orion/job/launcher-gerrit-verify/913",
             "queue_reason": null,
+            "remaining_ms": null,
             "started_at": "2026-10-27T04:00:00Z",
             "state": "failure",
             "trigger": {
@@ -683,6 +701,7 @@
             "overdue": false,
             "path": "/job/orion/job/launcher-gerrit-verify/913",
             "queue_reason": null,
+            "remaining_ms": null,
             "started_at": "2026-10-27T04:00:00Z",
             "state": "failure",
             "trigger": {
@@ -720,6 +739,7 @@
             "overdue": false,
             "path": "/job/orion/job/launcher-gerrit-verify/913",
             "queue_reason": null,
+            "remaining_ms": null,
             "started_at": "2026-10-27T04:00:00Z",
             "state": "failure",
             "trigger": {
@@ -757,6 +777,7 @@
             "overdue": false,
             "path": "/job/orion/job/launcher-gerrit-verify/913",
             "queue_reason": null,
+            "remaining_ms": null,
             "started_at": "2026-10-27T04:00:00Z",
             "state": "failure",
             "trigger": {
@@ -804,6 +825,7 @@
             "overdue": false,
             "path": "/job/release/job/ir-1113-full/57",
             "queue_reason": null,
+            "remaining_ms": null,
             "started_at": "2026-10-26T22:10:00Z",
             "state": "success",
             "trigger": {
@@ -916,6 +938,7 @@
         "overdue": false,
         "path": "/job/orion/job/launcher-daily-userdebug/482",
         "queue_reason": null,
+        "remaining_ms": 720000,
         "started_at": "2026-10-27T06:00:00Z",
         "state": "running",
         "trigger": {
@@ -987,6 +1010,7 @@
         "overdue": false,
         "path": "/job/orion/job/launcher-gerrit-verify/913",
         "queue_reason": null,
+        "remaining_ms": null,
         "started_at": "2026-10-27T04:00:00Z",
         "state": "failure",
         "trigger": {
@@ -1059,6 +1083,7 @@
         "overdue": false,
         "path": "/job/release/job/ir-1113-full/57",
         "queue_reason": null,
+        "remaining_ms": null,
         "started_at": "2026-10-26T22:10:00Z",
         "state": "success",
         "trigger": {
@@ -1128,6 +1153,7 @@
         "overdue": true,
         "path": "/job/orion/job/systemui-verify/1167",
         "queue_reason": null,
+        "remaining_ms": null,
         "started_at": "2026-10-27T05:57:00Z",
         "state": "running",
         "trigger": {
@@ -1153,6 +1179,7 @@
       "overdue": false,
       "path": "/job/orion/job/launcher-daily-userdebug/482",
       "queue_reason": null,
+      "remaining_ms": 720000,
       "started_at": "2026-10-27T06:00:00Z",
       "state": "running",
       "trigger": {
@@ -1172,6 +1199,7 @@
       "overdue": true,
       "path": "/job/orion/job/systemui-verify/1167",
       "queue_reason": null,
+      "remaining_ms": null,
       "started_at": "2026-10-27T05:57:00Z",
       "state": "running",
       "trigger": {
@@ -1191,6 +1219,7 @@
       "overdue": false,
       "path": "/job/orion/job/carmode-lc3-smoke",
       "queue_reason": "等待可用执行器 (label: arm64-large)",
+      "remaining_ms": null,
       "started_at": "2026-10-27T06:17:00Z",
       "state": "queued",
       "trigger": {
