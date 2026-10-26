@@ -1230,9 +1230,7 @@ struct HostNavigation;
 impl NavigationService for HostNavigation {
     fn open(&self, scope: &ScopeHandle, target: ExternalTarget) -> Result<Token> {
         scope.check()?;
-        if !target.https_uri.starts_with("https://") {
-            return Err(Error::Invalid("only HTTPS navigation is allowed".into()));
-        }
+        pecofence_plugin_api::check_https_uri(&target.https_uri)?;
         pecofence_platform::shell::shell_execute(
             std::path::Path::new(&target.https_uri),
             None,

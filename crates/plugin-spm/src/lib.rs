@@ -3,6 +3,8 @@
 //! Business decisions remain daemon-owned. This crate consumes versioned read-model snapshots and
 //! turns them into layout, hit-test, semantic, and paint data without depending on Win32.
 
+pub mod navigation;
+
 use pecofence_plugin_api::design::{self, ContentScale, LayoutTracker};
 use pecofence_plugin_api::scene::{NodeStyle, Scene, SceneNode};
 use pecofence_plugin_api::*;
@@ -28,6 +30,9 @@ const ROW_LOCAL_BASE: u64 = 1 << 32;
 pub struct SpmConfig {
     pub project_id: ProjectId,
     pub delivery_scope_id: DeliveryScopeId,
+    /// Where "Open" may lead; see [`navigation`].
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub navigation_origins: navigation::NavigationOrigins,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -899,9 +904,9 @@ impl PanelProvider for SpmPlugin {
                 "unsupported SPM panel config version".into(),
             ));
         }
-        let _parsed: SpmConfig = serde_json::from_slice(&config.bytes)
+        let parsed: SpmConfig = serde_json::from_slice(&config.bytes)
             .map_err(|error| Error::Invalid(error.to_string()))?;
-        Ok(())
+        navigation::validate_origins(&parsed.navigation_origins)
     }
 
     fn create(&self, ctx: PluginContext, input: CreatePanel) -> Result<Box<dyn PanelInstance>> {
@@ -1323,9 +1328,30 @@ impl SpmPanel {
                 spm_contracts::RefreshDisposition::Coalesced => "Refresh coalesced; awaiting data",
             }
             .into()),
-            (RpcMethod::ResolveNavigation, Body::Response(Response::ResolveNavigation(_))) => Err(
-                Error::Backend("navigation origin not configured; no link opened".into()),
-            ),
+            (
+                RpcMethod::ResolveNavigation,
+                Body::Response(Response::ResolveNavigation(response)),
+            ) => {
+                match navigation::open(
+                    &self.ctx,
+                    &self.config.navigation_origins,
+                    &response.targets,
+                ) {
+                    Ok(link) => Ok(format!("Opened in {:?}", link.system)),
+                    Err(navigation::OpenError::Host(error)) => Err(error),
+                    Err(navigation::OpenError::Link(error)) => Err(Error::Backend(match error {
+                        navigation::LinkError::NoTarget => {
+                            "the source has no link for this record; no link opened".into()
+                        }
+                        navigation::LinkError::UnknownOrigin(origin) => {
+                            format!("navigation origin {origin} not configured; no link opened")
+                        }
+                        navigation::LinkError::BadPath => {
+                            "the source sent an invalid record path; no link opened".into()
+                        }
+                    })),
+                }
+            }
             _ => Err(Error::Invalid(
                 "unexpected action response or revision".into(),
             )),
@@ -1345,6 +1371,7 @@ mod tests {
         copied: RefCell<Vec<String>>,
         cancelled: RefCell<Vec<Token>>,
         opened: Cell<u64>,
+        opened_uris: RefCell<Vec<String>>,
     }
     struct Mock(Rc<Calls>);
     impl ScopeLease for Mock {
@@ -1383,8 +1410,9 @@ mod tests {
         }
     }
     impl NavigationService for Mock {
-        fn open(&self, _: &ScopeHandle, _: ExternalTarget) -> Result<Token> {
+        fn open(&self, _: &ScopeHandle, target: ExternalTarget) -> Result<Token> {
             self.0.opened.set(self.0.opened.get() + 1);
+            self.0.opened_uris.borrow_mut().push(target.https_uri);
             Ok(Token(99))
         }
     }
@@ -1468,6 +1496,7 @@ mod tests {
         let config = SpmConfig {
             project_id: ProjectId::new("fictional-project").unwrap(),
             delivery_scope_id: DeliveryScopeId::new("fictional-scope").unwrap(),
+            navigation_origins: Default::default(),
         };
         (
             SpmPanel {
@@ -1618,6 +1647,67 @@ mod tests {
             .unwrap();
         assert_eq!(calls.opened.get(), 0);
         assert!(panel.action_status.unwrap().contains("no link opened"));
+    }
+
+    #[test]
+    fn navigation_opens_only_through_a_configured_origin() {
+        let (mut panel, calls, _keep) = panel();
+        panel.config.navigation_origins = [(
+            "meegle-acme".to_owned(),
+            "https://meegle.example.com".to_owned(),
+        )]
+        .into();
+        let resolve = |panel: &mut SpmPanel, path: &str| {
+            panel
+                .pending_actions
+                .insert(Token(2), (RpcMethod::ResolveNavigation, Some(Revision(4))));
+            panel
+                .event(completion(
+                    Token(2),
+                    Response::ResolveNavigation(ResolveNavigationResponse {
+                        targets: vec![NavigationTarget {
+                            system: SourceSystem::Meegle,
+                            configured_origin_id: "meegle-acme".into(),
+                            relative_record_path: path.into(),
+                        }],
+                    }),
+                ))
+                .unwrap();
+        };
+        resolve(&mut panel, "/orion/story/88232");
+        assert_eq!(
+            *calls.opened_uris.borrow(),
+            ["https://meegle.example.com/orion/story/88232"]
+        );
+        assert_eq!(panel.action_status.as_deref(), Some("Opened in Meegle"));
+
+        resolve(&mut panel, "//evil.example/x");
+        assert_eq!(calls.opened.get(), 1);
+        assert!(panel.action_status.unwrap().contains("invalid record path"));
+    }
+
+    #[test]
+    fn config_with_an_unsafe_navigation_origin_is_rejected() {
+        let config = |base: &str| PanelConfig {
+            version: 2,
+            bytes: serde_json::to_vec(&serde_json::json!({
+                "project_id": "p",
+                "delivery_scope_id": "s",
+                "navigation_origins": { "meegle-acme": base },
+            }))
+            .unwrap()
+            .into(),
+        };
+        assert!(
+            SpmPlugin
+                .validate(&config("https://meegle.example.com"))
+                .is_ok()
+        );
+        assert!(
+            SpmPlugin
+                .validate(&config("http://meegle.example.com"))
+                .is_err()
+        );
     }
 
     fn snapshot(session: DaemonSessionId, revision: u64) -> ProjectSnapshot {

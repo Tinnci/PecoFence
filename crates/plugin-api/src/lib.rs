@@ -345,6 +345,46 @@ pub struct ExternalTarget {
     pub https_uri: String,
 }
 
+/// Longest URI the host hands to the shell.
+pub const MAX_EXTERNAL_URI: usize = 2048;
+
+/// Accepts only a plain `https://host[:port]/…` URI: printable ASCII, no
+/// credentials, no backslashes. Path, query and fragment must already be
+/// percent-encoded. Hosts call this before passing a target to the shell.
+pub fn check_https_uri(uri: &str) -> Result<()> {
+    let invalid = |why: &str| Err(Error::Invalid(format!("link rejected: {why}")));
+    if uri.len() > MAX_EXTERNAL_URI {
+        return invalid("too long");
+    }
+    let Some(rest) = uri.strip_prefix("https://") else {
+        return invalid("only HTTPS links can open");
+    };
+    if !uri.bytes().all(|b| b.is_ascii_graphic()) || uri.contains('\\') {
+        return invalid("unencoded or control characters");
+    }
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or_default();
+    let (host, port) = match authority.rsplit_once(':') {
+        Some((host, port)) => (host, Some(port)),
+        None => (authority, None),
+    };
+    let host_ok = !host.is_empty()
+        && host.split('.').all(|label| {
+            !label.is_empty()
+                && !label.starts_with('-')
+                && !label.ends_with('-')
+                && label
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b == b'-')
+        });
+    let port_ok = port.is_none_or(|port| {
+        !port.is_empty() && port.len() <= 5 && port.bytes().all(|b| b.is_ascii_digit())
+    });
+    if !host_ok || !port_ok {
+        return invalid("the host is not a plain domain name");
+    }
+    Ok(())
+}
+
 #[derive(Clone, Debug)]
 pub struct VersionedValue {
     pub revision: u64,
@@ -728,6 +768,36 @@ pub fn stop_panel(panel: &mut dyn PanelInstance, reason: StopReason) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_plain_https_links_pass_the_host_check() {
+        for ok in [
+            "https://meegle.example.com",
+            "https://meegle.example.com:8443/a/%E9%A6%96?x=1#y",
+            "https://gerrit.internal/c/4712",
+        ] {
+            assert!(check_https_uri(ok).is_ok(), "{ok}");
+        }
+        for bad in [
+            "http://meegle.example.com",
+            "HTTPS://meegle.example.com",
+            "file:///C:/Windows/notepad.exe",
+            "javascript:alert(1)",
+            "https://",
+            "https://user:pw@meegle.example.com/",
+            "https://meegle.example.com\\..\\x",
+            "https://meegle.example.com/首页",
+            "https://meegle.example.com/a b",
+            "https://-bad.example.com",
+            "https://meegle.example.com:/a",
+            "https://meegle.example.com:123456",
+            "https://[::1]/",
+        ] {
+            assert!(check_https_uri(bad).is_err(), "{bad}");
+        }
+        let long = format!("https://a.example/{}", "x".repeat(MAX_EXTERNAL_URI));
+        assert!(check_https_uri(&long).is_err());
+    }
 
     struct Lease;
     impl ScopeLease for Lease {
