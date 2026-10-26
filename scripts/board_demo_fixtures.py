@@ -489,17 +489,26 @@ def timeline_projection(cards: list[dict], step: int) -> None:
         "099": ("11-03", None, [("10-21", "implementation")]),
         "093": ("10-31", None, [("10-14", "implementation")]),
         "108": ("11-05", None, [("10-20", "implementation")]),
-        "112": ("11-02", None, [("10-19", "implementation")]),
+        "112": ("11-02", None, [("10-19", "implementation"), ("10-25", "review")]),
         "124": ("10-27", "10-24", [("10-16", "implementation"), ("10-23", "regression")]),
     }
     for c in cards:
         n = c["business_number"][-3:]
         due, baseline, spans = data.get(n, ("11-10", None, [("10-22", c["stage"]["stage"])]))
+        if n in ("103", "099"):
+            current = "regression" if n == "103" else "implementation"
+            c["stage"] = stage(current, current, "Meegle projected timeline stage")
+            c["column"] = "doing"
+            c["started_at"] = date(spans[0][0])
+        if n == "112":
+            c["swimlane"] = LITE
         # Preserve the original scripted R-102 assignment/start and R-108 acceptance.
         if n in ("101", "102") and step > 0:
             spans = spans + [("10-27", c["stage"]["stage"])]
-        if n == "108" and step == 2:
-            spans = spans + [("10-27", "done")]
+        if n == "108":
+            spans = spans + [("10-24", "acceptance")]
+            if step == 2:
+                spans = spans + [("10-27", "done")]
         c["schedule"] = {"due": date(due), "baseline_due": date(baseline) if baseline else None,
                          "basis": c["source"]}
         c["stage_history"] = [{"stage": stage, "from": date(md),
@@ -524,6 +533,11 @@ def timeline_projection(cards: list[dict], step: int) -> None:
                  started_at=date(start),
                  stage_history=[{"stage": "implementation", "from": date(start), "to": date(end)},
                                 {"stage": "done", "from": date(end), "to": None}], event_marks=[])
+        eid = evidence("ev:done-" + n, c["source"], "workflow.nodes.accept.finished",
+                       date(end), EARLY, "Acceptance completed for ORION-R-" + n)
+        c.update(relationships=[], current_assignee=None, evidence_count=1,
+                 event_marks=[{"at": date(end), "system": "meegle", "evidence_id": eid}],
+                 workflow=workflow("已完成", "done", date(end)))
         cards.append(c)
 
 
@@ -556,6 +570,7 @@ def card_evidence(board: dict) -> list[dict]:
     for c in board["cards"]:
         ids = {e for r in c["relationships"] for e in r["evidence"]}
         ids |= {e for b in c["blockers"] for e in b["evidence"]}
+        ids |= {m["evidence_id"] for m in c["event_marks"]}
         if c["business_number"] == "ORION-R-102":
             ids |= {"ev:l-request", "ev:l-reply"}
         items = []
