@@ -149,6 +149,45 @@ impl Summary {
     }
 }
 
+/// Which failures should notify. A build notifies once, when a watched job's latest build
+/// becomes a failure after an earlier observation. The first snapshot is a baseline: failures
+/// that were already there when PecoFence started do not notify, and neither does a job the
+/// watch has only just started following while it is already failing.
+#[derive(Default)]
+pub struct FailureTransitions {
+    /// The latest (build number, state) seen per watched job.
+    previous: std::collections::BTreeMap<String, (Option<u64>, CiBuildState)>,
+    /// Failures already decided, so a build is never announced twice.
+    decided: std::collections::BTreeSet<(String, u64)>,
+    initialized: bool,
+}
+
+impl FailureTransitions {
+    /// The builds to announce for this snapshot. `enabled` is the global switch: failures are
+    /// still recorded as decided while it is off, so turning it back on does not replay them.
+    pub fn observe(&mut self, snapshot: &CiWatchSnapshot, enabled: bool) -> Vec<CiBuild> {
+        let mut announce = Vec::new();
+        for job in &snapshot.jobs {
+            let Some(build) = &job.last else { continue };
+            let before = self
+                .previous
+                .insert(job.job.clone(), (build.number, build.state));
+            if build.state != CiBuildState::Failure {
+                continue;
+            }
+            let Some(number) = build.number else { continue };
+            let first = self.decided.insert((job.job.clone(), number));
+            let transitioned =
+                before.is_some_and(|old| old != (build.number, CiBuildState::Failure));
+            if first && self.initialized && enabled && job.notify_on_failure && transitioned {
+                announce.push(build.clone());
+            }
+        }
+        self.initialized = true;
+        announce
+    }
+}
+
 /// Demo seeds: the same shape SPM sends in live mode, for the deterministic capture.
 pub fn demo_seeds() -> CiSuggestions {
     let job = |value: &str, count: u32| CiSuggestion {
@@ -387,6 +426,90 @@ mod tests {
             "train:orion/launcher:0",
             "build:orion/launcher-gerrit-verify:913"
         ));
+    }
+
+    fn failing_watch(number: u64, state: CiBuildState) -> CiWatchSnapshot {
+        CiWatchSnapshot {
+            jobs: vec![WatchedJob {
+                id: "job:orion/a".into(),
+                job: "orion/a".into(),
+                role: CiJobRole::Other,
+                only_mine: false,
+                notify_on_failure: true,
+                last: Some(CiBuild {
+                    number: Some(number),
+                    state,
+                    ..build("orion/a", Some(number), state, None)
+                }),
+                history: vec![],
+                median_ms: None,
+                health: WatchHealth::Ok,
+            }],
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn startup_failures_are_a_baseline_not_notices() {
+        let mut t = FailureTransitions::default();
+        assert!(
+            t.observe(&failing_watch(900, CiBuildState::Failure), true)
+                .is_empty()
+        );
+        // The same failure on the next poll is still not new.
+        assert!(
+            t.observe(&failing_watch(900, CiBuildState::Failure), true)
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn a_transition_to_failure_notifies_once_per_build() {
+        let mut t = FailureTransitions::default();
+        t.observe(&failing_watch(912, CiBuildState::Success), true);
+        t.observe(&failing_watch(913, CiBuildState::Running), true);
+        let announced = t.observe(&failing_watch(913, CiBuildState::Failure), true);
+        assert_eq!(announced.len(), 1);
+        assert_eq!(announced[0].number, Some(913));
+        assert!(
+            t.observe(&failing_watch(913, CiBuildState::Failure), true)
+                .is_empty()
+        );
+        assert!(
+            t.observe(&failing_watch(913, CiBuildState::Failure), true)
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn the_global_switch_and_the_per_job_flag_both_gate_notices() {
+        let mut t = FailureTransitions::default();
+        t.observe(&failing_watch(1, CiBuildState::Success), true);
+        assert!(
+            t.observe(&failing_watch(2, CiBuildState::Failure), false)
+                .is_empty()
+        );
+        // Turning the switch back on does not replay the failure that happened while it was off.
+        t.observe(&failing_watch(3, CiBuildState::Success), true);
+        assert!(
+            t.observe(&failing_watch(2, CiBuildState::Failure), true)
+                .is_empty()
+        );
+
+        let mut quiet = failing_watch(4, CiBuildState::Failure);
+        quiet.jobs[0].notify_on_failure = false;
+        t.observe(&failing_watch(5, CiBuildState::Success), true);
+        assert!(t.observe(&quiet, true).is_empty());
+    }
+
+    #[test]
+    fn a_job_first_seen_while_failing_does_not_notify() {
+        let mut t = FailureTransitions::default();
+        t.observe(&CiWatchSnapshot::default(), true);
+        assert!(
+            t.observe(&failing_watch(7, CiBuildState::Failure), true)
+                .is_empty()
+        );
     }
 
     #[test]

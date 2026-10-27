@@ -169,6 +169,8 @@ pub fn decode_tray_message(wparam: usize, lparam: isize) -> TrayEvent {
 pub const TRAY_EVENT_CONTEXTMENU: u32 = WM_CONTEXTMENU as u32;
 pub const TRAY_EVENT_SELECT: u32 = NIN_SELECT as u32;
 pub const TRAY_EVENT_KEYSELECT: u32 = NIN_KEYSELECT as u32;
+/// The user clicked the most recent balloon notice (`show_info`).
+pub const TRAY_EVENT_BALLOON_CLICK: u32 = NIN_BALLOONUSERCLICK as u32;
 pub const TRAY_EVENT_LBUTTONDBLCLK: u32 = WM_LBUTTONDBLCLK as u32;
 
 /// Application-owned menu data, independent of HMENU and the visual backend.

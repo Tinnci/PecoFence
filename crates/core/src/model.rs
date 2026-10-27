@@ -150,6 +150,9 @@ pub struct Settings {
     pub autostart: bool,
     pub telemetry: bool,
     pub peek: PeekSettings,
+    /// Balloon notices when a watched job with 失败提醒 on fails. Older files default to on.
+    #[serde(default = "ci_failure_notifications_default")]
+    pub ci_failure_notifications: bool,
     pub icons: IconSettings,
     pub desktop_path: Option<String>,
 }
@@ -173,10 +176,14 @@ impl Default for Settings {
             autostart: true,
             telemetry: false,
             peek: PeekSettings::default(),
+            ci_failure_notifications: ci_failure_notifications_default(),
             icons: IconSettings::default(),
             desktop_path: None,
         }
     }
+}
+fn ci_failure_notifications_default() -> bool {
+    true
 }
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

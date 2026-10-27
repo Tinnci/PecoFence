@@ -8,7 +8,7 @@ use pecofence_plugin_spm::{
     board,
     ci_watch::{
         self,
-        entry::{OpenIntent, Summary},
+        entry::{self, OpenIntent, Summary},
     },
 };
 
@@ -124,8 +124,15 @@ impl App {
                 if snapshot.validate().is_err() {
                     return;
                 }
+                let failures = self.ci_failures.observe(
+                    &snapshot,
+                    self.state.config.settings.ci_failure_notifications,
+                );
                 self.ci_snapshot = snapshot;
                 self.deliver_ci_context(board::PROVIDER_ID, None, topic, json);
+                for build in failures {
+                    self.notify_ci_failure(&build);
+                }
             }
             "ci.open" => {
                 let Ok(intent) = serde_json::from_str::<OpenIntent>(json) else {
@@ -193,6 +200,34 @@ impl App {
             Some(handle.key().id),
             "ci.open",
             &json,
+        );
+    }
+
+    /// One balloon per failed build. Windows decides whether it shows (focus assist, quiet hours);
+    /// PecoFence only decides whether a failure is news.
+    fn notify_ci_failure(&mut self, build: &spm_contracts::CiBuild) {
+        let number = build.number.map(|n| format!(" #{n}")).unwrap_or_default();
+        let text = pecofence_core::i18n::format(
+            "{0}{1} 构建失败。点击在 CI/CD 中查看。",
+            &[build.job.clone(), number],
+        );
+        if let Some(tray) = &self.tray {
+            tray.show_info("PecoFence · CI/CD", &text, true);
+        }
+        self.ci_last_failure = Some(entry::build_key(build));
+    }
+
+    /// A click on the failure balloon opens the CI/CD fence at the build it announced.
+    pub(super) fn ci_failure_clicked(&mut self) {
+        let Some(focus) = self.ci_last_failure.take() else {
+            return;
+        };
+        self.open_ci_watch_now(
+            OpenIntent {
+                focus: Some(focus),
+                edit: None,
+            },
+            false,
         );
     }
 

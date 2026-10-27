@@ -245,8 +245,12 @@ pub struct App {
     /// The combination the last `sync_peek_hotkey` tried to register (the user's choice), so a
     /// persisting conflict does not re-toast on every settings apply.
     peek_hotkey_wanted: Option<PeekHotkey>,
-    /// Snapshot from the hidden CI monitor: tray counts, capsule and toasts read it.
+    /// Snapshot from the hidden CI monitor: tray counts, capsule and failure notices read it.
     ci_snapshot: spm_contracts::CiWatchSnapshot,
+    /// Failures already announced, so each build notifies once.
+    ci_failures: pecofence_plugin_spm::ci_watch::entry::FailureTransitions,
+    /// Where the last failure notice points, for a click on that balloon.
+    ci_last_failure: Option<String>,
     /// Virtual-key code of the registered CI hotkey, when registration succeeded.
     ci_hotkey: Option<u32>,
     /// Items put on the clipboard with 剪切 (drawn dimmed) and the clipboard sequence number at
@@ -479,6 +483,11 @@ impl App {
                                 {
                                     app.show_tray_menu(ev.x, ev.y);
                                 }
+                            } else if ev.event == tray::TRAY_EVENT_BALLOON_CLICK
+                                && let Ok(mut guard) = cell.try_borrow_mut()
+                                && let Some(app) = guard.as_mut()
+                            {
+                                app.ci_failure_clicked();
                             } else if (ev.event == tray::TRAY_EVENT_SELECT
                                 || ev.event == tray::TRAY_EVENT_KEYSELECT)
                                 && let Ok(mut guard) = cell.try_borrow_mut()
@@ -1046,6 +1055,8 @@ impl App {
             peek_hotkey: None,
             peek_hotkey_wanted: None,
             ci_snapshot: Default::default(),
+            ci_failures: Default::default(),
+            ci_last_failure: None,
             ci_hotkey: None,
             desktop_unavailable: false,
             idle_rules_checked: None,

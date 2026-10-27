@@ -685,5 +685,8 @@
   "SPM": "SPM",
   "通用": "Général",
   "交付时间线": "Chronologie de livraison",
-  "CI/CD": "CI/CD"
+  "CI/CD": "CI/CD",
+  "{0}{1} 构建失败。点击在 CI/CD 中查看。": "{0}{1} a échoué. Cliquez pour le voir dans CI/CD.",
+  "开启「失败提醒」的任务构建失败时，发出一条通知。通知遵循 Windows 的专注助手与勿扰设置。": "Un avis s’affiche lorsqu’un build d’une tâche dont l’alerte d’échec est activée échoue. Les avis suivent l’aide à la concentration et les heures calmes de Windows.",
+  "CI 失败通知": "Avis d’échec CI"
 }

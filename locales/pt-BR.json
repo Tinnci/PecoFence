@@ -685,5 +685,8 @@
   "SPM": "SPM",
   "通用": "Geral",
   "交付时间线": "Linha do tempo de entrega",
-  "CI/CD": "CI/CD"
+  "CI/CD": "CI/CD",
+  "{0}{1} 构建失败。点击在 CI/CD 中查看。": "{0}{1} falhou. Clique para ver no CI/CD.",
+  "开启「失败提醒」的任务构建失败时，发出一条通知。通知遵循 Windows 的专注助手与勿扰设置。": "Quando uma compilação de um job com alerta de falha ativado falha, um aviso é exibido. Os avisos seguem a Assistência de Foco e as horas silenciosas do Windows.",
+  "CI 失败通知": "Avisos de falha de CI"
 }

@@ -670,6 +670,15 @@ fn general(view: &SettingsView, context: &mut ViewContext<SettingsComponent>) ->
             section("Peek 浮现栅栏"),
             note("单击托盘图标或按快捷键，把所有栅栏浮到当前窗口之上；再按一次、按 Esc 或点击空白处返回。"),
             group(peek),
+            section("CI/CD"),
+            note("开启「失败提醒」的任务构建失败时，发出一条通知。通知遵循 Windows 的专注助手与勿扰设置。"),
+            group(vec![toggle(
+                "CI 失败通知",
+                s.ci_failure_notifications,
+                enabled,
+                context,
+                SettingChange::CiFailureNotifications,
+            )]),
         ])
         .into()
 }
