@@ -33,6 +33,8 @@ fn negative_ci_fixtures_fail_validation() {
         include_str!("../fixtures/ci_watch/invalid-wrong-patchset.json"),
         include_str!("../fixtures/ci_watch/invalid-queued-number.json"),
         include_str!("../fixtures/ci_watch/invalid-raw-navigation.json"),
+        include_str!("../fixtures/ci_watch/invalid-pipeline-order.json"),
+        include_str!("../fixtures/ci_watch/invalid-release-train-role.json"),
     ] {
         assert!(serde_json::from_str::<CiWatchSnapshot>(data)
             .unwrap()
@@ -97,4 +99,45 @@ fn watchlist_validation_and_atomic_local_edits() {
             job: "overflow".into()
         })
         .is_err());
+}
+
+#[test]
+fn pipeline_release_train_and_role_contract() {
+    let snapshot: CiWatchSnapshot =
+        serde_json::from_str(include_str!("../fixtures/ci_watch/snapshot.json")).unwrap();
+    snapshot.validate().unwrap();
+    assert_eq!(snapshot.release_train.len(), 2);
+    assert_eq!(snapshot.kpis.watched_failing, 1);
+    let change = &snapshot.branches[0].changes[0];
+    assert_eq!(change.pipeline.len(), CiStageKind::ALL.len());
+    assert_eq!(change.pipeline[1].state, CiStageState::Failed);
+    // Additive defaults: an older payload without the new fields still validates.
+    let old: CiWatchSnapshot =
+        serde_json::from_str(r#"{"jobs":[{"id":"job:a","job":"a"}]}"#).unwrap();
+    old.validate().unwrap();
+    assert_eq!(old.jobs[0].role, CiJobRole::Other);
+    assert!(old.release_train.is_empty());
+    assert_eq!(old.kpis, CiKpis::default());
+    // Role edits are local and only apply to a job.
+    let mut list = CiWatchlist::default();
+    list.apply(UpdateCiWatchlistRequest::AddJob {
+        job: "orion/a".into(),
+    })
+    .unwrap();
+    let id = list.jobs[0].id.clone();
+    list.apply(UpdateCiWatchlistRequest::SetRole {
+        id: id.clone(),
+        role: CiJobRole::Verify,
+    })
+    .unwrap();
+    assert_eq!(list.jobs[0].role, CiJobRole::Verify);
+    assert!(list
+        .apply(UpdateCiWatchlistRequest::SetRole {
+            id: "branch:x:y".into(),
+            role: CiJobRole::Daily
+        })
+        .is_err());
+    let mut snap = snapshot.clone();
+    snap.apply_watchlist(&list);
+    assert_eq!(snap.watchlist().jobs[0].role, CiJobRole::Verify);
 }

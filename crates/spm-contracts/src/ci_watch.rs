@@ -8,6 +8,8 @@ pub const MAX_CI_JOBS: usize = 50;
 pub const MAX_CI_BRANCHES: usize = 20;
 pub const MAX_CI_BUILDS: usize = 100;
 pub const MAX_CI_CHANGES: usize = 20;
+pub const MAX_CI_STAGE_LABEL: usize = 64;
+pub const MAX_CI_NOTE: usize = 512;
 pub const MAX_CI_HISTORY: usize = 10;
 fn invalid(reason: &str) -> ContractError {
     ContractError::InvalidField {
@@ -53,6 +55,65 @@ pub fn validate_ci_query(query: &str) -> Result<(), ContractError> {
         return Err(invalid("suggestion query must be at most 256 bytes"));
     }
     Ok(())
+}
+
+/// What a watched job means for the delivery pipeline. `Other` is the unspecified default.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CiJobRole {
+    Verify,
+    Daily,
+    Release,
+    #[default]
+    Other,
+}
+/// The six delivery stages of one change, in order.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CiStageKind {
+    Submit,
+    Verify,
+    Review,
+    Merge,
+    DailyBuild,
+    Release,
+}
+impl CiStageKind {
+    pub const ALL: [Self; 6] = [
+        Self::Submit,
+        Self::Verify,
+        Self::Review,
+        Self::Merge,
+        Self::DailyBuild,
+        Self::Release,
+    ];
+}
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CiStageState {
+    Done,
+    Running,
+    Failed,
+    Warn,
+    #[default]
+    Pending,
+}
+/// One stage of a change. `label` is a short SPM-derived token such as `PS3`, `× #913`
+/// or `约 8 分`; `entered_at` stays `None` when the source does not show when the stage began.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CiStage {
+    pub kind: CiStageKind,
+    pub state: CiStageState,
+    pub label: String,
+    #[serde(default)]
+    pub entered_at: Option<DateTime<Utc>>,
+}
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CiRatio {
+    pub passed: u32,
+    pub total: u32,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -148,12 +209,16 @@ pub struct SourceHealth {
 pub struct BuildResultMark {
     pub number: u64,
     pub state: CiBuildState,
+    #[serde(default)]
+    pub started_at: Option<DateTime<Utc>>,
 }
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct WatchedJob {
     pub id: String,
     pub job: String,
+    #[serde(default)]
+    pub role: CiJobRole,
     #[serde(default)]
     pub only_mine: bool,
     #[serde(default)]
@@ -191,8 +256,55 @@ pub struct CiChange {
     /// Embedded bounded build reference: immutable identity plus its observed status.
     #[serde(default)]
     pub ci: Option<CiBuild>,
+    /// Six stages in order when present; empty for sources that do not derive them.
+    #[serde(default)]
+    pub pipeline: Vec<CiStage>,
+    /// One line for the stage that needs attention, such as the failing build or next step.
+    #[serde(default)]
+    pub note: Option<String>,
+    #[serde(default)]
+    pub note_state: Option<CiStageState>,
     pub url_origin: String,
     pub path: String,
+}
+/// A daily or release job's current, last finished and next scheduled build.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ReleaseTrainEntry {
+    pub job: String,
+    pub role: CiJobRole,
+    #[serde(default)]
+    pub current: Option<CiBuild>,
+    #[serde(default)]
+    pub last_finished: Option<CiBuild>,
+    /// Only set when the schedule is known; never inferred.
+    #[serde(default)]
+    pub scheduled_at: Option<DateTime<Utc>>,
+    /// Merged changes on watched branches not seen in this job's observed builds.
+    #[serde(default)]
+    pub pending_merges: Option<u32>,
+    #[serde(default)]
+    pub pending_mine: Option<u32>,
+    /// Passed out of finished observed builds.
+    #[serde(default)]
+    pub recent: Option<CiRatio>,
+    #[serde(default)]
+    pub median_ms: Option<u64>,
+}
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CiKpis {
+    #[serde(default)]
+    pub submit_to_merge_median_ms: Option<u64>,
+    #[serde(default)]
+    pub merge_to_release_median_ms: Option<u64>,
+    /// Passed out of finished verify-role builds in the last seven days.
+    #[serde(default)]
+    pub verify_pass_7d: Option<CiRatio>,
+    #[serde(default)]
+    pub watched_total: u32,
+    #[serde(default)]
+    pub watched_failing: u32,
 }
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -224,6 +336,10 @@ pub struct CiWatchSnapshot {
     pub branches: Vec<WatchedBranch>,
     #[serde(default)]
     pub sources: Vec<SourceHealth>,
+    #[serde(default)]
+    pub release_train: Vec<ReleaseTrainEntry>,
+    #[serde(default)]
+    pub kpis: CiKpis,
 }
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -264,6 +380,8 @@ pub struct CiSuggestions {
 pub struct JobWatch {
     pub id: String,
     pub job: String,
+    #[serde(default)]
+    pub role: CiJobRole,
     #[serde(default)]
     pub only_mine: bool,
     #[serde(default)]
@@ -313,6 +431,10 @@ pub enum UpdateCiWatchlistRequest {
         flag: CiWatchFlag,
         value: bool,
     },
+    SetRole {
+        id: String,
+        role: CiJobRole,
+    },
 }
 impl CiWatchlist {
     pub fn validate(&self) -> Result<(), ContractError> {
@@ -350,6 +472,7 @@ impl CiWatchlist {
                 next.jobs.push(JobWatch {
                     id: format!("job:{job}"),
                     job,
+                    role: CiJobRole::Other,
                     only_mine: false,
                     notify_on_failure: false,
                 });
@@ -377,6 +500,14 @@ impl CiWatchlist {
                 if n == next.jobs.len() + next.branches.len() {
                     return Err(invalid("unknown watch ID"));
                 }
+            }
+            UpdateCiWatchlistRequest::SetRole { id, role } => {
+                let job = next
+                    .jobs
+                    .iter_mut()
+                    .find(|j| j.id == id)
+                    .ok_or_else(|| invalid("unknown watch ID"))?;
+                job.role = role;
             }
             UpdateCiWatchlistRequest::Toggle { id, flag, value } => {
                 if let Some(j) = next.jobs.iter_mut().find(|j| j.id == id) {
@@ -406,7 +537,7 @@ impl UpdateCiWatchlistRequest {
         match self {
             Self::AddJob { job } => validate_ci_job(job),
             Self::AddBranch { project, branch } => validate_ci_branch(project, branch),
-            Self::Remove { id } | Self::Toggle { id, .. } => {
+            Self::Remove { id } | Self::Toggle { id, .. } | Self::SetRole { id, .. } => {
                 if bounded(id, 768) {
                     Ok(())
                 } else {
@@ -488,6 +619,7 @@ impl CiWatchSnapshot {
                 .map(|j| JobWatch {
                     id: j.id.clone(),
                     job: j.job.clone(),
+                    role: j.role,
                     only_mine: j.only_mine,
                     notify_on_failure: j.notify_on_failure,
                 })
@@ -518,6 +650,7 @@ impl CiWatchSnapshot {
                     .unwrap_or(WatchedJob {
                         id: entry.id.clone(),
                         job: entry.job.clone(),
+                        role: entry.role,
                         only_mine: entry.only_mine,
                         notify_on_failure: entry.notify_on_failure,
                         last: None,
@@ -525,6 +658,7 @@ impl CiWatchSnapshot {
                         median_ms: None,
                         health: WatchHealth::Stale,
                     });
+                j.role = entry.role;
                 j.only_mine = entry.only_mine;
                 j.notify_on_failure = entry.notify_on_failure;
                 j
@@ -575,6 +709,18 @@ impl CiWatchSnapshot {
         for b in &self.my_builds {
             b.validate()?;
         }
+        if self.release_train.len() > MAX_CI_JOBS {
+            return Err(invalid("release train bounds exceeded"));
+        }
+        for entry in &self.release_train {
+            entry.validate()?;
+        }
+        if let Some(r) = &self.kpis.verify_pass_7d {
+            r.validate()?;
+        }
+        if self.kpis.watched_failing > self.kpis.watched_total {
+            return Err(invalid("CI KPI failing exceeds watched"));
+        }
         for j in &self.jobs {
             if j.history.len() > MAX_CI_HISTORY
                 || j.history
@@ -608,6 +754,7 @@ impl CiWatchSnapshot {
                 {
                     return Err(invalid("invalid CI change"));
                 }
+                c.validate_pipeline()?;
                 if let Some(b) = &c.ci {
                     b.validate()?;
                     if !(!c.revision.is_empty() && b.commit_ids.contains(&c.revision)
@@ -617,6 +764,71 @@ impl CiWatchSnapshot {
                     }
                 }
             }
+        }
+        Ok(())
+    }
+}
+impl CiChange {
+    fn validate_pipeline(&self) -> Result<(), ContractError> {
+        if !self.pipeline.is_empty() {
+            let shaped = self.pipeline.len() == CiStageKind::ALL.len()
+                && self
+                    .pipeline
+                    .iter()
+                    .zip(CiStageKind::ALL)
+                    .all(|(stage, kind)| {
+                        stage.kind == kind && bounded(&stage.label, MAX_CI_STAGE_LABEL)
+                    });
+            if !shaped {
+                return Err(invalid(
+                    "CI pipeline must list six labelled stages in order",
+                ));
+            }
+        }
+        if self.note.as_ref().is_some_and(|n| !bounded(n, MAX_CI_NOTE))
+            || (self.note.is_none() && self.note_state.is_some())
+        {
+            return Err(invalid("invalid CI change note"));
+        }
+        Ok(())
+    }
+}
+impl CiRatio {
+    pub fn validate(&self) -> Result<(), ContractError> {
+        if self.passed > self.total {
+            return Err(invalid("CI ratio passed exceeds total"));
+        }
+        Ok(())
+    }
+}
+impl ReleaseTrainEntry {
+    pub fn validate(&self) -> Result<(), ContractError> {
+        validate_ci_job(&self.job)?;
+        if !matches!(self.role, CiJobRole::Daily | CiJobRole::Release) {
+            return Err(invalid("release train role must be daily or release"));
+        }
+        if let Some(b) = &self.current {
+            b.validate()?;
+            if b.job != self.job || !matches!(b.state, CiBuildState::Running | CiBuildState::Queued)
+            {
+                return Err(invalid("release train current build mismatch"));
+            }
+        }
+        if let Some(b) = &self.last_finished {
+            b.validate()?;
+            if b.job != self.job || matches!(b.state, CiBuildState::Running | CiBuildState::Queued)
+            {
+                return Err(invalid("release train finished build mismatch"));
+            }
+        }
+        if let Some(r) = &self.recent {
+            r.validate()?;
+            if r.total as usize > MAX_CI_HISTORY {
+                return Err(invalid("release train history bound exceeded"));
+            }
+        }
+        if self.pending_mine.unwrap_or(0) > self.pending_merges.unwrap_or(u32::MAX) {
+            return Err(invalid("pending mine exceeds pending merges"));
         }
         Ok(())
     }
