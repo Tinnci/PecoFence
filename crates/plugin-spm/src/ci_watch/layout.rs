@@ -7,6 +7,7 @@ use crate::board::{
     palette::Palette,
     text::{Fitter, Measure},
 };
+use crate::scene_builder::{Builder, r};
 use chrono::{DateTime, Utc};
 use pecofence_plugin_api::paper;
 use pecofence_plugin_api::{
@@ -27,183 +28,6 @@ pub struct Layout {
     /// Row keys that an entry point can reveal (change cards, release-train rows), with their
     /// top edge in document coordinates (before scrolling).
     pub rows: Vec<(String, f32)>,
-}
-struct Builder<'a> {
-    nodes: Vec<SceneNode>,
-    actions: Vec<(String, Target, RectDip)>,
-    rows: Vec<(String, f32)>,
-    /// The scroll offset this pass was laid out with, so rows can be recorded in document space.
-    scroll: f32,
-    ids: &'a mut HashMap<String, u64>,
-    next: &'a mut u64,
-    p: &'a Palette,
-    fitter: Fitter<'a>,
-    focus: Option<&'a str>,
-    top: f32,
-    bottom: f32,
-}
-impl Builder<'_> {
-    #[allow(clippy::too_many_arguments)]
-    fn node(
-        &mut self,
-        key: &str,
-        rect: RectDip,
-        role: &str,
-        name: String,
-        text: String,
-        font: FontRole,
-        size: f32,
-        weight: u16,
-        color: [f32; 4],
-        fill: Option<[f32; 4]>,
-        target: Option<Target>,
-    ) {
-        if rect.h <= 0.0 || rect.w <= 0.0 || rect.y < self.top || rect.y + rect.h > self.bottom {
-            return;
-        }
-        let id = *self.ids.entry(key.into()).or_insert_with(|| {
-            let n = *self.next;
-            *self.next += 1;
-            n
-        });
-        let action = target.map(|t| {
-            self.actions.push((key.into(), t, rect));
-            16 + self.actions.len() as u64 - 1
-        });
-        let fitted = self
-            .fitter
-            .with_font(font)
-            .fit(&text, size, weight, (rect.w - 12.0).max(1.0), 1)
-            .0;
-        self.nodes.push(SceneNode {
-            id,
-            parent: Some(1),
-            rect,
-            role: role.into(),
-            name,
-            text: fitted,
-            action,
-            style: NodeStyle {
-                font,
-                size,
-                weight,
-                foreground: color,
-                fill,
-                stroke: if self.focus == Some(key) || self.p.hc && action.is_some() {
-                    Some(StrokeStyle {
-                        rgba: self.p.accent_ink,
-                        width: 1.5,
-                    })
-                } else {
-                    None
-                },
-                radius: 6.0,
-                text_inset: [6.0, 0.0],
-                align: TextAlign::MiddleLeading,
-                path: None,
-            },
-        });
-    }
-    fn label(
-        &mut self,
-        key: &str,
-        r: RectDip,
-        text: String,
-        color: [f32; 4],
-        size: f32,
-        font: FontRole,
-    ) {
-        self.node(
-            key,
-            r,
-            "text",
-            text.clone(),
-            text,
-            font,
-            size,
-            400,
-            color,
-            None,
-            None,
-        );
-    }
-    /// Diagonal hatch inside `rect`, drawn as stroked paths so running segments differ from done ones
-    /// by pattern as well as colour. Lines stay inside the rectangle.
-    fn hatch(&mut self, key: &str, rect: RectDip, color: [f32; 4]) {
-        if rect.h <= 0.0 || rect.w <= 0.0 || rect.y < self.top || rect.y + rect.h > self.bottom {
-            return;
-        }
-        let right = rect.x + rect.w;
-        let mut k = 0u32;
-        while rect.x + k as f32 * 4.0 + rect.h <= right {
-            let x = rect.x + k as f32 * 4.0;
-            let id = *self
-                .ids
-                .entry(format!("{key}:hatch:{k}"))
-                .or_insert_with(|| {
-                    let n = *self.next;
-                    *self.next += 1;
-                    n
-                });
-            self.nodes.push(SceneNode {
-                id,
-                parent: Some(1),
-                rect,
-                role: "decoration".into(),
-                name: String::new(),
-                text: String::new(),
-                action: None,
-                style: NodeStyle {
-                    font: FontRole::Text,
-                    size: 11.0,
-                    weight: 400,
-                    foreground: color,
-                    fill: None,
-                    stroke: Some(StrokeStyle {
-                        rgba: color,
-                        width: 1.2,
-                    }),
-                    radius: 0.0,
-                    text_inset: [0.0, 0.0],
-                    align: TextAlign::TopLeading,
-                    path: Some(Path {
-                        points: vec![
-                            PointDip {
-                                x,
-                                y: rect.y + rect.h,
-                            },
-                            PointDip {
-                                x: x + rect.h,
-                                y: rect.y,
-                            },
-                        ],
-                        closed: false,
-                    }),
-                },
-            });
-            k += 1;
-        }
-    }
-    fn section(&mut self, key: &str, y: f32, w: f32, title: &str, meta: &str) {
-        self.node(
-            key,
-            RectDip {
-                x: 14.0,
-                y,
-                w: w - 28.0,
-                h: 24.0,
-            },
-            "heading",
-            format!("{title} {meta}"),
-            format!("{title}   {meta}"),
-            FontRole::Display,
-            13.0,
-            700,
-            self.p.secondary,
-            None,
-            None,
-        );
-    }
 }
 fn stage_tone(state: CiStageState, p: &Palette) -> [f32; 4] {
     match state {
@@ -241,14 +65,6 @@ fn build_glyph(b: &CiBuild) -> &'static str {
         _ => "○",
     }
 }
-fn r(x: f32, y: f32, w: f32, h: f32) -> RectDip {
-    RectDip {
-        x,
-        y,
-        w: w.max(0.0),
-        h: h.max(0.0),
-    }
-}
 /// Headline status for a change, from the first stage that needs attention.
 fn headline(change: &CiChange, lang: Lang) -> (String, CiStageState) {
     let stages = &change.pipeline;
@@ -283,7 +99,7 @@ fn next_role(role: CiJobRole) -> CiJobRole {
 /// The first-run list: recent jobs and open-change branches as ticks, then the footer. Returns the
 /// y after the footer, in the same coordinates as the other views.
 fn seeding_body(
-    b: &mut Builder<'_>,
+    b: &mut Builder<'_, Target>,
     snapshot: &CiWatchSnapshot,
     seeds: &CiSuggestions,
     selected: &BTreeSet<usize>,
@@ -1059,7 +875,7 @@ pub fn build(
 /// The release train: one row or card per daily or release job's current, scheduled and
 /// last finished build. `detailed` shows the job's pending merges, median and recent results.
 fn release_train(
-    b: &mut Builder<'_>,
+    b: &mut Builder<'_, Target>,
     s: &CiWatchSnapshot,
     lang: Lang,
     timezone: &str,
@@ -1252,7 +1068,7 @@ fn release_train(
 /// Stroked polyline or closed polygon, drawn in `rect`'s coordinates; never hit-tested.
 /// A zero-width or zero-height box is widened to one dip so the renderer keeps the path.
 fn stroke_path(
-    b: &mut Builder<'_>,
+    b: &mut Builder<'_, Target>,
     key: &str,
     rect: RectDip,
     points: Vec<(f32, f32)>,
@@ -1297,7 +1113,14 @@ fn stroke_path(
 }
 
 /// Dashes: short vertical strokes every 6 dip, for code freeze and release lines.
-fn dashed_vertical(b: &mut Builder<'_>, key: &str, x: f32, y0: f32, y1: f32, color: [f32; 4]) {
+fn dashed_vertical(
+    b: &mut Builder<'_, Target>,
+    key: &str,
+    x: f32,
+    y0: f32,
+    y1: f32,
+    color: [f32; 4],
+) {
     let mut y = y0;
     let mut k = 0;
     while y < y1 {
@@ -1371,7 +1194,7 @@ fn trigger_text(trigger: &CiTrigger, lang: Lang) -> String {
 /// The workspace: scope switch, KPIs, stage columns, release lanes, job health and triage.
 #[allow(clippy::too_many_arguments)]
 fn workspace(
-    b: &mut Builder<'_>,
+    b: &mut Builder<'_, Target>,
     s: &CiWatchSnapshot,
     lang: Lang,
     config: &Config,
