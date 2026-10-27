@@ -438,6 +438,10 @@ impl App {
                     if source == ["live"] {
                         config["demo"] = serde_json::json!(false);
                     }
+                    if source == ["seed"] {
+                        // The first run: an empty demo watchlist, offering its seeds.
+                        config["seed_demo"] = serde_json::json!(true);
+                    }
                     if self
                         .state
                         .new_panel_fence(
@@ -457,6 +461,15 @@ impl App {
                         self.resync_windows();
                         self.schedule_save();
                     }
+                }
+                ["ci-monitor-demo"] => {
+                    // What the hidden monitor publishes in live use, from the demo fixture: the
+                    // tray counts and the board's capsule segment follow it.
+                    let json =
+                        serde_json::to_string(&pecofence_plugin_spm::ci_watch::demo_snapshot())
+                            .unwrap_or_default();
+                    self.ci_app_event("ci.snapshot", &json);
+                    self.process_panel_events();
                 }
                 ["new-board", x, y, w, h, source @ ..] => {
                     // The evidence board on its deterministic demo source, or with `live`

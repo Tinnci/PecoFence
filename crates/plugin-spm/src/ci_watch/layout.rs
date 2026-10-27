@@ -302,22 +302,31 @@ fn seeding_body(
     );
     y += 34.0;
     let who = format!(
-        "{} {} · {} {}. {}",
+        "{} {} · {} {}",
         lang.t("Jenkins user"),
         snapshot.user.jenkins_user,
         lang.t("Gerrit account"),
         snapshot.user.gerrit_user,
-        lang.t("Tick what to follow. You can change the list later.")
     );
     b.label(
         "seed:who",
-        r(14.0, y, w - 28.0, 34.0),
+        r(14.0, y, w - 28.0, 18.0),
         who,
         p.secondary,
         12.0,
         FontRole::Text,
     );
-    y += 42.0;
+    y += 18.0;
+    b.label(
+        "seed:hint",
+        r(14.0, y, w - 28.0, 18.0),
+        lang.t("Tick what to follow. You can change the list later.")
+            .into(),
+        p.secondary,
+        12.0,
+        FontRole::Text,
+    );
+    y += 26.0;
     for (heading, kind) in [
         (
             lang.t("Your recently triggered jobs"),

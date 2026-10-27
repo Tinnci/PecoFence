@@ -32,6 +32,9 @@ pub const PROVIDER_ID: &str = "pecofence.spm.ci-watch";
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
+    /// Demo only: start from an empty watchlist, to show the first-run view.
+    #[serde(default)]
+    pub seed_demo: bool,
     /// The hidden instance that publishes snapshots to the composition root (tray, capsule,
     /// toasts). It has no fence and never draws.
     #[serde(default)]
@@ -226,6 +229,14 @@ impl Panel {
             stopped: false,
             status: None,
         };
+        if panel.config.seed_demo {
+            // Demo first run: the demo fixture with its watchlist removed.
+            panel.snapshot = Some(CiWatchSnapshot {
+                user: demo_snapshot().user,
+                ..Default::default()
+            });
+        }
+        panel.ensure_seeds()?;
         if !panel.config.demo {
             panel.send(Request::GetCiWatch(GetCiWatchRequest::default()))?;
         }

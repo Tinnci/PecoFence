@@ -7,7 +7,9 @@ param(
   [int]$TextScale = 0,
   # With -Out, run a scripted tour and save screenshots there, then exit.
   [string]$Out = '',
-  [ValidateSet('tour')][string]$Tour = 'tour'
+  # tour: the CI fence views. first-run: the empty-watchlist seeding view. capsule: the board's
+  # capsule with the CI/CD segment, fed by the demo monitor snapshot.
+  [ValidateSet('tour', 'first-run', 'capsule')][string]$Tour = 'tour'
 )
 # Evidence board demo in an isolated, portable PecoFence instance. The board uses the
 # deterministic demo source (fictional Orion data); it does not contact SPM.
@@ -28,7 +30,8 @@ public static class BoardShot {
   [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hwnd, out Rect rect);
   [DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(IntPtr value);
   // The largest visible top-level window of the process: the board fence.
-  public static IntPtr Largest(int process) {
+  public static IntPtr Largest(int process) { return LargestArea(process); }
+  static IntPtr LargestArea(int process) {
     IntPtr found = IntPtr.Zero; long best = 0;
     EnumWindows(delegate(IntPtr hwnd, IntPtr value) {
       uint pid; GetWindowThreadProcessId(hwnd, out pid);
@@ -36,6 +39,25 @@ public static class BoardShot {
       if (pid == (uint)process && IsWindowVisible(hwnd) && GetWindowRect(hwnd, out r)) {
         long area = (long)(r.right - r.left) * (r.bottom - r.top);
         if (area > best) { best = area; found = hwnd; }
+      }
+      return true;
+    }, IntPtr.Zero);
+    return found;
+  }
+  // A capsule-sized strip: the smallest visible window of the process between minHeight and
+  // maxHeight pixels tall and at least minWidth wide. The fence's shadow window is larger than
+  // the capsule it surrounds, so the smallest match is the capsule itself.
+  public static IntPtr Strip(int process, int minWidth, int minHeight, int maxHeight) {
+    IntPtr found = IntPtr.Zero; long best = long.MaxValue;
+    EnumWindows(delegate(IntPtr hwnd, IntPtr value) {
+      uint pid; GetWindowThreadProcessId(hwnd, out pid);
+      Rect r;
+      if (pid == (uint)process && IsWindowVisible(hwnd) && GetWindowRect(hwnd, out r)) {
+        int w = r.right - r.left, h = r.bottom - r.top;
+        if (w >= minWidth && h >= minHeight && h <= maxHeight) {
+          long area = (long)w * h;
+          if (area < best) { best = area; found = hwnd; }
+        }
       }
       return true;
     }, IntPtr.Zero);
@@ -78,6 +100,13 @@ $steps = @(
   @{ name = 'cicd-watchlist'; lines = @('input CI vk 39 0') }
 )
 $create = 'new-ci-watch 40 40 480 780'
+if ($Tour -eq 'first-run') {
+  $create = 'new-ci-watch 40 40 480 780 seed'
+  $steps = @(@{ name = 'cicd-first-run'; lines = @() })
+} elseif ($Tour -eq 'capsule') {
+  $create = 'new-board 40 40 360 48'
+  $steps = @(@{ name = 'board-capsule'; lines = @('ci-monitor-demo') })
+}
 $lines = [Collections.Generic.List[string]]::new()
 $lines.Add('sleep 2500')
 $lines.Add('set-setting widgetPaperStyle "' + $Theme + '"')
@@ -110,7 +139,8 @@ try {
   for ($i = 0; $i -lt $steps.Count; $i++) {
     $wait = if ($steps[$i].wait) { $steps[$i].wait } elseif ($i -eq 0) { 1500 } else { 2600 }
     Start-Sleep -Milliseconds $wait
-    $window = [BoardShot]::Largest($process.Id)
+    # A capsule is only a title-less strip, so pick it by height rather than by area.
+    $window = if ($Tour -eq 'capsule') { [BoardShot]::Strip($process.Id, 200, 30, 120) } else { [BoardShot]::Largest($process.Id) }
     if ($window -eq [IntPtr]::Zero) { throw 'no board window' }
     $r = New-Object BoardShot+Rect; [void][BoardShot]::GetWindowRect($window, [ref]$r)
     $bmp = New-Object System.Drawing.Bitmap ($r.right - $r.left), ($r.bottom - $r.top)

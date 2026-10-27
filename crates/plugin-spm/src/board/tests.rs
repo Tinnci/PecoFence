@@ -1450,3 +1450,25 @@ fn track_in_ci_reports_a_gerrit_change_the_snapshot_cannot_resolve() {
         "the drawer says the source is unavailable"
     );
 }
+
+#[test]
+fn board_capsule_with_ci_segment_snapshot() {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/snapshots");
+    let mut h = harness_with(Some(light()));
+    h.settle();
+    ci_context(&mut h, &crate::ci_watch::demo_snapshot());
+    let (w, ht) = (360.0, 48.0);
+    let mut capsule = input(w, ht, 1.0);
+    capsule.presentation = Presentation::Capsule;
+    let scene = h.panel.prepare(capsule, &Heuristic).unwrap();
+    let background = light().surface_panel;
+    let mut canvas = pecofence_render::HeadlessCanvas::default();
+    scene.paint(&mut canvas).unwrap();
+    let pixmap = pecofence_render::raster::rasterize(
+        canvas.commands(),
+        w as u32,
+        ht as u32,
+        [background[0], background[1], background[2], 1.0],
+    );
+    pecofence_render::raster::assert_snapshot(&pixmap, &dir.join("board-capsule-ci-light-360.png"));
+}
