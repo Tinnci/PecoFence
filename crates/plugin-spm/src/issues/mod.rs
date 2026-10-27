@@ -2,7 +2,14 @@
 //! and assignment proposals. This module turns those responses into the labels, rows, actions
 //! and key moves the 问题 workspace draws. Status is always a word, never colour alone, and
 //! nothing here writes to Lark, Meegle, Gerrit or Jenkins.
+pub mod layout;
+pub mod panel;
 pub mod text;
+
+pub use panel::{
+    Config, DemoBundle, IssuesPlugin, PROVIDER_ID, Panel, WORKSPACE_WIDTH, demo_bundle,
+    demo_config, live_config,
+};
 
 use spm_contracts::*;
 use text::Lang;

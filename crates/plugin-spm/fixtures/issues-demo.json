@@ -1,0 +1,2948 @@
+{
+  "details": {
+    "A-063": {
+      "gate_impact": {
+        "criteria": [],
+        "di_contribution": 0.0,
+        "next_gate": "tr5"
+      },
+      "item": {
+        "assignment": "unspecified",
+        "blocks_gate": null,
+        "conflict": null,
+        "due_at": "2026-10-25T02:00:00Z",
+        "effort_hours": null,
+        "id": "A-063",
+        "kind": "AI",
+        "legacy": null,
+        "overdue": true,
+        "owner": "Jordan",
+        "queues": [],
+        "risk": null,
+        "severity": null,
+        "sources": [
+          "lark"
+        ],
+        "status": "行动项",
+        "title": "确认 R-104 的认领人",
+        "trace": null
+      },
+      "messages": [],
+      "people": [
+        {
+          "display_name": "Jordan",
+          "entity_id": "entity:jordan",
+          "handles": [
+            {
+              "source": "lark",
+              "value": "ou_jordan"
+            },
+            {
+              "source": "meegle",
+              "value": "jordan"
+            }
+          ],
+          "persona": null,
+          "relations": [
+            "pdt_manager"
+          ],
+          "title": "Orion IR 项目协调"
+        }
+      ],
+      "proposals": [],
+      "suggestions": [],
+      "suggestions_dismissed": 0,
+      "truncated": false,
+      "who_to_ask": []
+    },
+    "D-2240": {
+      "gate_impact": {
+        "criteria": [
+          "di_threshold"
+        ],
+        "di_contribution": 0.1,
+        "next_gate": "tr5"
+      },
+      "item": {
+        "assignment": "unspecified",
+        "blocks_gate": null,
+        "conflict": null,
+        "due_at": null,
+        "effort_hours": null,
+        "id": "D-2240",
+        "kind": "DTS",
+        "legacy": null,
+        "overdue": false,
+        "owner": null,
+        "queues": [],
+        "risk": null,
+        "severity": "hint",
+        "sources": [
+          "meegle"
+        ],
+        "status": "open",
+        "title": "文案细节 1",
+        "trace": null
+      },
+      "messages": [],
+      "people": [
+        {
+          "display_name": "Jordan",
+          "entity_id": "entity:jordan",
+          "handles": [
+            {
+              "source": "lark",
+              "value": "ou_jordan"
+            },
+            {
+              "source": "meegle",
+              "value": "jordan"
+            }
+          ],
+          "persona": null,
+          "relations": [
+            "pdt_manager"
+          ],
+          "title": "Orion IR 项目协调"
+        }
+      ],
+      "proposals": [],
+      "suggestions": [],
+      "suggestions_dismissed": 0,
+      "truncated": false,
+      "who_to_ask": []
+    },
+    "D-2241": {
+      "gate_impact": {
+        "criteria": [
+          "di_threshold"
+        ],
+        "di_contribution": 0.1,
+        "next_gate": "tr5"
+      },
+      "item": {
+        "assignment": "unspecified",
+        "blocks_gate": null,
+        "conflict": null,
+        "due_at": null,
+        "effort_hours": null,
+        "id": "D-2241",
+        "kind": "DTS",
+        "legacy": null,
+        "overdue": false,
+        "owner": null,
+        "queues": [],
+        "risk": null,
+        "severity": "hint",
+        "sources": [
+          "meegle"
+        ],
+        "status": "open",
+        "title": "文案细节 2",
+        "trace": null
+      },
+      "messages": [],
+      "people": [
+        {
+          "display_name": "Jordan",
+          "entity_id": "entity:jordan",
+          "handles": [
+            {
+              "source": "lark",
+              "value": "ou_jordan"
+            },
+            {
+              "source": "meegle",
+              "value": "jordan"
+            }
+          ],
+          "persona": null,
+          "relations": [
+            "pdt_manager"
+          ],
+          "title": "Orion IR 项目协调"
+        }
+      ],
+      "proposals": [],
+      "suggestions": [],
+      "suggestions_dismissed": 0,
+      "truncated": false,
+      "who_to_ask": []
+    },
+    "D-2242": {
+      "gate_impact": {
+        "criteria": [
+          "di_threshold"
+        ],
+        "di_contribution": 0.1,
+        "next_gate": "tr5"
+      },
+      "item": {
+        "assignment": "unspecified",
+        "blocks_gate": null,
+        "conflict": null,
+        "due_at": null,
+        "effort_hours": null,
+        "id": "D-2242",
+        "kind": "DTS",
+        "legacy": null,
+        "overdue": false,
+        "owner": null,
+        "queues": [],
+        "risk": null,
+        "severity": "hint",
+        "sources": [
+          "meegle"
+        ],
+        "status": "open",
+        "title": "文案细节 3",
+        "trace": null
+      },
+      "messages": [],
+      "people": [
+        {
+          "display_name": "Jordan",
+          "entity_id": "entity:jordan",
+          "handles": [
+            {
+              "source": "lark",
+              "value": "ou_jordan"
+            },
+            {
+              "source": "meegle",
+              "value": "jordan"
+            }
+          ],
+          "persona": null,
+          "relations": [
+            "pdt_manager"
+          ],
+          "title": "Orion IR 项目协调"
+        }
+      ],
+      "proposals": [],
+      "suggestions": [],
+      "suggestions_dismissed": 0,
+      "truncated": false,
+      "who_to_ask": []
+    },
+    "D-2243": {
+      "gate_impact": {
+        "criteria": [
+          "di_threshold"
+        ],
+        "di_contribution": 0.1,
+        "next_gate": "tr5"
+      },
+      "item": {
+        "assignment": "unspecified",
+        "blocks_gate": null,
+        "conflict": null,
+        "due_at": null,
+        "effort_hours": null,
+        "id": "D-2243",
+        "kind": "DTS",
+        "legacy": null,
+        "overdue": false,
+        "owner": null,
+        "queues": [],
+        "risk": null,
+        "severity": "hint",
+        "sources": [
+          "meegle"
+        ],
+        "status": "open",
+        "title": "文案细节 4",
+        "trace": null
+      },
+      "messages": [],
+      "people": [
+        {
+          "display_name": "Jordan",
+          "entity_id": "entity:jordan",
+          "handles": [
+            {
+              "source": "lark",
+              "value": "ou_jordan"
+            },
+            {
+              "source": "meegle",
+              "value": "jordan"
+            }
+          ],
+          "persona": null,
+          "relations": [
+            "pdt_manager"
+          ],
+          "title": "Orion IR 项目协调"
+        }
+      ],
+      "proposals": [],
+      "suggestions": [],
+      "suggestions_dismissed": 0,
+      "truncated": false,
+      "who_to_ask": []
+    },
+    "D-2244": {
+      "gate_impact": {
+        "criteria": [
+          "di_threshold"
+        ],
+        "di_contribution": 0.1,
+        "next_gate": "tr5"
+      },
+      "item": {
+        "assignment": "unspecified",
+        "blocks_gate": null,
+        "conflict": null,
+        "due_at": null,
+        "effort_hours": null,
+        "id": "D-2244",
+        "kind": "DTS",
+        "legacy": null,
+        "overdue": false,
+        "owner": null,
+        "queues": [],
+        "risk": null,
+        "severity": "hint",
+        "sources": [
+          "meegle"
+        ],
+        "status": "open",
+        "title": "文案细节 5",
+        "trace": null
+      },
+      "messages": [],
+      "people": [
+        {
+          "display_name": "Jordan",
+          "entity_id": "entity:jordan",
+          "handles": [
+            {
+              "source": "lark",
+              "value": "ou_jordan"
+            },
+            {
+              "source": "meegle",
+              "value": "jordan"
+            }
+          ],
+          "persona": null,
+          "relations": [
+            "pdt_manager"
+          ],
+          "title": "Orion IR 项目协调"
+        }
+      ],
+      "proposals": [],
+      "suggestions": [],
+      "suggestions_dismissed": 0,
+      "truncated": false,
+      "who_to_ask": []
+    },
+    "D-2250": {
+      "gate_impact": {
+        "criteria": [
+          "di_threshold"
+        ],
+        "di_contribution": 1.0,
+        "next_gate": "tr5"
+      },
+      "item": {
+        "assignment": "unspecified",
+        "blocks_gate": null,
+        "conflict": null,
+        "due_at": null,
+        "effort_hours": null,
+        "id": "D-2250",
+        "kind": "DTS",
+        "legacy": null,
+        "overdue": false,
+        "owner": null,
+        "queues": [],
+        "risk": null,
+        "severity": "normal",
+        "sources": [
+          "meegle"
+        ],
+        "status": "open",
+        "title": "小部件预览裁切",
+        "trace": null
+      },
+      "messages": [],
+      "people": [
+        {
+          "display_name": "Jordan",
+          "entity_id": "entity:jordan",
+          "handles": [
+            {
+              "source": "lark",
+              "value": "ou_jordan"
+            },
+            {
+              "source": "meegle",
+              "value": "jordan"
+            }
+          ],
+          "persona": null,
+          "relations": [
+            "pdt_manager"
+          ],
+          "title": "Orion IR 项目协调"
+        }
+      ],
+      "proposals": [],
+      "suggestions": [],
+      "suggestions_dismissed": 0,
+      "truncated": false,
+      "who_to_ask": []
+    },
+    "D-2255": {
+      "gate_impact": {
+        "criteria": [
+          "di_threshold"
+        ],
+        "di_contribution": 1.0,
+        "next_gate": "tr5"
+      },
+      "item": {
+        "assignment": "unspecified",
+        "blocks_gate": null,
+        "conflict": null,
+        "due_at": null,
+        "effort_hours": null,
+        "id": "D-2255",
+        "kind": "DTS",
+        "legacy": null,
+        "overdue": false,
+        "owner": null,
+        "queues": [],
+        "risk": null,
+        "severity": "normal",
+        "sources": [
+          "meegle"
+        ],
+        "status": "open",
+        "title": "最近任务排序异常",
+        "trace": null
+      },
+      "messages": [],
+      "people": [
+        {
+          "display_name": "Jordan",
+          "entity_id": "entity:jordan",
+          "handles": [
+            {
+              "source": "lark",
+              "value": "ou_jordan"
+            },
+            {
+              "source": "meegle",
+              "value": "jordan"
+            }
+          ],
+          "persona": null,
+          "relations": [
+            "pdt_manager"
+          ],
+          "title": "Orion IR 项目协调"
+        }
+      ],
+      "proposals": [],
+      "suggestions": [],
+      "suggestions_dismissed": 0,
+      "truncated": false,
+      "who_to_ask": []
+    },
+    "D-2258": {
+      "gate_impact": {
+        "criteria": [
+          "di_threshold"
+        ],
+        "di_contribution": 1.0,
+        "next_gate": "tr5"
+      },
+      "item": {
+        "assignment": "unspecified",
+        "blocks_gate": null,
+        "conflict": null,
+        "due_at": null,
+        "effort_hours": null,
+        "id": "D-2258",
+        "kind": "DTS",
+        "legacy": null,
+        "overdue": false,
+        "owner": null,
+        "queues": [],
+        "risk": null,
+        "severity": "normal",
+        "sources": [
+          "meegle"
+        ],
+        "status": "open",
+        "title": "文件夹名称溢出",
+        "trace": null
+      },
+      "messages": [],
+      "people": [
+        {
+          "display_name": "Jordan",
+          "entity_id": "entity:jordan",
+          "handles": [
+            {
+              "source": "lark",
+              "value": "ou_jordan"
+            },
+            {
+              "source": "meegle",
+              "value": "jordan"
+            }
+          ],
+          "persona": null,
+          "relations": [
+            "pdt_manager"
+          ],
+          "title": "Orion IR 项目协调"
+        }
+      ],
+      "proposals": [],
+      "suggestions": [],
+      "suggestions_dismissed": 0,
+      "truncated": false,
+      "who_to_ask": []
+    },
+    "D-2262": {
+      "gate_impact": {
+        "criteria": [
+          "di_threshold"
+        ],
+        "di_contribution": 1.0,
+        "next_gate": "tr5"
+      },
+      "item": {
+        "assignment": "unspecified",
+        "blocks_gate": null,
+        "conflict": null,
+        "due_at": null,
+        "effort_hours": null,
+        "id": "D-2262",
+        "kind": "DTS",
+        "legacy": null,
+        "overdue": false,
+        "owner": null,
+        "queues": [],
+        "risk": null,
+        "severity": "normal",
+        "sources": [
+          "meegle"
+        ],
+        "status": "open",
+        "title": "分屏后搜索结果为空",
+        "trace": null
+      },
+      "messages": [],
+      "people": [
+        {
+          "display_name": "Jordan",
+          "entity_id": "entity:jordan",
+          "handles": [
+            {
+              "source": "lark",
+              "value": "ou_jordan"
+            },
+            {
+              "source": "meegle",
+              "value": "jordan"
+            }
+          ],
+          "persona": null,
+          "relations": [
+            "pdt_manager"
+          ],
+          "title": "Orion IR 项目协调"
+        }
+      ],
+      "proposals": [],
+      "suggestions": [],
+      "suggestions_dismissed": 0,
+      "truncated": false,
+      "who_to_ask": []
+    },
+    "D-2268": {
+      "gate_impact": {
+        "criteria": [
+          "di_threshold",
+          "legacy_approved"
+        ],
+        "di_contribution": 1.0,
+        "next_gate": "tr5"
+      },
+      "item": {
+        "assignment": "unspecified",
+        "blocks_gate": null,
+        "conflict": null,
+        "due_at": null,
+        "effort_hours": null,
+        "id": "D-2268",
+        "kind": "DTS",
+        "legacy": "requested",
+        "overdue": false,
+        "owner": null,
+        "queues": [
+          "legacy_pending"
+        ],
+        "risk": null,
+        "severity": "normal",
+        "sources": [
+          "meegle"
+        ],
+        "status": "open",
+        "title": "壁纸切换动画掉帧",
+        "trace": null
+      },
+      "messages": [],
+      "people": [
+        {
+          "display_name": "Jordan",
+          "entity_id": "entity:jordan",
+          "handles": [
+            {
+              "source": "lark",
+              "value": "ou_jordan"
+            },
+            {
+              "source": "meegle",
+              "value": "jordan"
+            }
+          ],
+          "persona": null,
+          "relations": [
+            "pdt_manager"
+          ],
+          "title": "Orion IR 项目协调"
+        }
+      ],
+      "proposals": [],
+      "suggestions": [],
+      "suggestions_dismissed": 0,
+      "truncated": false,
+      "who_to_ask": []
+    },
+    "D-2271": {
+      "gate_impact": {
+        "criteria": [
+          "di_threshold",
+          "legacy_approved"
+        ],
+        "di_contribution": 1.0,
+        "next_gate": "tr5"
+      },
+      "item": {
+        "assignment": "unspecified",
+        "blocks_gate": null,
+        "conflict": null,
+        "due_at": null,
+        "effort_hours": null,
+        "id": "D-2271",
+        "kind": "DTS",
+        "legacy": "requested",
+        "overdue": false,
+        "owner": null,
+        "queues": [
+          "legacy_pending"
+        ],
+        "risk": null,
+        "severity": "normal",
+        "sources": [
+          "meegle"
+        ],
+        "status": "open",
+        "title": "图标长按菜单无响应",
+        "trace": null
+      },
+      "messages": [],
+      "people": [
+        {
+          "display_name": "Jordan",
+          "entity_id": "entity:jordan",
+          "handles": [
+            {
+              "source": "lark",
+              "value": "ou_jordan"
+            },
+            {
+              "source": "meegle",
+              "value": "jordan"
+            }
+          ],
+          "persona": null,
+          "relations": [
+            "pdt_manager"
+          ],
+          "title": "Orion IR 项目协调"
+        }
+      ],
+      "proposals": [],
+      "suggestions": [],
+      "suggestions_dismissed": 0,
+      "truncated": false,
+      "who_to_ask": []
+    },
+    "D-2279": {
+      "gate_impact": {
+        "criteria": [
+          "di_threshold"
+        ],
+        "di_contribution": 1.0,
+        "next_gate": "tr5"
+      },
+      "item": {
+        "assignment": "confirmed",
+        "blocks_gate": null,
+        "conflict": null,
+        "due_at": null,
+        "effort_hours": 4.0,
+        "id": "D-2279",
+        "kind": "DTS",
+        "legacy": null,
+        "overdue": false,
+        "owner": "司马云澜",
+        "queues": [],
+        "risk": null,
+        "severity": "normal",
+        "sources": [
+          "meegle"
+        ],
+        "status": "open",
+        "title": "设置页文案截断",
+        "trace": null
+      },
+      "messages": [],
+      "people": [
+        {
+          "display_name": "Jordan",
+          "entity_id": "entity:jordan",
+          "handles": [
+            {
+              "source": "lark",
+              "value": "ou_jordan"
+            },
+            {
+              "source": "meegle",
+              "value": "jordan"
+            }
+          ],
+          "persona": null,
+          "relations": [
+            "pdt_manager"
+          ],
+          "title": "Orion IR 项目协调"
+        }
+      ],
+      "proposals": [],
+      "suggestions": [],
+      "suggestions_dismissed": 0,
+      "truncated": false,
+      "who_to_ask": []
+    },
+    "D-2287": {
+      "gate_impact": {
+        "criteria": [
+          "di_threshold",
+          "legacy_approved"
+        ],
+        "di_contribution": 1.0,
+        "next_gate": "tr5"
+      },
+      "item": {
+        "assignment": "confirmed",
+        "blocks_gate": null,
+        "conflict": null,
+        "due_at": null,
+        "effort_hours": 3.0,
+        "id": "D-2287",
+        "kind": "DTS",
+        "legacy": "requested",
+        "overdue": false,
+        "owner": "司马云澜",
+        "queues": [
+          "legacy_pending"
+        ],
+        "risk": null,
+        "severity": "normal",
+        "sources": [
+          "meegle"
+        ],
+        "status": "open",
+        "title": "锁屏天气卡片偶现空白",
+        "trace": null
+      },
+      "messages": [],
+      "people": [
+        {
+          "display_name": "Jordan",
+          "entity_id": "entity:jordan",
+          "handles": [
+            {
+              "source": "lark",
+              "value": "ou_jordan"
+            },
+            {
+              "source": "meegle",
+              "value": "jordan"
+            }
+          ],
+          "persona": null,
+          "relations": [
+            "pdt_manager"
+          ],
+          "title": "Orion IR 项目协调"
+        }
+      ],
+      "proposals": [],
+      "suggestions": [],
+      "suggestions_dismissed": 0,
+      "truncated": false,
+      "who_to_ask": []
+    },
+    "D-2291": {
+      "gate_impact": {
+        "criteria": [
+          "di_threshold",
+          "no_open_fatal_or_major"
+        ],
+        "di_contribution": 3.0,
+        "next_gate": "tr5"
+      },
+      "item": {
+        "assignment": "confirmed",
+        "blocks_gate": "tr5",
+        "conflict": null,
+        "due_at": null,
+        "effort_hours": 8.0,
+        "id": "D-2291",
+        "kind": "DTS",
+        "legacy": null,
+        "overdue": false,
+        "owner": "Kai",
+        "queues": [
+          "needs_my_reply",
+          "blocks_next_gate"
+        ],
+        "risk": null,
+        "severity": "major",
+        "sources": [
+          "meegle"
+        ],
+        "status": "open",
+        "title": "简易模式下搜索框消失（R-124 回归）",
+        "trace": null
+      },
+      "messages": [],
+      "people": [
+        {
+          "display_name": "Jordan",
+          "entity_id": "entity:jordan",
+          "handles": [
+            {
+              "source": "lark",
+              "value": "ou_jordan"
+            },
+            {
+              "source": "meegle",
+              "value": "jordan"
+            }
+          ],
+          "persona": null,
+          "relations": [
+            "pdt_manager"
+          ],
+          "title": "Orion IR 项目协调"
+        }
+      ],
+      "proposals": [],
+      "suggestions": [
+        {
+          "kind": "duplicate_candidate",
+          "missing": null,
+          "object_key": "defect:D-2301",
+          "origin": "same_module_and_time",
+          "reasons": [],
+          "reference_id": null,
+          "similarity": 0.74,
+          "subject_key": "defect:D-2291",
+          "title": "横屏下底部搜索框被导航栏遮挡"
+        }
+      ],
+      "suggestions_dismissed": 0,
+      "truncated": false,
+      "who_to_ask": []
+    },
+    "D-2300": {
+      "gate_impact": {
+        "criteria": [
+          "di_threshold",
+          "no_open_fatal_or_major"
+        ],
+        "di_contribution": 3.0,
+        "next_gate": "tr5"
+      },
+      "item": {
+        "assignment": "unspecified",
+        "blocks_gate": "tr5",
+        "conflict": null,
+        "due_at": null,
+        "effort_hours": 16.0,
+        "id": "D-2300",
+        "kind": "DTS",
+        "legacy": null,
+        "overdue": false,
+        "owner": null,
+        "queues": [
+          "blocks_next_gate"
+        ],
+        "risk": null,
+        "severity": "major",
+        "sources": [
+          "meegle"
+        ],
+        "status": "open",
+        "title": "底栏图标在 Pad 横屏下错位",
+        "trace": null
+      },
+      "messages": [],
+      "people": [
+        {
+          "display_name": "Jordan",
+          "entity_id": "entity:jordan",
+          "handles": [
+            {
+              "source": "lark",
+              "value": "ou_jordan"
+            },
+            {
+              "source": "meegle",
+              "value": "jordan"
+            }
+          ],
+          "persona": null,
+          "relations": [
+            "pdt_manager"
+          ],
+          "title": "Orion IR 项目协调"
+        }
+      ],
+      "proposals": [],
+      "suggestions": [],
+      "suggestions_dismissed": 0,
+      "truncated": false,
+      "who_to_ask": []
+    },
+    "D-2301": {
+      "gate_impact": {
+        "criteria": [],
+        "di_contribution": 0.0,
+        "next_gate": "tr5"
+      },
+      "item": {
+        "assignment": "unspecified",
+        "blocks_gate": null,
+        "conflict": null,
+        "due_at": null,
+        "effort_hours": null,
+        "id": "D-2301",
+        "kind": "DTS",
+        "legacy": null,
+        "overdue": false,
+        "owner": null,
+        "queues": [],
+        "risk": null,
+        "severity": "major",
+        "sources": [
+          "meegle"
+        ],
+        "status": "待分诊",
+        "title": "横屏下底部搜索框被导航栏遮挡",
+        "trace": null
+      },
+      "messages": [],
+      "people": [
+        {
+          "display_name": "Jordan",
+          "entity_id": "entity:jordan",
+          "handles": [
+            {
+              "source": "lark",
+              "value": "ou_jordan"
+            },
+            {
+              "source": "meegle",
+              "value": "jordan"
+            }
+          ],
+          "persona": null,
+          "relations": [
+            "pdt_manager"
+          ],
+          "title": "Orion IR 项目协调"
+        }
+      ],
+      "proposals": [],
+      "suggestions": [
+        {
+          "kind": "duplicate_candidate",
+          "missing": null,
+          "object_key": "defect:D-2291",
+          "origin": "same_module_and_time",
+          "reasons": [],
+          "reference_id": null,
+          "similarity": 0.74,
+          "subject_key": "defect:D-2301",
+          "title": "简易模式下搜索框消失（R-124 回归）"
+        }
+      ],
+      "suggestions_dismissed": 0,
+      "truncated": false,
+      "who_to_ask": []
+    },
+    "IR-010": {
+      "gate_impact": {
+        "criteria": [],
+        "di_contribution": 0.0,
+        "next_gate": "tr5"
+      },
+      "item": {
+        "assignment": "unspecified",
+        "blocks_gate": null,
+        "conflict": null,
+        "due_at": null,
+        "effort_hours": null,
+        "id": "IR-010",
+        "kind": "IR",
+        "legacy": null,
+        "overdue": false,
+        "owner": null,
+        "queues": [],
+        "risk": null,
+        "severity": null,
+        "sources": [
+          "meegle"
+        ],
+        "status": "已确认",
+        "title": "Orion IR：搜索入口调整",
+        "trace": {
+          "children": [
+            "SR-031"
+          ],
+          "parents": []
+        }
+      },
+      "messages": [],
+      "people": [
+        {
+          "display_name": "Jordan",
+          "entity_id": "entity:jordan",
+          "handles": [
+            {
+              "source": "lark",
+              "value": "ou_jordan"
+            },
+            {
+              "source": "meegle",
+              "value": "jordan"
+            }
+          ],
+          "persona": null,
+          "relations": [
+            "pdt_manager"
+          ],
+          "title": "Orion IR 项目协调"
+        }
+      ],
+      "proposals": [],
+      "suggestions": [],
+      "suggestions_dismissed": 0,
+      "truncated": false,
+      "who_to_ask": []
+    },
+    "K-009": {
+      "gate_impact": {
+        "criteria": [],
+        "di_contribution": 0.0,
+        "next_gate": "tr5"
+      },
+      "item": {
+        "assignment": "unspecified",
+        "blocks_gate": null,
+        "conflict": null,
+        "due_at": null,
+        "effort_hours": null,
+        "id": "K-009",
+        "kind": "RISK",
+        "legacy": null,
+        "overdue": false,
+        "owner": null,
+        "queues": [],
+        "risk": {
+          "impact": "medium",
+          "mitigation": null,
+          "probability": "low",
+          "state": "closed"
+        },
+        "severity": null,
+        "sources": [
+          "meegle"
+        ],
+        "status": "closed",
+        "title": "旧版编解码器兼容",
+        "trace": null
+      },
+      "messages": [],
+      "people": [
+        {
+          "display_name": "Jordan",
+          "entity_id": "entity:jordan",
+          "handles": [
+            {
+              "source": "lark",
+              "value": "ou_jordan"
+            },
+            {
+              "source": "meegle",
+              "value": "jordan"
+            }
+          ],
+          "persona": null,
+          "relations": [
+            "pdt_manager"
+          ],
+          "title": "Orion IR 项目协调"
+        }
+      ],
+      "proposals": [],
+      "suggestions": [],
+      "suggestions_dismissed": 0,
+      "truncated": false,
+      "who_to_ask": []
+    },
+    "K-011": {
+      "gate_impact": {
+        "criteria": [],
+        "di_contribution": 0.0,
+        "next_gate": "tr5"
+      },
+      "item": {
+        "assignment": "unspecified",
+        "blocks_gate": null,
+        "conflict": null,
+        "due_at": null,
+        "effort_hours": null,
+        "id": "K-011",
+        "kind": "RISK",
+        "legacy": null,
+        "overdue": false,
+        "owner": null,
+        "queues": [],
+        "risk": {
+          "impact": "high",
+          "mitigation": null,
+          "probability": "low",
+          "state": "accepted"
+        },
+        "severity": null,
+        "sources": [
+          "meegle"
+        ],
+        "status": "accepted",
+        "title": "第三方地图 SDK 许可待确认",
+        "trace": null
+      },
+      "messages": [],
+      "people": [
+        {
+          "display_name": "Jordan",
+          "entity_id": "entity:jordan",
+          "handles": [
+            {
+              "source": "lark",
+              "value": "ou_jordan"
+            },
+            {
+              "source": "meegle",
+              "value": "jordan"
+            }
+          ],
+          "persona": null,
+          "relations": [
+            "pdt_manager"
+          ],
+          "title": "Orion IR 项目协调"
+        }
+      ],
+      "proposals": [],
+      "suggestions": [],
+      "suggestions_dismissed": 0,
+      "truncated": false,
+      "who_to_ask": []
+    },
+    "K-014": {
+      "gate_impact": {
+        "criteria": [
+          "high_risks_closed_or_accepted"
+        ],
+        "di_contribution": 0.0,
+        "next_gate": "tr5"
+      },
+      "item": {
+        "assignment": "unspecified",
+        "blocks_gate": "tr5",
+        "conflict": null,
+        "due_at": null,
+        "effort_hours": null,
+        "id": "K-014",
+        "kind": "RISK",
+        "legacy": null,
+        "overdue": false,
+        "owner": "Riley",
+        "queues": [
+          "blocks_next_gate"
+        ],
+        "risk": {
+          "impact": "high",
+          "mitigation": "TR5 遗留，ADCP 前关闭",
+          "probability": "medium",
+          "state": "open"
+        },
+        "severity": null,
+        "sources": [
+          "meegle"
+        ],
+        "status": "open",
+        "title": "BSP 11-08 晚于 TR5，LC3 无法验证",
+        "trace": null
+      },
+      "messages": [],
+      "people": [
+        {
+          "display_name": "Jordan",
+          "entity_id": "entity:jordan",
+          "handles": [
+            {
+              "source": "lark",
+              "value": "ou_jordan"
+            },
+            {
+              "source": "meegle",
+              "value": "jordan"
+            }
+          ],
+          "persona": null,
+          "relations": [
+            "pdt_manager"
+          ],
+          "title": "Orion IR 项目协调"
+        }
+      ],
+      "proposals": [],
+      "suggestions": [],
+      "suggestions_dismissed": 0,
+      "truncated": false,
+      "who_to_ask": []
+    },
+    "R-099": {
+      "gate_impact": {
+        "criteria": [
+          "ar_owner_confirmed"
+        ],
+        "di_contribution": 0.0,
+        "next_gate": "tr5"
+      },
+      "item": {
+        "assignment": "conflict",
+        "blocks_gate": null,
+        "conflict": {
+          "first": {
+            "source": "meegle",
+            "value": "Casey"
+          },
+          "second": {
+            "source": "lark",
+            "value": "Morgan"
+          }
+        },
+        "due_at": null,
+        "effort_hours": null,
+        "id": "R-099",
+        "kind": "AR",
+        "legacy": null,
+        "overdue": false,
+        "owner": null,
+        "queues": [
+          "source_conflict"
+        ],
+        "risk": null,
+        "severity": null,
+        "sources": [
+          "meegle",
+          "lark"
+        ],
+        "status": "待确认",
+        "title": "Restore the classic dock layout",
+        "trace": null
+      },
+      "messages": [
+        {
+          "author": "Morgan",
+          "excerpt": "4 我可以做，但 Meegle 上还是 Casey，需要改一下。",
+          "missing_context": false,
+          "occurred_at": "2026-10-26T02:34:00Z",
+          "participants": [],
+          "precision": null,
+          "reasons": [
+            "reply_chain"
+          ],
+          "record_id": "lark:msg:0c4",
+          "reply_to": "lark:msg:0a2",
+          "revision": 1
+        }
+      ],
+      "people": [
+        {
+          "display_name": "Jordan",
+          "entity_id": "entity:jordan",
+          "handles": [
+            {
+              "source": "lark",
+              "value": "ou_jordan"
+            },
+            {
+              "source": "meegle",
+              "value": "jordan"
+            }
+          ],
+          "persona": null,
+          "relations": [
+            "pdt_manager"
+          ],
+          "title": "Orion IR 项目协调"
+        },
+        {
+          "display_name": "Morgan",
+          "entity_id": "entity:morgan",
+          "handles": [
+            {
+              "source": "lark",
+              "value": "ou_morgan"
+            }
+          ],
+          "persona": "Launcher",
+          "relations": [
+            "participant"
+          ],
+          "title": null
+        }
+      ],
+      "proposals": [
+        {
+          "acceptance": "unknown",
+          "assignee": "Morgan",
+          "authority": "unknown",
+          "basis": "explicit_statement",
+          "evidence": [
+            {
+              "record_id": "lark:msg:0a1",
+              "revision": 1,
+              "role": "request"
+            },
+            {
+              "record_id": "lark:msg:0a2",
+              "revision": 1,
+              "role": "reply"
+            }
+          ],
+          "id": "proposal:R-099:morgan",
+          "item_id": "R-099",
+          "reviewed_at": null,
+          "statement_at": "2026-10-26T02:20:00Z",
+          "statement_author": "Gale",
+          "status": "proposed"
+        }
+      ],
+      "suggestions": [
+        {
+          "kind": "missing_ipd_info",
+          "missing": "confirmed_owner",
+          "object_key": null,
+          "origin": "rule",
+          "reasons": [],
+          "reference_id": null,
+          "similarity": null,
+          "subject_key": "issue:R-099",
+          "title": "R-099 没有确认负责人"
+        }
+      ],
+      "suggestions_dismissed": 0,
+      "truncated": false,
+      "who_to_ask": []
+    },
+    "R-101": {
+      "gate_impact": {
+        "criteria": [
+          "ar_owner_confirmed"
+        ],
+        "di_contribution": 0.0,
+        "next_gate": "tr5"
+      },
+      "item": {
+        "assignment": "proposed",
+        "blocks_gate": null,
+        "conflict": null,
+        "due_at": null,
+        "effort_hours": null,
+        "id": "R-101",
+        "kind": "AR",
+        "legacy": null,
+        "overdue": false,
+        "owner": null,
+        "queues": [
+          "awaiting_assignment_confirmation"
+        ],
+        "risk": null,
+        "severity": null,
+        "sources": [
+          "meegle",
+          "lark"
+        ],
+        "status": "待确认",
+        "title": "Remove the regional feature",
+        "trace": null
+      },
+      "messages": [],
+      "people": [
+        {
+          "display_name": "Jordan",
+          "entity_id": "entity:jordan",
+          "handles": [
+            {
+              "source": "lark",
+              "value": "ou_jordan"
+            },
+            {
+              "source": "meegle",
+              "value": "jordan"
+            }
+          ],
+          "persona": null,
+          "relations": [
+            "pdt_manager"
+          ],
+          "title": "Orion IR 项目协调"
+        },
+        {
+          "display_name": "Casey",
+          "entity_id": "entity:casey",
+          "handles": [
+            {
+              "source": "lark",
+              "value": "ou_casey"
+            }
+          ],
+          "persona": "Launcher",
+          "relations": [
+            "participant"
+          ],
+          "title": null
+        }
+      ],
+      "proposals": [
+        {
+          "acceptance": "unknown",
+          "assignee": "Casey",
+          "authority": "unknown",
+          "basis": "explicit_statement",
+          "evidence": [
+            {
+              "record_id": "lark:msg:0a1",
+              "revision": 1,
+              "role": "request"
+            },
+            {
+              "record_id": "lark:msg:0a2",
+              "revision": 1,
+              "role": "reply"
+            }
+          ],
+          "id": "proposal:R-101:casey",
+          "item_id": "R-101",
+          "reviewed_at": null,
+          "statement_at": "2026-10-26T02:20:00Z",
+          "statement_author": "Gale",
+          "status": "proposed"
+        }
+      ],
+      "suggestions": [
+        {
+          "kind": "missing_ipd_info",
+          "missing": "confirmed_owner",
+          "object_key": null,
+          "origin": "rule",
+          "reasons": [],
+          "reference_id": null,
+          "similarity": null,
+          "subject_key": "issue:R-101",
+          "title": "R-101 没有确认负责人"
+        }
+      ],
+      "suggestions_dismissed": 0,
+      "truncated": false,
+      "who_to_ask": []
+    },
+    "R-102": {
+      "gate_impact": {
+        "criteria": [
+          "ar_owner_confirmed"
+        ],
+        "di_contribution": 0.0,
+        "next_gate": "tr5"
+      },
+      "item": {
+        "assignment": "proposed",
+        "blocks_gate": null,
+        "conflict": null,
+        "due_at": null,
+        "effort_hours": null,
+        "id": "R-102",
+        "kind": "AR",
+        "legacy": null,
+        "overdue": false,
+        "owner": null,
+        "queues": [
+          "needs_my_reply",
+          "awaiting_assignment_confirmation"
+        ],
+        "risk": null,
+        "severity": null,
+        "sources": [
+          "meegle",
+          "lark"
+        ],
+        "status": "待确认",
+        "title": "Move the Search box to the bottom",
+        "trace": {
+          "children": [],
+          "parents": [
+            "SR-031"
+          ]
+        }
+      },
+      "messages": [
+        {
+          "author": "Jordan",
+          "excerpt": "IR 剩余四项，请认领：1 R-101 移除区域功能 2 R-104 搜索框开关 3 R-102 搜索框移到底部 4 R-099 经典 Dock",
+          "missing_context": false,
+          "occurred_at": "2026-10-26T01:41:00Z",
+          "participants": [],
+          "precision": "exact",
+          "reasons": [
+            "token"
+          ],
+          "record_id": "lark:msg:0a1",
+          "reply_to": null,
+          "revision": 1
+        },
+        {
+          "author": "Gale",
+          "excerpt": "1 Casey 3 我 4 Morgan",
+          "missing_context": false,
+          "occurred_at": "2026-10-26T02:20:00Z",
+          "participants": [],
+          "precision": "exact",
+          "reasons": [
+            "token",
+            "reply_chain"
+          ],
+          "record_id": "lark:msg:0a2",
+          "reply_to": "lark:msg:0a1",
+          "revision": 1
+        },
+        {
+          "author": "Casey",
+          "excerpt": "收到 1。R-102 那个底部布局之前 Kai 做过原型。",
+          "missing_context": false,
+          "occurred_at": "2026-10-26T02:51:00Z",
+          "participants": [],
+          "precision": "exact",
+          "reasons": [
+            "token"
+          ],
+          "record_id": "lark:msg:0c3",
+          "reply_to": null,
+          "revision": 1
+        }
+      ],
+      "people": [
+        {
+          "display_name": "Gale",
+          "entity_id": "entity:gale",
+          "handles": [
+            {
+              "source": "lark",
+              "value": "ou_gale"
+            },
+            {
+              "source": "gerrit",
+              "value": "gale"
+            }
+          ],
+          "persona": "Launcher 组长",
+          "relations": [
+            "development_representative",
+            "proposed_owner"
+          ],
+          "title": "系统软件部"
+        },
+        {
+          "display_name": "Jordan",
+          "entity_id": "entity:jordan",
+          "handles": [
+            {
+              "source": "lark",
+              "value": "ou_jordan"
+            },
+            {
+              "source": "meegle",
+              "value": "jordan"
+            }
+          ],
+          "persona": null,
+          "relations": [
+            "pdt_manager"
+          ],
+          "title": "Orion IR 项目协调"
+        },
+        {
+          "display_name": "Kai",
+          "entity_id": "entity:kai",
+          "handles": [
+            {
+              "source": "lark",
+              "value": "ou_kai"
+            },
+            {
+              "source": "gerrit",
+              "value": "kai"
+            }
+          ],
+          "persona": "Launcher 搜索",
+          "relations": [
+            "mentioned"
+          ],
+          "title": null
+        },
+        {
+          "display_name": "Casey",
+          "entity_id": "entity:casey",
+          "handles": [
+            {
+              "source": "lark",
+              "value": "ou_casey"
+            }
+          ],
+          "persona": "Launcher",
+          "relations": [
+            "participant"
+          ],
+          "title": null
+        },
+        {
+          "display_name": "Morgan",
+          "entity_id": "entity:morgan",
+          "handles": [
+            {
+              "source": "lark",
+              "value": "ou_morgan"
+            }
+          ],
+          "persona": "Launcher",
+          "relations": [
+            "participant"
+          ],
+          "title": null
+        }
+      ],
+      "proposals": [
+        {
+          "acceptance": "unknown",
+          "assignee": "Gale",
+          "authority": "unknown",
+          "basis": "explicit_statement",
+          "evidence": [
+            {
+              "record_id": "lark:msg:0a1",
+              "revision": 1,
+              "role": "request"
+            },
+            {
+              "record_id": "lark:msg:0a2",
+              "revision": 1,
+              "role": "reply"
+            }
+          ],
+          "id": "proposal:R-102:gale",
+          "item_id": "R-102",
+          "reviewed_at": null,
+          "statement_at": "2026-10-26T02:20:00Z",
+          "statement_author": "Gale",
+          "status": "proposed"
+        }
+      ],
+      "suggestions": [
+        {
+          "kind": "related_discussion",
+          "missing": null,
+          "object_key": "record:lark:msg:0b7",
+          "origin": "semantic",
+          "reasons": [
+            "discussion_in_area"
+          ],
+          "reference_id": null,
+          "similarity": 0.66,
+          "subject_key": "issue:R-102",
+          "title": "Kai 10-19 提到 Pad 横屏裁切"
+        },
+        {
+          "kind": "who_to_ask",
+          "missing": null,
+          "object_key": "person:entity:kai",
+          "origin": "people_who",
+          "reasons": [
+            "changes_in_area",
+            "mentioned_in_thread"
+          ],
+          "reference_id": null,
+          "similarity": null,
+          "subject_key": "issue:R-102",
+          "title": "Kai 可以回答这个问题"
+        },
+        {
+          "kind": "missing_ipd_info",
+          "missing": "acceptance_criteria",
+          "object_key": null,
+          "origin": "rule",
+          "reasons": [],
+          "reference_id": "SR-031",
+          "similarity": null,
+          "subject_key": "issue:R-102",
+          "title": "R-102 没有验收标准"
+        },
+        {
+          "kind": "missing_ipd_info",
+          "missing": "confirmed_owner",
+          "object_key": null,
+          "origin": "rule",
+          "reasons": [],
+          "reference_id": null,
+          "similarity": null,
+          "subject_key": "issue:R-102",
+          "title": "R-102 没有确认负责人"
+        }
+      ],
+      "suggestions_dismissed": 0,
+      "truncated": false,
+      "who_to_ask": [
+        {
+          "count": 3,
+          "person": {
+            "display_name": "Kai",
+            "entity_id": "entity:kai",
+            "handles": [
+              {
+                "source": "lark",
+                "value": "ou_kai"
+              },
+              {
+                "source": "gerrit",
+                "value": "kai"
+              }
+            ],
+            "persona": "Launcher 搜索",
+            "relations": [
+              "mentioned"
+            ],
+            "title": null
+          },
+          "reasons": [
+            "changes_in_area",
+            "mentioned_in_thread"
+          ],
+          "score": 0.82
+        },
+        {
+          "count": 2,
+          "person": {
+            "display_name": "Morgan",
+            "entity_id": "entity:morgan",
+            "handles": [
+              {
+                "source": "lark",
+                "value": "ou_morgan"
+              }
+            ],
+            "persona": "Launcher",
+            "relations": [
+              "participant"
+            ],
+            "title": null
+          },
+          "reasons": [
+            "discussion_in_area"
+          ],
+          "score": 0.47
+        }
+      ]
+    },
+    "R-104": {
+      "gate_impact": {
+        "criteria": [
+          "ar_owner_confirmed"
+        ],
+        "di_contribution": 0.0,
+        "next_gate": "tr5"
+      },
+      "item": {
+        "assignment": "unspecified",
+        "blocks_gate": null,
+        "conflict": null,
+        "due_at": null,
+        "effort_hours": null,
+        "id": "R-104",
+        "kind": "AR",
+        "legacy": null,
+        "overdue": false,
+        "owner": null,
+        "queues": [],
+        "risk": null,
+        "severity": null,
+        "sources": [
+          "lark"
+        ],
+        "status": "未认领",
+        "title": "Add search visibility switch",
+        "trace": null
+      },
+      "messages": [],
+      "people": [
+        {
+          "display_name": "Jordan",
+          "entity_id": "entity:jordan",
+          "handles": [
+            {
+              "source": "lark",
+              "value": "ou_jordan"
+            },
+            {
+              "source": "meegle",
+              "value": "jordan"
+            }
+          ],
+          "persona": null,
+          "relations": [
+            "pdt_manager"
+          ],
+          "title": "Orion IR 项目协调"
+        }
+      ],
+      "proposals": [],
+      "suggestions": [
+        {
+          "kind": "missing_ipd_info",
+          "missing": "confirmed_owner",
+          "object_key": null,
+          "origin": "rule",
+          "reasons": [],
+          "reference_id": null,
+          "similarity": null,
+          "subject_key": "issue:R-104",
+          "title": "R-104 没有确认负责人"
+        }
+      ],
+      "suggestions_dismissed": 0,
+      "truncated": false,
+      "who_to_ask": []
+    },
+    "SR-031": {
+      "gate_impact": {
+        "criteria": [],
+        "di_contribution": 0.0,
+        "next_gate": "tr5"
+      },
+      "item": {
+        "assignment": "unspecified",
+        "blocks_gate": null,
+        "conflict": null,
+        "due_at": null,
+        "effort_hours": null,
+        "id": "SR-031",
+        "kind": "SR",
+        "legacy": null,
+        "overdue": false,
+        "owner": null,
+        "queues": [],
+        "risk": null,
+        "severity": null,
+        "sources": [
+          "meegle"
+        ],
+        "status": "已确认",
+        "title": "搜索框在横屏与底部 Dock 下完整显示",
+        "trace": {
+          "children": [
+            "R-102"
+          ],
+          "parents": [
+            "IR-010"
+          ]
+        }
+      },
+      "messages": [],
+      "people": [
+        {
+          "display_name": "Jordan",
+          "entity_id": "entity:jordan",
+          "handles": [
+            {
+              "source": "lark",
+              "value": "ou_jordan"
+            },
+            {
+              "source": "meegle",
+              "value": "jordan"
+            }
+          ],
+          "persona": null,
+          "relations": [
+            "pdt_manager"
+          ],
+          "title": "Orion IR 项目协调"
+        }
+      ],
+      "proposals": [],
+      "suggestions": [],
+      "suggestions_dismissed": 0,
+      "truncated": false,
+      "who_to_ask": []
+    }
+  },
+  "query": {
+    "items": [
+      {
+        "assignment": "unspecified",
+        "blocks_gate": null,
+        "conflict": null,
+        "due_at": "2026-10-25T02:00:00Z",
+        "effort_hours": null,
+        "id": "A-063",
+        "kind": "AI",
+        "legacy": null,
+        "overdue": true,
+        "owner": "Jordan",
+        "queues": [],
+        "risk": null,
+        "severity": null,
+        "sources": [
+          "lark"
+        ],
+        "status": "行动项",
+        "title": "确认 R-104 的认领人",
+        "trace": null
+      },
+      {
+        "assignment": "unspecified",
+        "blocks_gate": null,
+        "conflict": null,
+        "due_at": null,
+        "effort_hours": null,
+        "id": "D-2240",
+        "kind": "DTS",
+        "legacy": null,
+        "overdue": false,
+        "owner": null,
+        "queues": [],
+        "risk": null,
+        "severity": "hint",
+        "sources": [
+          "meegle"
+        ],
+        "status": "open",
+        "title": "文案细节 1",
+        "trace": null
+      },
+      {
+        "assignment": "unspecified",
+        "blocks_gate": null,
+        "conflict": null,
+        "due_at": null,
+        "effort_hours": null,
+        "id": "D-2241",
+        "kind": "DTS",
+        "legacy": null,
+        "overdue": false,
+        "owner": null,
+        "queues": [],
+        "risk": null,
+        "severity": "hint",
+        "sources": [
+          "meegle"
+        ],
+        "status": "open",
+        "title": "文案细节 2",
+        "trace": null
+      },
+      {
+        "assignment": "unspecified",
+        "blocks_gate": null,
+        "conflict": null,
+        "due_at": null,
+        "effort_hours": null,
+        "id": "D-2242",
+        "kind": "DTS",
+        "legacy": null,
+        "overdue": false,
+        "owner": null,
+        "queues": [],
+        "risk": null,
+        "severity": "hint",
+        "sources": [
+          "meegle"
+        ],
+        "status": "open",
+        "title": "文案细节 3",
+        "trace": null
+      },
+      {
+        "assignment": "unspecified",
+        "blocks_gate": null,
+        "conflict": null,
+        "due_at": null,
+        "effort_hours": null,
+        "id": "D-2243",
+        "kind": "DTS",
+        "legacy": null,
+        "overdue": false,
+        "owner": null,
+        "queues": [],
+        "risk": null,
+        "severity": "hint",
+        "sources": [
+          "meegle"
+        ],
+        "status": "open",
+        "title": "文案细节 4",
+        "trace": null
+      },
+      {
+        "assignment": "unspecified",
+        "blocks_gate": null,
+        "conflict": null,
+        "due_at": null,
+        "effort_hours": null,
+        "id": "D-2244",
+        "kind": "DTS",
+        "legacy": null,
+        "overdue": false,
+        "owner": null,
+        "queues": [],
+        "risk": null,
+        "severity": "hint",
+        "sources": [
+          "meegle"
+        ],
+        "status": "open",
+        "title": "文案细节 5",
+        "trace": null
+      },
+      {
+        "assignment": "unspecified",
+        "blocks_gate": null,
+        "conflict": null,
+        "due_at": null,
+        "effort_hours": null,
+        "id": "D-2250",
+        "kind": "DTS",
+        "legacy": null,
+        "overdue": false,
+        "owner": null,
+        "queues": [],
+        "risk": null,
+        "severity": "normal",
+        "sources": [
+          "meegle"
+        ],
+        "status": "open",
+        "title": "小部件预览裁切",
+        "trace": null
+      },
+      {
+        "assignment": "unspecified",
+        "blocks_gate": null,
+        "conflict": null,
+        "due_at": null,
+        "effort_hours": null,
+        "id": "D-2255",
+        "kind": "DTS",
+        "legacy": null,
+        "overdue": false,
+        "owner": null,
+        "queues": [],
+        "risk": null,
+        "severity": "normal",
+        "sources": [
+          "meegle"
+        ],
+        "status": "open",
+        "title": "最近任务排序异常",
+        "trace": null
+      },
+      {
+        "assignment": "unspecified",
+        "blocks_gate": null,
+        "conflict": null,
+        "due_at": null,
+        "effort_hours": null,
+        "id": "D-2258",
+        "kind": "DTS",
+        "legacy": null,
+        "overdue": false,
+        "owner": null,
+        "queues": [],
+        "risk": null,
+        "severity": "normal",
+        "sources": [
+          "meegle"
+        ],
+        "status": "open",
+        "title": "文件夹名称溢出",
+        "trace": null
+      },
+      {
+        "assignment": "unspecified",
+        "blocks_gate": null,
+        "conflict": null,
+        "due_at": null,
+        "effort_hours": null,
+        "id": "D-2262",
+        "kind": "DTS",
+        "legacy": null,
+        "overdue": false,
+        "owner": null,
+        "queues": [],
+        "risk": null,
+        "severity": "normal",
+        "sources": [
+          "meegle"
+        ],
+        "status": "open",
+        "title": "分屏后搜索结果为空",
+        "trace": null
+      },
+      {
+        "assignment": "unspecified",
+        "blocks_gate": null,
+        "conflict": null,
+        "due_at": null,
+        "effort_hours": null,
+        "id": "D-2268",
+        "kind": "DTS",
+        "legacy": "requested",
+        "overdue": false,
+        "owner": null,
+        "queues": [
+          "legacy_pending"
+        ],
+        "risk": null,
+        "severity": "normal",
+        "sources": [
+          "meegle"
+        ],
+        "status": "open",
+        "title": "壁纸切换动画掉帧",
+        "trace": null
+      },
+      {
+        "assignment": "unspecified",
+        "blocks_gate": null,
+        "conflict": null,
+        "due_at": null,
+        "effort_hours": null,
+        "id": "D-2271",
+        "kind": "DTS",
+        "legacy": "requested",
+        "overdue": false,
+        "owner": null,
+        "queues": [
+          "legacy_pending"
+        ],
+        "risk": null,
+        "severity": "normal",
+        "sources": [
+          "meegle"
+        ],
+        "status": "open",
+        "title": "图标长按菜单无响应",
+        "trace": null
+      },
+      {
+        "assignment": "confirmed",
+        "blocks_gate": null,
+        "conflict": null,
+        "due_at": null,
+        "effort_hours": 4.0,
+        "id": "D-2279",
+        "kind": "DTS",
+        "legacy": null,
+        "overdue": false,
+        "owner": "司马云澜",
+        "queues": [],
+        "risk": null,
+        "severity": "normal",
+        "sources": [
+          "meegle"
+        ],
+        "status": "open",
+        "title": "设置页文案截断",
+        "trace": null
+      },
+      {
+        "assignment": "confirmed",
+        "blocks_gate": null,
+        "conflict": null,
+        "due_at": null,
+        "effort_hours": 3.0,
+        "id": "D-2287",
+        "kind": "DTS",
+        "legacy": "requested",
+        "overdue": false,
+        "owner": "司马云澜",
+        "queues": [
+          "legacy_pending"
+        ],
+        "risk": null,
+        "severity": "normal",
+        "sources": [
+          "meegle"
+        ],
+        "status": "open",
+        "title": "锁屏天气卡片偶现空白",
+        "trace": null
+      },
+      {
+        "assignment": "confirmed",
+        "blocks_gate": "tr5",
+        "conflict": null,
+        "due_at": null,
+        "effort_hours": 8.0,
+        "id": "D-2291",
+        "kind": "DTS",
+        "legacy": null,
+        "overdue": false,
+        "owner": "Kai",
+        "queues": [
+          "needs_my_reply",
+          "blocks_next_gate"
+        ],
+        "risk": null,
+        "severity": "major",
+        "sources": [
+          "meegle"
+        ],
+        "status": "open",
+        "title": "简易模式下搜索框消失（R-124 回归）",
+        "trace": null
+      },
+      {
+        "assignment": "unspecified",
+        "blocks_gate": "tr5",
+        "conflict": null,
+        "due_at": null,
+        "effort_hours": 16.0,
+        "id": "D-2300",
+        "kind": "DTS",
+        "legacy": null,
+        "overdue": false,
+        "owner": null,
+        "queues": [
+          "blocks_next_gate"
+        ],
+        "risk": null,
+        "severity": "major",
+        "sources": [
+          "meegle"
+        ],
+        "status": "open",
+        "title": "底栏图标在 Pad 横屏下错位",
+        "trace": null
+      },
+      {
+        "assignment": "unspecified",
+        "blocks_gate": null,
+        "conflict": null,
+        "due_at": null,
+        "effort_hours": null,
+        "id": "D-2301",
+        "kind": "DTS",
+        "legacy": null,
+        "overdue": false,
+        "owner": null,
+        "queues": [],
+        "risk": null,
+        "severity": "major",
+        "sources": [
+          "meegle"
+        ],
+        "status": "待分诊",
+        "title": "横屏下底部搜索框被导航栏遮挡",
+        "trace": null
+      },
+      {
+        "assignment": "unspecified",
+        "blocks_gate": null,
+        "conflict": null,
+        "due_at": null,
+        "effort_hours": null,
+        "id": "IR-010",
+        "kind": "IR",
+        "legacy": null,
+        "overdue": false,
+        "owner": null,
+        "queues": [],
+        "risk": null,
+        "severity": null,
+        "sources": [
+          "meegle"
+        ],
+        "status": "已确认",
+        "title": "Orion IR：搜索入口调整",
+        "trace": {
+          "children": [
+            "SR-031"
+          ],
+          "parents": []
+        }
+      },
+      {
+        "assignment": "unspecified",
+        "blocks_gate": null,
+        "conflict": null,
+        "due_at": null,
+        "effort_hours": null,
+        "id": "K-009",
+        "kind": "RISK",
+        "legacy": null,
+        "overdue": false,
+        "owner": null,
+        "queues": [],
+        "risk": {
+          "impact": "medium",
+          "mitigation": null,
+          "probability": "low",
+          "state": "closed"
+        },
+        "severity": null,
+        "sources": [
+          "meegle"
+        ],
+        "status": "closed",
+        "title": "旧版编解码器兼容",
+        "trace": null
+      },
+      {
+        "assignment": "unspecified",
+        "blocks_gate": null,
+        "conflict": null,
+        "due_at": null,
+        "effort_hours": null,
+        "id": "K-011",
+        "kind": "RISK",
+        "legacy": null,
+        "overdue": false,
+        "owner": null,
+        "queues": [],
+        "risk": {
+          "impact": "high",
+          "mitigation": null,
+          "probability": "low",
+          "state": "accepted"
+        },
+        "severity": null,
+        "sources": [
+          "meegle"
+        ],
+        "status": "accepted",
+        "title": "第三方地图 SDK 许可待确认",
+        "trace": null
+      },
+      {
+        "assignment": "unspecified",
+        "blocks_gate": "tr5",
+        "conflict": null,
+        "due_at": null,
+        "effort_hours": null,
+        "id": "K-014",
+        "kind": "RISK",
+        "legacy": null,
+        "overdue": false,
+        "owner": "Riley",
+        "queues": [
+          "blocks_next_gate"
+        ],
+        "risk": {
+          "impact": "high",
+          "mitigation": "TR5 遗留，ADCP 前关闭",
+          "probability": "medium",
+          "state": "open"
+        },
+        "severity": null,
+        "sources": [
+          "meegle"
+        ],
+        "status": "open",
+        "title": "BSP 11-08 晚于 TR5，LC3 无法验证",
+        "trace": null
+      },
+      {
+        "assignment": "conflict",
+        "blocks_gate": null,
+        "conflict": {
+          "first": {
+            "source": "meegle",
+            "value": "Casey"
+          },
+          "second": {
+            "source": "lark",
+            "value": "Morgan"
+          }
+        },
+        "due_at": null,
+        "effort_hours": null,
+        "id": "R-099",
+        "kind": "AR",
+        "legacy": null,
+        "overdue": false,
+        "owner": null,
+        "queues": [
+          "source_conflict"
+        ],
+        "risk": null,
+        "severity": null,
+        "sources": [
+          "meegle",
+          "lark"
+        ],
+        "status": "待确认",
+        "title": "Restore the classic dock layout",
+        "trace": null
+      },
+      {
+        "assignment": "proposed",
+        "blocks_gate": null,
+        "conflict": null,
+        "due_at": null,
+        "effort_hours": null,
+        "id": "R-101",
+        "kind": "AR",
+        "legacy": null,
+        "overdue": false,
+        "owner": null,
+        "queues": [
+          "awaiting_assignment_confirmation"
+        ],
+        "risk": null,
+        "severity": null,
+        "sources": [
+          "meegle",
+          "lark"
+        ],
+        "status": "待确认",
+        "title": "Remove the regional feature",
+        "trace": null
+      },
+      {
+        "assignment": "proposed",
+        "blocks_gate": null,
+        "conflict": null,
+        "due_at": null,
+        "effort_hours": null,
+        "id": "R-102",
+        "kind": "AR",
+        "legacy": null,
+        "overdue": false,
+        "owner": null,
+        "queues": [
+          "needs_my_reply",
+          "awaiting_assignment_confirmation"
+        ],
+        "risk": null,
+        "severity": null,
+        "sources": [
+          "meegle",
+          "lark"
+        ],
+        "status": "待确认",
+        "title": "Move the Search box to the bottom",
+        "trace": {
+          "children": [],
+          "parents": [
+            "SR-031"
+          ]
+        }
+      },
+      {
+        "assignment": "unspecified",
+        "blocks_gate": null,
+        "conflict": null,
+        "due_at": null,
+        "effort_hours": null,
+        "id": "R-104",
+        "kind": "AR",
+        "legacy": null,
+        "overdue": false,
+        "owner": null,
+        "queues": [],
+        "risk": null,
+        "severity": null,
+        "sources": [
+          "lark"
+        ],
+        "status": "未认领",
+        "title": "Add search visibility switch",
+        "trace": null
+      },
+      {
+        "assignment": "unspecified",
+        "blocks_gate": null,
+        "conflict": null,
+        "due_at": null,
+        "effort_hours": null,
+        "id": "SR-031",
+        "kind": "SR",
+        "legacy": null,
+        "overdue": false,
+        "owner": null,
+        "queues": [],
+        "risk": null,
+        "severity": null,
+        "sources": [
+          "meegle"
+        ],
+        "status": "已确认",
+        "title": "搜索框在横屏与底部 Dock 下完整显示",
+        "trace": {
+          "children": [
+            "R-102"
+          ],
+          "parents": [
+            "IR-010"
+          ]
+        }
+      }
+    ],
+    "observed_through": "2026-10-27T06:21:00Z",
+    "queue_counts": [
+      {
+        "count": 2,
+        "queue": "needs_my_reply"
+      },
+      {
+        "count": 2,
+        "queue": "awaiting_assignment_confirmation"
+      },
+      {
+        "count": 3,
+        "queue": "blocks_next_gate"
+      },
+      {
+        "count": 3,
+        "queue": "legacy_pending"
+      },
+      {
+        "count": 1,
+        "queue": "source_conflict"
+      }
+    ],
+    "truncated": false
+  },
+  "readiness": {
+    "contributing": [
+      "D-2240",
+      "D-2241",
+      "D-2242",
+      "D-2243",
+      "D-2244",
+      "D-2250",
+      "D-2255",
+      "D-2258",
+      "D-2262",
+      "D-2268",
+      "D-2271",
+      "D-2279",
+      "D-2287",
+      "D-2291",
+      "D-2300",
+      "K-014",
+      "R-099",
+      "R-101",
+      "R-102",
+      "R-104"
+    ],
+    "criteria": [
+      {
+        "contributing": [
+          "D-2291",
+          "D-2300",
+          "D-2287",
+          "D-2279",
+          "D-2271",
+          "D-2268",
+          "D-2262",
+          "D-2258",
+          "D-2255",
+          "D-2250",
+          "D-2240",
+          "D-2241",
+          "D-2242",
+          "D-2243",
+          "D-2244"
+        ],
+        "kind": "di_threshold",
+        "pass": false,
+        "threshold": 10.0,
+        "value": 14.5
+      },
+      {
+        "contributing": [
+          "D-2291",
+          "D-2300"
+        ],
+        "kind": "no_open_fatal_or_major",
+        "pass": false,
+        "threshold": 0.0,
+        "value": 2.0
+      },
+      {
+        "contributing": [
+          "D-2287",
+          "D-2271",
+          "D-2268"
+        ],
+        "kind": "legacy_approved",
+        "pass": false,
+        "threshold": 0.0,
+        "value": 3.0
+      },
+      {
+        "contributing": [
+          "R-099",
+          "R-101",
+          "R-102",
+          "R-104"
+        ],
+        "kind": "ar_owner_confirmed",
+        "pass": false,
+        "threshold": 0.0,
+        "value": 4.0
+      },
+      {
+        "contributing": [
+          "K-014"
+        ],
+        "kind": "high_risks_closed_or_accepted",
+        "pass": false,
+        "threshold": 0.0,
+        "value": 1.0
+      }
+    ],
+    "di": {
+      "by_severity": [
+        {
+          "contribution": 0.0,
+          "count": 0,
+          "severity": "fatal"
+        },
+        {
+          "contribution": 6.0,
+          "count": 2,
+          "severity": "major"
+        },
+        {
+          "contribution": 8.0,
+          "count": 8,
+          "severity": "normal"
+        },
+        {
+          "contribution": 0.5,
+          "count": 5,
+          "severity": "hint"
+        }
+      ],
+      "value": 14.5,
+      "weights": {
+        "fatal": 10.0,
+        "hint": 0.1,
+        "major": 3.0,
+        "normal": 1.0
+      }
+    },
+    "next_gate": "tr5",
+    "next_gate_due": "2026-11-06T00:00:00Z",
+    "observed_through": "2026-10-27T06:21:00Z",
+    "ready": false,
+    "track": [
+      {
+        "due_at": null,
+        "gate": "cdcp",
+        "phase": "concept",
+        "state": "passed"
+      },
+      {
+        "due_at": null,
+        "gate": "pdcp",
+        "phase": "plan",
+        "state": "passed"
+      },
+      {
+        "due_at": null,
+        "gate": "tr1",
+        "phase": "development",
+        "state": "passed"
+      },
+      {
+        "due_at": null,
+        "gate": "tr2",
+        "phase": "development",
+        "state": "passed"
+      },
+      {
+        "due_at": null,
+        "gate": "tr3",
+        "phase": "development",
+        "state": "passed"
+      },
+      {
+        "due_at": null,
+        "gate": "tr4",
+        "phase": "development",
+        "state": "passed"
+      },
+      {
+        "due_at": "2026-11-06T00:00:00Z",
+        "gate": "tr5",
+        "phase": "verification",
+        "state": "current"
+      },
+      {
+        "due_at": null,
+        "gate": "tr6",
+        "phase": "verification",
+        "state": "upcoming"
+      },
+      {
+        "due_at": null,
+        "gate": "adcp",
+        "phase": "release",
+        "state": "upcoming"
+      }
+    ]
+  },
+  "search": {
+    "fallback": null,
+    "mode_requested": "hybrid",
+    "mode_used": "hybrid",
+    "results": [
+      {
+        "channels": [
+          "lexical",
+          "semantic"
+        ],
+        "id": "R-102",
+        "kind": "issue",
+        "lexical": {
+          "rank": 1,
+          "spans": [
+            {
+              "end": 12,
+              "start": 3
+            },
+            {
+              "end": 24,
+              "start": 18
+            }
+          ]
+        },
+        "linked_issue": null,
+        "score": 0.03252247488101534,
+        "semantic": {
+          "rank": 2,
+          "similarity": 0.71,
+          "span": null
+        },
+        "snippet": "把搜索框移到底部 Dock 上方；平板横屏时保持完整显示",
+        "title": "Move the Search box to the bottom",
+        "why": [
+          "exact_term",
+          "same_meaning",
+          "linked_to_issue"
+        ]
+      },
+      {
+        "channels": [
+          "lexical",
+          "semantic"
+        ],
+        "id": "D-2301",
+        "kind": "issue",
+        "lexical": {
+          "rank": 2,
+          "spans": [
+            {
+              "end": 18,
+              "start": 12
+            }
+          ]
+        },
+        "linked_issue": null,
+        "score": 0.03252247488101534,
+        "semantic": {
+          "rank": 1,
+          "similarity": 0.74,
+          "span": null
+        },
+        "snippet": "横屏模式底部搜索栏显示不完整，平板必现",
+        "title": "横屏下底部搜索框被导航栏遮挡",
+        "why": [
+          "exact_term",
+          "same_meaning"
+        ]
+      },
+      {
+        "channels": [
+          "lexical",
+          "semantic"
+        ],
+        "id": "lark:msg:0c3",
+        "kind": "message",
+        "lexical": {
+          "rank": 3,
+          "spans": [
+            {
+              "end": 29,
+              "start": 23
+            }
+          ]
+        },
+        "linked_issue": null,
+        "score": 0.03149801587301587,
+        "semantic": {
+          "rank": 4,
+          "similarity": 0.58,
+          "span": null
+        },
+        "snippet": "收到 1。R-102 那个底部布局之前 Kai 做过原型。",
+        "title": "Casey",
+        "why": [
+          "exact_term",
+          "same_meaning"
+        ]
+      },
+      {
+        "channels": [
+          "semantic"
+        ],
+        "id": "lark:msg:0b7",
+        "kind": "message",
+        "lexical": null,
+        "linked_issue": null,
+        "score": 0.015873015873015872,
+        "semantic": {
+          "rank": 3,
+          "similarity": 0.66,
+          "span": null
+        },
+        "snippet": "底栏那个搜索入口在 Pad 横过来会被裁掉一截，我先挪了 8dp 看看",
+        "title": "Kai",
+        "why": [
+          "same_meaning"
+        ]
+      },
+      {
+        "channels": [
+          "lexical"
+        ],
+        "id": "entity:kai",
+        "kind": "person",
+        "lexical": {
+          "rank": 4,
+          "spans": []
+        },
+        "linked_issue": null,
+        "score": 0.015625,
+        "semantic": null,
+        "snippet": "Launcher · 搜索",
+        "title": "Kai",
+        "why": [
+          "exact_term"
+        ]
+      },
+      {
+        "channels": [
+          "semantic"
+        ],
+        "id": "change:18240",
+        "kind": "change",
+        "lexical": null,
+        "linked_issue": null,
+        "score": 0.015384615384615385,
+        "semantic": {
+          "rank": 5,
+          "similarity": 0.52,
+          "span": null
+        },
+        "snippet": "调整底部搜索容器的 inset，避免与手势条重叠",
+        "title": "Gerrit change:18240",
+        "why": [
+          "same_meaning"
+        ]
+      }
+    ],
+    "truncated": false
+  },
+  "what_if": {
+    "gate": "tr5",
+    "reaches_threshold": true,
+    "start_di": 14.5,
+    "steps": [
+      {
+        "di_after": 11.5,
+        "di_reduction": 3.0,
+        "effort_hours": 8.0,
+        "item_id": "D-2291",
+        "severity": "major"
+      },
+      {
+        "di_after": 10.5,
+        "di_reduction": 1.0,
+        "effort_hours": 3.0,
+        "item_id": "D-2287",
+        "severity": "normal"
+      },
+      {
+        "di_after": 9.5,
+        "di_reduction": 1.0,
+        "effort_hours": 4.0,
+        "item_id": "D-2279",
+        "severity": "normal"
+      }
+    ],
+    "threshold": 10.0,
+    "unknown_effort": 11
+  }
+}

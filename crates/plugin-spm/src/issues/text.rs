@@ -2,8 +2,8 @@
 //! SPM strings (issue titles, messages, people names) are shown verbatim and never translated.
 use spm_contracts::{
     AssignmentBasis, CriterionKind, DefectSeverity, GatePhase, GateTrackState, IssueKind,
-    IssueQueue, MatchPrecision, MatchReason, ProposalStatus, SearchKind, SearchMode, SearchScope,
-    SearchWhy, Standing,
+    IssueQueue, MatchPrecision, MatchReason, PersonRelation, ProposalStatus, ReasonKind,
+    SearchChannel, SearchKind, SearchMode, SearchScope, SearchWhy, Standing, SuggestionKind,
 };
 
 #[derive(Clone, Copy)]
@@ -99,6 +99,45 @@ impl Lang {
             "Source conflict flag" => "来源冲突",
             "Legacy flag" => "遗留",
             "Owner unconfirmed" => "负责人未确认",
+            "Refresh failed" => "刷新失败",
+            "Demo data" => "演示数据",
+            "Loading issues…" => "正在读取问题…",
+            "Refresh" => "刷新",
+            "Search" => "搜索",
+            "Search issues, messages or people" => "搜索问题、消息或人 · 按字面或意思",
+            "Lark is not configured as a source" => "Lark 尚未配置为来源，无法打开",
+            "Next gate" => "下一评审点",
+            "Due" => "到期",
+            "Affects" => "影响",
+            "Back to my issues" => "返回我的问题",
+            "My issues" => "我的问题",
+            "Nothing needs you right now" => "目前没有需要你处理的问题",
+            "Select an issue" => "选择一个问题",
+            "Some assignments were not read" => "部分分配未读取",
+            "Assignment from Lark" => "Lark 中的分配",
+            "assigned by" => "，分配人",
+            "Authority" => "分配权",
+            "Acceptance" => "接受",
+            "Evidence" => "证据",
+            "Replies to a message that was not stored" => "回复的原消息未保存",
+            "PDT and related people" => "PDT 与相关的人",
+            "Who else to ask" => "还可以问谁",
+            "rank score, not a confidence" => "排序分，不是置信度",
+            "Shortest path to" => "到入口的最短路径",
+            "Type a question; words and meaning both count" => "输入问题；字面和意思都会匹配",
+            "No results" => "没有结果",
+            "Ranking fuses word and meaning ranks; similar means related, not the same" => {
+                "排序融合字面与语义排名；相似表示相关，不代表是同一件事"
+            }
+            "Suggestions for" => "建议 ·",
+            "similarity" => "相似度",
+            "IPD rule" => "IPD 规则",
+            "Same module and time" => "同模块、时间相近",
+            "Accept" => "关联",
+            "Dismiss" => "忽略",
+            "Suggestions are proposals: nothing is linked or changed until you accept" => {
+                "建议只是提议：你确认之前不会关联或改动任何内容"
+            }
             _ => en,
         }
     }
@@ -251,6 +290,62 @@ impl Lang {
             SearchKind::Message => "Messages",
             SearchKind::Person => "People",
             SearchKind::Change => "Changes",
+        })
+    }
+
+    pub fn relation(self, relation: PersonRelation) -> &'static str {
+        match (relation, self.zh) {
+            (PersonRelation::PdtManager, true) => "PDT 经理",
+            (PersonRelation::PdtRepresentative, true) => "PDT 代表",
+            (PersonRelation::DevelopmentRepresentative, true) => "开发代表",
+            (PersonRelation::TestRepresentative, true) => "测试代表",
+            (PersonRelation::ProposedOwner, true) => "提议负责人",
+            (PersonRelation::Mentioned, true) => "被提到",
+            (PersonRelation::Participant, true) => "参与者",
+            (PersonRelation::PdtManager, false) => "PDT manager",
+            (PersonRelation::PdtRepresentative, false) => "PDT representative",
+            (PersonRelation::DevelopmentRepresentative, false) => "Development rep.",
+            (PersonRelation::TestRepresentative, false) => "Test rep.",
+            (PersonRelation::ProposedOwner, false) => "Proposed owner",
+            (PersonRelation::Mentioned, false) => "Mentioned",
+            (PersonRelation::Participant, false) => "Participant",
+        }
+    }
+
+    pub fn reason_kind(self, reason: ReasonKind) -> &'static str {
+        match (reason, self.zh) {
+            (ReasonKind::ChangesInArea, true) => "相关代码变更",
+            (ReasonKind::DiscussionInArea, true) => "相关讨论",
+            (ReasonKind::MentionedInThread, true) => "讨论中被提到",
+            (ReasonKind::SharedLabel, true) => "相同标签",
+            (ReasonKind::RecentActivity, true) => "近期活跃",
+            (ReasonKind::ExplicitAssignment, true) => "明确分配",
+            (ReasonKind::ChangesInArea, false) => "Changes in this area",
+            (ReasonKind::DiscussionInArea, false) => "Discussed this area",
+            (ReasonKind::MentionedInThread, false) => "Mentioned in the thread",
+            (ReasonKind::SharedLabel, false) => "Shared label",
+            (ReasonKind::RecentActivity, false) => "Recently active",
+            (ReasonKind::ExplicitAssignment, false) => "Explicitly assigned",
+        }
+    }
+
+    pub fn suggestion_kind(self, kind: SuggestionKind) -> &'static str {
+        match (kind, self.zh) {
+            (SuggestionKind::RelatedDiscussion, true) => "可能相关的讨论",
+            (SuggestionKind::DuplicateCandidate, true) => "可能重复",
+            (SuggestionKind::WhoToAsk, true) => "建议请教",
+            (SuggestionKind::MissingIpdInfo, true) => "缺少 IPD 信息",
+            (SuggestionKind::RelatedDiscussion, false) => "Related discussion",
+            (SuggestionKind::DuplicateCandidate, false) => "Possible duplicate",
+            (SuggestionKind::WhoToAsk, false) => "Who to ask",
+            (SuggestionKind::MissingIpdInfo, false) => "Missing IPD information",
+        }
+    }
+
+    pub fn channel(self, channel: SearchChannel) -> &'static str {
+        self.t(match channel {
+            SearchChannel::Lexical => "Lexical",
+            SearchChannel::Semantic => "Semantic",
         })
     }
 
