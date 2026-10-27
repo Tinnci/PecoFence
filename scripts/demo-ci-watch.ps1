@@ -74,7 +74,8 @@ $F5 = Key 116; $Down = Key 40; $Right = Key 39; $Enter = Key 13; $Esc = Key 27
 $steps = @(
   @{ name = 'cicd-pipeline'; lines = @() },
   @{ name = 'cicd-release'; lines = @('input CI vk 39 0') },
-  @{ name = 'cicd-watchlist'; lines = @('input CI vk 39 0', 'input CI vk 39 0') }
+  @{ name = 'cicd-workspace'; lines = @('input CI vk 39 0') },
+  @{ name = 'cicd-watchlist'; lines = @('input CI vk 39 0') }
 )
 $create = 'new-ci-watch 40 40 480 780'
 $lines = [Collections.Generic.List[string]]::new()
