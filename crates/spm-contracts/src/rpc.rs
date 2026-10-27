@@ -32,6 +32,13 @@ pub enum RpcMethod {
     GetCiWatch,
     UpdateCiWatchlist,
     SuggestCiWatch,
+    QueryIssues,
+    GetIssue,
+    GetGateReadiness,
+    ReviewAssignment,
+    JudgeSuggestion,
+    SearchWorkspace,
+    GateWhatIf,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -210,6 +217,13 @@ pub enum Request {
     GetCiWatch(GetCiWatchRequest),
     UpdateCiWatchlist(UpdateCiWatchlistRequest),
     SuggestCiWatch(SuggestCiWatchRequest),
+    QueryIssues(QueryIssuesRequest),
+    GetIssue(GetIssueRequest),
+    GetGateReadiness(GetGateReadinessRequest),
+    ReviewAssignment(ReviewAssignmentRequest),
+    JudgeSuggestion(JudgeSuggestionRequest),
+    SearchWorkspace(SearchWorkspaceRequest),
+    GateWhatIf(GateWhatIfRequest),
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -229,6 +243,13 @@ pub enum Response {
     GetCiWatch(CiWatchSnapshot),
     UpdateCiWatchlist(CiWatchSnapshot),
     SuggestCiWatch(CiSuggestions),
+    QueryIssues(QueryIssuesResponse),
+    GetIssue(IssueDetail),
+    GetGateReadiness(GateReadiness),
+    ReviewAssignment(AssignmentProposal),
+    JudgeSuggestion(SuggestionJudgment),
+    SearchWorkspace(SearchWorkspaceResponse),
+    GateWhatIf(GateWhatIf),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -278,12 +299,25 @@ impl Request {
             Self::GetCiWatch(_) => RpcMethod::GetCiWatch,
             Self::UpdateCiWatchlist(_) => RpcMethod::UpdateCiWatchlist,
             Self::SuggestCiWatch(_) => RpcMethod::SuggestCiWatch,
+            Self::QueryIssues(_) => RpcMethod::QueryIssues,
+            Self::GetIssue(_) => RpcMethod::GetIssue,
+            Self::GetGateReadiness(_) => RpcMethod::GetGateReadiness,
+            Self::ReviewAssignment(_) => RpcMethod::ReviewAssignment,
+            Self::JudgeSuggestion(_) => RpcMethod::JudgeSuggestion,
+            Self::SearchWorkspace(_) => RpcMethod::SearchWorkspace,
+            Self::GateWhatIf(_) => RpcMethod::GateWhatIf,
         }
     }
     pub fn validate(&self) -> Result<(), ContractError> {
         match self {
             Self::UpdateCiWatchlist(q) => return q.validate(),
             Self::SuggestCiWatch(q) => return q.validate(),
+            Self::QueryIssues(q) => return q.validate(),
+            Self::GetIssue(q) => return q.validate(),
+            Self::ReviewAssignment(q) => return q.validate(),
+            Self::JudgeSuggestion(q) => return q.validate(),
+            Self::SearchWorkspace(q) => return q.validate(),
+            Self::GateWhatIf(q) => return q.validate(),
             _ => {}
         }
         let (revision, page_size) = match self {

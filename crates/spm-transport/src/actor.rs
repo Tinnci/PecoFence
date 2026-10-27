@@ -648,6 +648,13 @@ fn response_method(response: &Response) -> RpcMethod {
         Response::GetCiWatch(_) => RpcMethod::GetCiWatch,
         Response::UpdateCiWatchlist(_) => RpcMethod::UpdateCiWatchlist,
         Response::SuggestCiWatch(_) => RpcMethod::SuggestCiWatch,
+        Response::QueryIssues(_) => RpcMethod::QueryIssues,
+        Response::GetIssue(_) => RpcMethod::GetIssue,
+        Response::GetGateReadiness(_) => RpcMethod::GetGateReadiness,
+        Response::ReviewAssignment(_) => RpcMethod::ReviewAssignment,
+        Response::JudgeSuggestion(_) => RpcMethod::JudgeSuggestion,
+        Response::SearchWorkspace(_) => RpcMethod::SearchWorkspace,
+        Response::GateWhatIf(_) => RpcMethod::GateWhatIf,
     }
 }
 

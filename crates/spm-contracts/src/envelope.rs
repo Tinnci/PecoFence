@@ -87,6 +87,13 @@ impl Envelope {
                         snapshot.validate()?
                     }
                     Response::SuggestCiWatch(suggestions) => suggestions.validate()?,
+                    Response::QueryIssues(page) => page.validate()?,
+                    Response::GetIssue(detail) => detail.validate()?,
+                    Response::GetGateReadiness(readiness) => readiness.validate()?,
+                    Response::ReviewAssignment(proposal) => proposal.validate()?,
+                    Response::JudgeSuggestion(judgment) => judgment.validate()?,
+                    Response::SearchWorkspace(search) => search.validate()?,
+                    Response::GateWhatIf(what_if) => what_if.validate()?,
                     _ => {}
                 }
                 if direction != Direction::ServerToClient
