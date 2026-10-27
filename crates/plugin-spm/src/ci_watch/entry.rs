@@ -193,6 +193,64 @@ pub fn suggestion_edit(s: &CiSuggestion) -> Result<UpdateCiWatchlistRequest, &'s
     }
 }
 
+/// The focus token for a board source: its change (Gerrit) or its build (Jenkins).
+pub fn source_focus(source: &SourceRef) -> Option<String> {
+    match source.system {
+        SourceSystem::Gerrit => source
+            .record_id
+            .split('/')
+            .next()
+            .and_then(|n| n.parse::<u64>().ok())
+            .map(change_key),
+        SourceSystem::Jenkins => {
+            let (job, number) = source.record_id.rsplit_once('/')?;
+            Some(format!("build:{job}:{number}"))
+        }
+        _ => None,
+    }
+}
+
+/// The suggestion a board source resolves to, from a snapshot alone. Used by the demo backend;
+/// the live path asks SPM, which also reads Gerrit for the branch.
+pub fn suggestion_for_source(
+    snapshot: &CiWatchSnapshot,
+    source: &SourceRef,
+) -> Option<CiSuggestion> {
+    match source.system {
+        SourceSystem::Jenkins => {
+            let (job, _) = source.record_id.rsplit_once('/')?;
+            validate_ci_job(job).ok()?;
+            Some(CiSuggestion {
+                kind: CiSuggestionKind::Job,
+                value: job.into(),
+                label: job.into(),
+                already_watched: snapshot.jobs.iter().any(|j| j.job == job),
+                count: None,
+            })
+        }
+        SourceSystem::Gerrit => {
+            let number: u64 = source.record_id.split('/').next()?.parse().ok()?;
+            let (project, branch) = snapshot.branches.iter().find_map(|b| {
+                b.changes
+                    .iter()
+                    .any(|c| c.number == number)
+                    .then(|| (b.project.clone(), b.branch.clone()))
+            })?;
+            Some(CiSuggestion {
+                kind: CiSuggestionKind::Branch,
+                value: format!("{project}:{branch}"),
+                label: format!("{project} : {branch}"),
+                already_watched: snapshot
+                    .branches
+                    .iter()
+                    .any(|b| b.project == project && b.branch == branch),
+                count: None,
+            })
+        }
+        _ => None,
+    }
+}
+
 /// Whether a board source row is already followed, so the drawer can show 已关注 ✓.
 pub fn source_watched(snapshot: &CiWatchSnapshot, source: &SourceRef) -> bool {
     match source.system {
@@ -360,5 +418,55 @@ mod tests {
                 branch: "release/ir-1113".into(),
             })
         );
+    }
+}
+
+#[cfg(test)]
+mod source_tests {
+    use super::*;
+
+    fn source(system: SourceSystem, record_id: &str) -> SourceRef {
+        SourceRef {
+            system,
+            tenant: "t".into(),
+            project: "p".into(),
+            record_kind: "k".into(),
+            record_id: record_id.into(),
+        }
+    }
+
+    #[test]
+    fn board_sources_focus_their_change_or_build() {
+        assert_eq!(
+            source_focus(&source(SourceSystem::Gerrit, "4711/1")).as_deref(),
+            Some("change:4711")
+        );
+        assert_eq!(
+            source_focus(&source(SourceSystem::Jenkins, "launcher-orion/1182")).as_deref(),
+            Some("build:launcher-orion:1182")
+        );
+        assert_eq!(source_focus(&source(SourceSystem::Lark, "x")), None);
+    }
+
+    #[test]
+    fn a_jenkins_source_is_followed_by_its_job_and_shown_as_followed() {
+        let snapshot = CiWatchSnapshot {
+            jobs: vec![WatchedJob {
+                id: "job:launcher-orion".into(),
+                job: "launcher-orion".into(),
+                role: CiJobRole::Other,
+                only_mine: false,
+                notify_on_failure: false,
+                last: None,
+                history: vec![],
+                median_ms: None,
+                health: WatchHealth::Ok,
+            }],
+            ..Default::default()
+        };
+        let build = source(SourceSystem::Jenkins, "launcher-orion/1182");
+        assert!(source_watched(&snapshot, &build));
+        let other = source(SourceSystem::Jenkins, "orion-other/7");
+        assert!(!source_watched(&snapshot, &other));
     }
 }

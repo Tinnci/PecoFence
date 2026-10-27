@@ -14,6 +14,7 @@ fn golden_ci_snapshot_round_trip_and_additive_defaults() {
         Request::SuggestCiWatch(SuggestCiWatchRequest {
             query: "orion/car".into(),
             mode: CiSuggestMode::Search,
+            source: None,
         }),
         Request::UpdateCiWatchlist(UpdateCiWatchlistRequest::AddJob {
             job: "folder/job".into(),
@@ -151,11 +152,13 @@ fn seed_requests_take_no_query_and_suggestion_counts_are_additive() {
     let seeds = SuggestCiWatchRequest {
         query: String::new(),
         mode: CiSuggestMode::Seeds,
+        source: None,
     };
     assert!(seeds.validate().is_ok());
     let with_query = SuggestCiWatchRequest {
         query: "orion".into(),
         mode: CiSuggestMode::Seeds,
+        source: None,
     };
     assert!(with_query.validate().is_err());
     // An older client omits the mode and the count; both default.

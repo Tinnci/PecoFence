@@ -428,6 +428,10 @@ pub struct SuggestCiWatchRequest {
     /// query. Absent means an ordinary search.
     #[serde(default)]
     pub mode: CiSuggestMode,
+    /// A board source (a Gerrit change or a Jenkins build) to resolve to the one watchlist edit
+    /// that follows it. Takes no query and is a search, not a seed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<crate::SourceRef>,
 }
 /// Whether a suggestion request searches for a term or seeds an empty watchlist.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -961,6 +965,18 @@ impl ReleaseTrainEntry {
 }
 impl SuggestCiWatchRequest {
     pub fn validate(&self) -> Result<(), ContractError> {
+        if let Some(source) = &self.source {
+            if self.mode != CiSuggestMode::Search || !self.query.is_empty() {
+                return Err(invalid("a source resolves alone, without a query or seeds"));
+            }
+            if !matches!(
+                source.system,
+                crate::SourceSystem::Gerrit | crate::SourceSystem::Jenkins
+            ) {
+                return Err(invalid("only Gerrit and Jenkins sources can be followed"));
+            }
+            return validate_ci_query(&self.query);
+        }
         match self.mode {
             CiSuggestMode::Seeds if !self.query.is_empty() => {
                 Err(invalid("seed suggestions take no query"))

@@ -122,6 +122,8 @@ enum Pending {
     Evidence(RecordId, Revision),
     Briefing(Revision),
     Navigate(SourceRef),
+    /// SPM resolves a Gerrit or Jenkins source to the one watchlist edit that follows it.
+    TrackCi(SourceRef),
 }
 
 #[derive(Clone, Debug)]
@@ -560,11 +562,64 @@ impl BoardPanel {
         Ok(self.redraw())
     }
 
+    /// 「在 CI/CD 中跟踪」: resolve the source to one watchlist edit, then ask the composition root
+    /// to open the CI/CD fence at it. The demo backend resolves from its own snapshot.
+    fn track_ci(&mut self, source: SourceRef, now: Instant) -> Result<()> {
+        if let Backend::Demo(_) = self.backend {
+            let snapshot = crate::ci_watch::demo_snapshot();
+            match crate::ci_watch::entry::suggestion_for_source(&snapshot, &source) {
+                Some(suggestion) => self.queue_ci_open(&suggestion, &source)?,
+                None => {
+                    let text = self.lang().t("CI source unavailable").into();
+                    self.say(text, Some(Tone::Warning));
+                }
+            }
+            return Ok(());
+        }
+        self.send(
+            Request::SuggestCiWatch(spm_contracts::SuggestCiWatchRequest {
+                query: String::new(),
+                mode: spm_contracts::CiSuggestMode::Search,
+                source: Some(source.clone()),
+            }),
+            Pending::TrackCi(source),
+            now,
+        )
+    }
+
+    fn queue_ci_open(
+        &mut self,
+        suggestion: &spm_contracts::CiSuggestion,
+        source: &SourceRef,
+    ) -> Result<()> {
+        let edit = crate::ci_watch::entry::suggestion_edit(suggestion)
+            .map_err(|e| Error::Invalid(e.into()))?;
+        let intent = crate::ci_watch::entry::OpenIntent {
+            focus: crate::ci_watch::entry::source_focus(source),
+            edit: Some(edit),
+        };
+        self.outbox.push(HostCommand::AppEvent {
+            topic: "ci.open".into(),
+            json: serde_json::to_string(&intent).map_err(|e| Error::Invalid(e.to_string()))?,
+        });
+        Ok(())
+    }
+
     fn handle_completion(&mut self, pending: Pending, result: Result<Arc<[u8]>>) -> Result<()> {
         let lang = self.lang();
         let envelope = result.and_then(|bytes| decode_event(&bytes));
         let body = envelope.map(|e| e.body);
         match (pending, body) {
+            (
+                Pending::TrackCi(source),
+                Ok(Body::Response(Response::SuggestCiWatch(suggestions))),
+            ) => match suggestions.items.first() {
+                Some(suggestion) => self.queue_ci_open(suggestion, &source)?,
+                None => self.say(lang.t("CI source unavailable").into(), Some(Tone::Warning)),
+            },
+            (Pending::TrackCi(_), _) => {
+                self.say(lang.t("CI source unavailable").into(), Some(Tone::Warning))
+            }
             (Pending::Refresh, Ok(Body::Response(Response::Refresh(response)))) => {
                 self.refresh_operation = Some(response.operation_id);
                 self.say(
@@ -850,6 +905,7 @@ impl BoardPanel {
                         .map_err(|e| Error::Invalid(e.to_string()))?,
                 });
             }
+            Target::TrackCi(source) => self.track_ci(source, now)?,
             Target::OpenSource(source) => {
                 if let Some(board) = &self.board {
                     let revision = board.revision;

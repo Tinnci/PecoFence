@@ -40,6 +40,8 @@ pub enum Target {
     View(BoardView),
     /// The CI/CD segment of the capsule: open the CI/CD fence at its focus.
     OpenCi,
+    /// 「在 CI/CD 中跟踪」 on a Gerrit or Jenkins source: follow it and open the fence there.
+    TrackCi(SourceRef),
     Zoom(Zoom),
     Event(RecordId, String),
     OpenEvidence,
@@ -2034,6 +2036,7 @@ fn detail(b: &mut Builder, board: &BoardSnapshot, input: &Input, area: RectDip) 
                 b,
                 card,
                 &evidence.items,
+                input.ci,
                 input.selected_evidence,
                 tz,
                 x,
@@ -2076,6 +2079,7 @@ fn timeline(
     b: &mut Builder,
     card: &BoardCard,
     items: &[EvidenceItem],
+    ci: &spm_contracts::CiWatchSnapshot,
     selected: Option<&str>,
     tz: &str,
     x: f32,
@@ -2227,6 +2231,31 @@ fn timeline(
             lang.f("Open in {}", &[system]),
             Target::OpenSource(item.source.clone()),
         );
+        // Gerrit and Jenkins rows can be followed in the CI/CD fence. The label says whether the
+        // source is already followed, in words as well as the chip style.
+        if matches!(
+            item.source.system,
+            spm_contracts::SourceSystem::Gerrit | spm_contracts::SourceSystem::Jenkins
+        ) {
+            let watched = crate::ci_watch::entry::source_watched(ci, &item.source);
+            let label = lang.t(if watched {
+                "Already followed ✓"
+            } else {
+                "Track in CI/CD"
+            });
+            let bw = b.fit.width(label, META, 600).ceil() + 26.0;
+            b.button(
+                &format!("{key}:track"),
+                (x + w - bw).max(tx + link_w + 8.0),
+                y,
+                mh,
+                None,
+                label,
+                watched,
+                Target::TrackCi(item.source.clone()),
+                bw,
+            );
+        }
         if on {
             let detail = format!(
                 "{} · {} · {}",

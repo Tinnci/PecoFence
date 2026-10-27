@@ -296,6 +296,7 @@ impl Panel {
             self.send(Request::SuggestCiWatch(SuggestCiWatchRequest {
                 query: String::new(),
                 mode: CiSuggestMode::Seeds,
+                source: None,
             }))?;
         }
         Ok(())
@@ -342,6 +343,7 @@ impl Panel {
             self.send(Request::SuggestCiWatch(SuggestCiWatchRequest {
                 query: self.query.clone(),
                 mode: CiSuggestMode::Search,
+                source: None,
             }))?;
         }
         Ok(())

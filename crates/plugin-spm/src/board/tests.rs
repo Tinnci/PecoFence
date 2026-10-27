@@ -1392,3 +1392,61 @@ fn capsule_ci_segment_asks_for_the_ci_fence_at_its_focus() {
     assert_eq!(intent.focus, expected);
     assert!(intent.edit.is_none());
 }
+
+fn jenkins_source(record_id: &str) -> spm_contracts::SourceRef {
+    spm_contracts::SourceRef {
+        system: spm_contracts::SourceSystem::Jenkins,
+        tenant: "acme".into(),
+        project: "orion-ci".into(),
+        record_kind: "build".into(),
+        record_id: record_id.into(),
+    }
+}
+
+fn ci_open_intent(h: &Harness) -> Option<crate::ci_watch::entry::OpenIntent> {
+    h.panel.outbox.iter().find_map(|c| match c {
+        HostCommand::AppEvent { topic, json } if topic == "ci.open" => {
+            serde_json::from_str(json).ok()
+        }
+        _ => None,
+    })
+}
+
+#[test]
+fn track_in_ci_follows_the_jenkins_job_and_focuses_its_build() {
+    let mut h = harness();
+    let now = h.now;
+    h.panel
+        .invoke(Target::TrackCi(jenkins_source("launcher-orion/1182")), now)
+        .unwrap();
+    let intent = ci_open_intent(&h).expect("the drawer asks for the CI/CD fence");
+    assert_eq!(
+        intent.edit,
+        Some(spm_contracts::UpdateCiWatchlistRequest::AddJob {
+            job: "launcher-orion".into(),
+        })
+    );
+    assert_eq!(intent.focus.as_deref(), Some("build:launcher-orion:1182"));
+}
+
+#[test]
+fn track_in_ci_reports_a_gerrit_change_the_snapshot_cannot_resolve() {
+    let mut h = harness();
+    let now = h.now;
+    let source = spm_contracts::SourceRef {
+        system: spm_contracts::SourceSystem::Gerrit,
+        tenant: "review".into(),
+        project: "launcher".into(),
+        record_kind: "change".into(),
+        record_id: "4711/1".into(),
+    };
+    h.panel.invoke(Target::TrackCi(source), now).unwrap();
+    assert!(
+        ci_open_intent(&h).is_none(),
+        "no branch is known, so nothing is followed"
+    );
+    assert!(
+        h.panel.status.is_some(),
+        "the drawer says the source is unavailable"
+    );
+}
