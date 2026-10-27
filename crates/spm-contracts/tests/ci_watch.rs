@@ -13,6 +13,7 @@ fn golden_ci_snapshot_round_trip_and_additive_defaults() {
         Request::GetCiWatch(GetCiWatchRequest::default()),
         Request::SuggestCiWatch(SuggestCiWatchRequest {
             query: "orion/car".into(),
+            mode: CiSuggestMode::Search,
         }),
         Request::UpdateCiWatchlist(UpdateCiWatchlistRequest::AddJob {
             job: "folder/job".into(),
@@ -142,4 +143,26 @@ fn pipeline_release_train_and_role_contract() {
     let mut snap = snapshot.clone();
     snap.apply_watchlist(&list);
     assert_eq!(snap.watchlist().jobs[0].role, CiJobRole::Verify);
+}
+
+#[test]
+fn seed_requests_take_no_query_and_suggestion_counts_are_additive() {
+    use spm_contracts::{CiSuggestMode, CiSuggestion, CiSuggestionKind, SuggestCiWatchRequest};
+    let seeds = SuggestCiWatchRequest {
+        query: String::new(),
+        mode: CiSuggestMode::Seeds,
+    };
+    assert!(seeds.validate().is_ok());
+    let with_query = SuggestCiWatchRequest {
+        query: "orion".into(),
+        mode: CiSuggestMode::Seeds,
+    };
+    assert!(with_query.validate().is_err());
+    // An older client omits the mode and the count; both default.
+    let old: SuggestCiWatchRequest = serde_json::from_str(r#"{"query":"orion"}"#).unwrap();
+    assert_eq!(old.mode, CiSuggestMode::Search);
+    let suggestion: CiSuggestion =
+        serde_json::from_str(r#"{"kind":"job","value":"orion/a","label":"orion/a"}"#).unwrap();
+    assert_eq!(suggestion.kind, CiSuggestionKind::Job);
+    assert_eq!(suggestion.count, None);
 }

@@ -14,7 +14,7 @@ use pecofence_plugin_api::{
 use serde::{Deserialize, Serialize};
 use spm_contracts::*;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeSet, HashMap, HashSet},
     rc::Rc,
     sync::Arc,
     time::{Duration, Instant},
@@ -93,6 +93,12 @@ pub enum Scope {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Target {
     View(View),
+    /// Tick or untick one first-run suggestion.
+    Seed(usize),
+    /// Add the ticked first-run suggestions to the watchlist.
+    ApplySeeds,
+    /// Leave the first-run list for the manual watchlist editor.
+    ManualAdd,
     Scope(Scope),
     Find,
     Add,
@@ -136,6 +142,13 @@ pub struct Panel {
     config: Config,
     mount: Option<MountKey>,
     snapshot: Option<CiWatchSnapshot>,
+    /// First-run suggestions for an empty watchlist, and the ones the user ticked.
+    seeds: CiSuggestions,
+    selected_seeds: BTreeSet<usize>,
+    seeds_requested: bool,
+    seeds_in_flight: bool,
+    /// The user chose 手动添加…: show the watchlist editor even though the list is empty.
+    manual: bool,
     /// A fresh snapshot not yet published to the composition root (monitor only).
     publish_snapshot: bool,
     /// A focus token from an entry point, applied on the next layout.
@@ -179,6 +192,11 @@ impl Panel {
             snapshot: config.demo.then(demo_snapshot),
             config,
             mount: None,
+            seeds: CiSuggestions::default(),
+            selected_seeds: BTreeSet::new(),
+            seeds_requested: false,
+            seeds_in_flight: false,
+            manual: false,
             publish_snapshot: false,
             reveal: None,
             suggestions: CiSuggestions::default(),
@@ -257,6 +275,45 @@ impl Panel {
         self.last_refresh = Instant::now();
         Ok(())
     }
+    /// First run: an empty watchlist (and no manual editor) asks SPM for seeds once.
+    fn seeding(&self) -> bool {
+        !self.manual
+            && self
+                .snapshot
+                .as_ref()
+                .is_some_and(|s| s.jobs.is_empty() && s.branches.is_empty())
+    }
+    fn ensure_seeds(&mut self) -> Result<()> {
+        if self.seeds_requested || !self.seeding() {
+            return Ok(());
+        }
+        self.seeds_requested = true;
+        if self.config.demo {
+            self.seeds = entry::demo_seeds();
+            self.selected_seeds = (0..self.seeds.items.len()).collect();
+        } else {
+            self.seeds_in_flight = true;
+            self.send(Request::SuggestCiWatch(SuggestCiWatchRequest {
+                query: String::new(),
+                mode: CiSuggestMode::Seeds,
+            }))?;
+        }
+        Ok(())
+    }
+    fn apply_seeds(&mut self) -> Result<()> {
+        let edits: Vec<UpdateCiWatchlistRequest> = self
+            .selected_seeds
+            .iter()
+            .filter_map(|i| self.seeds.items.get(*i))
+            .filter_map(|s| entry::suggestion_edit(s).ok())
+            .collect();
+        for edit in edits {
+            self.edit(edit)?;
+        }
+        self.manual = false;
+        self.scroll = 0.0;
+        Ok(())
+    }
     fn suggestions(&mut self) -> Result<()> {
         validate_ci_query(&self.query).map_err(|e| Error::Invalid(e.to_string()))?;
         self.selected_suggestion = None;
@@ -275,6 +332,7 @@ impl Panel {
                         value: value.into(),
                         label: value.into(),
                         already_watched: false,
+                        count: None,
                     })
                     .collect(),
                 truncated: false,
@@ -283,6 +341,7 @@ impl Panel {
         } else {
             self.send(Request::SuggestCiWatch(SuggestCiWatchRequest {
                 query: self.query.clone(),
+                mode: CiSuggestMode::Search,
             }))?;
         }
         Ok(())
@@ -334,6 +393,18 @@ impl Panel {
     }
     fn invoke(&mut self, target: Target) -> Result<PanelUpdate> {
         match target {
+            Target::Seed(i) => {
+                if !self.selected_seeds.remove(&i) {
+                    self.selected_seeds.insert(i);
+                }
+            }
+            Target::ApplySeeds => self.apply_seeds()?,
+            Target::ManualAdd => {
+                self.manual = true;
+                self.view = View::Watchlist;
+                self.scroll = 0.0;
+                self.focus = None;
+            }
             Target::View(view) => {
                 self.view = view;
                 self.scroll = 0.0;
@@ -499,16 +570,25 @@ impl Panel {
                 snapshot
                     .validate()
                     .map_err(|e| Error::Invalid(e.to_string()))?;
+                // Any watched item ends the first run; removing them all may start it again.
+                self.seeds_requested = !(snapshot.jobs.is_empty() && snapshot.branches.is_empty());
                 self.snapshot = Some(snapshot);
                 self.publish_snapshot = true;
+                self.ensure_seeds()?;
                 self.status = None;
             }
             Body::Response(Response::SuggestCiWatch(suggestions)) => {
                 suggestions
                     .validate()
                     .map_err(|e| Error::Invalid(e.to_string()))?;
-                self.selected_suggestion = (!suggestions.items.is_empty()).then_some(0);
-                self.suggestions = suggestions;
+                if self.seeds_in_flight {
+                    self.seeds_in_flight = false;
+                    self.selected_seeds = (0..suggestions.items.len()).collect();
+                    self.seeds = suggestions;
+                } else {
+                    self.selected_suggestion = (!suggestions.items.is_empty()).then_some(0);
+                    self.suggestions = suggestions;
+                }
             }
             Body::Error(_) => self.status = Some(self.lang().t("Refresh failed").into()),
             _ => {}
@@ -674,6 +754,9 @@ impl Panel {
         // An entry point may ask for a row: lay out once to find it, scroll, then lay out again.
         let mut layout;
         loop {
+            let seeding = self
+                .seeding()
+                .then_some((&self.seeds, &self.selected_seeds));
             layout = layout::build(
                 self.snapshot.as_ref(),
                 &self.suggestions,
@@ -697,6 +780,7 @@ impl Panel {
                 measure,
                 &mut self.ids,
                 &mut self.next_id,
+                seeding,
             );
             let Some(target) = self.reveal.take() else {
                 break;

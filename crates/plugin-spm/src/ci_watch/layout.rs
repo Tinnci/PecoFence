@@ -14,7 +14,10 @@ use pecofence_plugin_api::{
     *,
 };
 use spm_contracts::*;
-use std::{cell::RefCell, collections::HashMap};
+use std::{
+    cell::RefCell,
+    collections::{BTreeSet, HashMap},
+};
 
 pub struct Layout {
     pub nodes: Vec<SceneNode>,
@@ -277,6 +280,142 @@ fn next_role(role: CiJobRole) -> CiJobRole {
         CiJobRole::Release => CiJobRole::Other,
     }
 }
+/// The first-run list: recent jobs and open-change branches as ticks, then the footer. Returns the
+/// y after the footer, in the same coordinates as the other views.
+fn seeding_body(
+    b: &mut Builder<'_>,
+    snapshot: &CiWatchSnapshot,
+    seeds: &CiSuggestions,
+    selected: &BTreeSet<usize>,
+    lang: Lang,
+    w: f32,
+    mut y: f32,
+) -> f32 {
+    let p = *b.p;
+    b.label(
+        "seed:title",
+        r(14.0, y, w - 28.0, 30.0),
+        lang.t("Start with your recent work").into(),
+        p.primary,
+        22.0,
+        FontRole::Display,
+    );
+    y += 34.0;
+    let who = format!(
+        "{} {} · {} {}. {}",
+        lang.t("Jenkins user"),
+        snapshot.user.jenkins_user,
+        lang.t("Gerrit account"),
+        snapshot.user.gerrit_user,
+        lang.t("Tick what to follow. You can change the list later.")
+    );
+    b.label(
+        "seed:who",
+        r(14.0, y, w - 28.0, 34.0),
+        who,
+        p.secondary,
+        12.0,
+        FontRole::Text,
+    );
+    y += 42.0;
+    for (heading, kind) in [
+        (
+            lang.t("Your recently triggered jobs"),
+            CiSuggestionKind::Job,
+        ),
+        (
+            lang.t("Branches of your open changes"),
+            CiSuggestionKind::Branch,
+        ),
+    ] {
+        b.section(&format!("seed:{kind:?}:heading"), y, w, heading, "");
+        y += 26.0;
+        let mut any = false;
+        for (i, seed) in seeds
+            .items
+            .iter()
+            .enumerate()
+            .filter(|(_, s)| s.kind == kind)
+        {
+            any = true;
+            let on = selected.contains(&i);
+            let meta = match (kind, seed.count) {
+                (CiSuggestionKind::Job, Some(n)) if lang.zh => format!("7 天 {n} 次"),
+                (CiSuggestionKind::Job, Some(n)) => format!("{n} {}", lang.t("in 7 days")),
+                (_, Some(n)) if lang.zh => format!("{n} {}", lang.t("of your changes")),
+                (_, Some(n)) => format!("{n} {}", lang.t("of your changes")),
+                _ => String::new(),
+            };
+            let mark = if on { "☑" } else { "☐" };
+            b.node(
+                &format!("seed:{i}"),
+                r(14.0, y, w - 28.0, 34.0),
+                "option",
+                format!(
+                    "{} {} {}",
+                    seed.label,
+                    if on {
+                        lang.t("selected")
+                    } else {
+                        lang.t("not selected")
+                    },
+                    meta
+                ),
+                format!("{mark}  {}   {meta}", seed.label),
+                FontRole::Display,
+                14.0,
+                if on { 700 } else { 400 },
+                if on { p.accent_ink } else { p.primary },
+                Some(p.card),
+                Some(Target::Seed(i)),
+            );
+            y += 38.0;
+        }
+        if !any {
+            b.label(
+                "seed:none",
+                r(14.0, y, w - 28.0, 22.0),
+                lang.t("No suggestions yet. Add a job or branch manually.")
+                    .into(),
+                p.secondary,
+                12.0,
+                FontRole::Text,
+            );
+            y += 26.0;
+        }
+        y += 8.0;
+    }
+    let count = selected.len();
+    let apply = format!("{} {count} {}", lang.t("Follow"), lang.t("items"));
+    b.node(
+        "seed:apply",
+        r(14.0, y, (w - 150.0).max(120.0), 34.0),
+        "button",
+        apply.clone(),
+        apply,
+        FontRole::Text,
+        13.0,
+        700,
+        p.accent_ink,
+        Some(p.card),
+        Some(Target::ApplySeeds),
+    );
+    b.node(
+        "seed:manual",
+        r(w - 128.0, y, 114.0, 34.0),
+        "button",
+        lang.t("Manual add…").into(),
+        lang.t("Manual add…").into(),
+        FontRole::Text,
+        13.0,
+        400,
+        p.primary,
+        Some(p.card),
+        Some(Target::ManualAdd),
+    );
+    y + 44.0
+}
+
 /// Shared grid for the six stage columns inside a card.
 fn stage_columns(w: f32) -> (f32, f32) {
     let inner = (w - 40.0).max(60.0);
@@ -300,6 +439,7 @@ pub fn build(
     measure: &dyn Measure,
     ids: &mut HashMap<String, u64>,
     next: &mut u64,
+    seeding: Option<(&CiSuggestions, &BTreeSet<usize>)>,
 ) -> Layout {
     let cache = RefCell::new(HashMap::new());
     let fitter = Fitter::new(measure, 1.0, &cache);
@@ -337,6 +477,18 @@ pub fn build(
         bottom: viewport.h,
     };
     let w = viewport.w;
+    if let (Some(s), Some((seeds, selected))) = (snapshot, seeding) {
+        // First run: the watchlist is empty, so the fence offers what the user already works on.
+        let y = seeding_body(&mut b, s, seeds, selected, lang, w, 14.0 - scroll);
+        let content_height = y + scroll + 40.0;
+        return Layout {
+            nodes: b.nodes,
+            actions: b.actions,
+            content_height,
+            field: r(14.0, 70.0 - scroll, (w - 100.0).max(1.0), 32.0),
+            rows: b.rows,
+        };
+    }
     // Segmented pill: one track, the selected tab on the ground colour.
     b.node(
         "view:track",

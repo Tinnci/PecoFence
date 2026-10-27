@@ -473,3 +473,62 @@ fn workspace_view_names_unavailable_medians_triage_and_actions() {
         assert!(hit.rect.y >= 0.0 && hit.rect.y + hit.rect.h <= 1400.0);
     }
 }
+
+fn empty_watchlist(panel: &mut Panel) {
+    panel.snapshot = Some(CiWatchSnapshot {
+        user: CiUser {
+            jenkins_user: "enterp".into(),
+            gerrit_user: "enterp".into(),
+        },
+        ..Default::default()
+    });
+}
+
+#[test]
+fn first_run_offers_seeds_and_follows_only_the_ticked_ones() {
+    let (mut panel, _keep) = harness(PaperStyle::Light, false);
+    empty_watchlist(&mut panel);
+    panel.ensure_seeds().unwrap();
+    assert!(panel.seeding());
+    assert_eq!(panel.seeds.items.len(), 5);
+    assert_eq!(panel.selected_seeds.len(), 5, "all seeds start ticked");
+
+    panel.invoke(Target::Seed(2)).unwrap();
+    assert_eq!(panel.selected_seeds.len(), 4);
+    frame(&mut panel, 480.0, 780.0);
+    let names: Vec<&str> = panel.actions.iter().map(|(k, _, _)| k.as_str()).collect();
+    assert!(names.contains(&"seed:apply") && names.contains(&"seed:manual"));
+
+    panel.invoke(Target::ApplySeeds).unwrap();
+    let watched = panel.snapshot.as_ref().unwrap();
+    assert_eq!(watched.jobs.len(), 2, "two jobs ticked");
+    assert_eq!(watched.branches.len(), 2, "two branches ticked");
+    assert!(!panel.seeding(), "a watched item ends the first run");
+}
+
+#[test]
+fn manual_add_leaves_the_first_run_for_the_watchlist_editor() {
+    let (mut panel, _keep) = harness(PaperStyle::Light, false);
+    empty_watchlist(&mut panel);
+    panel.ensure_seeds().unwrap();
+    panel.invoke(Target::ManualAdd).unwrap();
+    assert_eq!(panel.view, View::Watchlist);
+    assert!(!panel.seeding());
+    assert!(
+        panel.snapshot.as_ref().unwrap().jobs.is_empty(),
+        "nothing followed"
+    );
+}
+
+#[test]
+fn seeds_are_requested_once_per_empty_watchlist() {
+    let (mut panel, _keep) = harness(PaperStyle::Light, false);
+    empty_watchlist(&mut panel);
+    panel.ensure_seeds().unwrap();
+    panel.selected_seeds.clear();
+    panel.ensure_seeds().unwrap();
+    assert!(
+        panel.selected_seeds.is_empty(),
+        "a second call does not reseed"
+    );
+}

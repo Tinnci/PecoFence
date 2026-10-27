@@ -424,6 +424,18 @@ pub struct GetCiWatchRequest {
 #[serde(deny_unknown_fields)]
 pub struct SuggestCiWatchRequest {
     pub query: String,
+    /// `seeds` asks for the first-run list (recent jobs and open-change branches) and takes no
+    /// query. Absent means an ordinary search.
+    #[serde(default)]
+    pub mode: CiSuggestMode,
+}
+/// Whether a suggestion request searches for a term or seeds an empty watchlist.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CiSuggestMode {
+    #[default]
+    Search,
+    Seeds,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -439,6 +451,10 @@ pub struct CiSuggestion {
     pub label: String,
     #[serde(default)]
     pub already_watched: bool,
+    /// For seeds: how many of the user's builds (a job) or open changes (a branch) back it,
+    /// counted over the last seven days for builds. Absent for ordinary search results.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub count: Option<u32>,
 }
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -941,6 +957,16 @@ impl ReleaseTrainEntry {
             return Err(invalid("pending mine exceeds pending merges"));
         }
         Ok(())
+    }
+}
+impl SuggestCiWatchRequest {
+    pub fn validate(&self) -> Result<(), ContractError> {
+        match self.mode {
+            CiSuggestMode::Seeds if !self.query.is_empty() => {
+                Err(invalid("seed suggestions take no query"))
+            }
+            _ => validate_ci_query(&self.query),
+        }
     }
 }
 impl CiSuggestions {

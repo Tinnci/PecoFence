@@ -111,6 +111,23 @@ impl Lang {
             "SPM did not respond" => "SPM 未响应",
             "Open source unavailable" => "无法打开数据源",
             "Refresh failed" => "刷新失败",
+            "Start with your recent work" => "从你最近的工作开始",
+            "Your recently triggered jobs" => "你最近触发的任务",
+            "Branches of your open changes" => "你的变更所在分支",
+            "Follow" => "关注",
+            "Jenkins user" => "Jenkins 用户",
+            "Gerrit account" => "Gerrit 账号",
+            "items" => "项",
+            "Manual add…" => "手动添加…",
+            "not selected" => "未选",
+            "No suggestions yet. Add a job or branch manually." => {
+                "暂无建议，可手动添加任务或分支。"
+            }
+            "Tick what to follow. You can change the list later." => {
+                "勾选要关注的项，以后可在关注列表中修改。"
+            }
+            "in 7 days" => "7 天内",
+            "of your changes" => "个你的变更",
             "selected" => "已选",
             "on" => "开",
             "off" => "关",

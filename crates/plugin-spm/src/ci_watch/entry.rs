@@ -149,6 +149,34 @@ impl Summary {
     }
 }
 
+/// Demo seeds: the same shape SPM sends in live mode, for the deterministic capture.
+pub fn demo_seeds() -> CiSuggestions {
+    let job = |value: &str, count: u32| CiSuggestion {
+        kind: CiSuggestionKind::Job,
+        value: value.into(),
+        label: value.into(),
+        already_watched: false,
+        count: Some(count),
+    };
+    let branch = |value: &str, count: u32| CiSuggestion {
+        kind: CiSuggestionKind::Branch,
+        value: value.into(),
+        label: value.into(),
+        already_watched: false,
+        count: Some(count),
+    };
+    CiSuggestions {
+        items: vec![
+            job("orion/launcher-gerrit-verify", 6),
+            job("orion/launcher-daily-userdebug", 3),
+            job("orion/carmode-lc3-smoke", 1),
+            branch("orion/launcher:master", 2),
+            branch("orion/launcher:release/ir-1113", 1),
+        ],
+        truncated: false,
+    }
+}
+
 /// The watchlist edit a suggestion stands for, used when an entry adds the item it was given.
 pub fn suggestion_edit(s: &CiSuggestion) -> Result<UpdateCiWatchlistRequest, &'static str> {
     match s.kind {
@@ -310,6 +338,7 @@ mod tests {
             value: "orion/a".into(),
             label: String::new(),
             already_watched: false,
+            count: None,
         };
         assert_eq!(
             suggestion_edit(&job),
@@ -322,6 +351,7 @@ mod tests {
             value: "orion/launcher:release/ir-1113".into(),
             label: String::new(),
             already_watched: false,
+            count: None,
         };
         assert_eq!(
             suggestion_edit(&branch),

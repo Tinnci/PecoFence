@@ -283,7 +283,7 @@ impl Request {
     pub fn validate(&self) -> Result<(), ContractError> {
         match self {
             Self::UpdateCiWatchlist(q) => return q.validate(),
-            Self::SuggestCiWatch(q) => return validate_ci_query(&q.query),
+            Self::SuggestCiWatch(q) => return q.validate(),
             _ => {}
         }
         let (revision, page_size) = match self {
