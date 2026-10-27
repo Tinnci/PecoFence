@@ -575,7 +575,9 @@ pub struct IssueMessage {
     #[serde(default)]
     pub excerpt: Option<String>,
     pub reasons: Vec<MatchReason>,
-    pub precision: MatchPrecision,
+    /// Absent for a reply-chain match, which has no text precision of its own.
+    #[serde(default)]
+    pub precision: Option<MatchPrecision>,
     #[serde(default)]
     pub reply_to: Option<String>,
     #[serde(default)]
