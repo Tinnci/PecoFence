@@ -60,8 +60,16 @@ pub fn demo_snapshot() -> CiWatchSnapshot {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum View {
     #[default]
-    Builds,
+    Pipeline,
+    Release,
     Watchlist,
+}
+impl View {
+    fn shift(self, delta: i32) -> Self {
+        const ORDER: [View; 3] = [View::Pipeline, View::Release, View::Watchlist];
+        let i = ORDER.iter().position(|v| *v == self).unwrap_or(0) as i32 + delta;
+        ORDER[i.clamp(0, ORDER.len() as i32 - 1) as usize]
+    }
 }
 #[derive(Clone, Debug, PartialEq)]
 pub enum Target {
@@ -70,6 +78,7 @@ pub enum Target {
     Add,
     Suggestion(usize),
     Toggle(String, CiWatchFlag, bool),
+    Role(String, CiJobRole),
     Remove(String),
     Open(String, String, SourceSystem),
 }
@@ -146,7 +155,7 @@ impl Panel {
             config,
             mount: None,
             suggestions: CiSuggestions::default(),
-            view: View::Builds,
+            view: View::Pipeline,
             query: String::new(),
             selected_suggestion: None,
             focus: None,
@@ -329,6 +338,7 @@ impl Panel {
             Target::Toggle(id, flag, value) => {
                 self.edit(UpdateCiWatchlistRequest::Toggle { id, flag, value })?
             }
+            Target::Role(id, role) => self.edit(UpdateCiWatchlistRequest::SetRole { id, role })?,
             Target::Remove(id) => self.edit(UpdateCiWatchlistRequest::Remove { id })?,
             Target::Open(origin, path, system) => {
                 if crate::navigation::open(
@@ -362,13 +372,10 @@ impl Panel {
     pub fn chrome(&self) -> PanelChrome {
         let lang = self.lang();
         let failures = self.snapshot.as_ref().map_or(0, |s| {
-            s.jobs
+            s.branches
                 .iter()
-                .filter(|j| {
-                    j.last
-                        .as_ref()
-                        .is_some_and(|b| b.state == CiBuildState::Failure)
-                })
+                .flat_map(|b| b.changes.iter())
+                .filter(|c| c.pipeline.iter().any(|st| st.state == CiStageState::Failed))
                 .count()
         });
         let gaps = self
@@ -420,7 +427,7 @@ impl Panel {
             },
         );
         PanelChrome {
-            title: lang.t("CI watch").into(),
+            title: lang.t("CI/CD").into(),
             subtitle,
             status,
             commands: vec![
@@ -475,10 +482,10 @@ impl Panel {
                 self.changed();
             }
             PanelEvent::Command { id: 2 } => {
-                return self.invoke(Target::View(if self.view == View::Builds {
-                    View::Watchlist
+                return self.invoke(Target::View(if self.view == View::Watchlist {
+                    View::Pipeline
                 } else {
-                    View::Builds
+                    View::Watchlist
                 }));
             }
             PanelEvent::Wake => {
@@ -522,19 +529,15 @@ impl Panel {
                 match key {
                     PanelKey::Escape => {
                         if self.view == View::Watchlist {
-                            self.view = View::Builds;
+                            self.view = View::Pipeline;
                         }
                         self.focus = None;
                         self.scroll = 0.0;
                     }
                     PanelKey::Refresh => self.refresh(true)?,
-                    PanelKey::Left => {
-                        self.view = View::Builds;
-                        self.scroll = 0.0;
-                        self.focus = None;
-                    }
-                    PanelKey::Right => {
-                        self.view = View::Watchlist;
+                    PanelKey::Left | PanelKey::Right => {
+                        let delta = if key == PanelKey::Left { -1 } else { 1 };
+                        self.view = self.view.shift(delta);
                         self.scroll = 0.0;
                         self.focus = None;
                     }

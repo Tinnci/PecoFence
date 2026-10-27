@@ -147,19 +147,47 @@ fn frame(panel: &mut Panel, w: f32, h: f32) -> Scene {
         .unwrap()
 }
 #[test]
-fn ci_geometry_views_and_accessible_status() {
+fn cicd_pipeline_release_and_watch_views() {
     let (mut panel, _keep) = harness(PaperStyle::Light, false);
     let scene = frame(&mut panel, 480.0, 744.0);
+    let names: Vec<&str> = scene.nodes().iter().map(|n| n.name.as_str()).collect();
+    // Each change names its six stages and a headline word, not colour alone.
     assert!(
-        scene
-            .nodes()
+        names
             .iter()
-            .any(|n| n.role == "progressbar" && n.name.contains("launcher"))
+            .any(|n| n.starts_with("18234 ") && n.contains("需修复"))
     );
-    assert!(scene.nodes().iter().any(|n| n.name.contains("#913")));
-    assert!(scene.nodes().iter().any(|n| n.name.contains("14:33")));
-    assert!(scene.nodes().iter().any(|n| n.text == "CR+1"));
-    assert!(scene.nodes().iter().any(|n| n.name.contains("超出预计")));
+    assert!(names.iter().any(|n| n.contains("验证 × #913, 失败")));
+    assert!(names.iter().any(|n| n.contains("验证中")));
+    assert!(
+        names
+            .iter()
+            .any(|n| n.contains("已进版本") || n.contains("待进版本"))
+    );
+    assert!(
+        names
+            .iter()
+            .any(|n| n.contains("verify #913 失败 · 上次成功 #912"))
+    );
+    assert!(names.iter().any(|n| n.contains("与基线冲突，需变基")));
+    assert!(names.iter().any(|n| n.contains("#482 约 12 分")));
+    assert!(names.iter().any(|n| n.contains("已合入")));
+    // Release train: running daily, scheduled release and last finished release.
+    assert!(
+        names
+            .iter()
+            .any(|n| n.contains("orion/launcher-daily-userdebug #482") && n.contains("构建中"))
+    );
+    assert!(
+        names
+            .iter()
+            .any(|n| n.contains("release/ir-1113-full") && n.contains("计划"))
+    );
+    assert!(
+        names
+            .iter()
+            .any(|n| n.contains("release/ir-1113-full #57") && n.contains("成功"))
+    );
     for hit in scene.hit_tree() {
         assert!(hit.rect.x >= 0.0 && hit.rect.x + hit.rect.w <= 480.0);
         assert!(hit.rect.y >= 0.0 && hit.rect.y + hit.rect.h <= 744.0);
@@ -173,21 +201,26 @@ fn ci_geometry_views_and_accessible_status() {
                 .is_empty()
         );
     }
-    let bar = scene
-        .nodes()
-        .iter()
-        .find(|n| n.name.starts_with("orion/launcher-daily-userdebug ·") && n.role == "progressbar")
-        .unwrap();
-    let fill = scene
-        .nodes()
-        .iter()
-        .find(|n| {
-            n.rect.y == bar.rect.y
-                && n.rect.w < bar.rect.w
-                && n.style.fill == Some(panel.palette.accent)
-        })
-        .unwrap();
-    assert!((fill.rect.w / bar.rect.w - 21.0 / 33.0).abs() < 0.001);
+    panel.invoke(Target::View(View::Release)).unwrap();
+    let scene = frame(&mut panel, 480.0, 744.0);
+    assert!(
+        scene
+            .nodes()
+            .iter()
+            .any(|n| n.name.contains("发布列车") || n.name.contains("Release train"))
+    );
+    assert!(
+        scene
+            .nodes()
+            .iter()
+            .any(|n| n.name.contains("orion/launcher-daily-userdebug #482"))
+    );
+    assert!(
+        scene
+            .nodes()
+            .iter()
+            .any(|n| n.name.contains("待进入 1 个合入（你的 1 个）"))
+    );
     panel.invoke(Target::View(View::Watchlist)).unwrap();
     let scene = frame(&mut panel, 480.0, 744.0);
     assert!(scene.nodes().iter().any(|n| n.role == "combobox"));
@@ -195,17 +228,31 @@ fn ci_geometry_views_and_accessible_status() {
         scene
             .nodes()
             .iter()
+            .any(|n| n.role == "switch" && n.name.contains("角色"))
+    );
+    assert!(
+        scene
+            .nodes()
+            .iter()
             .any(|n| n.role == "switch" && n.name.contains("失败提醒"))
     );
 }
+
 #[test]
-fn local_demo_toggles_add_remove_and_keyboard() {
+fn local_demo_toggles_roles_add_remove_and_keyboard() {
     let (mut panel, _keep) = harness(PaperStyle::Light, false);
     let id = panel.snapshot.as_ref().unwrap().jobs[0].id.clone();
     panel
         .invoke(Target::Toggle(id.clone(), CiWatchFlag::OnlyMine, true))
         .unwrap();
     assert!(panel.snapshot.as_ref().unwrap().jobs[0].only_mine);
+    panel
+        .invoke(Target::Role(id.clone(), CiJobRole::Verify))
+        .unwrap();
+    assert_eq!(
+        panel.snapshot.as_ref().unwrap().jobs[0].role,
+        CiJobRole::Verify
+    );
     panel.invoke(Target::View(View::Watchlist)).unwrap();
     panel.query = "orion/car".into();
     panel.suggestions().unwrap();
@@ -229,7 +276,21 @@ fn local_demo_toggles_add_remove_and_keyboard() {
             shift: false,
         })
         .unwrap();
-    assert_eq!(panel.view, View::Builds);
+    assert_eq!(panel.view, View::Pipeline);
+    panel
+        .handle(PanelEvent::Key {
+            key: PanelKey::Right,
+            shift: false,
+        })
+        .unwrap();
+    assert_eq!(panel.view, View::Release);
+    panel
+        .handle(PanelEvent::Key {
+            key: PanelKey::Left,
+            shift: false,
+        })
+        .unwrap();
+    assert_eq!(panel.view, View::Pipeline);
     assert_eq!(panel.cadence(), Duration::from_secs(30));
     for b in &mut panel.snapshot.as_mut().unwrap().my_builds {
         b.state = CiBuildState::Success;
@@ -248,6 +309,7 @@ fn local_demo_toggles_add_remove_and_keyboard() {
     }
     assert_eq!(panel.cadence(), Duration::from_secs(120));
 }
+
 #[test]
 fn rejects_stale_frame_actions_and_retains_good_snapshot_on_bad_payload() {
     let (mut panel, _keep) = harness(PaperStyle::Light, false);
@@ -265,11 +327,12 @@ fn rejects_stale_frame_actions_and_retains_good_snapshot_on_bad_payload() {
             layout_revision: scene.identity().layout_revision,
         })
         .unwrap();
-    assert_eq!(panel.view, View::Builds);
+    assert_eq!(panel.view, View::Pipeline);
     let old = panel.snapshot.clone();
     assert!(panel.completion(b"invalid").is_err());
     assert_eq!(panel.snapshot, old);
 }
+
 #[test]
 fn good_ink_contrast_and_system_high_contrast() {
     for style in [PaperStyle::Light, PaperStyle::Dark, PaperStyle::Soft] {
@@ -295,14 +358,36 @@ fn good_ink_contrast_and_system_high_contrast() {
             .all(|n| n.style.stroke.is_some())
     );
 }
+
 #[test]
-fn ci_pixel_snapshots() {
+fn cicd_pixel_snapshots() {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/snapshots");
     for (name, style, hc, view) in [
-        ("ci-builds-light", PaperStyle::Light, false, View::Builds),
-        ("ci-builds-dark", PaperStyle::Dark, false, View::Builds),
-        ("ci-watchlist", PaperStyle::Light, false, View::Watchlist),
-        ("ci-hc", PaperStyle::Dark, true, View::Builds),
+        (
+            "cicd-pipeline-light",
+            PaperStyle::Light,
+            false,
+            View::Pipeline,
+        ),
+        (
+            "cicd-pipeline-dark",
+            PaperStyle::Dark,
+            false,
+            View::Pipeline,
+        ),
+        (
+            "cicd-release-light",
+            PaperStyle::Light,
+            false,
+            View::Release,
+        ),
+        (
+            "cicd-watchlist-light",
+            PaperStyle::Light,
+            false,
+            View::Watchlist,
+        ),
+        ("cicd-hc", PaperStyle::Dark, true, View::Pipeline),
     ] {
         let (mut panel, _keep) = harness(style, hc);
         panel.view = view;
