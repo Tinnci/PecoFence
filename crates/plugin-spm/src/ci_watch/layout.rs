@@ -1381,7 +1381,7 @@ fn workspace(
                 .and_then(|st| st.entered_at)
                 .map(|at| lang.age(((now - at).num_milliseconds().max(0)) as u64))
                 .unwrap_or_else(|| "—".into());
-            let card_h = 58.0;
+            let card_h = 70.0;
             let name = format!(
                 "{} {}，{}，{head}，{} {age}{}",
                 change.number,
@@ -1452,7 +1452,7 @@ fn workspace(
             );
             b.label(
                 &format!("{key}:subject"),
-                r(x + 8.0, cy + 19.0, col_w - 16.0, 16.0),
+                r(x + 8.0, cy + 21.0, col_w - 16.0, 16.0),
                 change.subject.clone(),
                 p.primary,
                 11.0,
@@ -1460,7 +1460,7 @@ fn workspace(
             );
             b.label(
                 &format!("{key}:state"),
-                r(x + 8.0, cy + 34.0, col_w - 16.0, 14.0),
+                r(x + 8.0, cy + 38.0, col_w - 16.0, 16.0),
                 head,
                 stage_tone(head_state, p),
                 11.0,
@@ -1468,7 +1468,7 @@ fn workspace(
             );
             b.label(
                 &format!("{key}:age"),
-                r(x + 8.0, cy + 46.0, col_w - 16.0, 12.0),
+                r(x + 8.0, cy + 54.0, col_w - 16.0, 14.0),
                 format!("{} {age}", lang.t("Age in stage")),
                 p.secondary,
                 10.0,
