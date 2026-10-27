@@ -247,7 +247,7 @@ impl App {
         if self.ci_fence().is_none() {
             let cursor = pecofence_platform::window::cursor_pos();
             let (x, y) = (cursor.x, cursor.y);
-            self.new_spm_panel_near(true, x, y, None);
+            self.new_spm_panel_near(SpmPanel::CiCd, x, y, None);
         }
         let Some((content, spec)) = self.ci_fence() else {
             return;

@@ -997,27 +997,34 @@ impl App {
 
     pub(super) fn new_spm_panel_near(
         &mut self,
-        ci: bool,
+        kind: SpmPanel,
         x: i32,
         y: i32,
         near: Option<ContainerId>,
     ) {
-        let (title, provider, (version, config), w, h) = if ci {
-            (
+        let (title, provider, (version, config), w, h) = match kind {
+            SpmPanel::CiCd => (
                 "CI/CD",
                 pecofence_plugin_spm::ci_watch::PROVIDER_ID,
                 pecofence_plugin_spm::ci_watch::live_config(),
                 480.0,
                 780.0,
-            )
-        } else {
-            (
+            ),
+            SpmPanel::Board => (
                 "交付看板",
                 pecofence_plugin_spm::board::PROVIDER_ID,
                 pecofence_plugin_spm::board::demo_config(),
                 1120.0,
                 760.0,
-            )
+            ),
+            // spmd serves issues only from its Orion fixture until the Meegle join exists.
+            SpmPanel::Issues => (
+                "我的问题",
+                pecofence_plugin_spm::issues::PROVIDER_ID,
+                pecofence_plugin_spm::issues::demo_config(),
+                480.0,
+                780.0,
+            ),
         };
         let rect = self.place_new_fence_dip(w, h, x, y, near);
         if self
@@ -1269,4 +1276,12 @@ impl App {
             self.schedule_save();
         }
     }
+}
+
+/// The SPM panels a menu can create.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum SpmPanel {
+    Board,
+    CiCd,
+    Issues,
 }

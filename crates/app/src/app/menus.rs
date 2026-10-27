@@ -14,6 +14,7 @@ struct WidgetIds {
     board: u32,
     timeline: u32,
     ci_cd: u32,
+    issues: u32,
 }
 
 fn new_widget_menu(ids: WidgetIds) -> PopupMenu {
@@ -34,6 +35,7 @@ fn new_widget_menu(ids: WidgetIds) -> PopupMenu {
         (ids.board, "交付看板"),
         (ids.timeline, "交付时间线"),
         (ids.ci_cd, "CI/CD"),
+        (ids.issues, "我的问题"),
     ] {
         menu.item(id, pecofence_core::i18n::text(title), false, false);
     }
@@ -59,6 +61,7 @@ const CMD_NEW_CI_WATCH: u32 = 17;
 const CMD_NEW_TIMELINE: u32 = 18;
 /// The SPM section's CI/CD row: reuses the CI/CD fence (reopening or unrolling it) or creates one.
 const CMD_OPEN_CI_WATCH: u32 = 19;
+const CMD_NEW_ISSUES: u32 = 20;
 const CMD_ITEM_OPEN: u32 = 100;
 const CMD_ITEM_LOCATION: u32 = 101;
 const CMD_ITEM_PROPERTIES: u32 = 102;
@@ -76,6 +79,7 @@ const CMD_FENCE_NEW_DIAGRAM: u32 = 338;
 const CMD_FENCE_NEW_BOARD: u32 = 343;
 const CMD_FENCE_NEW_CI_WATCH: u32 = 344;
 const CMD_FENCE_NEW_TIMELINE: u32 = 345;
+const CMD_FENCE_NEW_ISSUES: u32 = 346;
 const CMD_ITEM_MOVE_BASE: u32 = 200;
 const CMD_NEW_FENCE_HERE: u32 = 250;
 /// Command-id range handed to Explorer's `IContextMenu`.
@@ -179,6 +183,7 @@ impl App {
                 board: CMD_NEW_BOARD,
                 timeline: CMD_NEW_TIMELINE,
                 ci_cd: CMD_NEW_CI_WATCH,
+                issues: CMD_NEW_ISSUES,
             }),
         )
         .item(
@@ -255,9 +260,10 @@ impl App {
                 .queue
                 .push(Command::Fence(FenceCmd::NewFence { x, y: y - 300 })),
             CMD_OPEN_CI_WATCH => self.open_ci_watch_now(Default::default(), false),
-            CMD_NEW_BOARD => self.new_spm_panel_near(false, x, y, None),
+            CMD_NEW_BOARD => self.new_spm_panel_near(SpmPanel::Board, x, y, None),
             CMD_NEW_TIMELINE => self.new_timeline_near(x, y, None),
-            CMD_NEW_CI_WATCH => self.new_spm_panel_near(true, x, y, None),
+            CMD_NEW_CI_WATCH => self.new_spm_panel_near(SpmPanel::CiCd, x, y, None),
+            CMD_NEW_ISSUES => self.new_spm_panel_near(SpmPanel::Issues, x, y, None),
             CMD_NEW_CLOCK => {
                 self.new_widget_near(pecofence_plugin_widgets::CLOCK_PROVIDER, x, y, None)
             }
@@ -761,6 +767,7 @@ impl App {
                 board: CMD_FENCE_NEW_BOARD,
                 timeline: CMD_FENCE_NEW_TIMELINE,
                 ci_cd: CMD_FENCE_NEW_CI_WATCH,
+                issues: CMD_FENCE_NEW_ISSUES,
             }),
         );
         // Tabbed fences (Fences 6): split a tab out, move it along the strip, or merge this
@@ -971,8 +978,9 @@ impl App {
             CMD_FENCE_NEW_FOLDER => self.create_desktop_item(fence, true),
             CMD_FENCE_NEW_TEXT => self.create_desktop_item(fence, false),
             CMD_FENCE_NEW_TIMELINE => self.new_timeline_near(x, y, Some(host)),
-            CMD_FENCE_NEW_BOARD => self.new_spm_panel_near(false, x, y, Some(host)),
-            CMD_FENCE_NEW_CI_WATCH => self.new_spm_panel_near(true, x, y, Some(host)),
+            CMD_FENCE_NEW_BOARD => self.new_spm_panel_near(SpmPanel::Board, x, y, Some(host)),
+            CMD_FENCE_NEW_CI_WATCH => self.new_spm_panel_near(SpmPanel::CiCd, x, y, Some(host)),
+            CMD_FENCE_NEW_ISSUES => self.new_spm_panel_near(SpmPanel::Issues, x, y, Some(host)),
             CMD_FENCE_NEW_CLOCK => {
                 self.new_widget_near(pecofence_plugin_widgets::CLOCK_PROVIDER, x, y, Some(host))
             }

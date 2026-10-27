@@ -77,7 +77,7 @@ mod testscript;
 mod visuals;
 mod wallpaper_refresh;
 
-use fences::work_areas;
+use fences::{SpmPanel, work_areas};
 use fileops::{FileOp, FileOpThen};
 use panel_manager::PanelManager;
 use peek::peek_hotkey_label;
@@ -855,6 +855,10 @@ impl App {
             .borrow_mut()
             .register_provider(Rc::new(pecofence_plugin_spm::ci_watch::CiWatchPlugin))
             .expect("register CI watch provider");
+        panel_manager
+            .borrow_mut()
+            .register_provider(Rc::new(pecofence_plugin_spm::issues::IssuesPlugin))
+            .expect("register issue provider");
         panel_manager
             .borrow_mut()
             .register_provider(Rc::new(pecofence_plugin_widgets::ClockPlugin))
