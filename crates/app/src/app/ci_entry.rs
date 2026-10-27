@@ -51,6 +51,14 @@ pub(super) fn route(fence: CiFence, toggle: bool) -> CiRoute {
     }
 }
 
+/// Whether the UI is Simplified Chinese, for the few strings a view composes itself.
+pub(super) fn zh_ui() -> bool {
+    matches!(
+        pecofence_core::i18n::language(),
+        pecofence_core::i18n::Language::SimplifiedChinese
+    )
+}
+
 impl App {
     /// Opens the hidden monitor. It keeps the tray counts and the capsule current even when no
     /// CI fence is open.
@@ -73,7 +81,7 @@ impl App {
     pub(super) fn ci_tray_label(&self) -> String {
         let summary = Summary::from_snapshot(&self.ci_snapshot);
         let counts = if summary.visible() {
-            format!("\t● {} · × {}", summary.running, summary.failures)
+            format!("\t{}", summary.label(zh_ui()))
         } else {
             String::new()
         };
