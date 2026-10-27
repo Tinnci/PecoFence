@@ -35,6 +35,8 @@ fn negative_ci_fixtures_fail_validation() {
         include_str!("../fixtures/ci_watch/invalid-raw-navigation.json"),
         include_str!("../fixtures/ci_watch/invalid-pipeline-order.json"),
         include_str!("../fixtures/ci_watch/invalid-release-train-role.json"),
+        include_str!("../fixtures/ci_watch/invalid-log-window-bytes.json"),
+        include_str!("../fixtures/ci_watch/invalid-triage-not-failure.json"),
     ] {
         assert!(serde_json::from_str::<CiWatchSnapshot>(data)
             .unwrap()

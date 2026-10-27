@@ -10,7 +10,11 @@ pub const MAX_CI_BUILDS: usize = 100;
 pub const MAX_CI_CHANGES: usize = 20;
 pub const MAX_CI_STAGE_LABEL: usize = 64;
 pub const MAX_CI_NOTE: usize = 512;
-pub const MAX_CI_HISTORY: usize = 10;
+pub const MAX_CI_HISTORY: usize = 20;
+pub const MAX_CI_STEPS: usize = 64;
+pub const MAX_CI_MILESTONES: usize = 8;
+/// Bytes of console text shown in one log window; the window is a byte range of the full log.
+pub const MAX_CI_LOG_WINDOW: usize = 8192;
 fn invalid(reason: &str) -> ContractError {
     ContractError::InvalidField {
         field: "ci_watch",
@@ -211,6 +215,71 @@ pub struct BuildResultMark {
     pub state: CiBuildState,
     #[serde(default)]
     pub started_at: Option<DateTime<Utc>>,
+    /// Commits in the build's changeSets, for comparing a failure with the last success.
+    #[serde(default)]
+    pub commit_ids: Vec<String>,
+    #[serde(default)]
+    pub url_origin: String,
+    #[serde(default)]
+    pub path: String,
+}
+
+/// One step of a build. Only present when the build record has steps.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CiStepState {
+    Done,
+    Failed,
+    #[default]
+    Pending,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CiStep {
+    pub name: String,
+    pub state: CiStepState,
+    #[serde(default)]
+    pub elapsed_ms: Option<u64>,
+}
+
+/// A byte window of a console log. `text` is exactly `end - start` bytes of the log.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LogWindow {
+    pub text: String,
+    pub start: u64,
+    pub end: u64,
+    pub total: u64,
+}
+
+/// Triage for the selected failed build: its last success, steps when known, and the first-error log window.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FailureTriage {
+    pub build: CiBuild,
+    #[serde(default)]
+    pub last_success: Option<BuildResultMark>,
+    #[serde(default)]
+    pub steps: Vec<CiStep>,
+    #[serde(default)]
+    pub log: Option<LogWindow>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CiMilestoneKind {
+    CodeFreeze,
+    Release,
+}
+
+/// A dated line on the release-train axis. Only set from a known source, never inferred.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CiMilestone {
+    pub kind: CiMilestoneKind,
+    pub label: String,
+    pub at: DateTime<Utc>,
 }
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -340,6 +409,10 @@ pub struct CiWatchSnapshot {
     pub release_train: Vec<ReleaseTrainEntry>,
     #[serde(default)]
     pub kpis: CiKpis,
+    #[serde(default)]
+    pub milestones: Vec<CiMilestone>,
+    #[serde(default)]
+    pub triage: Option<FailureTriage>,
 }
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -721,11 +794,22 @@ impl CiWatchSnapshot {
         if self.kpis.watched_failing > self.kpis.watched_total {
             return Err(invalid("CI KPI failing exceeds watched"));
         }
+        if self.milestones.len() > MAX_CI_MILESTONES
+            || self.milestones.iter().any(|m| !bounded(&m.label, 64))
+        {
+            return Err(invalid("invalid CI milestones"));
+        }
+        if let Some(t) = &self.triage {
+            t.validate()?;
+        }
         for j in &self.jobs {
             if j.history.len() > MAX_CI_HISTORY
-                || j.history
-                    .iter()
-                    .any(|h| h.number == 0 || h.state == CiBuildState::Queued)
+                || j.history.iter().any(|h| {
+                    h.number == 0
+                        || h.state == CiBuildState::Queued
+                        || h.commit_ids.len() > MAX_CI_CHANGES
+                        || (!h.path.is_empty() && navigation(&h.url_origin, &h.path).is_err())
+                })
             {
                 return Err(invalid("invalid CI history"));
             }
@@ -789,6 +873,32 @@ impl CiChange {
             || (self.note.is_none() && self.note_state.is_some())
         {
             return Err(invalid("invalid CI change note"));
+        }
+        Ok(())
+    }
+}
+impl FailureTriage {
+    fn validate(&self) -> Result<(), ContractError> {
+        self.build.validate()?;
+        if self.build.state != CiBuildState::Failure {
+            return Err(invalid("triage build must be a failure"));
+        }
+        if let Some(mark) = &self.last_success {
+            if mark.number == 0 || mark.state != CiBuildState::Success {
+                return Err(invalid("triage last success must be a success"));
+            }
+        }
+        if self.steps.len() > MAX_CI_STEPS || self.steps.iter().any(|s| !bounded(&s.name, 256)) {
+            return Err(invalid("invalid CI steps"));
+        }
+        if let Some(log) = &self.log {
+            if log.text.len() > MAX_CI_LOG_WINDOW
+                || log.start > log.end
+                || log.end > log.total
+                || log.text.len() as u64 != log.end - log.start
+            {
+                return Err(invalid("invalid CI log window"));
+            }
         }
         Ok(())
     }

@@ -37,8 +37,25 @@ def build(job, number, state, elapsed=0, estimate=None, started=None, eta=None,
 STATES = dict(s="success", f="failure", u="unstable", a="aborted", r="running")
 
 
-def history(job_numbers, codes, starts):
-    return [dict(number=n, state=STATES[c], started_at=t) for n, c, t in zip(job_numbers, codes, starts)]
+def history(job, job_numbers, codes, starts, commits=None):
+    """Oldest first. `commits` maps a build number to its changeSets commit ids."""
+    commits = commits or {}
+    marks = []
+    for n, c, t in zip(job_numbers, codes, starts):
+        marks.append(dict(number=n, state=STATES[c], started_at=t,
+                          commit_ids=commits.get(n, []),
+                          url_origin="jenkins-work",
+                          path="/" + "/".join("job/" + p for p in job.split("/")) + f"/{n}"))
+    return marks
+
+
+def log_window(text_lines, length):
+    """Exactly `length` ASCII bytes of console text, padded with plausible build output."""
+    body = "".join(line + "\n" for line in text_lines)
+    filler = "[INFO] Tests run: 412, Failures: 0, Errors: 0, Skipped: 3\n"
+    while len(body) < length:
+        body += filler
+    return body[:length]
 
 
 def snapshot():
@@ -48,7 +65,7 @@ def snapshot():
     daily_prev = build("orion/launcher-daily-userdebug", 481, "success", 31, 31,
                        "2026-10-26T22:00:00Z", commits=["8" * 40], trigger={"kind": "timer"})
     verify_fail = build("orion/launcher-gerrit-verify", 913, "failure", 16, 18,
-                        "2026-10-27T04:00:00Z", commits=["a" * 40],
+                        "2026-10-27T04:00:00Z", commits=["9" * 40, "a" * 40],
                         trigger={"kind": "gerrit", "change": 18234, "patchset": 3}, node="node-04")
     verify_run = build("orion/launcher-gerrit-verify", 914, "running", 10, 18,
                        "2026-10-27T06:11:00Z", "2026-10-27T06:29:00Z", commits=["b" * 40],
@@ -61,20 +78,21 @@ def snapshot():
                   queue_reason="等待可用执行器 (label: arm64-large)")
     queue["started_at"] = "2026-10-27T06:17:00Z"
 
-    # Histories are oldest first; the newest entry equals the job's `last` build.
-    daily_hist = history(range(473, 483), "sssssfsssr", ["2026-10-19T22:00:00Z"] * 9 + ["2026-10-27T06:00:00Z"])
-    verify_nums = range(905, 915)
-    verify_hist = history(
-        verify_nums,
-        "ssssssssfr",
-        ["2026-10-18T09:00:00Z", "2026-10-19T09:00:00Z", "2026-10-23T09:00:00Z",
-         "2026-10-24T09:00:00Z", "2026-10-24T15:00:00Z", "2026-10-25T09:00:00Z",
-         "2026-10-25T15:00:00Z", "2026-10-26T09:00:00Z", "2026-10-26T20:00:00Z",
-         "2026-10-27T06:11:00Z"],
-    )
-    release_hist = history(range(48, 58), "sssssussss",
-                           [f"2026-10-{17 + i // 1:02d}T22:10:00Z" for i in range(10)])
-    system_hist = history(range(1158, 1168), "sssssssssr", ["2026-10-27T05:57:00Z"] * 10)
+    # Histories are oldest first, 20 builds each; the newest entry equals the job's `last` build.
+    daily_starts = [f"2026-10-{d:02d}T22:00:00Z" for d in range(8, 27)] + ["2026-10-27T06:00:00Z"]
+    daily_hist = history("orion/launcher-daily-userdebug", range(463, 483),
+                         "ssssssfssssssssfsssr", daily_starts[-20:],
+                         {n: ["9" * 40] for n in range(463, 482)} | {482: ["c" * 40]})
+    verify_starts = ["2026-10-%02dT09:00:00Z" % d for d in range(8, 27)] + ["2026-10-27T06:11:00Z"]
+    verify_hist = history("orion/launcher-gerrit-verify", range(895, 915),
+                          "ssfsssfssssfssssssfr", verify_starts[-20:],
+                          {n: ["9" * 40] for n in range(895, 912)}
+                          | {912: ["9" * 40], 913: ["9" * 40, "a" * 40], 914: ["9" * 40, "b" * 40]})
+    release_hist = history("release/ir-1113-full", range(38, 58), "sssssssussssssssssss",
+                           [f"2026-10-{8 + i:02d}T22:10:00Z" for i in range(20)],
+                           {n: ["9" * 40] for n in range(38, 57)} | {57: ["9" * 40]})
+    system_hist = history("orion/systemui-verify", range(1148, 1168), "sssssssssssssssssssr",
+                          ["2026-10-27T05:57:00Z"] * 20)
 
     def job(entry, role, last, hist, median, mine=False, notify=False, health="ok"):
         return dict(id="job:" + entry, job=entry, role=role, only_mine=mine,
@@ -159,6 +177,28 @@ def snapshot():
     ]
     kpis = dict(submit_to_merge_median_ms=None, merge_to_release_median_ms=None,
                 verify_pass_7d=dict(passed=6, total=7), watched_total=4, watched_failing=1)
+    milestones = [
+        dict(kind="code_freeze", label="代码冻结", at="2026-11-06T00:00:00Z"),
+        dict(kind="release", label="IR 发布", at="2026-11-13T00:00:00Z"),
+    ]
+    last_success = dict(verify_hist[-3]) if verify_hist[-3]["state"] == "success" else None
+    triage = dict(
+        build=verify_fail,
+        last_success=last_success,
+        steps=[],
+        log=dict(
+            text=log_window([
+                "SearchBoxTest > keepsVisibleInSimpleMode FAILED",
+                "    expected: visible",
+                "    but was: gone",
+                "    at SearchBoxTest.kt:88",
+                "SearchBoxTest > survivesRotation FAILED",
+                "    at SearchBoxTest.kt:131",
+                "2 tests failed, 412 passed",
+            ], 1206912 - 1204880),
+            start=1204880, end=1206912, total=3100000,
+        ),
+    )
 
     my_builds = [daily, system, queue, verify_fail, verify_run]
     return dict(
@@ -173,6 +213,8 @@ def snapshot():
         ],
         release_train=release_train,
         kpis=kpis,
+        milestones=milestones,
+        triage=triage,
     )
 
 
@@ -187,13 +229,15 @@ def main():
     write(root / "snapshot.json", data)
     write(ROOT / "crates/plugin-spm/fixtures/ci-watch-demo.json", data)
     mutations = [
-        ("history-bound", lambda d: d["jobs"][0]["history"].append(d["jobs"][0]["history"][0])),
+        ("history-bound", lambda d: d["jobs"][0]["history"].extend([d["jobs"][0]["history"][0]] * 2)),
         ("changes-bound", lambda d: d["branches"][0].update(changes=[d["branches"][0]["changes"][0]] * 21)),
         ("wrong-patchset", lambda d: d["branches"][0]["changes"][0].update(revision="e" * 40, patchset=4)),
         ("queued-number", lambda d: d["my_builds"][2].update(number=99)),
         ("raw-navigation", lambda d: d["my_builds"][0].update(path="https://evil.example/build")),
         ("pipeline-order", lambda d: d["branches"][0]["changes"][0]["pipeline"].reverse()),
         ("release-train-role", lambda d: d["release_train"][0].update(role="verify")),
+        ("log-window-bytes", lambda d: d["triage"]["log"].update(end=d["triage"]["log"]["end"] + 1)),
+        ("triage-not-failure", lambda d: d["triage"]["build"].update(state="success")),
     ]
     for name, mutate in mutations:
         d = json.loads(json.dumps(data))

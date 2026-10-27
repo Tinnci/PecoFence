@@ -1,0 +1,1478 @@
+{
+  "branches": [
+    {
+      "branch": "master",
+      "changes": [
+        {
+          "ci": {
+            "commit_ids": [
+              "9999999999999999999999999999999999999999",
+              "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            ],
+            "elapsed_ms": 960000,
+            "estimated_ms": 1080000,
+            "eta_at": null,
+            "job": "orion/launcher-gerrit-verify",
+            "node": "node-04",
+            "number": 913,
+            "overdue": false,
+            "path": "/job/orion/job/launcher-gerrit-verify/913",
+            "queue_reason": null,
+            "remaining_ms": null,
+            "started_at": "2026-10-27T04:00:00Z",
+            "state": "failure",
+            "trigger": {
+              "change": 18234,
+              "kind": "gerrit",
+              "patchset": 3
+            },
+            "url_origin": "jenkins-work"
+          },
+          "labels": {
+            "Code-Review": 1,
+            "Verified": -1
+          },
+          "mergeable": true,
+          "note": "verify #913 失败 · 上次成功 #912",
+          "note_state": "failed",
+          "number": 18234,
+          "owner": "tianchi",
+          "patchset": 3,
+          "path": "/c/18234",
+          "pipeline": [
+            {
+              "entered_at": "2026-10-27T03:58:00Z",
+              "kind": "submit",
+              "label": "PS3",
+              "state": "done"
+            },
+            {
+              "entered_at": "2026-10-27T04:00:00Z",
+              "kind": "verify",
+              "label": "× #913",
+              "state": "failed"
+            },
+            {
+              "entered_at": null,
+              "kind": "review",
+              "label": "CR+1",
+              "state": "pending"
+            },
+            {
+              "entered_at": null,
+              "kind": "merge",
+              "label": "—",
+              "state": "pending"
+            },
+            {
+              "entered_at": null,
+              "kind": "daily_build",
+              "label": "—",
+              "state": "pending"
+            },
+            {
+              "entered_at": null,
+              "kind": "release",
+              "label": "—",
+              "state": "pending"
+            }
+          ],
+          "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "status": "open",
+          "subject": "Keep the Search box visible in Simple Mode",
+          "url_origin": "gerrit-work"
+        },
+        {
+          "ci": {
+            "commit_ids": [
+              "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            ],
+            "elapsed_ms": 600000,
+            "estimated_ms": 1080000,
+            "eta_at": "2026-10-27T06:29:00Z",
+            "job": "orion/launcher-gerrit-verify",
+            "node": "node-04",
+            "number": 914,
+            "overdue": false,
+            "path": "/job/orion/job/launcher-gerrit-verify/914",
+            "queue_reason": null,
+            "remaining_ms": 480000,
+            "started_at": "2026-10-27T06:11:00Z",
+            "state": "running",
+            "trigger": {
+              "change": 18240,
+              "kind": "gerrit",
+              "patchset": 5
+            },
+            "url_origin": "jenkins-work"
+          },
+          "labels": {
+            "Code-Review": 2
+          },
+          "mergeable": true,
+          "note": "#914 约 8 分后完成 · 验证通过后即可合入",
+          "note_state": null,
+          "number": 18240,
+          "owner": "tianchi",
+          "patchset": 5,
+          "path": "/c/18240",
+          "pipeline": [
+            {
+              "entered_at": "2026-10-27T05:50:00Z",
+              "kind": "submit",
+              "label": "PS5",
+              "state": "done"
+            },
+            {
+              "entered_at": "2026-10-27T06:11:00Z",
+              "kind": "verify",
+              "label": "#914 约 8 分",
+              "state": "running"
+            },
+            {
+              "entered_at": null,
+              "kind": "review",
+              "label": "CR+2",
+              "state": "done"
+            },
+            {
+              "entered_at": null,
+              "kind": "merge",
+              "label": "待验证",
+              "state": "pending"
+            },
+            {
+              "entered_at": null,
+              "kind": "daily_build",
+              "label": "—",
+              "state": "pending"
+            },
+            {
+              "entered_at": null,
+              "kind": "release",
+              "label": "—",
+              "state": "pending"
+            }
+          ],
+          "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "status": "open",
+          "subject": "Rename the Home Settings entry",
+          "url_origin": "gerrit-work"
+        }
+      ],
+      "id": "branch:orion/launcher:master",
+      "include_merged": false,
+      "only_mine": false,
+      "project": "orion/launcher",
+      "truncated": false
+    },
+    {
+      "branch": "release/ir-1113",
+      "changes": [
+        {
+          "ci": null,
+          "labels": {
+            "Code-Review": 2,
+            "Verified": 1
+          },
+          "mergeable": true,
+          "note": "已在 daily #482 中，约 12 分后完成",
+          "note_state": null,
+          "number": 18198,
+          "owner": "tianchi",
+          "patchset": 2,
+          "path": "/c/18198",
+          "pipeline": [
+            {
+              "entered_at": "2026-10-25T09:00:00Z",
+              "kind": "submit",
+              "label": "PS2",
+              "state": "done"
+            },
+            {
+              "entered_at": null,
+              "kind": "verify",
+              "label": "V+1",
+              "state": "done"
+            },
+            {
+              "entered_at": null,
+              "kind": "review",
+              "label": "CR+2",
+              "state": "done"
+            },
+            {
+              "entered_at": null,
+              "kind": "merge",
+              "label": "已合入",
+              "state": "done"
+            },
+            {
+              "entered_at": "2026-10-27T06:00:00Z",
+              "kind": "daily_build",
+              "label": "#482 约 12 分",
+              "state": "running"
+            },
+            {
+              "entered_at": null,
+              "kind": "release",
+              "label": "待进版本",
+              "state": "pending"
+            }
+          ],
+          "revision": "cccccccccccccccccccccccccccccccccccccccc",
+          "status": "merged",
+          "subject": "Support the LC3 audio codec in Car Mode",
+          "url_origin": "gerrit-work"
+        },
+        {
+          "ci": null,
+          "labels": {
+            "Code-Review": 2,
+            "Verified": 1
+          },
+          "mergeable": false,
+          "note": "与基线冲突，需变基",
+          "note_state": "warn",
+          "number": 18177,
+          "owner": "tianchi",
+          "patchset": 7,
+          "path": "/c/18177",
+          "pipeline": [
+            {
+              "entered_at": "2026-10-26T13:00:00Z",
+              "kind": "submit",
+              "label": "PS7",
+              "state": "done"
+            },
+            {
+              "entered_at": null,
+              "kind": "verify",
+              "label": "V+1",
+              "state": "done"
+            },
+            {
+              "entered_at": null,
+              "kind": "review",
+              "label": "CR+2",
+              "state": "done"
+            },
+            {
+              "entered_at": null,
+              "kind": "merge",
+              "label": "⇄ 冲突",
+              "state": "warn"
+            },
+            {
+              "entered_at": null,
+              "kind": "daily_build",
+              "label": "—",
+              "state": "pending"
+            },
+            {
+              "entered_at": null,
+              "kind": "release",
+              "label": "—",
+              "state": "pending"
+            }
+          ],
+          "revision": "dddddddddddddddddddddddddddddddddddddddd",
+          "status": "open",
+          "subject": "Restore the classic dock layout",
+          "url_origin": "gerrit-work"
+        }
+      ],
+      "id": "branch:orion/launcher:release/ir-1113",
+      "include_merged": true,
+      "only_mine": false,
+      "project": "orion/launcher",
+      "truncated": false
+    },
+    {
+      "branch": "master",
+      "changes": [],
+      "id": "branch:orion/systemui:master",
+      "include_merged": false,
+      "only_mine": true,
+      "project": "orion/systemui",
+      "truncated": false
+    }
+  ],
+  "jobs": [
+    {
+      "health": "ok",
+      "history": [
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 463,
+          "path": "/job/orion/job/launcher-daily-userdebug/463",
+          "started_at": "2026-10-08T22:00:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 464,
+          "path": "/job/orion/job/launcher-daily-userdebug/464",
+          "started_at": "2026-10-09T22:00:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 465,
+          "path": "/job/orion/job/launcher-daily-userdebug/465",
+          "started_at": "2026-10-10T22:00:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 466,
+          "path": "/job/orion/job/launcher-daily-userdebug/466",
+          "started_at": "2026-10-11T22:00:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 467,
+          "path": "/job/orion/job/launcher-daily-userdebug/467",
+          "started_at": "2026-10-12T22:00:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 468,
+          "path": "/job/orion/job/launcher-daily-userdebug/468",
+          "started_at": "2026-10-13T22:00:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 469,
+          "path": "/job/orion/job/launcher-daily-userdebug/469",
+          "started_at": "2026-10-14T22:00:00Z",
+          "state": "failure",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 470,
+          "path": "/job/orion/job/launcher-daily-userdebug/470",
+          "started_at": "2026-10-15T22:00:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 471,
+          "path": "/job/orion/job/launcher-daily-userdebug/471",
+          "started_at": "2026-10-16T22:00:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 472,
+          "path": "/job/orion/job/launcher-daily-userdebug/472",
+          "started_at": "2026-10-17T22:00:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 473,
+          "path": "/job/orion/job/launcher-daily-userdebug/473",
+          "started_at": "2026-10-18T22:00:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 474,
+          "path": "/job/orion/job/launcher-daily-userdebug/474",
+          "started_at": "2026-10-19T22:00:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 475,
+          "path": "/job/orion/job/launcher-daily-userdebug/475",
+          "started_at": "2026-10-20T22:00:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 476,
+          "path": "/job/orion/job/launcher-daily-userdebug/476",
+          "started_at": "2026-10-21T22:00:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 477,
+          "path": "/job/orion/job/launcher-daily-userdebug/477",
+          "started_at": "2026-10-22T22:00:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 478,
+          "path": "/job/orion/job/launcher-daily-userdebug/478",
+          "started_at": "2026-10-23T22:00:00Z",
+          "state": "failure",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 479,
+          "path": "/job/orion/job/launcher-daily-userdebug/479",
+          "started_at": "2026-10-24T22:00:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 480,
+          "path": "/job/orion/job/launcher-daily-userdebug/480",
+          "started_at": "2026-10-25T22:00:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 481,
+          "path": "/job/orion/job/launcher-daily-userdebug/481",
+          "started_at": "2026-10-26T22:00:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "cccccccccccccccccccccccccccccccccccccccc"
+          ],
+          "number": 482,
+          "path": "/job/orion/job/launcher-daily-userdebug/482",
+          "started_at": "2026-10-27T06:00:00Z",
+          "state": "running",
+          "url_origin": "jenkins-work"
+        }
+      ],
+      "id": "job:orion/launcher-daily-userdebug",
+      "job": "orion/launcher-daily-userdebug",
+      "last": {
+        "commit_ids": [
+          "cccccccccccccccccccccccccccccccccccccccc"
+        ],
+        "elapsed_ms": 1260000,
+        "estimated_ms": 1980000,
+        "eta_at": "2026-10-27T06:33:00Z",
+        "job": "orion/launcher-daily-userdebug",
+        "node": "node-07",
+        "number": 482,
+        "overdue": false,
+        "path": "/job/orion/job/launcher-daily-userdebug/482",
+        "queue_reason": null,
+        "remaining_ms": 720000,
+        "started_at": "2026-10-27T06:00:00Z",
+        "state": "running",
+        "trigger": {
+          "kind": "timer"
+        },
+        "url_origin": "jenkins-work"
+      },
+      "median_ms": 1860000,
+      "notify_on_failure": true,
+      "only_mine": false,
+      "role": "daily"
+    },
+    {
+      "health": "ok",
+      "history": [
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 895,
+          "path": "/job/orion/job/launcher-gerrit-verify/895",
+          "started_at": "2026-10-08T09:00:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 896,
+          "path": "/job/orion/job/launcher-gerrit-verify/896",
+          "started_at": "2026-10-09T09:00:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 897,
+          "path": "/job/orion/job/launcher-gerrit-verify/897",
+          "started_at": "2026-10-10T09:00:00Z",
+          "state": "failure",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 898,
+          "path": "/job/orion/job/launcher-gerrit-verify/898",
+          "started_at": "2026-10-11T09:00:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 899,
+          "path": "/job/orion/job/launcher-gerrit-verify/899",
+          "started_at": "2026-10-12T09:00:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 900,
+          "path": "/job/orion/job/launcher-gerrit-verify/900",
+          "started_at": "2026-10-13T09:00:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 901,
+          "path": "/job/orion/job/launcher-gerrit-verify/901",
+          "started_at": "2026-10-14T09:00:00Z",
+          "state": "failure",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 902,
+          "path": "/job/orion/job/launcher-gerrit-verify/902",
+          "started_at": "2026-10-15T09:00:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 903,
+          "path": "/job/orion/job/launcher-gerrit-verify/903",
+          "started_at": "2026-10-16T09:00:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 904,
+          "path": "/job/orion/job/launcher-gerrit-verify/904",
+          "started_at": "2026-10-17T09:00:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 905,
+          "path": "/job/orion/job/launcher-gerrit-verify/905",
+          "started_at": "2026-10-18T09:00:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 906,
+          "path": "/job/orion/job/launcher-gerrit-verify/906",
+          "started_at": "2026-10-19T09:00:00Z",
+          "state": "failure",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 907,
+          "path": "/job/orion/job/launcher-gerrit-verify/907",
+          "started_at": "2026-10-20T09:00:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 908,
+          "path": "/job/orion/job/launcher-gerrit-verify/908",
+          "started_at": "2026-10-21T09:00:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 909,
+          "path": "/job/orion/job/launcher-gerrit-verify/909",
+          "started_at": "2026-10-22T09:00:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 910,
+          "path": "/job/orion/job/launcher-gerrit-verify/910",
+          "started_at": "2026-10-23T09:00:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 911,
+          "path": "/job/orion/job/launcher-gerrit-verify/911",
+          "started_at": "2026-10-24T09:00:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 912,
+          "path": "/job/orion/job/launcher-gerrit-verify/912",
+          "started_at": "2026-10-25T09:00:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999",
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          ],
+          "number": 913,
+          "path": "/job/orion/job/launcher-gerrit-verify/913",
+          "started_at": "2026-10-26T09:00:00Z",
+          "state": "failure",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999",
+            "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          ],
+          "number": 914,
+          "path": "/job/orion/job/launcher-gerrit-verify/914",
+          "started_at": "2026-10-27T06:11:00Z",
+          "state": "running",
+          "url_origin": "jenkins-work"
+        }
+      ],
+      "id": "job:orion/launcher-gerrit-verify",
+      "job": "orion/launcher-gerrit-verify",
+      "last": {
+        "commit_ids": [
+          "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        ],
+        "elapsed_ms": 600000,
+        "estimated_ms": 1080000,
+        "eta_at": "2026-10-27T06:29:00Z",
+        "job": "orion/launcher-gerrit-verify",
+        "node": "node-04",
+        "number": 914,
+        "overdue": false,
+        "path": "/job/orion/job/launcher-gerrit-verify/914",
+        "queue_reason": null,
+        "remaining_ms": 480000,
+        "started_at": "2026-10-27T06:11:00Z",
+        "state": "running",
+        "trigger": {
+          "change": 18240,
+          "kind": "gerrit",
+          "patchset": 5
+        },
+        "url_origin": "jenkins-work"
+      },
+      "median_ms": 1080000,
+      "notify_on_failure": true,
+      "only_mine": true,
+      "role": "verify"
+    },
+    {
+      "health": "ok",
+      "history": [
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 38,
+          "path": "/job/release/job/ir-1113-full/38",
+          "started_at": "2026-10-08T22:10:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 39,
+          "path": "/job/release/job/ir-1113-full/39",
+          "started_at": "2026-10-09T22:10:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 40,
+          "path": "/job/release/job/ir-1113-full/40",
+          "started_at": "2026-10-10T22:10:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 41,
+          "path": "/job/release/job/ir-1113-full/41",
+          "started_at": "2026-10-11T22:10:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 42,
+          "path": "/job/release/job/ir-1113-full/42",
+          "started_at": "2026-10-12T22:10:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 43,
+          "path": "/job/release/job/ir-1113-full/43",
+          "started_at": "2026-10-13T22:10:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 44,
+          "path": "/job/release/job/ir-1113-full/44",
+          "started_at": "2026-10-14T22:10:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 45,
+          "path": "/job/release/job/ir-1113-full/45",
+          "started_at": "2026-10-15T22:10:00Z",
+          "state": "unstable",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 46,
+          "path": "/job/release/job/ir-1113-full/46",
+          "started_at": "2026-10-16T22:10:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 47,
+          "path": "/job/release/job/ir-1113-full/47",
+          "started_at": "2026-10-17T22:10:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 48,
+          "path": "/job/release/job/ir-1113-full/48",
+          "started_at": "2026-10-18T22:10:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 49,
+          "path": "/job/release/job/ir-1113-full/49",
+          "started_at": "2026-10-19T22:10:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 50,
+          "path": "/job/release/job/ir-1113-full/50",
+          "started_at": "2026-10-20T22:10:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 51,
+          "path": "/job/release/job/ir-1113-full/51",
+          "started_at": "2026-10-21T22:10:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 52,
+          "path": "/job/release/job/ir-1113-full/52",
+          "started_at": "2026-10-22T22:10:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 53,
+          "path": "/job/release/job/ir-1113-full/53",
+          "started_at": "2026-10-23T22:10:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 54,
+          "path": "/job/release/job/ir-1113-full/54",
+          "started_at": "2026-10-24T22:10:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 55,
+          "path": "/job/release/job/ir-1113-full/55",
+          "started_at": "2026-10-25T22:10:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 56,
+          "path": "/job/release/job/ir-1113-full/56",
+          "started_at": "2026-10-26T22:10:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [
+            "9999999999999999999999999999999999999999"
+          ],
+          "number": 57,
+          "path": "/job/release/job/ir-1113-full/57",
+          "started_at": "2026-10-27T22:10:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        }
+      ],
+      "id": "job:release/ir-1113-full",
+      "job": "release/ir-1113-full",
+      "last": {
+        "commit_ids": [
+          "9999999999999999999999999999999999999999"
+        ],
+        "elapsed_ms": 6120000,
+        "estimated_ms": 6120000,
+        "eta_at": null,
+        "job": "release/ir-1113-full",
+        "node": null,
+        "number": 57,
+        "overdue": false,
+        "path": "/job/release/job/ir-1113-full/57",
+        "queue_reason": null,
+        "remaining_ms": null,
+        "started_at": "2026-10-26T22:10:00Z",
+        "state": "success",
+        "trigger": {
+          "kind": "timer"
+        },
+        "url_origin": "jenkins-work"
+      },
+      "median_ms": 6120000,
+      "notify_on_failure": false,
+      "only_mine": false,
+      "role": "release"
+    },
+    {
+      "health": "ok",
+      "history": [
+        {
+          "commit_ids": [],
+          "number": 1148,
+          "path": "/job/orion/job/systemui-verify/1148",
+          "started_at": "2026-10-27T05:57:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [],
+          "number": 1149,
+          "path": "/job/orion/job/systemui-verify/1149",
+          "started_at": "2026-10-27T05:57:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [],
+          "number": 1150,
+          "path": "/job/orion/job/systemui-verify/1150",
+          "started_at": "2026-10-27T05:57:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [],
+          "number": 1151,
+          "path": "/job/orion/job/systemui-verify/1151",
+          "started_at": "2026-10-27T05:57:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [],
+          "number": 1152,
+          "path": "/job/orion/job/systemui-verify/1152",
+          "started_at": "2026-10-27T05:57:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [],
+          "number": 1153,
+          "path": "/job/orion/job/systemui-verify/1153",
+          "started_at": "2026-10-27T05:57:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [],
+          "number": 1154,
+          "path": "/job/orion/job/systemui-verify/1154",
+          "started_at": "2026-10-27T05:57:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [],
+          "number": 1155,
+          "path": "/job/orion/job/systemui-verify/1155",
+          "started_at": "2026-10-27T05:57:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [],
+          "number": 1156,
+          "path": "/job/orion/job/systemui-verify/1156",
+          "started_at": "2026-10-27T05:57:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [],
+          "number": 1157,
+          "path": "/job/orion/job/systemui-verify/1157",
+          "started_at": "2026-10-27T05:57:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [],
+          "number": 1158,
+          "path": "/job/orion/job/systemui-verify/1158",
+          "started_at": "2026-10-27T05:57:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [],
+          "number": 1159,
+          "path": "/job/orion/job/systemui-verify/1159",
+          "started_at": "2026-10-27T05:57:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [],
+          "number": 1160,
+          "path": "/job/orion/job/systemui-verify/1160",
+          "started_at": "2026-10-27T05:57:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [],
+          "number": 1161,
+          "path": "/job/orion/job/systemui-verify/1161",
+          "started_at": "2026-10-27T05:57:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [],
+          "number": 1162,
+          "path": "/job/orion/job/systemui-verify/1162",
+          "started_at": "2026-10-27T05:57:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [],
+          "number": 1163,
+          "path": "/job/orion/job/systemui-verify/1163",
+          "started_at": "2026-10-27T05:57:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [],
+          "number": 1164,
+          "path": "/job/orion/job/systemui-verify/1164",
+          "started_at": "2026-10-27T05:57:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [],
+          "number": 1165,
+          "path": "/job/orion/job/systemui-verify/1165",
+          "started_at": "2026-10-27T05:57:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [],
+          "number": 1166,
+          "path": "/job/orion/job/systemui-verify/1166",
+          "started_at": "2026-10-27T05:57:00Z",
+          "state": "success",
+          "url_origin": "jenkins-work"
+        },
+        {
+          "commit_ids": [],
+          "number": 1167,
+          "path": "/job/orion/job/systemui-verify/1167",
+          "started_at": "2026-10-27T05:57:00Z",
+          "state": "running",
+          "url_origin": "jenkins-work"
+        }
+      ],
+      "id": "job:orion/systemui-verify",
+      "job": "orion/systemui-verify",
+      "last": {
+        "commit_ids": [],
+        "elapsed_ms": 1440000,
+        "estimated_ms": 1080000,
+        "eta_at": null,
+        "job": "orion/systemui-verify",
+        "node": "node-03",
+        "number": 1167,
+        "overdue": true,
+        "path": "/job/orion/job/systemui-verify/1167",
+        "queue_reason": null,
+        "remaining_ms": null,
+        "started_at": "2026-10-27T05:57:00Z",
+        "state": "running",
+        "trigger": {
+          "id": "tianchi",
+          "kind": "user"
+        },
+        "url_origin": "jenkins-work"
+      },
+      "median_ms": 1080000,
+      "notify_on_failure": true,
+      "only_mine": false,
+      "role": "verify"
+    }
+  ],
+  "kpis": {
+    "merge_to_release_median_ms": null,
+    "submit_to_merge_median_ms": null,
+    "verify_pass_7d": {
+      "passed": 6,
+      "total": 7
+    },
+    "watched_failing": 1,
+    "watched_total": 4
+  },
+  "milestones": [
+    {
+      "at": "2026-11-06T00:00:00Z",
+      "kind": "code_freeze",
+      "label": "代码冻结"
+    },
+    {
+      "at": "2026-11-13T00:00:00Z",
+      "kind": "release",
+      "label": "IR 发布"
+    }
+  ],
+  "my_builds": [
+    {
+      "commit_ids": [
+        "cccccccccccccccccccccccccccccccccccccccc"
+      ],
+      "elapsed_ms": 1260000,
+      "estimated_ms": 1980000,
+      "eta_at": "2026-10-27T06:33:00Z",
+      "job": "orion/launcher-daily-userdebug",
+      "node": "node-07",
+      "number": 482,
+      "overdue": false,
+      "path": "/job/orion/job/launcher-daily-userdebug/482",
+      "queue_reason": null,
+      "remaining_ms": 720000,
+      "started_at": "2026-10-27T06:00:00Z",
+      "state": "running",
+      "trigger": {
+        "kind": "timer"
+      },
+      "url_origin": "jenkins-work"
+    },
+    {
+      "commit_ids": [],
+      "elapsed_ms": 1440000,
+      "estimated_ms": 1080000,
+      "eta_at": null,
+      "job": "orion/systemui-verify",
+      "node": "node-03",
+      "number": 1167,
+      "overdue": true,
+      "path": "/job/orion/job/systemui-verify/1167",
+      "queue_reason": null,
+      "remaining_ms": null,
+      "started_at": "2026-10-27T05:57:00Z",
+      "state": "running",
+      "trigger": {
+        "id": "tianchi",
+        "kind": "user"
+      },
+      "url_origin": "jenkins-work"
+    },
+    {
+      "commit_ids": [],
+      "elapsed_ms": 240000,
+      "estimated_ms": null,
+      "eta_at": null,
+      "job": "orion/carmode-lc3-smoke",
+      "node": null,
+      "number": null,
+      "overdue": false,
+      "path": "/job/orion/job/carmode-lc3-smoke",
+      "queue_reason": "等待可用执行器 (label: arm64-large)",
+      "remaining_ms": null,
+      "started_at": "2026-10-27T06:17:00Z",
+      "state": "queued",
+      "trigger": {
+        "id": "tianchi",
+        "kind": "user"
+      },
+      "url_origin": "jenkins-work"
+    },
+    {
+      "commit_ids": [
+        "9999999999999999999999999999999999999999",
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      ],
+      "elapsed_ms": 960000,
+      "estimated_ms": 1080000,
+      "eta_at": null,
+      "job": "orion/launcher-gerrit-verify",
+      "node": "node-04",
+      "number": 913,
+      "overdue": false,
+      "path": "/job/orion/job/launcher-gerrit-verify/913",
+      "queue_reason": null,
+      "remaining_ms": null,
+      "started_at": "2026-10-27T04:00:00Z",
+      "state": "failure",
+      "trigger": {
+        "change": 18234,
+        "kind": "gerrit",
+        "patchset": 3
+      },
+      "url_origin": "jenkins-work"
+    },
+    {
+      "commit_ids": [
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      ],
+      "elapsed_ms": 600000,
+      "estimated_ms": 1080000,
+      "eta_at": "2026-10-27T06:29:00Z",
+      "job": "orion/launcher-gerrit-verify",
+      "node": "node-04",
+      "number": 914,
+      "overdue": false,
+      "path": "/job/orion/job/launcher-gerrit-verify/914",
+      "queue_reason": null,
+      "remaining_ms": 480000,
+      "started_at": "2026-10-27T06:11:00Z",
+      "state": "running",
+      "trigger": {
+        "change": 18240,
+        "kind": "gerrit",
+        "patchset": 5
+      },
+      "url_origin": "jenkins-work"
+    }
+  ],
+  "observed_through": "2026-10-27T06:21:00Z",
+  "release_train": [
+    {
+      "current": {
+        "commit_ids": [
+          "cccccccccccccccccccccccccccccccccccccccc"
+        ],
+        "elapsed_ms": 1260000,
+        "estimated_ms": 1980000,
+        "eta_at": "2026-10-27T06:33:00Z",
+        "job": "orion/launcher-daily-userdebug",
+        "node": "node-07",
+        "number": 482,
+        "overdue": false,
+        "path": "/job/orion/job/launcher-daily-userdebug/482",
+        "queue_reason": null,
+        "remaining_ms": 720000,
+        "started_at": "2026-10-27T06:00:00Z",
+        "state": "running",
+        "trigger": {
+          "kind": "timer"
+        },
+        "url_origin": "jenkins-work"
+      },
+      "job": "orion/launcher-daily-userdebug",
+      "last_finished": {
+        "commit_ids": [
+          "8888888888888888888888888888888888888888"
+        ],
+        "elapsed_ms": 1860000,
+        "estimated_ms": 1860000,
+        "eta_at": null,
+        "job": "orion/launcher-daily-userdebug",
+        "node": null,
+        "number": 481,
+        "overdue": false,
+        "path": "/job/orion/job/launcher-daily-userdebug/481",
+        "queue_reason": null,
+        "remaining_ms": null,
+        "started_at": "2026-10-26T22:00:00Z",
+        "state": "success",
+        "trigger": {
+          "kind": "timer"
+        },
+        "url_origin": "jenkins-work"
+      },
+      "median_ms": 1860000,
+      "pending_merges": 0,
+      "pending_mine": 0,
+      "recent": {
+        "passed": 8,
+        "total": 9
+      },
+      "role": "daily",
+      "scheduled_at": null
+    },
+    {
+      "current": null,
+      "job": "release/ir-1113-full",
+      "last_finished": {
+        "commit_ids": [
+          "9999999999999999999999999999999999999999"
+        ],
+        "elapsed_ms": 6120000,
+        "estimated_ms": 6120000,
+        "eta_at": null,
+        "job": "release/ir-1113-full",
+        "node": null,
+        "number": 57,
+        "overdue": false,
+        "path": "/job/release/job/ir-1113-full/57",
+        "queue_reason": null,
+        "remaining_ms": null,
+        "started_at": "2026-10-26T22:10:00Z",
+        "state": "success",
+        "trigger": {
+          "kind": "timer"
+        },
+        "url_origin": "jenkins-work"
+      },
+      "median_ms": 6120000,
+      "pending_merges": 1,
+      "pending_mine": 1,
+      "recent": {
+        "passed": 9,
+        "total": 10
+      },
+      "role": "release",
+      "scheduled_at": "2026-10-27T14:00:00Z"
+    }
+  ],
+  "sources": [
+    {
+      "error": null,
+      "health": "ok",
+      "observed_at": "2026-10-27T06:20:30Z",
+      "source": "jenkins"
+    },
+    {
+      "error": null,
+      "health": "ok",
+      "observed_at": "2026-10-27T06:19:00Z",
+      "source": "gerrit"
+    }
+  ],
+  "triage": {
+    "build": {
+      "commit_ids": [
+        "9999999999999999999999999999999999999999",
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      ],
+      "elapsed_ms": 960000,
+      "estimated_ms": 1080000,
+      "eta_at": null,
+      "job": "orion/launcher-gerrit-verify",
+      "node": "node-04",
+      "number": 913,
+      "overdue": false,
+      "path": "/job/orion/job/launcher-gerrit-verify/913",
+      "queue_reason": null,
+      "remaining_ms": null,
+      "started_at": "2026-10-27T04:00:00Z",
+      "state": "success",
+      "trigger": {
+        "change": 18234,
+        "kind": "gerrit",
+        "patchset": 3
+      },
+      "url_origin": "jenkins-work"
+    },
+    "last_success": {
+      "commit_ids": [
+        "9999999999999999999999999999999999999999"
+      ],
+      "number": 912,
+      "path": "/job/orion/job/launcher-gerrit-verify/912",
+      "started_at": "2026-10-25T09:00:00Z",
+      "state": "success",
+      "url_origin": "jenkins-work"
+    },
+    "log": {
+      "end": 1206912,
+      "start": 1204880,
+      "text": "SearchBoxTest > keepsVisibleInSimpleMode FAILED\n    expected: visible\n    but was: gone\n    at SearchBoxTest.kt:88\nSearchBoxTest > survivesRotation FAILED\n    at SearchBoxTest.kt:131\n2 tests failed, 412 passed\n[INFO] Tests run: 412, Failures: 0, Errors: 0, Skipped: 3\n[INFO] Tests run: 412, Failures: 0, Errors: 0, Skipped: 3\n[INFO] Tests run: 412, Failures: 0, Errors: 0, Skipped: 3\n[INFO] Tests run: 412, Failures: 0, Errors: 0, Skipped: 3\n[INFO] Tests run: 412, Failures: 0, Errors: 0, Skipped: 3\n[INFO] Tests run: 412, Failures: 0, Errors: 0, Skipped: 3\n[INFO] Tests run: 412, Failures: 0, Errors: 0, Skipped: 3\n[INFO] Tests run: 412, Failures: 0, Errors: 0, Skipped: 3\n[INFO] Tests run: 412, Failures: 0, Errors: 0, Skipped: 3\n[INFO] Tests run: 412, Failures: 0, Errors: 0, Skipped: 3\n[INFO] Tests run: 412, Failures: 0, Errors: 0, Skipped: 3\n[INFO] Tests run: 412, Failures: 0, Errors: 0, Skipped: 3\n[INFO] Tests run: 412, Failures: 0, Errors: 0, Skipped: 3\n[INFO] Tests run: 412, Failures: 0, Errors: 0, Skipped: 3\n[INFO] Tests run: 412, Failures: 0, Errors: 0, Skipped: 3\n[INFO] Tests run: 412, Failures: 0, Errors: 0, Skipped: 3\n[INFO] Tests run: 412, Failures: 0, Errors: 0, Skipped: 3\n[INFO] Tests run: 412, Failures: 0, Errors: 0, Skipped: 3\n[INFO] Tests run: 412, Failures: 0, Errors: 0, Skipped: 3\n[INFO] Tests run: 412, Failures: 0, Errors: 0, Skipped: 3\n[INFO] Tests run: 412, Failures: 0, Errors: 0, Skipped: 3\n[INFO] Tests run: 412, Failures: 0, Errors: 0, Skipped: 3\n[INFO] Tests run: 412, Failures: 0, Errors: 0, Skipped: 3\n[INFO] Tests run: 412, Failures: 0, Errors: 0, Skipped: 3\n[INFO] Tests run: 412, Failures: 0, Errors: 0, Skipped: 3\n[INFO] Tests run: 412, Failures: 0, Errors: 0, Skipped: 3\n[INFO] Tests run: 412, Failures: 0, Errors: 0, Skipped: 3\n[INFO] Tests run: 412, Failures: 0, Errors: 0, Skipped: 3\n[INFO] Tests run: 412, Failures: 0, Errors: 0, Skipped: 3\n[INFO] Tests run: 412, Failures: 0, Errors: 0, Skipped: 3\n[INFO] Tests run: 412, Failures: 0, Errors: 0, Skipped: 3\n[INFO] Tests run: 412, F",
+      "total": 3100000
+    },
+    "steps": []
+  },
+  "user": {
+    "gerrit_user": "tianchi",
+    "jenkins_user": "tianchi"
+  }
+}
