@@ -62,18 +62,33 @@ pub enum View {
     #[default]
     Pipeline,
     Release,
+    Workspace,
     Watchlist,
 }
 impl View {
     fn shift(self, delta: i32) -> Self {
-        const ORDER: [View; 3] = [View::Pipeline, View::Release, View::Watchlist];
+        const ORDER: [View; 4] = [
+            View::Pipeline,
+            View::Release,
+            View::Workspace,
+            View::Watchlist,
+        ];
         let i = ORDER.iter().position(|v| *v == self).unwrap_or(0) as i32 + delta;
         ORDER[i.clamp(0, ORDER.len() as i32 - 1) as usize]
     }
 }
+/// Which changes the workspace lists: the user's own, or the whole watched team.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Scope {
+    Mine,
+    #[default]
+    Team,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Target {
     View(View),
+    Scope(Scope),
     Find,
     Add,
     Suggestion(usize),
@@ -118,6 +133,7 @@ pub struct Panel {
     snapshot: Option<CiWatchSnapshot>,
     suggestions: CiSuggestions,
     view: View,
+    scope: Scope,
     query: String,
     selected_suggestion: Option<usize>,
     focus: Option<String>,
@@ -156,6 +172,7 @@ impl Panel {
             mount: None,
             suggestions: CiSuggestions::default(),
             view: View::Pipeline,
+            scope: Scope::Team,
             query: String::new(),
             selected_suggestion: None,
             focus: None,
@@ -311,6 +328,7 @@ impl Panel {
                 self.scroll = 0.0;
                 self.focus = None;
             }
+            Target::Scope(scope) => self.scope = scope,
             Target::Find => {
                 let mut style =
                     TextInputStyle::new(self.field, self.palette.primary, self.palette.card, 13.0);
@@ -616,6 +634,15 @@ impl Panel {
             self.focus.as_deref(),
             self.scroll,
             &self.config,
+            self.scope,
+            if self.config.demo {
+                self.snapshot
+                    .as_ref()
+                    .and_then(|s| s.observed_through)
+                    .unwrap_or_else(chrono::Utc::now)
+            } else {
+                chrono::Utc::now()
+            },
             self.lang(),
             viewport,
             &self.palette,

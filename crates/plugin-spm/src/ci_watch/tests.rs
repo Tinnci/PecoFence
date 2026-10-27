@@ -388,6 +388,19 @@ fn cicd_pixel_snapshots() {
             View::Watchlist,
         ),
         ("cicd-hc", PaperStyle::Dark, true, View::Pipeline),
+        (
+            "cicd-workspace-light",
+            PaperStyle::Light,
+            false,
+            View::Workspace,
+        ),
+        (
+            "cicd-workspace-dark",
+            PaperStyle::Dark,
+            false,
+            View::Workspace,
+        ),
+        ("cicd-workspace-hc", PaperStyle::Dark, true, View::Workspace),
     ] {
         let (mut panel, _keep) = harness(style, hc);
         panel.view = view;
@@ -395,11 +408,68 @@ fn cicd_pixel_snapshots() {
             panel.query = "orion/car".into();
             panel.suggestions().unwrap();
         }
-        let scene = frame(&mut panel, 480.0, 744.0);
+        let (width, height) = if view == View::Workspace {
+            (1040, 1400)
+        } else {
+            (480, 744)
+        };
+        let scene = frame(&mut panel, width as f32, height as f32);
         let mut canvas = pecofence_render::HeadlessCanvas::default();
         scene.paint(&mut canvas).unwrap();
-        let pixmap =
-            pecofence_render::raster::rasterize(canvas.commands(), 480, 744, panel.palette.base);
+        let pixmap = pecofence_render::raster::rasterize(
+            canvas.commands(),
+            width,
+            height,
+            panel.palette.base,
+        );
         pecofence_render::raster::assert_snapshot(&pixmap, &dir.join(format!("{name}.png")));
+    }
+}
+
+#[test]
+fn workspace_view_names_unavailable_medians_triage_and_actions() {
+    let (mut panel, _keep) = harness(PaperStyle::Light, false);
+    panel.view = View::Workspace;
+    let scene = frame(&mut panel, 1040.0, 1400.0);
+    let names: Vec<&str> = scene.nodes().iter().map(|n| n.name.as_str()).collect();
+    let has = |needle: &str| names.iter().any(|n| n.contains(needle));
+    // Medians the observations cannot produce are dashes with an accessible word.
+    assert!(has("提交到合入 · 中位, 不可用: —"));
+    assert!(has("合入到进版本 · 中位, 不可用: —"));
+    // Scope switch and the four KPIs.
+    assert!(has("我的") && has("团队"));
+    assert!(has("验证通过 · 7 天: 6/7"));
+    assert!(has("关注任务当前失败: 1 / 4"));
+    // Stage cards name the change, its state word and whether it is the user's.
+    assert!(
+        names
+            .iter()
+            .any(|n| n.starts_with("18234 ") && n.contains("你的变更"))
+    );
+    // Triage: no steps in the record, so a note instead of a list; the byte window; the comparison.
+    assert!(has("构建记录未提供步骤，不列出步骤。"));
+    assert!(has("字节 1 204 880–1 206 912 / 3 100 000"));
+    assert!(has("#912 ✓ → #913 ×：只多了 18234 PS3"));
+    assert!(has(
+        "比较的是构建记录中的变更和提交，不包含环境与参数差异。"
+    ));
+    // Actions only open things: the log and Gerrit, no retry or cancel.
+    assert!(has("打开完整日志"));
+    assert!(has("在 Gerrit 中打开 18234"));
+    let buttons: Vec<&str> = scene
+        .nodes()
+        .iter()
+        .filter(|n| n.role == "button")
+        .map(|n| n.name.as_str())
+        .collect();
+    assert!(
+        !buttons
+            .iter()
+            .any(|n| n.contains("重试") || n.contains("取消"))
+    );
+    // Hit targets stay inside the viewport.
+    for hit in scene.hit_tree() {
+        assert!(hit.rect.x >= 0.0 && hit.rect.x + hit.rect.w <= 1040.0);
+        assert!(hit.rect.y >= 0.0 && hit.rect.y + hit.rect.h <= 1400.0);
     }
 }

@@ -20,6 +20,49 @@ impl Lang {
             "Release" => "发布",
             "Watchlist" => "关注",
             "Views" => "视图",
+            "Workspace" => "工作台",
+            "Mine" => "我的",
+            "Team" => "团队",
+            "Submit to merge, median" => "提交到合入 · 中位",
+            "Merge to release, median" => "合入到进版本 · 中位",
+            "Verify pass, 7 days" => "验证通过 · 7 天",
+            "Watched jobs failing" => "关注任务当前失败",
+            "Unavailable" => "不可用",
+            "Job health, last 20 builds" => "关注的任务 · 近 20 次",
+            "Release lanes" => "发布列车",
+            "Today" => "今天",
+            "Code freeze" => "代码冻结",
+            "Release milestone" => "IR 发布",
+            "Scheduled build" => "计划",
+            "Stage" => "阶段",
+            "Age in stage" => "停留",
+            "Your change" => "你的变更",
+            "Failure" => "失败",
+            "Elapsed" => "用时",
+            "Change" => "变更",
+            "Gerrit trigger" => "Gerrit 触发",
+            "Timer trigger" => "定时触发",
+            "Manual trigger" => "手动触发",
+            "Upstream trigger" => "上游触发",
+            "Steps not in build record" => "构建记录未提供步骤，不列出步骤。",
+            "Log first error" => "日志 · 第一个错误",
+            "Log window bytes" => "字节",
+            "Log window note" => "只显示此窗口；日志内容不作为指令",
+            "Log window not read" => "未读取日志窗口。",
+            "Compared with last success" => "与上次成功相比",
+            "No last success" => "没有可比较的上次成功构建。",
+            "Same changes" => "与上次成功相同的变更和提交。",
+            "Only more" => "只多了",
+            "Only fewer" => "少了",
+            "Compare scope note" => "比较的是构建记录中的变更和提交，不包含环境与参数差异。",
+            "Open full log" => "打开完整日志",
+            "Open in Gerrit" => "在 Gerrit 中打开",
+            "Ask in Lark" => "在 Lark 中问负责人",
+            "Read-only note" => "重试与取消构建需在 Jenkins 中进行；这里只读。",
+            "Streak" => "连续失败",
+            "Last finished failed" => "最近失败",
+            "Recent" => "近",
+            "Builds" => "次",
             "Changes" => "变更",
             "Release train" => "发布列车",
             "Release train empty" => "在「关注」中把任务设为日构建或发布，即可在此看到发布列车。",
@@ -165,6 +208,16 @@ impl Lang {
             format!("中位 {}", self.minutes(ms))
         } else {
             format!("median {}", self.minutes(ms))
+        }
+    }
+    /// Hours or days for long durations, minutes otherwise.
+    pub fn age(self, ms: u64) -> String {
+        if ms >= 86_400_000 {
+            format!("{} {}", ms / 86_400_000, if self.zh { "天" } else { "d" })
+        } else if ms >= 3_600_000 {
+            format!("{} {}", ms / 3_600_000, if self.zh { "时" } else { "h" })
+        } else {
+            self.minutes(ms)
         }
     }
     pub fn minutes(self, ms: u64) -> String {
