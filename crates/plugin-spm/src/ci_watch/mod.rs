@@ -1,4 +1,5 @@
 //! CI presentation only. SPM owns observation, attribution, ETA and local watchlists.
+pub mod entry;
 pub mod layout;
 pub mod text;
 use crate::board::{
@@ -31,6 +32,10 @@ pub const PROVIDER_ID: &str = "pecofence.spm.ci-watch";
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
+    /// The hidden instance that publishes snapshots to the composition root (tray, capsule,
+    /// toasts). It has no fence and never draws.
+    #[serde(default)]
+    pub monitor: bool,
     #[serde(default)]
     pub demo: bool,
     #[serde(default = "timezone")]
@@ -131,6 +136,10 @@ pub struct Panel {
     config: Config,
     mount: Option<MountKey>,
     snapshot: Option<CiWatchSnapshot>,
+    /// A fresh snapshot not yet published to the composition root (monitor only).
+    publish_snapshot: bool,
+    /// A focus token from an entry point, applied on the next layout.
+    reveal: Option<String>,
     suggestions: CiSuggestions,
     view: View,
     scope: Scope,
@@ -170,6 +179,8 @@ impl Panel {
             snapshot: config.demo.then(demo_snapshot),
             config,
             mount: None,
+            publish_snapshot: false,
+            reveal: None,
             suggestions: CiSuggestions::default(),
             view: View::Pipeline,
             scope: Scope::Team,
@@ -379,13 +390,27 @@ impl Panel {
     }
     fn update(&mut self) -> PanelUpdate {
         self.published_chrome = true;
+        let mut commands = vec![
+            HostCommand::Invalidate,
+            HostCommand::SetChrome(self.chrome()),
+        ];
+        commands.extend(self.snapshot_event());
         PanelUpdate {
-            commands: vec![
-                HostCommand::Invalidate,
-                HostCommand::SetChrome(self.chrome()),
-            ],
+            commands,
             relayout: true,
         }
+    }
+    /// The monitor's snapshot goes to the composition root once per refresh, not once per frame.
+    fn snapshot_event(&mut self) -> Option<HostCommand> {
+        if !(self.config.monitor && self.publish_snapshot) {
+            return None;
+        }
+        let snapshot = self.snapshot.as_ref()?;
+        self.publish_snapshot = false;
+        Some(HostCommand::AppEvent {
+            topic: "ci.snapshot".into(),
+            json: serde_json::to_string(snapshot).ok()?,
+        })
     }
     pub fn chrome(&self) -> PanelChrome {
         let lang = self.lang();
@@ -475,6 +500,7 @@ impl Panel {
                     .validate()
                     .map_err(|e| Error::Invalid(e.to_string()))?;
                 self.snapshot = Some(snapshot);
+                self.publish_snapshot = true;
                 self.status = None;
             }
             Body::Response(Response::SuggestCiWatch(suggestions)) => {
@@ -495,6 +521,25 @@ impl Panel {
             return Err(Error::Closed);
         }
         match event {
+            PanelEvent::Context { topic, json } if topic == "ci.open" => {
+                let intent: entry::OpenIntent =
+                    serde_json::from_str(&json).map_err(|e| Error::Invalid(e.to_string()))?;
+                if let Some(edit) = intent.edit {
+                    self.edit(edit)?;
+                }
+                self.view = if intent
+                    .focus
+                    .as_deref()
+                    .is_some_and(|f| f.starts_with("build:"))
+                {
+                    View::Release
+                } else {
+                    View::Pipeline
+                };
+                self.scroll = 0.0;
+                self.reveal = intent.focus;
+                self.changed();
+            }
             PanelEvent::Command { id: 1 } => {
                 self.refresh(true)?;
                 self.changed();
@@ -626,30 +671,47 @@ impl Panel {
         let scale = ContentScale::new(input.viewport, input.text_scale);
         let viewport = scale.logical_viewport();
         self.viewport_height = viewport.h;
-        let mut layout = layout::build(
-            self.snapshot.as_ref(),
-            &self.suggestions,
-            self.view,
-            &self.query,
-            self.focus.as_deref(),
-            self.scroll,
-            &self.config,
-            self.scope,
-            if self.config.demo {
-                self.snapshot
-                    .as_ref()
-                    .and_then(|s| s.observed_through)
-                    .unwrap_or_else(chrono::Utc::now)
-            } else {
-                chrono::Utc::now()
-            },
-            self.lang(),
-            viewport,
-            &self.palette,
-            measure,
-            &mut self.ids,
-            &mut self.next_id,
-        );
+        // An entry point may ask for a row: lay out once to find it, scroll, then lay out again.
+        let mut layout;
+        loop {
+            layout = layout::build(
+                self.snapshot.as_ref(),
+                &self.suggestions,
+                self.view,
+                &self.query,
+                self.focus.as_deref(),
+                self.scroll,
+                &self.config,
+                self.scope,
+                if self.config.demo {
+                    self.snapshot
+                        .as_ref()
+                        .and_then(|s| s.observed_through)
+                        .unwrap_or_else(chrono::Utc::now)
+                } else {
+                    chrono::Utc::now()
+                },
+                self.lang(),
+                viewport,
+                &self.palette,
+                measure,
+                &mut self.ids,
+                &mut self.next_id,
+            );
+            let Some(target) = self.reveal.take() else {
+                break;
+            };
+            if let Some((_, y)) = layout
+                .rows
+                .iter()
+                .find(|(key, _)| entry::focus_matches(key, &target))
+            {
+                self.scroll = (y - 48.0).max(0.0);
+                self.focus = None;
+                continue;
+            }
+            break;
+        }
         self.content_height = layout.content_height;
         self.field = scale.rect(layout.field);
         self.actions = layout.actions;

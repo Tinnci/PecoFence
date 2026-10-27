@@ -681,5 +681,9 @@
   "补齐": "Completar",
   "已关闭的栅栏": "Vallas cerradas",
   "CI 关注": "CI watch",
-  "交付看板": "Delivery board"
+  "交付看板": "Delivery board",
+  "SPM": "SPM",
+  "通用": "General",
+  "交付时间线": "Cronograma de entrega",
+  "CI/CD": "CI/CD"
 }

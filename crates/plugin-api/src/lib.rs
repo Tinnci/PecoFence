@@ -564,6 +564,12 @@ pub trait PreparedFrame {
 }
 
 pub enum PanelEvent {
+    /// First-party context from the composition root (for example the CI monitor's
+    /// snapshot, or a request to focus a view). Panels ignore topics they do not own.
+    Context {
+        topic: String,
+        json: String,
+    },
     /// Hover or keyboard focus over a committed action. Allows lazy previews
     /// without activating it. `None` dismisses the preview.
     Inspect {
@@ -732,6 +738,11 @@ pub struct PanelChrome {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum HostCommand {
+    /// Asks the composition root to handle a first-party topic outside this panel's borrow.
+    AppEvent {
+        topic: String,
+        json: String,
+    },
     Invalidate,
     SetTitle(String),
     RequestMode(Presentation),

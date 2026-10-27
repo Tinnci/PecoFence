@@ -21,10 +21,16 @@ pub struct Layout {
     pub actions: Vec<(String, Target, RectDip)>,
     pub content_height: f32,
     pub field: RectDip,
+    /// Row keys that an entry point can reveal (change cards, release-train rows), with their
+    /// top edge in document coordinates (before scrolling).
+    pub rows: Vec<(String, f32)>,
 }
 struct Builder<'a> {
     nodes: Vec<SceneNode>,
     actions: Vec<(String, Target, RectDip)>,
+    rows: Vec<(String, f32)>,
+    /// The scroll offset this pass was laid out with, so rows can be recorded in document space.
+    scroll: f32,
     ids: &'a mut HashMap<String, u64>,
     next: &'a mut u64,
     p: &'a Palette,
@@ -298,6 +304,8 @@ pub fn build(
     let cache = RefCell::new(HashMap::new());
     let fitter = Fitter::new(measure, 1.0, &cache);
     let mut b = Builder {
+        rows: vec![],
+        scroll,
         nodes: vec![SceneNode {
             id: 1,
             parent: None,
@@ -414,6 +422,7 @@ pub fn build(
                 }
                 for (branch_id, change) in changes {
                     let key = format!("change:{branch_id}:{}", change.number);
+                    b.rows.push((key.clone(), y + scroll));
                     let (head, head_state) = headline(change, lang);
                     let name = format!(
                         "{} {}, {head}, {}",
@@ -882,6 +891,7 @@ pub fn build(
         actions: b.actions,
         content_height,
         field,
+        rows: b.rows,
     }
 }
 
@@ -992,6 +1002,7 @@ fn release_train(
         }
         for (i, (glyph, build, word, detail, state)) in rows.into_iter().enumerate() {
             let key = format!("train:{}:{i}", entry.job);
+            b.rows.push((key.clone(), y + b.scroll));
             let tone = build_tone(state, b.p);
             let target = build.map(|build| {
                 Target::Open(

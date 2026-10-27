@@ -4,24 +4,36 @@ use crate::commands::{DesktopCmd, FenceCmd, SettingsCmd};
 
 use super::*;
 
-fn new_widget_menu(
+/// The 「新建小组件」 submenu: general widgets first, then the SPM workspace views.
+struct WidgetIds {
     clock: u32,
     calendar: u32,
     note: u32,
     todo: u32,
     diagram: u32,
     board: u32,
-    ci_watch: u32,
-) -> PopupMenu {
+    timeline: u32,
+    ci_cd: u32,
+}
+
+fn new_widget_menu(ids: WidgetIds) -> PopupMenu {
     let menu = PopupMenu::new();
+    menu.item(0, pecofence_core::i18n::text("通用"), false, true);
     for (id, title) in [
-        (note, "便笺"),
-        (todo, "待办清单"),
-        (diagram, "图表"),
-        (clock, "数字时钟"),
-        (calendar, "日历"),
-        (board, "交付看板"),
-        (ci_watch, "CI 关注"),
+        (ids.note, "便笺"),
+        (ids.todo, "待办清单"),
+        (ids.diagram, "图表"),
+        (ids.clock, "数字时钟"),
+        (ids.calendar, "日历"),
+    ] {
+        menu.item(id, pecofence_core::i18n::text(title), false, false);
+    }
+    menu.separator();
+    menu.item(0, pecofence_core::i18n::text("SPM"), false, true);
+    for (id, title) in [
+        (ids.board, "交付看板"),
+        (ids.timeline, "交付时间线"),
+        (ids.ci_cd, "CI/CD"),
     ] {
         menu.item(id, pecofence_core::i18n::text(title), false, false);
     }
@@ -44,6 +56,9 @@ const CMD_NEW_NOTE: u32 = 14;
 const CMD_NEW_DIAGRAM: u32 = 15;
 const CMD_NEW_BOARD: u32 = 16;
 const CMD_NEW_CI_WATCH: u32 = 17;
+const CMD_NEW_TIMELINE: u32 = 18;
+/// The SPM section's CI/CD row: reuses the CI/CD fence (reopening or unrolling it) or creates one.
+const CMD_OPEN_CI_WATCH: u32 = 19;
 const CMD_ITEM_OPEN: u32 = 100;
 const CMD_ITEM_LOCATION: u32 = 101;
 const CMD_ITEM_PROPERTIES: u32 = 102;
@@ -60,6 +75,7 @@ const CMD_FENCE_NEW_NOTE: u32 = 337;
 const CMD_FENCE_NEW_DIAGRAM: u32 = 338;
 const CMD_FENCE_NEW_BOARD: u32 = 343;
 const CMD_FENCE_NEW_CI_WATCH: u32 = 344;
+const CMD_FENCE_NEW_TIMELINE: u32 = 345;
 const CMD_ITEM_MOVE_BASE: u32 = 200;
 const CMD_NEW_FENCE_HERE: u32 = 250;
 /// Command-id range handed to Explorer's `IContextMenu`.
@@ -133,6 +149,9 @@ impl App {
             .as_ref()
             .is_some_and(|a| a.fences_hidden());
         let menu = PopupMenu::new();
+        menu.item(0, pecofence_core::i18n::text("SPM"), false, true)
+            .item(CMD_OPEN_CI_WATCH, &self.ci_tray_label(), false, false)
+            .separator();
         menu.item(
             CMD_TOGGLE_FENCES,
             if hidden {
@@ -151,15 +170,16 @@ impl App {
         )
         .submenu(
             pecofence_core::i18n::text("新建小组件"),
-            new_widget_menu(
-                CMD_NEW_CLOCK,
-                CMD_NEW_CALENDAR,
-                CMD_NEW_NOTE,
-                CMD_NEW_TODO,
-                CMD_NEW_DIAGRAM,
-                CMD_NEW_BOARD,
-                CMD_NEW_CI_WATCH,
-            ),
+            new_widget_menu(WidgetIds {
+                clock: CMD_NEW_CLOCK,
+                calendar: CMD_NEW_CALENDAR,
+                note: CMD_NEW_NOTE,
+                todo: CMD_NEW_TODO,
+                diagram: CMD_NEW_DIAGRAM,
+                board: CMD_NEW_BOARD,
+                timeline: CMD_NEW_TIMELINE,
+                ci_cd: CMD_NEW_CI_WATCH,
+            }),
         )
         .item(
             CMD_PEEK,
@@ -234,7 +254,9 @@ impl App {
             CMD_NEW_FENCE => self
                 .queue
                 .push(Command::Fence(FenceCmd::NewFence { x, y: y - 300 })),
+            CMD_OPEN_CI_WATCH => self.open_ci_watch_now(Default::default(), false),
             CMD_NEW_BOARD => self.new_spm_panel_near(false, x, y, None),
+            CMD_NEW_TIMELINE => self.new_timeline_near(x, y, None),
             CMD_NEW_CI_WATCH => self.new_spm_panel_near(true, x, y, None),
             CMD_NEW_CLOCK => {
                 self.new_widget_near(pecofence_plugin_widgets::CLOCK_PROVIDER, x, y, None)
@@ -730,15 +752,16 @@ impl App {
         }
         menu.submenu(
             pecofence_core::i18n::text("新建小组件"),
-            new_widget_menu(
-                CMD_FENCE_NEW_CLOCK,
-                CMD_FENCE_NEW_CALENDAR,
-                CMD_FENCE_NEW_NOTE,
-                CMD_FENCE_NEW_TODO,
-                CMD_FENCE_NEW_DIAGRAM,
-                CMD_FENCE_NEW_BOARD,
-                CMD_FENCE_NEW_CI_WATCH,
-            ),
+            new_widget_menu(WidgetIds {
+                clock: CMD_FENCE_NEW_CLOCK,
+                calendar: CMD_FENCE_NEW_CALENDAR,
+                note: CMD_FENCE_NEW_NOTE,
+                todo: CMD_FENCE_NEW_TODO,
+                diagram: CMD_FENCE_NEW_DIAGRAM,
+                board: CMD_FENCE_NEW_BOARD,
+                timeline: CMD_FENCE_NEW_TIMELINE,
+                ci_cd: CMD_FENCE_NEW_CI_WATCH,
+            }),
         );
         // Tabbed fences (Fences 6): split a tab out, move it along the strip, or merge this
         // fence into another window. Hidden when none of that applies.
@@ -947,6 +970,7 @@ impl App {
             }
             CMD_FENCE_NEW_FOLDER => self.create_desktop_item(fence, true),
             CMD_FENCE_NEW_TEXT => self.create_desktop_item(fence, false),
+            CMD_FENCE_NEW_TIMELINE => self.new_timeline_near(x, y, Some(host)),
             CMD_FENCE_NEW_BOARD => self.new_spm_panel_near(false, x, y, Some(host)),
             CMD_FENCE_NEW_CI_WATCH => self.new_spm_panel_near(true, x, y, Some(host)),
             CMD_FENCE_NEW_CLOCK => {

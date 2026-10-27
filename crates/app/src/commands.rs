@@ -262,6 +262,10 @@ pub enum FenceCmd {
 #[derive(Debug)]
 #[allow(dead_code)]
 pub enum PanelCmd {
+    AppEvent {
+        topic: String,
+        json: String,
+    },
     ConfigChanged {
         key: InstanceKey,
         bytes: Arc<[u8]>,

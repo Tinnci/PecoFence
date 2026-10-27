@@ -53,6 +53,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use windows_core::Result;
 
+mod ci_entry;
 mod dnd;
 mod fence_options;
 mod fences;
@@ -244,6 +245,10 @@ pub struct App {
     /// The combination the last `sync_peek_hotkey` tried to register (the user's choice), so a
     /// persisting conflict does not re-toast on every settings apply.
     peek_hotkey_wanted: Option<PeekHotkey>,
+    /// Snapshot from the hidden CI monitor: tray counts, capsule and toasts read it.
+    ci_snapshot: spm_contracts::CiWatchSnapshot,
+    /// Virtual-key code of the registered CI hotkey, when registration succeeded.
+    ci_hotkey: Option<u32>,
     /// Items put on the clipboard with 剪切 (drawn dimmed) and the clipboard sequence number at
     /// that moment: any later clipboard change (Explorer pasted, something else was copied)
     /// clears the dimming.
@@ -1040,6 +1045,8 @@ impl App {
             test: None,
             peek_hotkey: None,
             peek_hotkey_wanted: None,
+            ci_snapshot: Default::default(),
+            ci_hotkey: None,
             desktop_unavailable: false,
             idle_rules_checked: None,
             cut_items: HashSet::new(),
@@ -1069,6 +1076,7 @@ impl App {
             }
         }
         app.sync_peek_hotkey();
+        app.start_ci_monitor();
         if let Some(a) = app.anchor.borrow_mut().as_mut() {
             let q = app.queue.clone();
             a.on_peek_interrupted = Some(Box::new(move || {
@@ -1401,6 +1409,21 @@ impl App {
         }
         if self.pending_panel_updates.is_empty() {
             return;
+        }
+        // First-party events (monitor snapshots, open requests) are handled here, outside any
+        // panel borrow, and may add context updates that the pass below then applies.
+        let mut events = Vec::new();
+        for update in self.pending_panel_updates.values_mut() {
+            update.commands.retain(|command| match command {
+                pecofence_plugin_api::HostCommand::AppEvent { topic, json } => {
+                    events.push((topic.clone(), json.clone()));
+                    false
+                }
+                _ => true,
+            });
+        }
+        for (topic, json) in events {
+            self.ci_app_event(&topic, &json);
         }
         let mut borrowed_view = false;
         self.pending_panel_updates.retain(|key, update| {

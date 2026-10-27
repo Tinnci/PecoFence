@@ -562,6 +562,9 @@ impl FenceViewState {
         let mut relayout = update.relayout;
         for command in update.commands {
             match command {
+                HostCommand::AppEvent { topic, json } => self
+                    .queue
+                    .push(Command::Panel(PanelCmd::AppEvent { topic, json })),
                 HostCommand::Invalidate => redraw_content = true,
                 HostCommand::SetTitle(title) => {
                     if self.title_bar.title != title {

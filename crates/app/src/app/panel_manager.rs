@@ -333,6 +333,34 @@ impl PanelManager {
         Ok(handle)
     }
 
+    /// Delivers a first-party context to the instances of one provider (or to one instance).
+    /// Each instance answers with its own update; unknown topics are ignored by the panel.
+    pub fn context(
+        &self,
+        provider: &str,
+        id: Option<u128>,
+        topic: &str,
+        json: &str,
+    ) -> Vec<(InstanceKey, PanelUpdate)> {
+        self.instances
+            .values()
+            .filter(|r| {
+                r.provider == provider
+                    && r.drain_started.is_none()
+                    && id.is_none_or(|id| r.instance_key.id == id)
+            })
+            .filter_map(|r| {
+                r.handle
+                    .event(PanelEvent::Context {
+                        topic: topic.into(),
+                        json: json.into(),
+                    })
+                    .ok()
+                    .map(|update| (r.instance_key, update))
+            })
+            .collect()
+    }
+
     pub fn open_panel(&mut self, spec: &PanelSpec) -> Result<PanelHandle> {
         self.resolve(spec)
     }
@@ -496,7 +524,7 @@ impl PanelManager {
             .instances
             .keys()
             .copied()
-            .filter(|id| !wanted.contains(id))
+            .filter(|id| *id != super::ci_entry::MONITOR_ID && !wanted.contains(id))
             .collect();
         for id in stale {
             let _ = self.close_panel(id, StopReason::Deleted);
@@ -518,7 +546,7 @@ impl PanelManager {
             .instances
             .keys()
             .copied()
-            .filter(|id| !wanted.contains(id))
+            .filter(|id| *id != super::ci_entry::MONITOR_ID && !wanted.contains(id))
             .collect();
         for id in stale {
             let _ = self.close_panel(id, StopReason::Deleted);

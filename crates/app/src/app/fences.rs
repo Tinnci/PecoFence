@@ -1004,7 +1004,7 @@ impl App {
     ) {
         let (title, provider, (version, config), w, h) = if ci {
             (
-                "CI 关注",
+                "CI/CD",
                 pecofence_plugin_spm::ci_watch::PROVIDER_ID,
                 pecofence_plugin_spm::ci_watch::live_config(),
                 480.0,
@@ -1034,6 +1034,35 @@ impl App {
             self.resync_windows();
             self.schedule_save();
         }
+    }
+
+    /// A board fence that opens in its timeline view. The view is set by a context the board
+    /// reads once it is mounted, so the fence never starts on the wrong tab.
+    pub(super) fn new_timeline_near(&mut self, x: i32, y: i32, near: Option<ContainerId>) {
+        let (version, config) = pecofence_plugin_spm::board::demo_config();
+        let rect = self.place_new_fence_dip(1120.0, 760.0, x, y, near);
+        let Some(content) = self.state.new_panel_fence(
+            pecofence_core::i18n::text("交付时间线"),
+            rect,
+            pecofence_plugin_spm::board::PROVIDER_ID,
+            version,
+            config,
+        ) else {
+            return;
+        };
+        self.resync_windows();
+        self.schedule_save();
+        if let Some(pecofence_core::FenceContentSpec::Panel { panel }) =
+            self.state.fence(content).map(|f| f.content)
+        {
+            self.deliver_ci_context(
+                pecofence_plugin_spm::board::PROVIDER_ID,
+                Some(panel.instance_id.as_u128()),
+                "board.timeline",
+                "{}",
+            );
+        }
+        self.process_panel_events();
     }
 
     pub(super) fn new_widget_near(

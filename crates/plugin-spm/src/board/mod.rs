@@ -1104,6 +1104,10 @@ impl BoardPanel {
             return Err(Error::Closed);
         }
         match event {
+            PanelEvent::Context { topic, .. } if topic == "board.timeline" => {
+                self.view = BoardView::Timeline;
+                Ok(self.redraw())
+            }
             PanelEvent::Inspect {
                 action,
                 layout_revision,

@@ -5,6 +5,10 @@ use crate::commands::PanelCmd;
 impl App {
     pub(super) fn handle_panel(&mut self, cmd: PanelCmd) {
         match cmd {
+            PanelCmd::AppEvent { topic, json } => {
+                self.ci_app_event(&topic, &json);
+                self.process_panel_events();
+            }
             PanelCmd::ConfigChanged { key, bytes } => {
                 let active_fence = self.state.fences().iter().find_map(|f| match &f.content {
                     pecofence_core::FenceContentSpec::Panel { panel }
