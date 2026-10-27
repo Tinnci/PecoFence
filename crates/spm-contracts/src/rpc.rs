@@ -39,6 +39,7 @@ pub enum RpcMethod {
     JudgeSuggestion,
     SearchWorkspace,
     GateWhatIf,
+    RefreshIssues,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -224,6 +225,7 @@ pub enum Request {
     JudgeSuggestion(JudgeSuggestionRequest),
     SearchWorkspace(SearchWorkspaceRequest),
     GateWhatIf(GateWhatIfRequest),
+    RefreshIssues(RefreshIssuesRequest),
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -250,6 +252,7 @@ pub enum Response {
     JudgeSuggestion(SuggestionJudgment),
     SearchWorkspace(SearchWorkspaceResponse),
     GateWhatIf(GateWhatIf),
+    RefreshIssues(RefreshIssuesResponse),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -306,6 +309,7 @@ impl Request {
             Self::JudgeSuggestion(_) => RpcMethod::JudgeSuggestion,
             Self::SearchWorkspace(_) => RpcMethod::SearchWorkspace,
             Self::GateWhatIf(_) => RpcMethod::GateWhatIf,
+            Self::RefreshIssues(_) => RpcMethod::RefreshIssues,
         }
     }
     pub fn validate(&self) -> Result<(), ContractError> {

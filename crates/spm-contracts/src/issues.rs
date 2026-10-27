@@ -548,6 +548,27 @@ pub struct QueryIssuesResponse {
     pub truncated: bool,
 }
 
+/// Explicit refresh of assignment proposals from the people-cli numbered-reply producer. It is
+/// the only issue request that writes, and only to the local people database. Reads never run it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RefreshIssuesRequest {
+    pub project_id: ProjectId,
+}
+
+/// `people_configured` is false when no people-cli is set up; nothing ran in that case.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RefreshIssuesResponse {
+    pub people_configured: bool,
+    #[serde(default)]
+    pub statements: u32,
+    #[serde(default)]
+    pub proposals_created: u32,
+    #[serde(default)]
+    pub truncated: bool,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct GetIssueRequest {
@@ -1202,6 +1223,15 @@ impl QueryIssuesResponse {
 impl GetIssueRequest {
     pub fn validate(&self) -> Result<(), ContractError> {
         validate_issue_id(&self.id)
+    }
+}
+
+impl RefreshIssuesResponse {
+    pub fn validate(&self) -> Result<(), ContractError> {
+        if !self.people_configured && (self.statements != 0 || self.proposals_created != 0) {
+            return Err(invalid("refresh reports counts without people-cli"));
+        }
+        Ok(())
     }
 }
 

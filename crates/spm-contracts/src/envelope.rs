@@ -94,6 +94,7 @@ impl Envelope {
                     Response::JudgeSuggestion(judgment) => judgment.validate()?,
                     Response::SearchWorkspace(search) => search.validate()?,
                     Response::GateWhatIf(what_if) => what_if.validate()?,
+                    Response::RefreshIssues(refresh) => refresh.validate()?,
                     _ => {}
                 }
                 if direction != Direction::ServerToClient

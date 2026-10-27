@@ -57,6 +57,7 @@ fn issue_requests_round_trip_and_validate() {
         include_str!("../fixtures/issues/judge-duplicate-request.json"),
         include_str!("../fixtures/issues/search-request.json"),
         include_str!("../fixtures/issues/review-assignment-request.json"),
+        include_str!("../fixtures/issues/refresh-issues-request.json"),
     ] {
         golden::<Request>(fixture);
         let request: Request = serde_json::from_str(fixture).unwrap();
@@ -390,9 +391,31 @@ fn request_methods_map_to_their_rpc_names() {
             }),
             RpcMethod::GateWhatIf,
         ),
+        (
+            Request::RefreshIssues(RefreshIssuesRequest {
+                project_id: project.clone(),
+            }),
+            RpcMethod::RefreshIssues,
+        ),
     ];
     for (request, method) in cases {
         assert_eq!(request.method(), method);
         request.validate().unwrap();
     }
+}
+
+#[test]
+fn refresh_reports_no_counts_without_people_cli() {
+    let refused: RefreshIssuesResponse =
+        serde_json::from_str(r#"{"people_configured":false,"statements":2,"proposals_created":1}"#)
+            .unwrap();
+    assert!(refused.validate().is_err(), "counts without people-cli");
+    let demo: RefreshIssuesResponse =
+        serde_json::from_str(r#"{"people_configured":false}"#).unwrap();
+    demo.validate().unwrap();
+    let ran: RefreshIssuesResponse = serde_json::from_str(
+        r#"{"people_configured":true,"statements":3,"proposals_created":2,"truncated":false}"#,
+    )
+    .unwrap();
+    ran.validate().unwrap();
 }

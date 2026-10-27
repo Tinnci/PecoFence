@@ -655,6 +655,7 @@ fn response_method(response: &Response) -> RpcMethod {
         Response::JudgeSuggestion(_) => RpcMethod::JudgeSuggestion,
         Response::SearchWorkspace(_) => RpcMethod::SearchWorkspace,
         Response::GateWhatIf(_) => RpcMethod::GateWhatIf,
+        Response::RefreshIssues(_) => RpcMethod::RefreshIssues,
     }
 }
 
