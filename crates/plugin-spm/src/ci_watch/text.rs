@@ -19,6 +19,7 @@ impl Lang {
             "Pipeline" => "流水线",
             "Release" => "发布",
             "Watchlist" => "关注",
+            "Views" => "视图",
             "Changes" => "变更",
             "Release train" => "发布列车",
             "Release train empty" => "在「关注」中把任务设为日构建或发布，即可在此看到发布列车。",

@@ -29,6 +29,8 @@ pub struct Palette {
     pub chip_on_text: [f32; 4],
     pub rule: [f32; 4],
     pub skeleton: [f32; 4],
+    /// Pending stage segments: light on light paper, dark on dark paper.
+    pub pending: [f32; 4],
 }
 
 fn over(top: [f32; 4], alpha: f32, under: [f32; 4]) -> [f32; 4] {
@@ -70,6 +72,7 @@ impl Palette {
             chip_on_text: p.accent_ink,
             rule: paper::mix(p.card, p.ink, 0.1),
             skeleton: paper::mix(p.card, p.ink, 0.06),
+            pending: if p.dark { paper::TODO.1 } else { paper::TODO.0 },
         }
     }
 
@@ -143,6 +146,7 @@ impl Palette {
             chip_on_text: base,
             rule: over(theme.stroke, 1.0, base),
             skeleton: over(p, 0.10, base),
+            pending: over(p, 0.10, base),
         }
     }
 

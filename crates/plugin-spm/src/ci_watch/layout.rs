@@ -7,6 +7,7 @@ use crate::board::{
     palette::Palette,
     text::{Fitter, Measure},
 };
+use pecofence_plugin_api::paper;
 use pecofence_plugin_api::{
     scene::{NodeStyle, SceneNode},
     *,
@@ -116,6 +117,63 @@ impl Builder<'_> {
             None,
         );
     }
+    /// Diagonal hatch inside `rect`, drawn as stroked paths so running segments differ from done ones
+    /// by pattern as well as colour. Lines stay inside the rectangle.
+    fn hatch(&mut self, key: &str, rect: RectDip, color: [f32; 4]) {
+        if rect.h <= 0.0 || rect.w <= 0.0 || rect.y < self.top || rect.y + rect.h > self.bottom {
+            return;
+        }
+        let right = rect.x + rect.w;
+        let mut k = 0u32;
+        while rect.x + k as f32 * 4.0 + rect.h <= right {
+            let x = rect.x + k as f32 * 4.0;
+            let id = *self
+                .ids
+                .entry(format!("{key}:hatch:{k}"))
+                .or_insert_with(|| {
+                    let n = *self.next;
+                    *self.next += 1;
+                    n
+                });
+            self.nodes.push(SceneNode {
+                id,
+                parent: Some(1),
+                rect,
+                role: "decoration".into(),
+                name: String::new(),
+                text: String::new(),
+                action: None,
+                style: NodeStyle {
+                    font: FontRole::Text,
+                    size: 11.0,
+                    weight: 400,
+                    foreground: color,
+                    fill: None,
+                    stroke: Some(StrokeStyle {
+                        rgba: color,
+                        width: 1.2,
+                    }),
+                    radius: 0.0,
+                    text_inset: [0.0, 0.0],
+                    align: TextAlign::TopLeading,
+                    path: Some(Path {
+                        points: vec![
+                            PointDip {
+                                x,
+                                y: rect.y + rect.h,
+                            },
+                            PointDip {
+                                x: x + rect.h,
+                                y: rect.y,
+                            },
+                        ],
+                        closed: false,
+                    }),
+                },
+            });
+            k += 1;
+        }
+    }
     fn section(&mut self, key: &str, y: f32, w: f32, title: &str, meta: &str) {
         self.node(
             key,
@@ -144,6 +202,14 @@ fn stage_tone(state: CiStageState, p: &Palette) -> [f32; 4] {
         CiStageState::Failed => p.danger,
         CiStageState::Warn => p.warning,
         CiStageState::Pending => p.secondary,
+    }
+}
+/// Stage segment fill: pending is light paper, running is a tint, done and others use the tone.
+fn segment_fill(state: CiStageState, p: &Palette) -> [f32; 4] {
+    match state {
+        CiStageState::Pending => p.pending,
+        CiStageState::Running => paper::mix(p.base, p.accent_ink, 0.22),
+        other => stage_tone(other, p),
     }
 }
 fn build_tone(state: CiBuildState, p: &Palette) -> [f32; 4] {
@@ -260,6 +326,20 @@ pub fn build(
         bottom: viewport.h,
     };
     let w = viewport.w;
+    // Segmented pill: one track, the selected tab on the ground colour.
+    b.node(
+        "view:track",
+        r(12.0, 3.0, 3.0 * 94.0 + 4.0, 30.0),
+        "group",
+        lang.t("Views").into(),
+        String::new(),
+        FontRole::Text,
+        12.0,
+        400,
+        p.primary,
+        Some(p.card),
+        None,
+    );
     for (i, (v, label)) in [
         (View::Pipeline, "Pipeline"),
         (View::Release, "Release"),
@@ -269,17 +349,18 @@ pub fn build(
     .enumerate()
     {
         let text = lang.t(label);
+        let on = view == v;
         b.node(
             &format!("view:{i}"),
-            r(14.0 + i as f32 * 94.0, 4.0, 90.0, 28.0),
+            r(14.0 + i as f32 * 94.0, 5.0, 90.0, 26.0),
             "tab",
-            format!("{text} {}", if view == v { lang.t("selected") } else { "" }),
+            format!("{text} {}", if on { lang.t("selected") } else { "" }),
             text.into(),
             FontRole::Text,
             12.0,
-            if view == v { 700 } else { 400 },
-            if view == v { p.accent_ink } else { p.primary },
-            Some(if view == v { p.base } else { p.card }),
+            if on { 700 } else { 400 },
+            if on { p.accent_ink } else { p.primary },
+            if on { Some(p.base) } else { None },
             Some(Target::View(v)),
         );
     }
@@ -403,9 +484,16 @@ pub fn build(
                             11.0,
                             400,
                             p.primary,
-                            Some(stage_tone(stage.state, p)),
+                            Some(segment_fill(stage.state, p)),
                             None,
                         );
+                        if stage.state == CiStageState::Running {
+                            b.hatch(
+                                &format!("{key}:bar:{i}"),
+                                r(x, y + 30.0, col, 6.0),
+                                p.accent_ink,
+                            );
+                        }
                         b.node(
                             &format!("{key}:stage:{i}"),
                             r(x, y + 39.0, col, 16.0),

@@ -19,6 +19,8 @@ pub const INK_FAINT: [f32; 4] = srgb(0x9A, 0x8F, 0x80);
 pub const TERRACOTTA: [f32; 4] = srgb(0xA9, 0x50, 0x2D);
 pub const TERRACOTTA_INK: [f32; 4] = srgb(0x94, 0x45, 0x26);
 pub const CREAM: [f32; 4] = srgb(0xFF, 0xF8, 0xEE);
+/// Not-yet-started stage segments: the design's `todo` ink on (light paper, dark paper).
+pub const TODO: ([f32; 4], [f32; 4]) = (srgb(0xD3, 0xC9, 0xB8), srgb(0x4A, 0x45, 0x40));
 
 /// Status inks on paper as (light paper, dark paper), one per WinUI InfoBar severity.
 pub const SUCCESS: ([f32; 4], [f32; 4]) = (srgb(0x4E, 0x6B, 0x2E), srgb(0xA9, 0xC4, 0x7F));
