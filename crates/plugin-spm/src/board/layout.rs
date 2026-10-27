@@ -38,6 +38,8 @@ const META: f32 = 12.0;
 #[derive(Clone, Debug, PartialEq)]
 pub enum Target {
     View(BoardView),
+    /// The CI/CD segment of the capsule: open the CI/CD fence at its focus.
+    OpenCi,
     Zoom(Zoom),
     Event(RecordId, String),
     OpenEvidence,
@@ -122,6 +124,8 @@ pub enum Mode {
 /// Everything layout reads. Built by the panel from its state.
 pub struct Input<'a> {
     pub board: Option<&'a BoardSnapshot>,
+    /// The latest CI snapshot from the monitor (empty when none has arrived).
+    pub ci: &'a spm_contracts::CiWatchSnapshot,
     pub view: BoardView,
     pub zoom: Zoom,
     pub evidence_open: bool,
@@ -2573,6 +2577,14 @@ fn compact(b: &mut Builder, input: &Input, viewport: RectDip) {
 fn capsule(b: &mut Builder, input: &Input, viewport: RectDip) {
     let lang = b.lang;
     let pal = *b.pal;
+    // The CI/CD segment sits after the summary and only while something runs or has failed.
+    let ci = crate::ci_watch::entry::Summary::from_snapshot(input.ci);
+    let ci_label = ci.label(lang.zh);
+    let ci_w = if ci.visible() {
+        (b.fit.width(&ci_label, META, 600).ceil() + 26.0).min(viewport.w * 0.45)
+    } else {
+        0.0
+    };
     let Some(board) = input.board else {
         b.text(
             "cap:loading".into(),
@@ -2620,7 +2632,7 @@ fn capsule(b: &mut Builder, input: &Input, viewport: RectDip) {
     );
     x += nw + 12.0;
     let line = open.join(" · ");
-    let right = 60.0;
+    let right = 60.0 + ci_w;
     let (fitted, _) = b.fit.fit(&line, META, 400, viewport.w - x - right, 1);
     let lw = b.fit.width(&fitted, META, 400) + 2.0;
     b.text(
@@ -2659,6 +2671,25 @@ fn capsule(b: &mut Builder, input: &Input, viewport: RectDip) {
             12.0,
             pal.warning,
         );
+    }
+    if ci.visible() {
+        let x_ci = viewport.w - 36.0 - ci_w;
+        b.button(
+            "cap:ci",
+            x_ci,
+            4.0,
+            (viewport.h - 8.0).max(24.0),
+            None,
+            &ci_label,
+            true,
+            Target::OpenCi,
+            ci_w,
+        );
+        // The visible text is short; the accessible name says the whole status.
+        let name = ci.accessible_name(lang.zh);
+        if let Some(node) = b.out.nodes.iter_mut().rev().find(|n| n.key == "cap:ci:hit") {
+            node.name = name;
+        }
     }
 }
 

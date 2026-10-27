@@ -162,6 +162,10 @@ pub struct BoardPanel {
     ctx: PluginContext,
     key: InstanceKey,
     config: BoardConfig,
+    /// The monitor's CI snapshot (context from the composition root).
+    ci: spm_contracts::CiWatchSnapshot,
+    /// First-party events raised by this panel, returned with its next update.
+    outbox: Vec<HostCommand>,
     backend: Backend,
     subscription: Token,
     server_subscription: Option<SubscriptionId>,
@@ -251,6 +255,8 @@ impl BoardPanel {
             ctx,
             key,
             config,
+            ci: Default::default(),
+            outbox: vec![],
             backend,
             subscription,
             server_subscription: None,
@@ -833,6 +839,17 @@ impl BoardPanel {
                 self.scroll = 0.0;
             }
             Target::ToggleDone => self.done_open = !self.done_open,
+            Target::OpenCi => {
+                let intent = crate::ci_watch::entry::OpenIntent {
+                    focus: crate::ci_watch::entry::Summary::from_snapshot(&self.ci).focus,
+                    edit: None,
+                };
+                self.outbox.push(HostCommand::AppEvent {
+                    topic: "ci.open".into(),
+                    json: serde_json::to_string(&intent)
+                        .map_err(|e| Error::Invalid(e.to_string()))?,
+                });
+            }
             Target::OpenSource(source) => {
                 if let Some(board) = &self.board {
                     let revision = board.revision;
@@ -1096,6 +1113,7 @@ impl BoardPanel {
                 relayout: false,
             });
         }
+        update.commands.append(&mut self.outbox);
         Ok(update)
     }
 
@@ -1107,6 +1125,16 @@ impl BoardPanel {
             PanelEvent::Context { topic, .. } if topic == "board.timeline" => {
                 self.view = BoardView::Timeline;
                 Ok(self.redraw())
+            }
+            PanelEvent::Context { topic, json } if topic == "ci.snapshot" => {
+                // A snapshot the monitor already validated; a bad one keeps the previous view.
+                if let Ok(snapshot) = serde_json::from_str::<spm_contracts::CiWatchSnapshot>(&json)
+                    && snapshot.validate().is_ok()
+                {
+                    self.ci = snapshot;
+                    return Ok(self.redraw());
+                }
+                Ok(PanelUpdate::default())
             }
             PanelEvent::Inspect {
                 action,
@@ -1254,6 +1282,7 @@ impl BoardPanel {
             let status = self.status.as_ref().map(|(s, t)| (s.as_str(), *t));
             let layout_input = Input {
                 board: self.board.as_ref(),
+                ci: &self.ci,
                 view: self.view,
                 zoom: self.zoom,
                 evidence_open: self.evidence_open,

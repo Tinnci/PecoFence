@@ -109,9 +109,20 @@ impl Summary {
         self.running > 0 || self.failures > 0
     }
 
-    /// Text with the counts as words and glyphs, so status is never carried by colour alone.
-    pub fn label(&self) -> String {
-        format!("● {} · × {}", self.running, self.failures)
+    /// Compact text: running count, shortest ETA, failure count. Glyphs and numbers carry the
+    /// status, so colour is never the only signal.
+    pub fn label(&self, zh: bool) -> String {
+        let mut parts = vec![format!("● {}", self.running)];
+        if let Some(ms) = self.shortest_remaining_ms {
+            let minutes = ms.div_ceil(60_000);
+            parts.push(if zh {
+                format!("约{minutes}分")
+            } else {
+                format!("~{minutes} min")
+            });
+        }
+        parts.push(format!("× {}", self.failures));
+        parts.join(" · ")
     }
 
     /// Full accessible name for the capsule segment.
@@ -214,7 +225,10 @@ mod tests {
         let summary = Summary::from_snapshot(&demo_snapshot());
         assert!(summary.visible());
         assert!(summary.running > 0 && summary.failures > 0);
-        assert!(summary.label().contains("×"), "counts are text, not colour");
+        assert!(
+            summary.label(false).contains("×"),
+            "counts are text, not colour"
+        );
         assert!(summary.accessible_name(true).contains("个失败"));
         assert!(!Summary::from_snapshot(&CiWatchSnapshot::default()).visible());
     }

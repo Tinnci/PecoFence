@@ -1328,3 +1328,67 @@ fn timeline_and_drawer_stay_inside_scaled_fences() {
         }
     }
 }
+
+fn ci_context(h: &mut Harness, snapshot: &spm_contracts::CiWatchSnapshot) {
+    let json = serde_json::to_string(snapshot).unwrap();
+    let now = h.now;
+    h.panel
+        .handle(
+            PanelEvent::Context {
+                topic: "ci.snapshot".into(),
+                json,
+            },
+            now,
+        )
+        .unwrap();
+}
+
+#[test]
+fn capsule_ci_segment_shows_only_while_a_build_runs_or_failed() {
+    let mut h = harness();
+    let mut capsule = input(360.0, 48.0, 1.0);
+    capsule.presentation = Presentation::Capsule;
+    ci_context(&mut h, &crate::ci_watch::demo_snapshot());
+    h.panel.prepare(capsule, &Heuristic).unwrap();
+    let segment = h
+        .panel
+        .layout()
+        .nodes
+        .iter()
+        .find(|n| n.key == "cap:ci:hit")
+        .expect("a running or failed build shows the CI segment");
+    assert_eq!(segment.role, "button");
+    assert!(
+        segment.name.starts_with("CI/CD"),
+        "full accessible name: {}",
+        segment.name
+    );
+    assert!(segment.name.contains("失败") || segment.name.contains("failed"));
+
+    // Nothing running and nothing failed: the segment is hidden.
+    ci_context(&mut h, &spm_contracts::CiWatchSnapshot::default());
+    h.panel.prepare(capsule, &Heuristic).unwrap();
+    assert!(!h.panel.layout().nodes.iter().any(|n| n.key == "cap:ci:hit"));
+}
+
+#[test]
+fn capsule_ci_segment_asks_for_the_ci_fence_at_its_focus() {
+    let mut h = harness();
+    ci_context(&mut h, &crate::ci_watch::demo_snapshot());
+    let expected =
+        crate::ci_watch::entry::Summary::from_snapshot(&crate::ci_watch::demo_snapshot()).focus;
+    let now = h.now;
+    h.panel.invoke(Target::OpenCi, now).unwrap();
+    let json = h
+        .panel
+        .outbox
+        .iter()
+        .find_map(|c| match c {
+            HostCommand::AppEvent { topic, json } if topic == "ci.open" => Some(json.clone()),
+            _ => None,
+        })
+        .expect("the segment raises ci.open");
+    let intent: crate::ci_watch::entry::OpenIntent = serde_json::from_str(&json).unwrap();
+    assert_eq!(intent.focus, expected);
+    assert!(intent.edit.is_none());
+}
