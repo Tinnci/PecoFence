@@ -465,6 +465,15 @@ impl App {
                             window::set_timer(hwnd, TIMER_ICONS, 40);
                             Some(0)
                         }
+                        msg::WM_HOTKEY if wparam as i32 == ci_entry::HOTKEY_CI => {
+                            // Toggle: the hotkey hides the CI/CD fence when it is already in front.
+                            if let Ok(mut guard) = cell.try_borrow_mut()
+                                && let Some(app) = guard.as_mut()
+                            {
+                                app.open_ci_watch_now(Default::default(), true);
+                            }
+                            Some(0)
+                        }
                         msg::WM_HOTKEY if wparam as i32 == HOTKEY_PEEK => {
                             if let Ok(mut guard) = cell.try_borrow_mut()
                                 && let Some(app) = guard.as_mut()
@@ -1088,6 +1097,7 @@ impl App {
         }
         app.sync_peek_hotkey();
         app.start_ci_monitor();
+        app.sync_ci_hotkey();
         if let Some(a) = app.anchor.borrow_mut().as_mut() {
             let q = app.queue.clone();
             a.on_peek_interrupted = Some(Box::new(move || {

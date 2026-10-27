@@ -24,6 +24,7 @@ fn input() -> ComponentInput {
 
 fn projection() -> SettingsView {
     SettingsView {
+        ci_hotkey_status: "CI/CD 快捷键已关闭".into(),
         stamp: DocumentStamp {
             workspace: Uuid::new_v4(),
             revision: 0,

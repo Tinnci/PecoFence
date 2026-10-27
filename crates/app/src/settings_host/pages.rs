@@ -679,6 +679,34 @@ fn general(view: &SettingsView, context: &mut ViewContext<SettingsComponent>) ->
                 context,
                 SettingChange::CiFailureNotifications,
             )]),
+            section("CI/CD 快捷键"),
+            supporting(view.ci_hotkey_status.as_str()),
+            group(vec![
+                toggle(
+                    "启用 CI/CD 快捷键",
+                    s.ci_hotkey_enabled,
+                    enabled,
+                    context,
+                    SettingChange::CiHotkeyEnabled,
+                ),
+                field_combo(
+                    "CI/CD 快捷键",
+                    &["Ctrl + Alt + J", "Ctrl + Alt + K", "Ctrl + Alt + L"],
+                    match s.ci_hotkey_key {
+                        0x4B => 1,
+                        0x4C => 2,
+                        _ => 0,
+                    },
+                    enabled,
+                    context.callback(|i: Option<usize>| {
+                        Message::Setting(SettingChange::CiHotkeyKey(match i.unwrap_or(0) {
+                            1 => 0x4B,
+                            2 => 0x4C,
+                            _ => 0x4A,
+                        }))
+                    }),
+                ),
+            ]),
         ])
         .into()
 }

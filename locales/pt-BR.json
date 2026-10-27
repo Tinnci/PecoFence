@@ -688,5 +688,13 @@
   "CI/CD": "CI/CD",
   "{0}{1} 构建失败。点击在 CI/CD 中查看。": "{0}{1} falhou. Clique para ver no CI/CD.",
   "开启「失败提醒」的任务构建失败时，发出一条通知。通知遵循 Windows 的专注助手与勿扰设置。": "Quando uma compilação de um job com alerta de falha ativado falha, um aviso é exibido. Os avisos seguem a Assistência de Foco e as horas silenciosas do Windows.",
-  "CI 失败通知": "Avisos de falha de CI"
+  "CI 失败通知": "Avisos de falha de CI",
+  "CI/CD 快捷键已关闭": "O atalho do CI/CD está desativado",
+  "已注册 {0}": "{0} registrado",
+  "注册失败：{0} 已被系统或其他程序占用。请在下方换一个字母。": "Falha no registro: {0} está em uso pelo Windows ou por outro programa. Escolha outra letra abaixo.",
+  "启用 CI/CD 快捷键": "Ativar o atalho do CI/CD",
+  "CI/CD 快捷键": "Atalho do CI/CD",
+  "Ctrl + Alt + J": "Ctrl + Alt + J",
+  "Ctrl + Alt + K": "Ctrl + Alt + K",
+  "Ctrl + Alt + L": "Ctrl + Alt + L"
 }

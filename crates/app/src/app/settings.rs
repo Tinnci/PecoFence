@@ -69,6 +69,7 @@ impl App {
         // apply_settings only refreshes on a visual / icon diff; a wholesale swap (per-fence
         // tint, layouts) needs these regardless.
         self.sync_peek_hotkey();
+        self.sync_ci_hotkey();
         self.apply_icon_variant();
         self.refresh_visuals(true);
         self.push_settings_state();
@@ -202,6 +203,7 @@ impl App {
             .map(|(id, label)| MonitorChoice { id, label })
             .collect();
         SettingsView {
+            ci_hotkey_status: self.ci_hotkey_status(),
             stamp: self.state.document_stamp(),
             settings: self.state.config.settings.clone(),
             writable: self.mutations_allowed(),
@@ -679,6 +681,7 @@ impl App {
         self.state.mark_dirty();
         self.schedule_save();
         self.sync_peek_hotkey();
+        self.sync_ci_hotkey();
         if icons_toggled {
             self.desktop_icons_setting_changed();
         }

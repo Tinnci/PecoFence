@@ -24,6 +24,8 @@ pub const TINT_PALETTE: &[(&str, [u8; 3])] = &[
 
 #[derive(Clone, Debug)]
 pub struct SettingsView {
+    /// Registration result for the CI/CD hotkey, in words (never colour alone).
+    pub ci_hotkey_status: String,
     pub stamp: DocumentStamp,
     pub settings: Settings,
     pub writable: bool,

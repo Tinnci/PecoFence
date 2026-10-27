@@ -688,5 +688,13 @@
   "CI/CD": "CI/CD",
   "{0}{1} 构建失败。点击在 CI/CD 中查看。": "{0}{1} ist fehlgeschlagen. Klicken, um es in CI/CD anzusehen.",
   "开启「失败提醒」的任务构建失败时，发出一条通知。通知遵循 Windows 的专注助手与勿扰设置。": "Wenn ein Build eines Jobs mit aktiviertem Fehlerhinweis fehlschlägt, wird eine Benachrichtigung angezeigt. Benachrichtigungen folgen den Windows-Fokusassistenz- und Ruhezeiteinstellungen.",
-  "CI 失败通知": "CI-Fehlerbenachrichtigungen"
+  "CI 失败通知": "CI-Fehlerbenachrichtigungen",
+  "CI/CD 快捷键已关闭": "CI/CD-Tastenkürzel ist aus",
+  "已注册 {0}": "{0} registriert",
+  "注册失败：{0} 已被系统或其他程序占用。请在下方换一个字母。": "Registrierung fehlgeschlagen: {0} wird von Windows oder einem anderen Programm verwendet. Wählen Sie unten einen anderen Buchstaben.",
+  "启用 CI/CD 快捷键": "CI/CD-Tastenkürzel aktivieren",
+  "CI/CD 快捷键": "CI/CD-Tastenkürzel",
+  "Ctrl + Alt + J": "Ctrl + Alt + J",
+  "Ctrl + Alt + K": "Ctrl + Alt + K",
+  "Ctrl + Alt + L": "Ctrl + Alt + L"
 }

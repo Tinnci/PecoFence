@@ -153,6 +153,12 @@ pub struct Settings {
     /// Balloon notices when a watched job with 失败提醒 on fails. Older files default to on.
     #[serde(default = "ci_failure_notifications_default")]
     pub ci_failure_notifications: bool,
+    /// Global Ctrl+Alt+<key> toggle for the CI/CD fence. Off by default.
+    #[serde(default)]
+    pub ci_hotkey_enabled: bool,
+    /// The letter (A–Z, virtual-key code) used with Ctrl+Alt.
+    #[serde(default = "ci_hotkey_key_default")]
+    pub ci_hotkey_key: u32,
     pub icons: IconSettings,
     pub desktop_path: Option<String>,
 }
@@ -177,6 +183,8 @@ impl Default for Settings {
             telemetry: false,
             peek: PeekSettings::default(),
             ci_failure_notifications: ci_failure_notifications_default(),
+            ci_hotkey_enabled: false,
+            ci_hotkey_key: ci_hotkey_key_default(),
             icons: IconSettings::default(),
             desktop_path: None,
         }
@@ -184,6 +192,10 @@ impl Default for Settings {
 }
 fn ci_failure_notifications_default() -> bool {
     true
+}
+/// 'J' (0x4A): Ctrl+Alt+J.
+fn ci_hotkey_key_default() -> u32 {
+    0x4A
 }
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

@@ -687,5 +687,13 @@
   "CI/CD": "CI/CD",
   "{0}{1} 构建失败。点击在 CI/CD 中查看。": "{0}{1} failed. Click to view it in CI/CD.",
   "开启「失败提醒」的任务构建失败时，发出一条通知。通知遵循 Windows 的专注助手与勿扰设置。": "When a build of a job with failure alerts on fails, a notice is shown. Notices follow Windows focus assist and quiet hours.",
-  "CI 失败通知": "CI failure notices"
+  "CI 失败通知": "CI failure notices",
+  "CI/CD 快捷键已关闭": "CI/CD hotkey is off",
+  "已注册 {0}": "Registered {0}",
+  "注册失败：{0} 已被系统或其他程序占用。请在下方换一个字母。": "Registration failed: {0} is in use by Windows or another program. Choose another letter below.",
+  "启用 CI/CD 快捷键": "Enable CI/CD hotkey",
+  "CI/CD 快捷键": "CI/CD hotkey",
+  "Ctrl + Alt + J": "Ctrl + Alt + J",
+  "Ctrl + Alt + K": "Ctrl + Alt + K",
+  "Ctrl + Alt + L": "Ctrl + Alt + L"
 }

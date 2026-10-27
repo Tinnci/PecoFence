@@ -12,6 +12,52 @@ use pecofence_plugin_spm::{
     },
 };
 
+/// The registered id of the CI/CD hotkey (distinct from Peek's id on the same window).
+pub(super) const HOTKEY_CI: i32 = 2;
+/// Ctrl+Alt, not repeating while held.
+const CI_HOTKEY_MODS: u32 = pecofence_platform::hotkey::mods::CONTROL
+    | pecofence_platform::hotkey::mods::ALT
+    | pecofence_platform::hotkey::mods::NOREPEAT;
+
+/// What the CI/CD hotkey should do after a settings change: release the held combination, then
+/// register the wanted key if there is one. Nothing is done when the held key already matches.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct HotkeyPlan {
+    pub release: bool,
+    pub register: Option<u32>,
+}
+
+pub(super) fn hotkey_plan(wanted: Option<u32>, held: Option<u32>) -> HotkeyPlan {
+    if wanted == held {
+        return HotkeyPlan {
+            release: false,
+            register: None,
+        };
+    }
+    HotkeyPlan {
+        release: held.is_some(),
+        register: wanted,
+    }
+}
+
+/// The settings page's view of the hotkey: off, registered, or the combination that failed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum HotkeyState {
+    Off,
+    Registered(char),
+    /// Another program or Windows holds the combination; the user should pick another letter.
+    Conflict(char),
+}
+
+pub(super) fn hotkey_state(enabled: bool, held: Option<u32>, key: u32) -> HotkeyState {
+    let letter = char::from_u32(key).unwrap_or('J');
+    match (enabled, held) {
+        (false, _) => HotkeyState::Off,
+        (true, Some(_)) => HotkeyState::Registered(letter),
+        (true, None) => HotkeyState::Conflict(letter),
+    }
+}
+
 /// The fixed instance id of the hidden monitor (no fence, never drawn).
 pub(super) const MONITOR_ID: u128 = 0x7e3c_5a1f_0000_4000_8000_6a1c_0000_0001;
 
@@ -90,6 +136,46 @@ impl App {
             .map(|vk| format!("\tCtrl+Alt+{}", char::from_u32(vk).unwrap_or('J')))
             .unwrap_or_default();
         format!("CI/CD{counts}{shortcut}")
+    }
+
+    /// Registers the CI/CD hotkey when it is enabled and not yet registered under the chosen key.
+    /// A combination another program holds stays unregistered; the settings page says so.
+    pub(super) fn sync_ci_hotkey(&mut self) {
+        let settings = &self.state.config.settings;
+        let wanted = settings.ci_hotkey_enabled.then_some(settings.ci_hotkey_key);
+        let plan = hotkey_plan(wanted, self.ci_hotkey);
+        if !plan.release && plan.register.is_none() {
+            return;
+        }
+        let hwnd = self.control.hwnd();
+        if plan.release {
+            hotkey::unregister(hwnd, HOTKEY_CI);
+            self.ci_hotkey = None;
+        }
+        if let Some(vk) = plan.register
+            && hotkey::register(hwnd, HOTKEY_CI, CI_HOTKEY_MODS, vk)
+        {
+            self.ci_hotkey = Some(vk);
+        }
+    }
+
+    /// The settings page's status line: off, registered, or failed (with the reason in words).
+    pub(super) fn ci_hotkey_status(&self) -> String {
+        let settings = &self.state.config.settings;
+        match hotkey_state(
+            settings.ci_hotkey_enabled,
+            self.ci_hotkey,
+            settings.ci_hotkey_key,
+        ) {
+            HotkeyState::Off => pecofence_core::i18n::text("CI/CD 快捷键已关闭").into(),
+            HotkeyState::Registered(key) => {
+                pecofence_core::i18n::format("已注册 {0}", &[format!("Ctrl+Alt+{key}")])
+            }
+            HotkeyState::Conflict(key) => pecofence_core::i18n::format(
+                "注册失败：{0} 已被系统或其他程序占用。请在下方换一个字母。",
+                &[format!("Ctrl+Alt+{key}")],
+            ),
+        }
     }
 
     /// Hands a context to every panel of one provider (or one instance). The updates merge into
@@ -293,5 +379,57 @@ mod tests {
             ..OPEN_ACTIVE
         };
         assert_eq!(route(behind, true), CiRoute::Activate);
+    }
+
+    #[test]
+    fn a_held_combination_is_released_before_a_new_one_is_registered() {
+        assert_eq!(
+            hotkey_plan(None, None),
+            HotkeyPlan {
+                release: false,
+                register: None
+            }
+        );
+        assert_eq!(
+            hotkey_plan(Some(0x4A), None),
+            HotkeyPlan {
+                release: false,
+                register: Some(0x4A)
+            }
+        );
+        assert_eq!(
+            hotkey_plan(Some(0x4B), Some(0x4A)),
+            HotkeyPlan {
+                release: true,
+                register: Some(0x4B)
+            }
+        );
+        assert_eq!(
+            hotkey_plan(None, Some(0x4A)),
+            HotkeyPlan {
+                release: true,
+                register: None
+            }
+        );
+        assert_eq!(
+            hotkey_plan(Some(0x4A), Some(0x4A)),
+            HotkeyPlan {
+                release: false,
+                register: None
+            },
+            "an unchanged hotkey is not re-registered on every settings apply"
+        );
+    }
+
+    #[test]
+    fn a_taken_combination_is_reported_as_a_conflict_not_silently_dropped() {
+        assert_eq!(hotkey_state(false, None, 0x4A), HotkeyState::Off);
+        assert_eq!(hotkey_state(false, Some(0x4A), 0x4A), HotkeyState::Off);
+        assert_eq!(
+            hotkey_state(true, Some(0x4A), 0x4A),
+            HotkeyState::Registered('J')
+        );
+        assert_eq!(hotkey_state(true, None, 0x4A), HotkeyState::Conflict('J'));
+        assert_eq!(hotkey_state(true, None, 0x4C), HotkeyState::Conflict('L'));
     }
 }
