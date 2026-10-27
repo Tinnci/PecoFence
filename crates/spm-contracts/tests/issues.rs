@@ -419,3 +419,32 @@ fn refresh_reports_no_counts_without_people_cli() {
     .unwrap();
     ran.validate().unwrap();
 }
+
+#[test]
+fn reviewed_time_is_present_exactly_when_reviewed() {
+    let mut proposal: AssignmentProposal = serde_json::from_str(
+        &serde_json::to_string(
+            &serde_json::from_str::<IssueDetail>(include_str!(
+                "../fixtures/issues/get-issue-r102.json"
+            ))
+            .unwrap()
+            .proposals[0],
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(proposal.status, ProposalStatus::Proposed);
+    proposal.validate().unwrap();
+    proposal.reviewed_at = Some(chrono::Utc::now());
+    assert!(
+        proposal.validate().is_err(),
+        "proposed rows carry no review time"
+    );
+    proposal.status = ProposalStatus::Confirmed;
+    proposal.validate().unwrap();
+    proposal.reviewed_at = None;
+    assert!(
+        proposal.validate().is_err(),
+        "confirmed rows need a review time"
+    );
+}

@@ -32,6 +32,14 @@ pub const MAX_SEARCH_QUERY: usize = 256;
 pub const MAX_SEARCH_SNIPPET: usize = 512;
 pub const MAX_SEARCH_SPANS: usize = 16;
 
+fn is_zero_u32(value: &u32) -> bool {
+    *value == 0
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
+}
+
 fn invalid(reason: impl Into<String>) -> ContractError {
     ContractError::InvalidField {
         field: "issues",
@@ -634,6 +642,9 @@ pub struct AssignmentProposal {
     pub acceptance: Standing,
     #[serde(default)]
     pub statement_at: Option<DateTime<Utc>>,
+    /// When the user reviewed the proposal; present exactly when it is no longer proposed.
+    #[serde(default)]
+    pub reviewed_at: Option<DateTime<Utc>>,
 }
 
 impl AssignmentProposal {
@@ -653,6 +664,11 @@ impl AssignmentProposal {
         }
         if self.basis == AssignmentBasis::ExplicitStatement && self.evidence.is_empty() {
             return Err(invalid("an explicit assignment needs evidence"));
+        }
+        if (self.status == ProposalStatus::Proposed) == self.reviewed_at.is_some() {
+            return Err(invalid(
+                "reviewed_at is present exactly when the proposal was reviewed",
+            ));
         }
         Ok(())
     }
@@ -795,6 +811,12 @@ pub struct IssueDetail {
     pub suggestions: Vec<IssueSuggestion>,
     #[serde(default)]
     pub suggestions_dismissed: u32,
+    /// Rejected proposals are hidden from `proposals` and counted here.
+    #[serde(default, skip_serializing_if = "is_zero_u32")]
+    pub proposals_rejected: u32,
+    /// The proposal read hit its bound; some assignments may be missing from `proposals`.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub proposals_truncated: bool,
     #[serde(default)]
     pub truncated: bool,
 }
