@@ -5,6 +5,7 @@
 
 pub mod board;
 pub mod ci_watch;
+pub mod issues;
 pub mod navigation;
 
 use pecofence_plugin_api::design::{self, ContentScale, LayoutTracker};
