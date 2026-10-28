@@ -1,6 +1,6 @@
 # PecoFence 与 SPM：架构优化与可扩展性分析
 
-历史提案，已由 [应用边界与类型化接口重设计](ARCHITECTURE.md) 和 [ADR-006](decisions/ADR-006-application-boundaries.md) 取代。下文保留当时的源码分析，不作为当前服务框架、兼容策略或迁移顺序的约束。
+历史提案，已由 [应用边界与类型化接口重设计](../ARCHITECTURE.md) 和 [ADR-006](../decisions/ADR-006-application-boundaries.md) 取代。下文保留当时的源码分析，不作为当前服务框架、兼容策略或迁移顺序的约束。
 
 日期：2026-09-21。状态：供后续实施遵循的架构决策与迁移规范；本文不是实现完成报告。
 
@@ -83,21 +83,21 @@ P0/P2a 确定的 v2 endpoint 是：
 
 | 源码证据 | 已核对事实 | 对本次决策的意义 |
 | --- | --- | --- |
-| [plugin-api](../crates/plugin-api/src/lib.rs) | 已有对象安全 PanelProvider、PanelInstance、Canvas、Capability、LayoutSnapshot；PluginContext 固定包含 IPC 等能力 | 不是从零增加进程内插件，而是让它成为完整、低成本的默认路径 |
-| [host bridge](../crates/app/src/fence_window/plugin_panel.rs) | 宿主创建 Direct2dCanvas 并调用插件 paint；绘制时固定 Workspace/text_scale=1；每次调用 layout | 已经没有 SPM 子 HWND；原子 frame、模式、输入和资源缓存仍需建设 |
-| [RenderStack](../crates/render/src/stack.rs)、[Panel](../crates/render/src/panel.rs) | 宿主管理 GPU、Compositor、drawing surface、device recovery | 可以在现有后端上扩展 VisualNode，不需要让插件自建图形设备 |
-| [workspace manifest](../Cargo.toml)、[composition wrapper](../vendor/windows-composition/src/lib.rs) | 当前用 `windows-composition` 的 system 栈；生成绑定是 `Windows.UI.Composition`，Panel 用 SpriteVisual/CompositionDrawingSurface | “DirectComposition 原生合成”是技术方向，不应声称当前 API 就是直接暴露 IDCompositionVisual |
-| [activation](../crates/plugin-kernel/src/activation.rs)、[drain](../crates/plugin-kernel/src/drain.rs)、[scope](../crates/plugin-kernel/src/scope.rs) | 已加入激活事务、callback/cleanup/native ledger、arena 回收等原语 | 保留并补全接入，不能用一次性重写丢弃其测试和行为 |
-| [host PanelManager](../crates/app/src/app/panel_manager.rs) | 已有 open/close/attach/detach/poll；同时仍拥有 runtime、pipe state 和 SPM handshake 分支 | 生命周期运行时与传输适配器需要分开；两类职责不能继续在同一文件增长 |
-| [contracts](../../spm/crates/spm-contracts/src/lib.rs)及 [version](../../spm/crates/spm-contracts/src/version.rs) | protocol 2.0；crate 当前继承 workspace package 0.1.0；强 ID、4 MiB framing、九种 RPC、schema/fixtures | protocol version 2.0 不等于 Cargo package version 2.0 |
-| [host transport](../crates/app/src/app/panel_manager.rs) | run_pipe_subscription 仍手写 `version/session/requestId/method` 与 `spm.hello` | 与 P0 的 `protocol_major/daemon_session/request_id` typed envelope 不相同；P3 要解决真实适配 |
-| [plugin-spm](../crates/plugin-spm/src/lib.rs) | 已消费 typed contracts；SnapshotCursor 首个 snapshot 锁定 session，未建立 Hello 驱动的完整重置路径 | 不再是任意 snapshot 都可切 session，但尚不能证明安全重连和旧连接隔离 |
-| [v2 connection actor](../../spm/crates/spm-protocol/src/ipc/v2/connection.rs) | 有 Hello、异步请求路由和 Ping；请求任务通过 tokio::spawn 创建；未见完整 snapshot event 发布路径 | 九种 RPC 的类型存在，不等于多路订阅、完成事件及所有任务排空已端到端实现 |
-| [v2 listener](../../spm/crates/spmd/src/v2/listener.rs)、[入口](../../spm/crates/spmd/src/main.rs) | v2 使用 fixture；listener shutdown 停止接受新连接，但已有 session 使用独立 cancellation token | 需要把 shutdown 传播到活动 session 并观察请求子任务；仅等待 JoinSet 可能等不到仍在线客户端退出 |
+| [plugin-api](../../crates/plugin-api/src/lib.rs) | 已有对象安全 PanelProvider、PanelInstance、Canvas、Capability、LayoutSnapshot；PluginContext 固定包含 IPC 等能力 | 不是从零增加进程内插件，而是让它成为完整、低成本的默认路径 |
+| [host bridge](../../crates/app/src/fence_window/plugin_panel.rs) | 宿主创建 Direct2dCanvas 并调用插件 paint；绘制时固定 Workspace/text_scale=1；每次调用 layout | 已经没有 SPM 子 HWND；原子 frame、模式、输入和资源缓存仍需建设 |
+| [RenderStack](../../crates/render/src/stack.rs)、[Panel](../../crates/render/src/panel.rs) | 宿主管理 GPU、Compositor、drawing surface、device recovery | 可以在现有后端上扩展 VisualNode，不需要让插件自建图形设备 |
+| [workspace manifest](../../Cargo.toml)、[composition wrapper](../../vendor/windows-composition/src/lib.rs) | 当前用 `windows-composition` 的 system 栈；生成绑定是 `Windows.UI.Composition`，Panel 用 SpriteVisual/CompositionDrawingSurface | “DirectComposition 原生合成”是技术方向，不应声称当前 API 就是直接暴露 IDCompositionVisual |
+| [activation](../../crates/plugin-kernel/src/activation.rs)、[drain](../../crates/plugin-kernel/src/drain.rs)、[scope](../../crates/plugin-kernel/src/scope.rs) | 已加入激活事务、callback/cleanup/native ledger、arena 回收等原语 | 保留并补全接入，不能用一次性重写丢弃其测试和行为 |
+| [host PanelManager](../../crates/app/src/app/panel_manager.rs) | 已有 open/close/attach/detach/poll；同时仍拥有 runtime、pipe state 和 SPM handshake 分支 | 生命周期运行时与传输适配器需要分开；两类职责不能继续在同一文件增长 |
+| [contracts](../../../spm/crates/spm-contracts/src/lib.rs)及 [version](../../../spm/crates/spm-contracts/src/version.rs) | protocol 2.0；crate 当前继承 workspace package 0.1.0；强 ID、4 MiB framing、九种 RPC、schema/fixtures | protocol version 2.0 不等于 Cargo package version 2.0 |
+| [host transport](../../crates/app/src/app/panel_manager.rs) | run_pipe_subscription 仍手写 `version/session/requestId/method` 与 `spm.hello` | 与 P0 的 `protocol_major/daemon_session/request_id` typed envelope 不相同；P3 要解决真实适配 |
+| [plugin-spm](../../crates/plugin-spm/src/lib.rs) | 已消费 typed contracts；SnapshotCursor 首个 snapshot 锁定 session，未建立 Hello 驱动的完整重置路径 | 不再是任意 snapshot 都可切 session，但尚不能证明安全重连和旧连接隔离 |
+| [v2 connection actor](../../../spm/crates/spm-protocol/src/ipc/v2/connection.rs) | 有 Hello、异步请求路由和 Ping；请求任务通过 tokio::spawn 创建；未见完整 snapshot event 发布路径 | 九种 RPC 的类型存在，不等于多路订阅、完成事件及所有任务排空已端到端实现 |
+| [v2 listener](../../../spm/crates/spmd/src/v2/listener.rs)、[入口](../../../spm/crates/spmd/src/main.rs) | v2 使用 fixture；listener shutdown 停止接受新连接，但已有 session 使用独立 cancellation token | 需要把 shutdown 传播到活动 session 并观察请求子任务；仅等待 JoinSet 可能等不到仍在线客户端退出 |
 
 ### 2.2 四态术语冲突的处理
 
-任务上下文使用 `Satisfied / Unsatisfied / Unknown / Incomplete`。然而，已提交 P0 的 [GateStatus](../../spm/crates/spm-contracts/src/snapshot.rs)、schema、fixtures 及原路线图一致使用：
+任务上下文使用 `Satisfied / Unsatisfied / Unknown / Incomplete`。然而，已提交 P0 的 [GateStatus](../../../spm/crates/spm-contracts/src/snapshot.rs)、schema、fixtures 及原路线图一致使用：
 
 ```text
 Satisfied / Unsatisfied / Unknown / NotApplicable
@@ -215,7 +215,7 @@ Named pipe 必须处理：
 
 Microsoft 特别说明使用 logon SID 控制不同终端会话访问，且 `FILE_GENERIC_WRITE` 与创建 pipe instance 权限有关联；实现应按所需具体权限审计。[Named Pipe Security and Access Rights](https://learn.microsoft.com/en-us/windows/win32/ipc/named-pipe-security-and-access-rights)
 
-这些成本对保存凭据、独立采集和数据库写入的 SPM 可以合理；对只显示时钟、两行笔记或局部计数器的组件则通常不合理。保留两进程不意味着必须增加两个无条件常驻 watchdog。已有 [watchdog crate](../crates/watchdog/Cargo.toml) 不应据名称被推断为已经监督 spmd；该关系需要单独实现和验证。
+这些成本对保存凭据、独立采集和数据库写入的 SPM 可以合理；对只显示时钟、两行笔记或局部计数器的组件则通常不合理。保留两进程不意味着必须增加两个无条件常驻 watchdog。已有 [watchdog crate](../../crates/watchdog/Cargo.toml) 不应据名称被推断为已经监督 spmd；该关系需要单独实现和验证。
 
 ### 3.5 开发体验与扩展门槛
 

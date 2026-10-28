@@ -1,6 +1,6 @@
 # PecoFence：Cordis 风格插件内核与 SPM 面板集成设计
 
-历史提案，已由 [应用边界与类型化接口重设计](ARCHITECTURE.md) 和 [ADR-006](decisions/ADR-006-application-boundaries.md) 取代。下文的通用服务内核和依赖图不再是扩展接口的目标。
+历史提案，已由 [应用边界与类型化接口重设计](../ARCHITECTURE.md) 和 [ADR-006](../decisions/ADR-006-application-boundaries.md) 取代。下文的通用服务内核和依赖图不再是扩展接口的目标。
 
 状态：架构提案。本文规定目标接口、资源契约和迁移顺序，不表示这些接口已经存在于仓库。
 
@@ -34,26 +34,26 @@ SPM daemon 的采集、SQLite、凭据和领域计算继续留在 `spmd`。PecoF
 
 | 位置 | 已观察到的行为 | 迁移目标 |
 | --- | --- | --- |
-| [core/model.rs](../crates/core/src/model.rs) | `FenceContentSpec` 使用 `tag = "kind"`、`rename_all = "camelCase"`；包含 `SpmPanel { project, scope_id }` | `Panel { panel: PanelSpec }` 与版本化读取层 |
-| [core/config_store.rs](../crates/core/src/config_store.rs) | `validate` 直接校验 SPM 的 project/scope、Virtual 和空 items；`parse_file` 先反序列化、验证，最后调用当前恒等迁移 | 原始 JSON 迁移先于目标模型反序列化；通用约束与 provider 校验分层 |
-| [fence_window/state.rs](../crates/app/src/fence_window/state.rs) | `spm_panel: Option<SpmPanelContent>` | `ContentBinding` 与实例键 |
-| [fence_window/api.rs](../crates/app/src/fence_window/api.rs) | `set_content` 构造 `SpmPanelContent`，设置 `TIMER_SPM`；切回文件时停止定时器 | 由 `PanelManager` 执行 reconcile |
-| [fence_window/render.rs](../crates/app/src/fence_window/render.rs) | `redraw_content` 直接分支绘制 SPM | 通用面板绘制入口 |
-| [handler/mod.rs](../crates/app/src/fence_window/handler/mod.rs)、[handler/nc.rs](../crates/app/src/fence_window/handler/nc.rs) | SPM 消息处理先于普通窗口分支；非客户区命中处理包含 SPM 条件 | 宿主先处理 chrome，再派发内容区类型化事件 |
-| [fence_window/dnd.rs](../crates/app/src/fence_window/dnd.rs) | 通过 `spm_panel.is_some()` 阻止文件拖放 | 根据通用内容能力判断 |
-| [app/fences.rs](../crates/app/src/app/fences.rs)、[app/items.rs](../crates/app/src/app/items.rs)、[app/state.rs](../crates/app/src/state.rs) | active tab 决定显示内容，部分路径已用 `content.is_files()` | 保留通用判断，补齐面板实例与 tab 绑定 |
-| [app/Cargo.toml](../crates/app/Cargo.toml) | app 直接 path 依赖相邻 SPM 仓库的 `spm-protocol`、`spm-domain`，并依赖 chrono | SPM 依赖收敛到 adapter crate |
+| [core/model.rs](../../crates/core/src/model.rs) | `FenceContentSpec` 使用 `tag = "kind"`、`rename_all = "camelCase"`；包含 `SpmPanel { project, scope_id }` | `Panel { panel: PanelSpec }` 与版本化读取层 |
+| [core/config_store.rs](../../crates/core/src/config_store.rs) | `validate` 直接校验 SPM 的 project/scope、Virtual 和空 items；`parse_file` 先反序列化、验证，最后调用当前恒等迁移 | 原始 JSON 迁移先于目标模型反序列化；通用约束与 provider 校验分层 |
+| [fence_window/state.rs](../../crates/app/src/fence_window/state.rs) | `spm_panel: Option<SpmPanelContent>` | `ContentBinding` 与实例键 |
+| [fence_window/api.rs](../../crates/app/src/fence_window/api.rs) | `set_content` 构造 `SpmPanelContent`，设置 `TIMER_SPM`；切回文件时停止定时器 | 由 `PanelManager` 执行 reconcile |
+| [fence_window/render.rs](../../crates/app/src/fence_window/render.rs) | `redraw_content` 直接分支绘制 SPM | 通用面板绘制入口 |
+| [handler/mod.rs](../../crates/app/src/fence_window/handler/mod.rs)、[handler/nc.rs](../../crates/app/src/fence_window/handler/nc.rs) | SPM 消息处理先于普通窗口分支；非客户区命中处理包含 SPM 条件 | 宿主先处理 chrome，再派发内容区类型化事件 |
+| [fence_window/dnd.rs](../../crates/app/src/fence_window/dnd.rs) | 通过 `spm_panel.is_some()` 阻止文件拖放 | 根据通用内容能力判断 |
+| [app/fences.rs](../../crates/app/src/app/fences.rs)、[app/items.rs](../../crates/app/src/app/items.rs)、[app/state.rs](../../crates/app/src/state.rs) | active tab 决定显示内容，部分路径已用 `content.is_files()` | 保留通用判断，补齐面板实例与 tab 绑定 |
+| [app/Cargo.toml](../../crates/app/Cargo.toml) | app 直接 path 依赖相邻 SPM 仓库的 `spm-protocol`、`spm-domain`，并依赖 chrono | SPM 依赖收敛到 adapter crate |
 
-当前 SPM 绘制与输入代码位于 [spm_panel.rs](../crates/app/src/fence_window/spm_panel.rs)。`TIMER_SPM = 81` 每 1000 ms 请求重绘，roll-up 时跳过绘制。`draw` 每次创建两个 `TextFormat` 和七个 solid brush，并在每次绘制开始递增 hit-test generation。这里能确认的是重复创建资源及绘制会取消既有点击匹配，不能据此断言 COM brush 泄漏。
+当前 SPM 绘制与输入代码位于 [spm_panel.rs](../../crates/app/src/fence_window/spm_panel.rs)。`TIMER_SPM = 81` 每 1000 ms 请求重绘，roll-up 时跳过绘制。`draw` 每次创建两个 `TextFormat` 和七个 solid brush，并在每次绘制开始递增 hit-test generation。这里能确认的是重复创建资源及绘制会取消既有点击匹配，不能据此断言 COM brush 泄漏。
 
 ### 2.2 已有释放机制与不足
 
 - `FenceWindow::Drop` 已在 HWND 销毁之前撤销 OLE drop target，并移除以 HWND 为键的壁纸缓存。这是已有资源顺序约束，不能在迁移时删除。
 - `platform/window.rs` 在 `WM_NCDESTROY` 清空 `GWLP_USERDATA` 并回收 `Box<State>`，调用 handler 之前 clone `Rc`，避免同步重入时 handler 被释放。
 - `platform/winevent.rs` 已有 `WinEventHook::Drop`。其 `event_proc` 临时取出 callback 后无条件通过 `entry(...).or_insert(cb)` 放回；若 callback 内释放 hook，仅从 map 删除不能证明 callback 不被放回。新增路由须独立保存 registration 的 alive/generation 状态，并测试自撤销场景。
-- SPM 的 [ipc.rs](../../spm/crates/spm-protocol/src/ipc.rs) 中，`PanelClient` 已在后台线程运行 Tokio current-thread runtime；`Drop` 已发送 oneshot 停止信号。线程句柄没有保存，调用者不能观察线程结束。不能将其描述为完全没有取消机制。
+- SPM 的 [ipc.rs](../../../spm/crates/spm-protocol/src/ipc.rs) 中，`PanelClient` 已在后台线程运行 Tokio current-thread runtime；`Drop` 已发送 oneshot 停止信号。线程句柄没有保存，调用者不能观察线程结束。不能将其描述为完全没有取消机制。
 - `PanelClient` 每次重连等待 2 秒，握手读取超时 10 秒，响应读取超时 15 秒；后台 reader 与 writer 分开，不因本地刷新请求而重建半读 frame。
-- [odm.rs](../../spm/crates/spm-protocol/src/odm.rs) 的 `enforce_freshness` 已处理断连、时间失效、数据源覆盖和 Incomplete 状态；插件化不能删除这项语义。
+- [odm.rs](../../../spm/crates/spm-protocol/src/odm.rs) 的 `enforce_freshness` 已处理断连、时间失效、数据源覆盖和 Incomplete 状态；插件化不能删除这项语义。
 
 本设计要解决的是：资源撤销点散落在内容切换、窗口过程、客户端析构和渲染路径中，无法通过一个实例状态判断所有资源是否已经停止。
 
@@ -1101,7 +1101,7 @@ pub struct SpmPanelInstance {
 
 ### 10.3 管道协议事实与 adapter
 
-当前协议为 little-endian u32 长度加 UTF-8 JSON，单 frame 最大 8 MiB，version=1；每条连接只有一个订阅。Windows endpoint 来源于当前 token SID：`\\.\pipe\spm.v1.<SID>`。server 已创建仅当前 SID 的 DACL 并拒绝 remote clients。[SPM ipc.rs](../../spm/crates/spm-protocol/src/ipc.rs)
+当前协议为 little-endian u32 长度加 UTF-8 JSON，单 frame 最大 8 MiB，version=1；每条连接只有一个订阅。Windows endpoint 来源于当前 token SID：`\\.\pipe\spm.v1.<SID>`。server 已创建仅当前 SID 的 DACL 并拒绝 remote clients。[SPM ipc.rs](../../../spm/crates/spm-protocol/src/ipc.rs)
 
 | 顺序 | 实际 wire 方法 | 校验 |
 | --- | --- | --- |

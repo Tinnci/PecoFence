@@ -1,6 +1,6 @@
 # PecoFence 与 SPM：界面及 Cordis 风格架构重设计规范
 
-历史目标设计，已由 [统一架构规范](ARCHITECTURE.md) 和 [ADR-006](decisions/ADR-006-application-boundaries.md) 取代。领域背景与界面草案可作参考；Cordis 微内核与统一字节/服务模型不作为新实现契约。
+历史目标设计，已由 [统一架构规范](../ARCHITECTURE.md) 和 [ADR-006](../decisions/ADR-006-application-boundaries.md) 取代。领域背景与界面草案可作参考；Cordis 微内核与统一字节/服务模型不作为新实现契约。
 
 日期：2026-09-21。状态：目标设计，供实现与验收使用。本文中的“必须”是实现契约；尺寸、配额、超时和性能预算是初始设计参数，不是现有产品的测量结果。
 
@@ -33,15 +33,15 @@ PecoFence 定义为 Windows 桌面工作区宿主，负责容器、输入、布�
 
 | 观察位置 | 当前事实 | 目标处理 |
 | --- | --- | --- |
-| [app/Cargo.toml](../crates/app/Cargo.toml) | 宿主直接 path 依赖相邻 SPM 仓库的 domain 与 protocol | SPM 依赖收敛到插件；发布使用固定版本依赖 |
-| [core/model.rs](../crates/core/src/model.rs) | 存在 `FenceContentSpec::SpmPanel` | 新工作区配置只保存 provider、实例标识和版本化配置 |
-| [spm_panel.rs](../crates/app/src/fence_window/spm_panel.rs)、[api.rs](../crates/app/src/fence_window/api.rs) | 面板使用 `PanelClient`，窗口设置 1000 ms 的 SPM 定时器 | 数据推送与失效截止时间驱动更新；无 SPM 专属 Win32 timer |
-| [render/lib.rs](../crates/render/src/lib.rs)、[panel.rs](../crates/render/src/panel.rs) | 当前实现为 Windows.UI.Composition visual tree 与 Direct2D surface，绘制输入使用 DIP | 在宿主渲染能力后封装现有 backend；不把它误称为现有经典 `IDCompositionDevice` 实现 |
-| [anchor.rs](../crates/app/src/anchor.rs) | 存在桌面锚定、图标 host、Show Desktop 与 Peek 状态 | 提取为宿主 `DesktopService`，插件不查找 Explorer 窗口 |
-| [app/peek.rs](../crates/app/src/app/peek.rs) | 当前快捷键选项是 Win+Space、Ctrl+Alt+Space、Win+Shift+Space | 新设计期望 Win+Alt+D；运行时明确显示实际注册结果 |
-| [winevent.rs](../crates/platform/src/winevent.rs) | 有 Drop unhook；回调取出后重新插入 map | 采用 registration generation 和 alive 标记，覆盖回调中自撤销场景 |
-| [SPM ipc.rs](../../spm/crates/spm-protocol/src/ipc.rs) | v1 为 u32 长度加 JSON，一条连接一个订阅；客户端 Drop 发送停止信号，创建线程的 join handle 未保存 | 新 transport supervisor 保留完成句柄；请求取消与排空完成分别报告 |
-| [spmd/main.rs](../../spm/crates/spmd/src/main.rs) | 有采集、可选 SQLite 持久化、订阅发布与每秒 freshness 派生 | 采集、证据与读模型保留在 daemon 边界，重新定义调度及多项目模型 |
+| [app/Cargo.toml](../../crates/app/Cargo.toml) | 宿主直接 path 依赖相邻 SPM 仓库的 domain 与 protocol | SPM 依赖收敛到插件；发布使用固定版本依赖 |
+| [core/model.rs](../../crates/core/src/model.rs) | 存在 `FenceContentSpec::SpmPanel` | 新工作区配置只保存 provider、实例标识和版本化配置 |
+| [spm_panel.rs](../../crates/app/src/fence_window/spm_panel.rs)、[api.rs](../../crates/app/src/fence_window/api.rs) | 面板使用 `PanelClient`，窗口设置 1000 ms 的 SPM 定时器 | 数据推送与失效截止时间驱动更新；无 SPM 专属 Win32 timer |
+| [render/lib.rs](../../crates/render/src/lib.rs)、[panel.rs](../../crates/render/src/panel.rs) | 当前实现为 Windows.UI.Composition visual tree 与 Direct2D surface，绘制输入使用 DIP | 在宿主渲染能力后封装现有 backend；不把它误称为现有经典 `IDCompositionDevice` 实现 |
+| [anchor.rs](../../crates/app/src/anchor.rs) | 存在桌面锚定、图标 host、Show Desktop 与 Peek 状态 | 提取为宿主 `DesktopService`，插件不查找 Explorer 窗口 |
+| [app/peek.rs](../../crates/app/src/app/peek.rs) | 当前快捷键选项是 Win+Space、Ctrl+Alt+Space、Win+Shift+Space | 新设计期望 Win+Alt+D；运行时明确显示实际注册结果 |
+| [winevent.rs](../../crates/platform/src/winevent.rs) | 有 Drop unhook；回调取出后重新插入 map | 采用 registration generation 和 alive 标记，覆盖回调中自撤销场景 |
+| [SPM ipc.rs](../../../spm/crates/spm-protocol/src/ipc.rs) | v1 为 u32 长度加 JSON，一条连接一个订阅；客户端 Drop 发送停止信号，创建线程的 join handle 未保存 | 新 transport supervisor 保留完成句柄；请求取消与排空完成分别报告 |
+| [spmd/main.rs](../../../spm/crates/spmd/src/main.rs) | 有采集、可选 SQLite 持久化、订阅发布与每秒 freshness 派生 | 采集、证据与读模型保留在 daemon 边界，重新定义调度及多项目模型 |
 | [既有 Cordis 提案](PECOFENCE_CORDIS_PLUGIN_ARCHITECTURE.md) | 包含服务、scope 和旧配置迁移 | 沿用已识别的生命周期约束；取消迁移依赖 |
 
 Cordis 提供 context 服务、声明依赖、事件与可撤销注册的组织方式。本文的 UI apartment、原生 I/O 排空、容器状态和业务数据模型是 PecoFence 的设计，并非 Cordis 已提供的 Windows 功能。[DeepSeek Harness Cordis Primer](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/cordis-primer.md)、[Cordis Fiber 源码](https://github.com/cordiverse/cordis/blob/main/packages/core/src/fiber.ts)
