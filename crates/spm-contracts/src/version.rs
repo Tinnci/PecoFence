@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 pub const PROTOCOL_MAJOR: u16 = 2;
-pub const PROTOCOL_MINOR: u16 = 0;
+pub const PROTOCOL_MINOR: u16 = 1;
 pub const MAX_FRAME_BYTES: usize = 4 * 1024 * 1024;
 pub const DEFAULT_PAGE_SIZE: u16 = 100;
 pub const MAX_PAGE_SIZE: u16 = 500;

@@ -71,6 +71,7 @@ struct Actor {
     pending_subscribes: HashMap<RequestId, ProjectQuery>,
     pending_operations: HashMap<RequestId, PendingOperation>,
     daemon_session: Option<DaemonSessionId>,
+    peer_minor: u16,
 }
 
 #[cfg(windows)]
@@ -94,6 +95,7 @@ pub async fn run(
         pending_subscribes: HashMap::new(),
         pending_operations: HashMap::new(),
         daemon_session: None,
+        peer_minor: PROTOCOL_MINOR,
     };
     tracing::info!(endpoint = %endpoint_for_log, "transport.run");
     let mut delay = Duration::from_millis(500);
@@ -300,6 +302,7 @@ impl Actor {
             {
                 return Err(());
             }
+            self.peer_minor=response.protocol_minor;
             let session_changed = self.daemon_session != Some(response.daemon_session);
             self.daemon_session = Some(response.daemon_session);
             self.reset_remote();
@@ -444,6 +447,17 @@ impl Actor {
                         .complete(route.owner, route.generation, local, Err(Error::Exhausted));
                     return Ok(());
                 }
+                if request.method().minimum_minor() > self.peer_minor {
+                    self.sink.complete(
+                        route.owner,
+                        route.generation,
+                        local,
+                        Err(Error::Backend(
+                            "backend does not support delivery planning protocol".into(),
+                        )),
+                    );
+                    return Ok(());
+                }
                 let request_id = RequestId::new();
                 let method = request.method();
                 let envelope = self.request_envelope(request_id, request)?;
@@ -476,7 +490,7 @@ impl Actor {
     fn request_envelope(&self, request_id: RequestId, request: Request) -> Result<Envelope, ()> {
         Ok(Envelope {
             protocol_major: PROTOCOL_MAJOR,
-            protocol_minor: PROTOCOL_MINOR,
+            protocol_minor: self.peer_minor,
             daemon_session: self.daemon_session,
             request_id: Some(request_id),
             subscription_id: None,
@@ -487,7 +501,7 @@ impl Actor {
 
     fn route_incoming(&mut self, envelope: Envelope) -> Option<SubscriptionId> {
         if envelope.daemon_session != self.daemon_session
-            || envelope.protocol_minor > PROTOCOL_MINOR
+            || envelope.protocol_minor > self.peer_minor
         {
             return None;
         }
@@ -634,6 +648,7 @@ impl Actor {
 
 fn response_method(response: &Response) -> RpcMethod {
     match response {
+        Response::GetDeliveryPlan(_) => RpcMethod::GetDeliveryPlan,
         Response::Hello(_) => RpcMethod::Hello,
         Response::GetCapabilities(_) => RpcMethod::GetCapabilities,
         Response::Subscribe(_) => RpcMethod::Subscribe,
@@ -862,6 +877,7 @@ mod tests {
             pending_subscribes: HashMap::new(),
             pending_operations: HashMap::new(),
             daemon_session: None,
+            peer_minor: PROTOCOL_MINOR,
         }
     }
 

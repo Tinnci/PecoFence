@@ -18,6 +18,7 @@ pub enum Feature {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RpcMethod {
+    GetDeliveryPlan,
     Hello,
     GetCapabilities,
     Subscribe,
@@ -204,6 +205,7 @@ pub struct PingResponse {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "method", content = "params", rename_all = "snake_case")]
 pub enum Request {
+    GetDeliveryPlan(GetDeliveryPlanRequest),
     Hello(HelloRequest),
     GetCapabilities(GetCapabilitiesRequest),
     Subscribe(SubscribeRequest),
@@ -231,6 +233,7 @@ pub enum Request {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "method", content = "result", rename_all = "snake_case")]
 pub enum Response {
+    GetDeliveryPlan(DeliveryPlanView),
     Hello(HelloResponse),
     GetCapabilities(GetCapabilitiesResponse),
     Subscribe(SubscribeResponse),
@@ -288,6 +291,7 @@ pub type Extensions = BTreeMap<String, serde_json::Value>;
 impl Request {
     pub fn method(&self) -> RpcMethod {
         match self {
+            Self::GetDeliveryPlan(_) => RpcMethod::GetDeliveryPlan,
             Self::Hello(_) => RpcMethod::Hello,
             Self::GetCapabilities(_) => RpcMethod::GetCapabilities,
             Self::Subscribe(_) => RpcMethod::Subscribe,
@@ -314,6 +318,7 @@ impl Request {
     }
     pub fn validate(&self) -> Result<(), ContractError> {
         match self {
+            Self::GetDeliveryPlan(q) => return q.validate(),
             Self::UpdateCiWatchlist(q) => return q.validate(),
             Self::SuggestCiWatch(q) => return q.validate(),
             Self::QueryIssues(q) => return q.validate(),
@@ -342,5 +347,15 @@ impl Request {
             });
         }
         Ok(())
+    }
+}
+
+impl RpcMethod {
+    /// Earliest negotiated minor that can decode this method. Keep capabilities filtered.
+    pub fn minimum_minor(self) -> u16 {
+        match self {
+            Self::GetDeliveryPlan => 1,
+            _ => 0,
+        }
     }
 }

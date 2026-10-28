@@ -79,10 +79,23 @@ impl Envelope {
                         "business request requires session and request id".into(),
                     ));
                 }
+                if request.method().minimum_minor() > self.protocol_minor {
+                    return Err(ContractError::InvalidEnvelope(
+                        "method requires newer negotiated minor".into(),
+                    ));
+                }
                 request.validate()?;
             }
             Body::Response(response) => {
                 match response {
+                    Response::GetDeliveryPlan(view) => {
+                        if self.protocol_minor < 1 {
+                            return Err(ContractError::InvalidEnvelope(
+                                "delivery plan requires minor 1".into(),
+                            ));
+                        }
+                        view.validate()?;
+                    }
                     Response::GetCiWatch(snapshot) | Response::UpdateCiWatchlist(snapshot) => {
                         snapshot.validate()?
                     }

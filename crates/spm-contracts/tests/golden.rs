@@ -6,7 +6,7 @@ use uuid::Uuid;
 fn hello_request_matches_canonical_fixture() {
     let envelope = Envelope {
         protocol_major: PROTOCOL_MAJOR,
-        protocol_minor: PROTOCOL_MINOR,
+        protocol_minor: 0,
         daemon_session: None,
         request_id: Some(RequestId(
             Uuid::parse_str("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa").unwrap(),
