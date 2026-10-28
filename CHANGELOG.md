@@ -13,7 +13,7 @@
 - Merge all fetched upstream branch histories with explicit native architecture resolutions. Keep native WinUI Settings, schema-2 workspaces, SPM and bundled fonts; exclude WebView UI/runtime and flat-model replacements.
 - Fix watcher cancellation/handle cleanup and restart exited portal watchers. Improve desktop z-order anchoring and watchdog recovery when another instance has started.
 - Add optional QuickLook preview using Space, arrow navigation and Esc, when QuickLook is already running.
-- See `docs/NATIVE_BRANCH_MERGE_2026-10-18.md` for retained differences and exact merge scope.
+- See `docs/archive/NATIVE_BRANCH_MERGE_2026-10-18.md` for retained differences and exact merge scope.
 
 ## Unreleased — Tinnci edition
 
@@ -21,7 +21,7 @@
   long paths, Internet-shortcut encoding, memory counters, icon-worker stacks,
   Composition batch lifetime, Windows 11 shell popups and locale scanning.
   Preserve the native/plugin/schema-2 architecture; see the
-  [upstream compatibility review](docs/UPSTREAM_REVIEW_2026-10-18.md).
+  [upstream compatibility review](docs/archive/UPSTREAM_REVIEW_2026-10-18.md).
 
 - Unify local, CI and tag-release verification; reduce development build disk usage.
 - Separate repository/download links from upstream publishing accounts. Store
