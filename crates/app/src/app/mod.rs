@@ -857,6 +857,10 @@ impl App {
             .expect("register CI watch provider");
         panel_manager
             .borrow_mut()
+            .register_provider(Rc::new(pecofence_plugin_spm::planning::PlanningPlugin))
+            .expect("register planning provider");
+        panel_manager
+            .borrow_mut()
             .register_provider(Rc::new(pecofence_plugin_spm::issues::IssuesPlugin))
             .expect("register issue provider");
         panel_manager

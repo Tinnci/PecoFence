@@ -7,6 +7,7 @@ pub mod board;
 pub mod ci_watch;
 pub mod issues;
 pub mod navigation;
+pub mod planning;
 pub(crate) mod scene_builder;
 
 use pecofence_plugin_api::design::{self, ContentScale, LayoutTracker};

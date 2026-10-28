@@ -302,7 +302,7 @@ impl Actor {
             {
                 return Err(());
             }
-            self.peer_minor=response.protocol_minor;
+            self.peer_minor = response.protocol_minor;
             let session_changed = self.daemon_session != Some(response.daemon_session);
             self.daemon_session = Some(response.daemon_session);
             self.reset_remote();
@@ -1296,5 +1296,55 @@ mod tests {
         assert!(actor.local_queries.is_empty());
         actor.apply_offline(subscribe(Token(4099)));
         assert!(actor.local_queries.contains_key(&Token(4099)));
+    }
+    #[tokio::test]
+    async fn minor_zero_peer_rejects_planning_locally_before_writing() {
+        let mut actor = actor();
+        actor.peer_minor = 0;
+        actor.daemon_session = Some(DaemonSessionId::new());
+        let local = Token(77);
+        actor
+            .sink
+            .test_operation(local, route().owner, route().generation);
+        let request = Request::GetDeliveryPlan(spm_contracts::GetDeliveryPlanRequest {
+            project_id: ProjectId::new("DEMO").unwrap(),
+            delivery_scope_id: DeliveryScopeId::new("release").unwrap(),
+            plan_id: "plan".into(),
+            plan_revision: None,
+            offset: 0,
+            limit: 200,
+        });
+        let (mut write, mut read) = tokio::io::duplex(4096);
+        actor
+            .apply_connected(
+                Command::Request {
+                    local,
+                    route: route(),
+                    request,
+                },
+                &mut write,
+            )
+            .await
+            .unwrap();
+        assert!(actor.pending_operations.is_empty());
+        assert!(matches!(
+            actor.sink.test_events().pop(),
+            Some(pecofence_plugin_api::PanelEvent::Completion {
+                operation: Token(77),
+                result: Err(Error::Backend(_))
+            })
+        ));
+        assert!(
+            tokio::time::timeout(Duration::from_millis(10), read.read_u8())
+                .await
+                .is_err()
+        );
+        let envelope = actor
+            .request_envelope(
+                RequestId::new(),
+                Request::GetCapabilities(spm_contracts::GetCapabilitiesRequest {}),
+            )
+            .unwrap();
+        assert_eq!(envelope.protocol_minor, 0);
     }
 }

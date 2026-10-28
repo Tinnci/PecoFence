@@ -431,6 +431,29 @@ impl App {
                         bottom: y + h,
                     })));
                 }
+                ["new-planning", x, y, w, h] => {
+                    let p = |s: &str| s.parse::<i32>().unwrap_or(0);
+                    let (version, config) = pecofence_plugin_spm::planning::demo_config();
+                    if self
+                        .state
+                        .new_panel_fence(
+                            "Planning",
+                            RECT {
+                                left: p(x),
+                                top: p(y),
+                                right: p(x) + p(w),
+                                bottom: p(y) + p(h),
+                            },
+                            pecofence_plugin_spm::planning::PROVIDER_ID,
+                            version,
+                            config,
+                        )
+                        .is_some()
+                    {
+                        self.resync_windows();
+                        self.schedule_save();
+                    }
+                }
                 ["new-ci-watch", x, y, w, h, source @ ..] => {
                     let p = |s: &str| s.parse::<i32>().unwrap_or(0);
                     let (x, y, w, h) = (p(x), p(y), p(w), p(h));

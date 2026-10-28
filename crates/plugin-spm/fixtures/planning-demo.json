@@ -1,0 +1,141 @@
+{
+  "schema_version": 1,
+  "project_id": "DEMO",
+  "delivery_scope_id": "release-a",
+  "plan_id": "plan-a",
+  "plan_revision": 1,
+  "baseline_id": "baseline-a",
+  "epoch_utc": "2026-10-28T00:00:00Z",
+  "slot_minutes": 60,
+  "status_at": 0,
+  "horizon": 100,
+  "conditional": true,
+  "finish": 20,
+  "protected_finish": 24,
+  "tasks": [
+    {
+      "id": "camera",
+      "label": "相机修复",
+      "lane": "机型 A",
+      "state": "todo",
+      "start": 0,
+      "finish": 4,
+      "actual_start": null,
+      "actual_finish": null,
+      "conditional": false,
+      "critical": true,
+      "driving": true,
+      "blocked": false,
+      "unscheduled_reason": null,
+      "dependencies": [],
+      "resources": []
+    },
+    {
+      "id": "xts-a",
+      "label": "xTS 测试 A",
+      "lane": "机型 A",
+      "state": "todo",
+      "start": 4,
+      "finish": 9,
+      "actual_start": null,
+      "actual_finish": null,
+      "conditional": false,
+      "critical": false,
+      "driving": true,
+      "blocked": false,
+      "unscheduled_reason": null,
+      "dependencies": [
+        "camera"
+      ],
+      "resources": [
+        "lab"
+      ]
+    },
+    {
+      "id": "xts-b",
+      "label": "xTS 测试 B",
+      "lane": "机型 A",
+      "state": "todo",
+      "start": 9,
+      "finish": 14,
+      "actual_start": null,
+      "actual_finish": null,
+      "conditional": false,
+      "critical": false,
+      "driving": false,
+      "blocked": false,
+      "unscheduled_reason": null,
+      "dependencies": [],
+      "resources": [
+        "lab"
+      ]
+    },
+    {
+      "id": "authorization",
+      "label": "授权确认",
+      "lane": "机型 A",
+      "state": "todo",
+      "start": null,
+      "finish": null,
+      "actual_start": null,
+      "actual_finish": null,
+      "conditional": false,
+      "critical": false,
+      "driving": false,
+      "blocked": false,
+      "unscheduled_reason": "unknown_gate",
+      "dependencies": [],
+      "resources": []
+    }
+  ],
+  "total_tasks": 4,
+  "offset": 0,
+  "next_offset": null,
+  "milestones": [
+    {
+      "id": "approval",
+      "label": "Approval",
+      "target": 18,
+      "baseline": 18,
+      "forecast": 20,
+      "actual": null,
+      "conditional": true
+    }
+  ],
+  "gates": [
+    {
+      "id": "authorization",
+      "readiness": "unknown",
+      "reasons": [
+        "等待确认的授权证据"
+      ],
+      "reason_count": 1
+    }
+  ],
+  "resource_waits": [
+    {
+      "resource": "lab",
+      "before": "xts-a",
+      "after": "xts-b"
+    }
+  ],
+  "buffers": [
+    {
+      "id": "project",
+      "after": "approval",
+      "before": null,
+      "slots": 4,
+      "consumed": 2
+    }
+  ],
+  "flow": [
+    {
+      "lane": "机型 A",
+      "wip": 2,
+      "blocked_wip": 1,
+      "limit": 2,
+      "oldest_wip": 3
+    }
+  ],
+  "warnings": []
+}

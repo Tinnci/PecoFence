@@ -1010,6 +1010,13 @@ impl App {
                 480.0,
                 780.0,
             ),
+            SpmPanel::Planning => (
+                "交付计划",
+                pecofence_plugin_spm::planning::PROVIDER_ID,
+                pecofence_plugin_spm::planning::live_config(),
+                720.0,
+                780.0,
+            ),
             SpmPanel::Board => (
                 "交付看板",
                 pecofence_plugin_spm::board::PROVIDER_ID,
@@ -1281,6 +1288,7 @@ impl App {
 /// The SPM panels a menu can create.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum SpmPanel {
+    Planning,
     Board,
     CiCd,
     Issues,

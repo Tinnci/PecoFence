@@ -451,6 +451,28 @@ impl<'a> Fitter<'a> {
     ) -> (String, u32) {
         // Line breaks inside source text would defeat the line budget.
         let text = text.replace(['\n', '\r'], " ");
+        // Mixed-script fallback fonts can make wrapped height look like one taller line.
+        // For a single-line budget, measure advance width directly instead of dividing heights.
+        if max_lines == 1 {
+            if self.width(&text, size, weight) <= width {
+                return (text, 1);
+            }
+            let chars: Vec<char> = text.chars().collect();
+            let (mut lo, mut hi) = (0, chars.len());
+            while lo < hi {
+                let mid = (lo + hi).div_ceil(2);
+                let candidate = chars[..mid].iter().collect::<String>() + "…";
+                if self.width(&candidate, size, weight) <= width {
+                    lo = mid;
+                } else {
+                    hi = mid - 1;
+                }
+            }
+            return (
+                chars[..lo].iter().collect::<String>().trim_end().to_owned() + "…",
+                1,
+            );
+        }
         let lines = self.lines_of(&text, size, weight, width);
         if lines <= max_lines {
             return (text, lines);
@@ -529,5 +551,36 @@ mod tests {
         let zh = Lang { zh: true };
         assert_eq!(zh.f("{} of {} merged", &["1", "2"]), "已合入 1/2");
         assert_eq!(Lang { zh: false }.t("Done"), "Done");
+    }
+}
+
+#[cfg(test)]
+mod single_line_tests {
+    use super::*;
+    struct MixedFallback;
+    impl Measure for MixedFallback {
+        fn measure(&self, text: &str, _: f32, _: u16, _: FontRole, width: f32) -> (f32, f32) {
+            let advance = text.chars().count() as f32 * 8.0;
+            // A taller fallback run makes one wrapped line ratio round down to one.
+            (
+                advance.min(width),
+                if width >= 1000.0 { 32.0 } else { 40.0 },
+            )
+        }
+    }
+    #[test]
+    fn single_line_uses_advance_width_even_when_fallback_line_heights_differ() {
+        let cache = RefCell::new(HashMap::new());
+        let fitter = Fitter::new(&MixedFallback, 1.0, &cache);
+        let (text, lines) = fitter.fit(
+            "条件预测 10-28 20:00 · 含缓冲 10-29 00:00",
+            13.0,
+            400,
+            80.0,
+            1,
+        );
+        assert_eq!(lines, 1);
+        assert!(text.ends_with('…'));
+        assert!(fitter.width(&text, 13.0, 400) <= 80.0);
     }
 }

@@ -6,7 +6,7 @@ param(
   [int]$TextScale = 0,
   # With -Out, run a scripted tour and save screenshots there, then exit.
   [string]$Out = '',
-  [ValidateSet('tour', 'scaled', 'live', 'timeline')][string]$Tour = 'tour'
+  [ValidateSet('tour', 'scaled', 'live', 'timeline', 'planning')][string]$Tour = 'tour'
 )
 # Evidence board demo in an isolated, portable PecoFence instance. The board uses the
 # deterministic demo source (fictional Orion data); it does not contact SPM.
@@ -70,6 +70,7 @@ function Key([int]$vk) { "input Board vk $vk 0" }
 $F5 = Key 116; $Down = Key 40; $Right = Key 39; $Enter = Key 13; $Esc = Key 27
 # Each step: script lines to run, then a screenshot named after the step.
 $steps = switch ($Tour) {
+  'planning' { @( @{ name = 'planning'; lines = @() }, @{ name = 'planning-narrow'; lines = @('bounds Planning 40 40 420 780') } ) }
   'tour' {
     @(
       @{ name = 'wide-step1'; lines = @() },
@@ -105,7 +106,7 @@ $steps = switch ($Tour) {
     )
   }
 }
-$create = if ($Tour -eq 'live') { 'new-board 40 40 1200 760 live' } else { 'new-board 40 40 1460 960' }
+$create = if ($Tour -eq 'planning') { 'new-planning 40 40 920 900' } elseif ($Tour -eq 'live') { 'new-board 40 40 1200 760 live' } else { 'new-board 40 40 1460 960' }
 $lines = [Collections.Generic.List[string]]::new()
 $lines.Add('sleep 2500')
 # Paper is independent of app theme when Adaptive follows the wallpaper. Set the
