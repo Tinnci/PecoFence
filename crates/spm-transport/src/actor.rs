@@ -566,11 +566,24 @@ impl Actor {
             // a subscription snapshot, nor an uncorrelated global completion.
             return None;
         }
-        let Body::Event(Event::Snapshot(_)) = &envelope.body else {
-            return None;
-        };
         let remote = envelope.subscription_id?;
         let query = self.remote_queries.get(&remote).cloned()?;
+        let scope_matches = match &envelope.body {
+            Body::Event(Event::Snapshot(v)) => {
+                query.view != spm_contracts::ViewKind::Board
+                    && v.project_id == query.project_id
+                    && v.delivery_scope_id == query.delivery_scope_id
+            }
+            Body::Event(Event::Board(v)) => {
+                query.view == spm_contracts::ViewKind::Board
+                    && v.project_id == query.project_id
+                    && v.delivery_scope_id == query.delivery_scope_id
+            }
+            _ => false,
+        };
+        if !scope_matches {
+            return None;
+        }
         let Ok(bytes) = serde_json::to_vec(&envelope).map(Arc::<[u8]>::from) else {
             return None;
         };
@@ -1084,6 +1097,8 @@ mod tests {
         let envelope = |revision| {
             let mut snapshot = snapshot.clone();
             snapshot.daemon_session = session;
+            snapshot.project_id = query().project_id;
+            snapshot.delivery_scope_id = query().delivery_scope_id;
             snapshot.revision = spm_contracts::Revision(revision);
             Envelope {
                 protocol_major: PROTOCOL_MAJOR,
@@ -1346,5 +1361,43 @@ mod tests {
             )
             .unwrap();
         assert_eq!(envelope.protocol_minor, 0);
+    }
+    #[test]
+    fn board_pushes_are_routed_only_to_their_scoped_board_subscription() {
+        let mut actor = actor();
+        let session = DaemonSessionId::new();
+        actor.daemon_session = Some(session);
+        let mut q = query();
+        q.view = spm_contracts::ViewKind::Board;
+        let remote = SubscriptionId::new();
+        actor.apply_offline(Command::Subscribe {
+            local: Token(9),
+            route: route(),
+            query: q.clone(),
+        });
+        actor.remote_queries.insert(remote, q.clone());
+        actor.active.get_mut(&q).unwrap().remote = Some(remote);
+        let mut board: spm_contracts::BoardSnapshot = serde_json::from_str(include_str!(
+            "../../plugin-spm/fixtures/board-demo/step1-board.json"
+        ))
+        .unwrap();
+        board.project_id = q.project_id.clone();
+        board.delivery_scope_id = q.delivery_scope_id.clone();
+        board.daemon_session = session;
+        let event = |b: spm_contracts::BoardSnapshot| Envelope {
+            protocol_major: PROTOCOL_MAJOR,
+            protocol_minor: PROTOCOL_MINOR,
+            daemon_session: Some(session),
+            request_id: None,
+            subscription_id: Some(remote),
+            revision: Some(b.revision),
+            body: Body::Event(Event::Board(b)),
+        };
+        let mut wrong = board.clone();
+        wrong.project_id = ProjectId::new("other-project").unwrap();
+        actor.route_incoming(event(wrong));
+        assert!(actor.active[&q].latest.is_none());
+        actor.route_incoming(event(board));
+        assert!(actor.active[&q].latest.is_some());
     }
 }
