@@ -12,6 +12,25 @@ import winappsdk_runtime as runtime
 
 
 class RuntimeTests(unittest.TestCase):
+    def test_staged_runtime_matches_case_and_reports_missing_original_name(self):
+        name, data = "Runtime.dat", b"synthetic runtime resource"
+        records = {name: {"bytes": len(data), "sha256": runtime.digest(data), "image": None}}
+        with (
+            tempfile.TemporaryDirectory() as folder,
+            mock.patch.object(runtime, "validate_file_records", return_value=(records, {})),
+            mock.patch.object(runtime, "runtime_roots", return_value=[name]),
+        ):
+            root = Path(folder)
+            path = root / name.upper()
+            path.write_bytes(data)
+            self.assertEqual(
+                runtime.validate_runtime_directory(root, {"fixture": True}, lambda _: None),
+                ({name: data}, {}),
+            )
+            path.unlink()
+            with self.assertRaisesRegex(ValueError, "missing=.*Runtime.dat"):
+                runtime.validate_runtime_directory(root, {"fixture": True}, lambda _: None)
+
     def test_checked_in_inventory_and_activation_manifest(self):
         manifest = runtime.load_runtime_manifest()
         files, images = runtime.validate_manifest(manifest)

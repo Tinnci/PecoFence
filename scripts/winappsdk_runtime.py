@@ -545,7 +545,10 @@ def _create_activation_manifest(
     return declaration + b"?>\n" + provenance + rest, activation_map
 
 
-def build_candidate(package_bytes: bytes, parse_pe) -> tuple[dict, bytes, bytes]:
+def _runtime_payload(
+    package_bytes: bytes, roots: list[str]
+) -> tuple[dict[str, bytes], bytes, bytes]:
+    """Verify the pinned archives and select their bounded runtime payload once."""
     if len(package_bytes) != PACKAGE_SIZE or digest(package_bytes) != PACKAGE_SHA256:
         fail("NuGet runtime package SHA-256 mismatch")
     if (
@@ -553,11 +556,6 @@ def build_candidate(package_bytes: bytes, parse_pe) -> tuple[dict, bytes, bytes]
         != PACKAGE_SHA512_BASE64
     ):
         fail("NuGet runtime package SHA-512 mismatch")
-    runtime_list = RUNTIME_LIST.read_bytes()
-    if digest(_normalized_text_bytes(runtime_list)) != REACTOR_RUNTIME_LIST_SHA256:
-        fail("upstream Reactor runtime list SHA-256 mismatch")
-    roots = [line.strip() for line in runtime_list.decode("utf-8").splitlines() if line.strip()]
-    roots.extend(item["path"] for item in ADDITIONAL_RUNTIME_FILES)
     with zipfile.ZipFile(io.BytesIO(package_bytes)) as package:
         package_entries = zip_entries(
             package,
@@ -567,7 +565,11 @@ def build_candidate(package_bytes: bytes, parse_pe) -> tuple[dict, bytes, bytes]
         )
         msix_data = read_exact_entry(package, package_entries, MSIX_ENTRY)
         license_data = read_exact_entry(package, package_entries, LICENSE_ENTRY)
-    if len(msix_data) != MSIX_SIZE or digest(msix_data) != MSIX_SHA256:
+    if (
+        len(msix_data) != MSIX_SIZE
+        or len(msix_data) > MAX_MSIX_BYTES
+        or digest(msix_data) != MSIX_SHA256
+    ):
         fail("pinned Windows App SDK MSIX hash mismatch")
     if digest(license_data) != LICENSE_SHA256:
         fail("pinned Windows App SDK license hash mismatch")
@@ -601,6 +603,16 @@ def build_candidate(package_bytes: bytes, parse_pe) -> tuple[dict, bytes, bytes]
         fail("selected Windows App SDK runtime exceeds the size limit")
     if any("webview" in path.casefold() for path in selected):
         fail("WebView payload is not allowed in runtime inventory")
+    return selected, appx_data, license_data
+
+
+def build_candidate(package_bytes: bytes, parse_pe) -> tuple[dict, bytes, bytes]:
+    runtime_list = RUNTIME_LIST.read_bytes()
+    if digest(_normalized_text_bytes(runtime_list)) != REACTOR_RUNTIME_LIST_SHA256:
+        fail("upstream Reactor runtime list SHA-256 mismatch")
+    roots = [line.strip() for line in runtime_list.decode("utf-8").splitlines() if line.strip()]
+    roots.extend(item["path"] for item in ADDITIONAL_RUNTIME_FILES)
+    selected, appx_data, license_data = _runtime_payload(package_bytes, roots)
     app_manifest, activation_map = _create_activation_manifest(
         appx_data, {path.casefold() for path in selected}
     )
@@ -679,58 +691,7 @@ def extract_runtime_files(
     parse_pe,
 ) -> tuple[dict[str, bytes], dict[str, dict]]:
     expected, expected_images = validate_file_records(manifest)
-    if (
-        len(package_bytes) != PACKAGE_SIZE
-        or digest(package_bytes) != PACKAGE_SHA256
-        or base64.b64encode(hashlib.sha512(package_bytes).digest()).decode("ascii")
-        != PACKAGE_SHA512_BASE64
-    ):
-        fail("NuGet runtime package failed its pinned SHA-256/SHA-512 digest")
-    with zipfile.ZipFile(io.BytesIO(package_bytes)) as package:
-        package_entries = zip_entries(
-            package,
-            max_entries=MAX_NUPKG_ENTRIES,
-            max_unpacked=MAX_NUPKG_UNPACKED,
-            allow_directories=True,
-        )
-        msix_data = read_exact_entry(package, package_entries, MSIX_ENTRY)
-        license_data = read_exact_entry(package, package_entries, LICENSE_ENTRY)
-    if (
-        len(msix_data) != MSIX_SIZE
-        or len(msix_data) > MAX_MSIX_BYTES
-        or digest(msix_data) != MSIX_SHA256
-    ):
-        fail("pinned Windows App SDK MSIX hash/size mismatch")
-    if digest(license_data) != LICENSE_SHA256:
-        fail("pinned Windows App SDK license hash mismatch")
-    with zipfile.ZipFile(io.BytesIO(msix_data)) as msix:
-        entries = zip_entries(
-            msix,
-            max_entries=MAX_MSIX_ENTRIES,
-            max_unpacked=MAX_MSIX_UNPACKED,
-            allow_directories=True,
-        )
-        appx_data = read_exact_entry(msix, entries, APPX_MANIFEST_ENTRY)
-        if digest(appx_data) != APPX_MANIFEST_SHA256:
-            fail("pinned Windows App SDK AppxManifest.xml hash mismatch")
-        all_files = {name: entry for name, entry in entries.items() if not entry.is_dir()}
-        folded = {name.casefold(): name for name in all_files}
-        selected: dict[str, bytes] = {}
-        for root in runtime_roots(manifest):
-            key = root.casefold()
-            direct = folded.get(key)
-            children = [name for name in all_files if name.casefold().startswith(key + "/")]
-            if direct is not None and children:
-                fail(f"runtime root is both a file and directory: {root}")
-            if direct is not None:
-                selected[direct] = msix.read(all_files[direct])
-            elif children:
-                for name in children:
-                    selected[name] = msix.read(all_files[name])
-            else:
-                fail(f"required runtime root is absent from pinned MSIX: {root}")
-    if len(selected) > MAX_RUNTIME_FILES or sum(map(len, selected.values())) > MAX_RUNTIME_BYTES:
-        fail("selected Windows App SDK runtime exceeds the size limit")
+    selected, _, _ = _runtime_payload(package_bytes, runtime_roots(manifest))
     if set(selected) != set(expected):
         missing = sorted(set(expected) - set(selected), key=str.casefold)
         extra = sorted(set(selected) - set(expected), key=str.casefold)
@@ -747,8 +708,6 @@ def extract_runtime_files(
             actual_images[path] = image
     if actual_images != expected_images:
         fail("runtime PE image inventory differs from its per-file manifest")
-    if any("webview" in path.casefold() for path in selected):
-        fail("WebView payload is not allowed in runtime inventory")
     return selected, actual_images
 
 
@@ -821,21 +780,22 @@ def validate_runtime_directory(
     root = Path(directory)
     _check_parent_chain(root)
     found = _tree_files(root, runtime_roots(manifest))
-    if {name.casefold() for name in found} != {name.casefold() for name in expected}:
-        missing = sorted(set(expected) - set(found), key=str.casefold)
+    found_by_key = {name.casefold(): name for name in found}
+    expected_by_key = {name.casefold(): name for name in expected}
+    if found_by_key.keys() != expected_by_key.keys():
+        missing = sorted(
+            (expected_by_key[k] for k in expected_by_key.keys() - found_by_key.keys()),
+            key=str.casefold,
+        )
         extra = sorted(
-            (
-                name
-                for name in found
-                if name.casefold() not in {item.casefold() for item in expected}
-            ),
+            (found_by_key[k] for k in found_by_key.keys() - expected_by_key.keys()),
             key=str.casefold,
         )
         fail(f"missing/extra staged runtime file (missing={missing}, extra={extra})")
     staged: dict[str, bytes] = {}
     actual_images: dict[str, dict] = {}
     for name, record in expected.items():
-        actual = next(item for item in found if item.casefold() == name.casefold())
+        actual = found_by_key[name.casefold()]
         data = found[actual].read_bytes()
         if len(data) != record["bytes"] or digest(data) != record["sha256"]:
             fail(f"staged runtime file hash/size mismatch: {actual}")
@@ -857,18 +817,17 @@ def _stage_files(directory: Path, runtime_files: dict[str, bytes], manifest: dic
     if _is_reparse(root) or not root.is_dir():
         fail(f"runtime destination is not a regular directory: {root}")
     records = {record["path"]: record for record in manifest["files"]}
-    expected = {name.casefold() for name in records}
+    records_by_key = {name.casefold(): record for name, record in records.items()}
     existing = _tree_files(root, runtime_roots(manifest))
     for name, path in existing.items():
-        match = next((item for item in records if item.casefold() == name.casefold()), None)
-        if match is None:
+        record = records_by_key.get(name.casefold())
+        if record is None:
             fail(f"unexpected file in a Windows App SDK runtime directory: {name}")
         data = path.read_bytes()
-        record = records[match]
         if len(data) != record["bytes"] or digest(data) != record["sha256"]:
             fail(f"refusing to overwrite a modified runtime file: {name}")
     for name, data in runtime_files.items():
-        if name.casefold() not in expected:
+        if name.casefold() not in records_by_key:
             fail(f"runtime stage attempted an unmanifested file: {name}")
         target = root.joinpath(*PurePosixPath(name).parts)
         for parent in (target, *target.parents):
