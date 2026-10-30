@@ -1,8 +1,8 @@
 import importlib.util
-from pathlib import Path
 import re
 import tempfile
 import unittest
+from pathlib import Path
 
 spec = importlib.util.spec_from_file_location("actions_policy", Path(__file__).with_name("check-actions.py"))
 policy = importlib.util.module_from_spec(spec)
@@ -59,7 +59,7 @@ class CiActionContractTests(unittest.TestCase):
         cls.workflow_text = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
 
     def test_python_minor_is_fixed_and_action_mode_defaults_to_full(self):
-        self.assertIn("python-version: '3.13'", self.action_text)
+        self.assertIn("python-version: '3.14'", self.action_text)
         self.assertNotIn("check-latest: true", self.action_text)
         self.assertRegex(
             self.action_text,

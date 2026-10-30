@@ -31,11 +31,11 @@ not credentials; keep account tokens and signing private keys out of source file
   [DEVELOPMENT.md](DEVELOPMENT.md).
 - Windows SDK tools `MakeAppx`, `MakePri` and, for local signing, `SignTool`.
   One installation option is `winget install Microsoft.WindowsSDK.10.0.26100`.
-- Python >=3.11 with Pillow for generating tile assets. Use `uv` for an isolated
+- Python >=3.14 with Pillow for generating tile assets. Use `uv` for an isolated
   environment and install Pillow from PyPI:
 
   ```powershell
-  uv venv --python ">=3.11" .venv-msix
+  uv venv --python ">=3.14" .venv-msix
   uv pip install --python .venv-msix/Scripts/python.exe --index-url https://pypi.org/simple Pillow
   ```
 

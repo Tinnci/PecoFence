@@ -51,8 +51,8 @@ echo "branch   : $(git rev-parse --abbrev-ref HEAD)"
 python3 - <<'PY'
 import pathlib
 import sys
-if sys.version_info < (3, 11):
-    raise SystemExit("Python >=3.11 is required to read public contract provenance")
+if sys.version_info < (3, 14):
+    raise SystemExit("Python >=3.14 is required to read public contract provenance")
 import tomllib
 path = pathlib.Path("crates/spm-contracts/Cargo.toml")
 data = tomllib.loads(path.read_text())

@@ -65,7 +65,7 @@ Windows 进程写入的文档类文件（.json/.md/.js/.sh 等），git blob 干
 
 Python 脚本只要求 >=3.11（`tomllib`），不固定 minor 版本；CI 使用最新稳定
 Python 3。本机旧 Python 可保留，使用
-`uv run --no-project --python ">=3.11" python scripts/<script>.py` 选择兼容版本。
+`uv run --no-project --python ">=3.14" python scripts/<script>.py` 选择兼容版本。
 Windows 会话（2026-10-05）已将 Rust stable/rustfmt/Clippy 更新到 1.99 系列、
 uv 更新到 0.12.23；现有 VS 2022 C++ Build Tools 与 Windows SDK 10.0.26100.0
 已通过 Windows workspace 编译。

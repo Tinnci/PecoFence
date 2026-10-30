@@ -35,8 +35,8 @@ import subprocess
 import sys
 sys.path.insert(0, str(Path(os.environ['PF_REPO']).resolve() / 'scripts'))
 import winappsdk_runtime as runtime
-if sys.version_info < (3, 11):
-    raise SystemExit('VERIFY-FAILED: Python >=3.11 is required')
+if sys.version_info < (3, 14):
+    raise SystemExit('VERIFY-FAILED: Python >=3.14 is required')
 import tomllib
 
 lab = Path(sys.argv[1]).resolve()

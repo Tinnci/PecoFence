@@ -33,8 +33,8 @@ their own declared `runs.using` version.
 
 ## Windows CI feedback and cache boundary
 
-Windows CI pins Python 3.13 for worker setup; local validation scripts continue
-to support Python 3.11 or newer. The Quick and Full verification jobs run
+Windows CI pins Python 3.14 for worker setup; local validation scripts continue
+to support Python 3.14 or newer. The Quick and Full verification jobs run
 independently. Quick is intended to return native feedback sooner; Full remains
 the build job and produces the portable artifacts with every existing release
 compile, size, binding-consistency and real-ZIP gate intact.
@@ -84,8 +84,8 @@ build is not evidence of live private-daemon integration.
 ## Verification
 
 ```powershell
-uv run --no-project --python ">=3.11" python scripts/test-actions-policy.py
-uv run --no-project --python ">=3.11" python scripts/check-actions.py --online
+uv run --no-project --python ">=3.14" python scripts/test-actions-policy.py
+uv run --no-project --python ">=3.14" python scripts/check-actions.py --online
 ```
 
 GitHub-hosted runners are the supported CI target. A self-hosted runner must meet

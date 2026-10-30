@@ -50,7 +50,7 @@ pecofence-cli suggest --limit 5 --json
   3. Start the app and confirm with `status` that it is `running` with the watchdog alive.
   4. Verify hashes and preserve layouts and TODO contents.
 - **Packaging.** Run `package_desktop.py verify --archive <zip> --sha256 <trusted> --summary --json`,
-  then `install ... --dry-run`. Use Python 3.11 or newer, from the checkout.
+  then `install ... --dry-run`. Use Python 3.14 or newer, from the checkout.
   - A checksum computed from an untrusted download authenticates nothing.
   - Fix verification failures; don't retry with checks disabled.
   - Release packaging requires clean source.

@@ -7,7 +7,7 @@
     1. Visual Studio 2022 C++ Build Tools (MSVC compiler, Windows 10/11 SDK)
     2. Rustup & Rust stable (x86_64-pc-windows-msvc)
     3. Toolchain components (rustfmt, clippy)
-    4. Python >=3.11 via uv (used by project validation and packaging scripts)
+    4. Python >=3.14 via uv (used by project validation and packaging scripts)
 #>
 
 [CmdletBinding()]
@@ -113,7 +113,7 @@ if (Get-Command rustup -ErrorAction SilentlyContinue) {
 
 # 4. Resolve a supported Python without replacing the system interpreter.
 # Source packaging uses tomllib (added in Python 3.11); newer versions are welcome.
-Write-Host "`n[3/4] Checking Python >=3.11 via uv..." -ForegroundColor Yellow
+Write-Host "`n[3/4] Checking Python >=3.14 via uv..." -ForegroundColor Yellow
 $uvCommand = Get-Command uv -ErrorAction SilentlyContinue
 $uvPrefix = @()
 if (-not $uvCommand) {
@@ -131,9 +131,9 @@ if (-not $uvCommand) {
     $uvCommand = $bootstrapPython
     $uvPrefix = @("-m", "uv")
 }
-& $uvCommand.Source @uvPrefix run --no-project --python ">=3.11" python --version
-if ($LASTEXITCODE -ne 0) { throw "Python >=3.11 setup failed." }
-Write-Host "  [OK] Use uv run --no-project --python '>=3.11' python scripts/<script>.py" -ForegroundColor Green
+& $uvCommand.Source @uvPrefix run --no-project --python ">=3.14" python --version
+if ($LASTEXITCODE -ne 0) { throw "Python >=3.14 setup failed." }
+Write-Host "  [OK] Use uv run --no-project --python '>=3.14' python scripts/<script>.py" -ForegroundColor Green
 
 # 5. Summary and Build Instructions
 Write-Host "`n[4/4] Toolchain Configuration Complete!" -ForegroundColor Green
@@ -141,7 +141,7 @@ Write-Host "====================================================" -ForegroundCol
 Write-Host "To build and run PecoFence in PowerShell:" -ForegroundColor White
 Write-Host "  cd C:\Users\Administrator\PecoFence" -ForegroundColor Yellow
 Write-Host "  cargo build --locked" -ForegroundColor Yellow
-Write-Host "  uv run --no-project --python '>=3.11' python scripts\stage-winappsdk-runtime.py stage --target-dir target --profile debug" -ForegroundColor Yellow
+Write-Host "  uv run --no-project --python '>=3.14' python scripts\stage-winappsdk-runtime.py stage --target-dir target --profile debug" -ForegroundColor Yellow
 Write-Host "  .\target\debug\pecofence.exe" -ForegroundColor Yellow
 Write-Host "`nTo create a portable release package:" -ForegroundColor White
 Write-Host "  powershell -ExecutionPolicy Bypass -File scripts\make-portable.ps1" -ForegroundColor Yellow

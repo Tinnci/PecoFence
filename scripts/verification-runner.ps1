@@ -244,8 +244,8 @@ function Get-DesktopVerificationPlan {
   $sourceReason = "Source checks were explicitly skipped; consult the separate preflight report."
   $nativeReason = "Outside SourceOnly scope; requires the native toolchain."
   $fullReason = "Outside $Mode scope; run Full to verify generated bindings and release artifacts."
-  $plan.Add((New-VerificationCheck "python" "Python >=3.11" $Python @(
-    "-c", "import sys; print('Python ' + sys.version.split()[0]); sys.exit(0 if sys.version_info >= (3, 11) else 2)"
+  $plan.Add((New-VerificationCheck "python" "Python >=3.14" $Python @(
+    "-c", "import sys; print('Python ' + sys.version.split()[0]); sys.exit(0 if sys.version_info >= (3, 14) else 2)"
   ) -FailureKind "error"))
   if (-not $SourcePath) {
     $SourcePath = Join-Path $TargetDir "verification-source-$([guid]::NewGuid().ToString('N')).json"

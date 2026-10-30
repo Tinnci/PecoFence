@@ -16,7 +16,7 @@ foreach ($record in $manifest.files) {
     }
 }
 
-uv run --no-project --python ">=3.11" python scripts/stage-winappsdk-runtime.py verify --directory $runtimeDir
+uv run --no-project --python ">=3.14" python scripts/stage-winappsdk-runtime.py verify --directory $runtimeDir
 if ($LASTEXITCODE -ne 0) { throw "The self-contained runtime did not pass provenance verification" }
 $evidence = [IO.Path]::GetFullPath($EvidencePath)
 $directory = Split-Path -Parent $evidence

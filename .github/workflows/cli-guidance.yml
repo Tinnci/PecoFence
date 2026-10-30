@@ -26,6 +26,6 @@ jobs:
         with:
           version: "0.13.0"
           enable-cache: false
-      - run: uv run --no-project --python 3.11 python scripts/test-cli-guidance.py
-      - run: uv run --no-project --python 3.11 python scripts/test-package-desktop.py
+      - run: uv run --no-project --python 3.14 python scripts/test-cli-guidance.py
+      - run: uv run --no-project --python 3.14 python scripts/test-package-desktop.py
         if: runner.os == 'Linux'

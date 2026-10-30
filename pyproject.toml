@@ -2,7 +2,7 @@
 name = "pecofence-dev-tools"
 version = "0.1.0"
 description = "Development and verification tools for the native Rust PecoFence application"
-requires-python = ">=3.11"
+requires-python = ">=3.14"
 classifiers = ["Private :: Do Not Upload"]
 
 [dependency-groups]
@@ -12,7 +12,7 @@ dev = ["ruff>=0.17,<0.18"]
 package = false
 
 [tool.ruff]
-target-version = "py311"
+target-version = "py314"
 line-length = 100
 extend-exclude = ["vendor", "third_party", "docs/history", "docs/_ref"]
 

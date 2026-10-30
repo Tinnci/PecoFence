@@ -5,7 +5,7 @@
 - Windows 11 x64.
 - Rust stable (MSVC toolchain); the workspace's minimum Rust version is in `Cargo.toml`.
 - Visual Studio Build Tools with the Desktop development with C++ workload and Windows SDK.
-- Python >=3.11 for catalog checks/source packaging.
+- Python >=3.14 for catalog checks/source packaging.
 
 Public builds use only this repository and public registries. The local
 `crates/spm-contracts` crate is version 0.1.0; no SPM checkout or private token
@@ -14,12 +14,12 @@ live SPM data needs an authorized backend installation, not distributed here.
 See [SPM_BOUNDARY.md](SPM_BOUNDARY.md) for the contract and verification boundary.
 
 Local validation and source-packaging scripts use the standard library,
-including `tomllib` (available since 3.11), and support Python 3.11 or newer.
-Windows CI separately pins Python 3.13 for repeatable worker setup. If the system
+including `tomllib` (available since 3.11), and support Python 3.14 or newer.
+Windows CI separately pins Python 3.14 for repeatable worker setup. If the system
 `python` is older, use `uv` without replacing it:
 
 ```powershell
-uv run --no-project --python ">=3.11" python scripts/check-locales.py
+uv run --no-project --python ">=3.14" python scripts/check-locales.py
 ```
 
 The same prefix works for other Python scripts. `setup-toolchain.ps1` resolves
@@ -29,7 +29,7 @@ a compatible Python through `uv` and updates Rust stable, rustfmt and Clippy.
 
 ```powershell
 cargo build --locked
-uv run --no-project --python ">=3.11" python scripts/stage-winappsdk-runtime.py `
+uv run --no-project --python ">=3.14" python scripts/stage-winappsdk-runtime.py `
   stage --target-dir target --profile debug
 ./target/debug/pecofence.exe
 ```
@@ -87,7 +87,7 @@ binding consistency, release build and size checks, and real portable-ZIP
 validation. Full is the default when `-Mode` is omitted; Quick or a narrowed
 Quick test selection never reduces Full or release acceptance.
 
-The entry point requires PowerShell 7+, Python 3.11+ and Git; SourceOnly needs
+The entry point requires PowerShell 7+, Python 3.14+ and Git; SourceOnly needs
 no Rust or Windows SDK. Add `-ReportPath target/verification-report.json` for a schema-version-1 aggregate JSON
 report, or `-TimeoutSeconds 0` for an unlimited global time budget. A nonzero
 timeout applies across the entire invocation. The console prints each check with
@@ -156,7 +156,7 @@ the renderer. Preserve its license files when changing or distributing it.
 
 ## Python verification tooling
 
-The Python helpers require Python 3.11+ (including `tomllib`). Use `uv sync --locked`
+The Python helpers require Python 3.14+ (including `tomllib`). Use `uv sync --locked`
 and `uv run --locked ruff check scripts` to reproduce the declared development
 tooling. The root pyproject is a virtual tools project; it is not the native
 application and must not be uploaded to PyPI. Existing script diagnostics are

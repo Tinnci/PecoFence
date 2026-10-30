@@ -44,8 +44,8 @@
 在仓库根目录执行；需要 Windows、Rust MSVC 工具链及 uv：
 
 ```powershell
-uv run --no-project --python ">=3.11" python scripts/test-winappsdk-runtime.py
-uv run --no-project --python ">=3.11" python scripts/stage-winappsdk-runtime.py stage --target-dir target --profile debug
+uv run --no-project --python ">=3.14" python scripts/test-winappsdk-runtime.py
+uv run --no-project --python ">=3.14" python scripts/stage-winappsdk-runtime.py stage --target-dir target --profile debug
 cargo test --locked -p pecofence --no-run --message-format=json > target/native-test-build.json
 if ($LASTEXITCODE -ne 0) { throw "Native test build failed" }
 $testBinary = Get-Content target/native-test-build.json |

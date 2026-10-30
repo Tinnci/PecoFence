@@ -16,7 +16,7 @@ checks are release criteria, not a requirement to repeat on every commit.
 
 `scripts/build-and-verify.ps1` accepts `-Mode SourceOnly`, `-Mode Quick`, or
 `-Mode Full`; omitting `-Mode` means **Full**. The entry point requires PowerShell
-7+, Python 3.11+ and Git for local provenance and cache fixtures. SourceOnly
+7+, Python 3.14+ and Git for local provenance and cache fixtures. SourceOnly
 does not require Rust, the Windows SDK, runtime downloads or private credentials.
 Quick is the faster native feedback path, not a replacement for Full. Full retains
 every existing compile, generated-binding, size and real-package gate; neither a

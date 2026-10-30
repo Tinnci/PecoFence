@@ -14,9 +14,9 @@ binary hashes cause refusal. `-Version` cannot relabel a binary. Tag releases al
 require a clean source tree.
 
 ```powershell
-uv run --no-project --python ">=3.11" pwsh -NoProfile -File scripts/build-and-verify.ps1
+uv run --no-project --python ">=3.14" pwsh -NoProfile -File scripts/build-and-verify.ps1
 # Reuse exactly those verified binaries:
-uv run --no-project --python ">=3.11" pwsh -NoProfile -File scripts/make-portable.ps1 -SkipBuild -TargetDir target
+uv run --no-project --python ">=3.14" pwsh -NoProfile -File scripts/make-portable.ps1 -SkipBuild -TargetDir target
 ```
 
 Use an ignored target directory, normally `target` or `target/package`. Changing
@@ -60,7 +60,7 @@ defensive parser limits, not a promised download-size or runtime-size budget.
 For a local debug Cargo build, stage the runtime before launching the executable:
 
 ```powershell
-uv run --no-project --python ">=3.11" python scripts/stage-winappsdk-runtime.py `
+uv run --no-project --python ">=3.14" python scripts/stage-winappsdk-runtime.py `
   stage --target-dir target --profile debug
 ```
 
@@ -70,10 +70,10 @@ downloaded NuGet archive and staged output remain in ignored `target/`.
 ## Install without touching another version
 
 The application itself and manual ZIP extraction do not require Python. The
-optional developer/advanced-user install helper uses Python >=3.11 and PowerShell:
+optional developer/advanced-user install helper uses Python >=3.14 and PowerShell:
 
 ```powershell
-uv run --no-project --python ">=3.11" pwsh -NoProfile -File scripts/install-user.ps1 `
+uv run --no-project --python ">=3.14" pwsh -NoProfile -File scripts/install-user.ps1 `
   -Archive dist/pecofence-0.0.3-x64.zip -WhatIf
 # Remove -WhatIf to install; -CreateShortcut is optional.
 ```

@@ -16,8 +16,8 @@ import shutil
 import subprocess
 import sys
 
-if sys.version_info < (3, 11):
-    raise SystemExit('Python >=3.11 required')
+if sys.version_info < (3, 14):
+    raise SystemExit('Python >=3.14 required')
 source_script = Path(sys.argv[1])
 source_repo = source_script.parents[2]
 root = Path(sys.argv[2])
