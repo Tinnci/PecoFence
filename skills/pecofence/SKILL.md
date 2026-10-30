@@ -72,10 +72,8 @@ arguments.
 
 ## Boundaries
 
-- `--shell-command new-note|new-todo` creates a component. Use it only when asked, and verify
-  the result: dispatch is not proof that it saved.
-- `--validate-workspace` and `--probe-spm` are diagnostics, not data APIs. Do not invent
-  TODO or note commands.
+- `--shell-command new-note|new-todo` dispatches component creation when requested; re-read workspace state afterward to confirm the new item was saved.
+- `--validate-workspace` and `--probe-spm` run read-only diagnostics. Use only the documented commands for workspace inspection.
 - Workspace data, session records and logs are private. Do not upload them, and do not alter
   the SPM database to inspect packaging.
 - Details: `docs/LIFECYCLE.md`, `docs/SUGGESTIONS.md`, `docs/AGENT_CLI_GUIDANCE.md`.
