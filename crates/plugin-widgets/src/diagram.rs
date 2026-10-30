@@ -1303,14 +1303,7 @@ mod tests {
     use pecofence_plugin_api::scene::Scene;
 
     fn scene(source: &str, w: f32, h: f32, chinese: bool) -> Scene {
-        let mut frame = WidgetFrame::new(
-            MountKey {
-                instance: InstanceKey {
-                    id: 1,
-                    activation: 1,
-                },
-                generation: 1,
-            },
+        let mut frame = crate::test_frame(
             1,
             1,
             FrameInput {
@@ -1711,14 +1704,7 @@ mod tests {
 
     #[test]
     fn source_editor_is_a_monospace_page_over_the_stage() {
-        let frame = WidgetFrame::new(
-            MountKey {
-                instance: InstanceKey {
-                    id: 1,
-                    activation: 1,
-                },
-                generation: 1,
-            },
+        let frame = crate::test_frame(
             1,
             1,
             FrameInput {

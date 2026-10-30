@@ -653,14 +653,7 @@ mod tests {
             for tint in Tint::ORDER {
                 let colors = Colors::paper(None);
                 let surface = tint.surface(colors);
-                let mut frame = WidgetFrame::new(
-                    MountKey {
-                        instance: InstanceKey {
-                            id: 1,
-                            activation: 1,
-                        },
-                        generation: 1,
-                    },
+                let mut frame = crate::test_frame(
                     1,
                     1,
                     FrameInput {
@@ -775,14 +768,7 @@ mod tests {
     fn note_header_and_body_identity_do_not_depend_on_undo_visibility() {
         let mut scenes = Vec::new();
         for undo in [false, true] {
-            let mut frame = WidgetFrame::new(
-                MountKey {
-                    instance: InstanceKey {
-                        id: 1,
-                        activation: 1,
-                    },
-                    generation: 1,
-                },
+            let mut frame = crate::test_frame(
                 1,
                 1,
                 FrameInput {
@@ -845,14 +831,7 @@ mod tests {
     fn note_controls_fit_and_empty_state_teaches_editor_keys() {
         for scale in [1.0, 1.5, 2.25] {
             for (text, undo) in [("", false), ("Body", true)] {
-                let mut frame = WidgetFrame::new(
-                    MountKey {
-                        instance: InstanceKey {
-                            id: 1,
-                            activation: 1,
-                        },
-                        generation: 1,
-                    },
+                let mut frame = crate::test_frame(
                     1,
                     1,
                     FrameInput {

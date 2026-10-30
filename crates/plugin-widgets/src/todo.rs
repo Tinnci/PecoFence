@@ -1111,18 +1111,7 @@ mod tests {
             theme_epoch: 1,
             device_epoch: 1,
         };
-        let mut frame = WidgetFrame::new(
-            MountKey {
-                instance: InstanceKey {
-                    id: 1,
-                    activation: 1,
-                },
-                generation: 1,
-            },
-            1,
-            1,
-            input,
-        );
+        let mut frame = crate::test_frame(1, 1, input);
         let config = TodoConfig {
             next_id: 21,
             tasks: (0..20)
@@ -1276,18 +1265,7 @@ mod tests {
             theme_epoch: 1,
             device_epoch: 1,
         };
-        let mut frame = WidgetFrame::new(
-            MountKey {
-                instance: InstanceKey {
-                    id: 1,
-                    activation: 1,
-                },
-                generation: 1,
-            },
-            1,
-            1,
-            input,
-        );
+        let mut frame = crate::test_frame(1, 1, input);
         build_todo(
             &mut frame,
             config,
@@ -1395,18 +1373,7 @@ mod tests {
                 };
                 let logical = design::ContentScale::new(input.viewport, scale).logical_viewport();
                 let capacity = page_capacity(logical.h);
-                let mut frame = WidgetFrame::new(
-                    MountKey {
-                        instance: InstanceKey {
-                            id: 1,
-                            activation: 1,
-                        },
-                        generation: 1,
-                    },
-                    1,
-                    1,
-                    input,
-                );
+                let mut frame = crate::test_frame(1, 1, input);
                 build_todo(
                     &mut frame,
                     &config,
@@ -1452,18 +1419,7 @@ mod tests {
                 theme_epoch: 1,
                 device_epoch: 1,
             };
-            let mut frame = WidgetFrame::new(
-                MountKey {
-                    instance: InstanceKey {
-                        id: 1,
-                        activation: 1,
-                    },
-                    generation: 1,
-                },
-                1,
-                1,
-                input,
-            );
+            let mut frame = crate::test_frame(1, 1, input);
             build_todo(
                 &mut frame,
                 &config,

@@ -713,6 +713,7 @@ use pecofence_plugin_api::paper::srgb;
 pub(crate) mod paper {
     use super::srgb;
     pub(crate) use pecofence_plugin_api::paper::{CARD, CREAM, GROUND, TERRACOTTA};
+
     #[cfg(test)]
     pub(crate) use pecofence_plugin_api::paper::{INK, INK_SECONDARY, TERRACOTTA_INK};
     /// Diagram stage, a shade under the card, and the surfaces drawn on it.
@@ -1866,6 +1867,22 @@ fn build_calendar_with_data(
     }
 }
 
+#[cfg(test)]
+fn test_frame(frame_revision: u64, layout_revision: u64, input: FrameInput) -> WidgetFrame {
+    WidgetFrame::new(
+        MountKey {
+            instance: InstanceKey {
+                id: 1,
+                activation: 1,
+            },
+            generation: 1,
+        },
+        frame_revision,
+        layout_revision,
+        input,
+    )
+}
+
 /// Every interactive control stays inside the panel and no two controls share pixels.
 #[cfg(test)]
 pub(crate) fn assert_controls_fit(scene: &Scene) {
@@ -1922,18 +1939,7 @@ mod tests {
             theme_epoch: 1,
             device_epoch: 1,
         };
-        let mut frame = WidgetFrame::new(
-            MountKey {
-                instance: InstanceKey {
-                    id: 1,
-                    activation: 1,
-                },
-                generation: 1,
-            },
-            1,
-            0,
-            input,
-        );
+        let mut frame = crate::test_frame(1, 0, input);
         let mut theme = ThemeSnapshot::dark();
         theme.high_contrast = true;
         theme.surface_subtle = [0.0; 4];
@@ -2006,18 +2012,7 @@ mod tests {
                 theme_epoch: 1,
                 device_epoch: 1,
             };
-            let mut frame = WidgetFrame::new(
-                MountKey {
-                    instance: InstanceKey {
-                        id: 1,
-                        activation: 1,
-                    },
-                    generation: 1,
-                },
-                1,
-                0,
-                input,
-            );
+            let mut frame = crate::test_frame(1, 0, input);
             build_clock(
                 &mut frame,
                 WidgetConfig::default(),
@@ -2062,18 +2057,7 @@ mod tests {
                 theme_epoch: 1,
                 device_epoch: 1,
             };
-            let mut frame = WidgetFrame::new(
-                MountKey {
-                    instance: InstanceKey {
-                        id: 1,
-                        activation: 1,
-                    },
-                    generation: 1,
-                },
-                1,
-                0,
-                input,
-            );
+            let mut frame = crate::test_frame(1, 0, input);
             build_panel_header(
                 &mut frame,
                 "便笺",
@@ -2200,14 +2184,7 @@ mod tests {
         assert!(canvas.is_balanced());
     }
     fn identity_frame(width: f32, height: f32, text_scale: f32) -> WidgetFrame {
-        WidgetFrame::new(
-            MountKey {
-                instance: InstanceKey {
-                    id: 1,
-                    activation: 1,
-                },
-                generation: 1,
-            },
+        crate::test_frame(
             1,
             1,
             FrameInput {
