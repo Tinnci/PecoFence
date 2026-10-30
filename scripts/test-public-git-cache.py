@@ -1,14 +1,15 @@
 import importlib.util
-from pathlib import Path
 import shutil
 import stat
 import subprocess
 import tempfile
 import unittest
 import zlib
+from pathlib import Path
 
 SPEC = importlib.util.spec_from_file_location(
-    "public_git_cache", Path(__file__).with_name("check-public-git-cache.py"))
+    "public_git_cache", Path(__file__).with_name("check-public-git-cache.py")
+)
 CACHE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(CACHE)
 
@@ -96,13 +97,9 @@ class PublicGitCacheTests(unittest.TestCase):
 
     def test_cargo_database_without_remote_is_valid_and_conflicting_remote_is_rejected(self):
         self.assertEqual(self.validate(), self.database)
-        self.git(
-            self.database, "config", "remote.origin.url", CACHE.WINDOWS_RS_URL
-        )
+        self.git(self.database, "config", "remote.origin.url", CACHE.WINDOWS_RS_URL)
         self.assertEqual(self.validate(), self.database)
-        self.git(
-            self.database, "config", "remote.origin.url", "https://example.invalid/other"
-        )
+        self.git(self.database, "config", "remote.origin.url", "https://example.invalid/other")
         with self.assertRaisesRegex(CACHE.CacheValidationError, "conflicting remote identity"):
             self.validate()
 
@@ -158,7 +155,7 @@ class PublicGitCacheTests(unittest.TestCase):
         link = self.database / "objects" / "external-link"
         try:
             link.symlink_to(target, target_is_directory=True)
-        except (OSError, NotImplementedError):
+        except OSError, NotImplementedError:
             self.skipTest("this Windows account cannot create directory symlinks")
         with self.assertRaisesRegex(CACHE.CacheValidationError, "symbolic link or reparse"):
             self.validate()
@@ -171,7 +168,8 @@ class PublicGitCacheTests(unittest.TestCase):
 
     def test_corrupt_git_object_is_rejected(self):
         loose_objects = [
-            path for path in (self.database / "objects").rglob("*")
+            path
+            for path in (self.database / "objects").rglob("*")
             if path.is_file() and len(path.parent.name) == 2
         ]
         self.assertTrue(loose_objects, "fixture should contain loose Git objects")

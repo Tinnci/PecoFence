@@ -1,9 +1,10 @@
 """Collect Git provenance inside the verification runner's bounded process tree."""
+
 import argparse
 import json
-from pathlib import Path
 import subprocess
 import sys
+from pathlib import Path
 
 
 def main():
@@ -16,9 +17,9 @@ def main():
         ["git", "rev-parse", "HEAD"], text=True, encoding="utf-8"
     ).strip()
     changes = subprocess.check_output(
-        ["git", "--no-optional-locks", "-c", "core.fsmonitor=false",
-         "status", "--porcelain"],
-        text=True, encoding="utf-8",
+        ["git", "--no-optional-locks", "-c", "core.fsmonitor=false", "status", "--porcelain"],
+        text=True,
+        encoding="utf-8",
     )
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(

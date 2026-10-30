@@ -78,14 +78,19 @@ class GuidanceTests(unittest.TestCase):
                 self.assertIn(command, commands)
         used = set(re.findall(r"`[^`]*?(--[a-z]+)", skill)) - {"--help"}
         cli_flags = set(re.findall(r"--[a-z]+", help_text))
-        package_help = subprocess.run(
-            [sys.executable, str(SCRIPT), "verify", "--help"], capture_output=True, text=True
-        ).stdout + subprocess.run(
-            [sys.executable, str(SCRIPT), "install", "--help"], capture_output=True, text=True
-        ).stdout
+        package_help = (
+            subprocess.run(
+                [sys.executable, str(SCRIPT), "verify", "--help"], capture_output=True, text=True
+            ).stdout
+            + subprocess.run(
+                [sys.executable, str(SCRIPT), "install", "--help"], capture_output=True, text=True
+            ).stdout
+        )
         for flag in used:
             self.assertTrue(
-                flag in cli_flags or flag in package_help or flag in {"--shell", "--validate", "--probe"},
+                flag in cli_flags
+                or flag in package_help
+                or flag in {"--shell", "--validate", "--probe"},
                 f"skill mentions {flag}, which no documented command accepts",
             )
         self.assertIn("never force", skill.lower().replace("never forces", "never force"))

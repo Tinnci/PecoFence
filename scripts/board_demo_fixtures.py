@@ -89,23 +89,71 @@ EARLY = "2026-10-26T01:40:00Z"  # observation time of the older facts below
 # Evidence of the original four tasks, reused from the Phase 0 fixtures.
 CHAT = ref("lark", "orion-ir-chat", "message", "om_request")
 REPLY = ref("lark", "orion-ir-chat", "message", "om_reply")
-evidence("ev:g-4711", base.CHANGE, "owner", "2026-10-14T03:20:00Z", base.GERRIT_SEEN,
-         "Change 4711 on launcher/orion-ir: owner Morgan; Gale listed as reviewer; merged by Gale")
-evidence("ev:g-4711-ps1", base.PS1, "revisions.1.commit.author", "2026-10-14T03:20:00Z", base.GERRIT_SEEN,
-         "Change 4711 patch set 1 authored by Morgan; touches regional-feature and search-position configuration")
-evidence("ev:g-4711-ps1-labels", base.PS1, "labels.Code-Review.all", "2026-10-14T05:00:00Z", base.GERRIT_SEEN,
-         "Gale votes Code-Review +2 on patch set 1")
-evidence("ev:g-4711-ps2", base.PS2, "revisions.2.uploader", "2026-10-15T01:00:00Z", base.GERRIT_SEEN,
-         "Patch set 2 (trivial rebase) uploaded by Morgan")
-evidence("ev:g-4711-ps2-labels", base.PS2, "labels.Code-Review.all", "2026-10-15T01:00:00Z", base.GERRIT_SEEN,
-         "Gale's +2 is present on patch set 2; the vote date is before the patch set, so Gerrit copied it")
-evidence("ev:l-request", CHAT, "content.text", "2026-10-26T02:01:00Z", base.LARK_SEEN,
-         "Taylor lists Orion IR tasks 1 to 4 in the Orion IR chat")
-evidence("ev:l-reply", REPLY, "content.text", "2026-10-26T02:11:00Z", base.LARK_SEEN,
-         "Gale replies to that message: \"1 Casey 3 me 4 Morgan\"; task 2 is not named")
+evidence(
+    "ev:g-4711",
+    base.CHANGE,
+    "owner",
+    "2026-10-14T03:20:00Z",
+    base.GERRIT_SEEN,
+    "Change 4711 on launcher/orion-ir: owner Morgan; Gale listed as reviewer; merged by Gale",
+)
+evidence(
+    "ev:g-4711-ps1",
+    base.PS1,
+    "revisions.1.commit.author",
+    "2026-10-14T03:20:00Z",
+    base.GERRIT_SEEN,
+    "Change 4711 patch set 1 authored by Morgan; touches regional-feature and search-position configuration",
+)
+evidence(
+    "ev:g-4711-ps1-labels",
+    base.PS1,
+    "labels.Code-Review.all",
+    "2026-10-14T05:00:00Z",
+    base.GERRIT_SEEN,
+    "Gale votes Code-Review +2 on patch set 1",
+)
+evidence(
+    "ev:g-4711-ps2",
+    base.PS2,
+    "revisions.2.uploader",
+    "2026-10-15T01:00:00Z",
+    base.GERRIT_SEEN,
+    "Patch set 2 (trivial rebase) uploaded by Morgan",
+)
+evidence(
+    "ev:g-4711-ps2-labels",
+    base.PS2,
+    "labels.Code-Review.all",
+    "2026-10-15T01:00:00Z",
+    base.GERRIT_SEEN,
+    "Gale's +2 is present on patch set 2; the vote date is before the patch set, so Gerrit copied it",
+)
+evidence(
+    "ev:l-request",
+    CHAT,
+    "content.text",
+    "2026-10-26T02:01:00Z",
+    base.LARK_SEEN,
+    "Taylor lists Orion IR tasks 1 to 4 in the Orion IR chat",
+)
+evidence(
+    "ev:l-reply",
+    REPLY,
+    "content.text",
+    "2026-10-26T02:11:00Z",
+    base.LARK_SEEN,
+    'Gale replies to that message: "1 Casey 3 me 4 Morgan"; task 2 is not named',
+)
 for n in (1, 2):
-    evidence(f"ev:m-8823{n}-owner", base.story(n), "workflow.nodes.develop.owners", "2026-10-27T06:00:00Z",
-             "2026-10-27T06:05:00Z", "Meegle develop node owner set to Casey")
+    evidence(
+        f"ev:m-8823{n}-owner",
+        base.story(n),
+        "workflow.nodes.develop.owners",
+        "2026-10-27T06:00:00Z",
+        "2026-10-27T06:05:00Z",
+        "Meegle develop node owner set to Casey",
+    )
 
 
 def numbered(card: dict) -> int:
@@ -146,26 +194,58 @@ def workflow(state: str, node: str, at: str) -> dict:
     return {"source_state": state, "node_key": node, "source_time": at}
 
 
-def stage(name: str, node: str | None, explanation: str, *, basis: str = "workflow_node",
-          overlays: list[str] | None = None) -> dict:
-    return {"stage": name, "basis": basis, "overlays": overlays or [], "raw_node": node,
-            "explanation": explanation}
+def stage(
+    name: str,
+    node: str | None,
+    explanation: str,
+    *,
+    basis: str = "workflow_node",
+    overlays: list[str] | None = None,
+) -> dict:
+    return {
+        "stage": name,
+        "basis": basis,
+        "overlays": overlays or [],
+        "raw_node": node,
+        "explanation": explanation,
+    }
 
 
 COLUMNS = {
-    "not_started": "todo", "implementation": "doing", "review": "doing",
-    "integration_build": "doing", "regression": "doing", "acceptance": "doing",
-    "done": "done", "unmapped": "unclassified",
+    "not_started": "todo",
+    "implementation": "doing",
+    "review": "doing",
+    "integration_build": "doing",
+    "regression": "doing",
+    "acceptance": "doing",
+    "done": "done",
+    "unmapped": "unclassified",
 }
 
 
-def card(number: str, story_id: str, title: str, lane: dict, *, workflow_state: dict, stage_value: dict,
-         started_at: str | None, assignee: str | None, relationships: list[dict], code: dict,
-         build: str, verification: str, next_action: tuple[str, str] | None,
-         blockers: list[dict] | None = None, conflicts: list[dict] | None = None,
-         observed: dict | None = None) -> dict:
+def card(
+    number: str,
+    story_id: str,
+    title: str,
+    lane: dict,
+    *,
+    workflow_state: dict,
+    stage_value: dict,
+    started_at: str | None,
+    assignee: str | None,
+    relationships: list[dict],
+    code: dict,
+    build: str,
+    verification: str,
+    next_action: tuple[str, str] | None,
+    blockers: list[dict] | None = None,
+    conflicts: list[dict] | None = None,
+    observed: dict | None = None,
+) -> dict:
     blockers = blockers or []
-    ids = {e for r in relationships for e in r["evidence"]} | {e for b in blockers for e in b["evidence"]}
+    ids = {e for r in relationships for e in r["evidence"]} | {
+        e for b in blockers for e in b["evidence"]
+    }
     return {
         "card_id": f"meegle:acme/orion/story/{story_id}",
         "source": story(story_id),
@@ -180,11 +260,13 @@ def card(number: str, story_id: str, title: str, lane: dict, *, workflow_state: 
         "relationships": relationships,
         "progress": {"code": code, "build": build, "verification": verification},
         "blockers": blockers,
-        "next_action": None if next_action is None
+        "next_action": None
+        if next_action is None
         else {"text": next_action[0], "owner": person(next_action[1])},
         "conflicts": conflicts or [],
         "evidence_count": len(ids),
-        "observed_through": observed or {"meegle": EARLY, "gerrit": EARLY, "people": base.LARK_SEEN},
+        "observed_through": observed
+        or {"meegle": EARLY, "gerrit": EARLY, "people": base.LARK_SEEN},
     }
 
 
@@ -192,262 +274,707 @@ def code(linked: int, merged: int, open_: int = 0, relation: str = "confirmed") 
     return {"linked": linked, "merged": merged, "open": open_, "abandoned": 0, "relation": relation}
 
 
-def vote(rid: str, who: str, subject: dict, ps: int, value: int, at: str, eid: str,
-         label: str = "Code-Review", carried: str = "no") -> dict:
-    return rel(rid, "approval", gerrit(who, ACCOUNTS[who]), subject, "source_field", at, EARLY, [eid],
-               approval={"patchset": ps, "label": label, "value": value, "carried_over": carried,
-                         "post_submit": False, "self_approval": False})
+def vote(
+    rid: str,
+    who: str,
+    subject: dict,
+    ps: int,
+    value: int,
+    at: str,
+    eid: str,
+    label: str = "Code-Review",
+    carried: str = "no",
+) -> dict:
+    return rel(
+        rid,
+        "approval",
+        gerrit(who, ACCOUNTS[who]),
+        subject,
+        "source_field",
+        at,
+        EARLY,
+        [eid],
+        approval={
+            "patchset": ps,
+            "label": label,
+            "value": value,
+            "carried_over": carried,
+            "post_submit": False,
+            "self_approval": False,
+        },
+    )
 
 
 def r087(step: int) -> dict:
     # Merged with regression pending; the reviewer (Jordan) is not the developer (Riley).
     s = story("88187")
     c = change(4652)
-    ev_owner = evidence("ev:m-88187-owner", s, "workflow.nodes.develop.owners", "2026-10-20T02:00:00Z", EARLY,
-                        "Meegle develop node owner set to Riley")
-    ev_change = evidence("ev:g-4652", c, "owner", "2026-10-21T03:00:00Z", EARLY,
-                         "Change 4652 on launcher/orion-ir: owner Riley; reviewer Jordan; merged by Jordan")
-    ev_vote = evidence("ev:g-4652-ps3-labels", patchset(4652, 3), "labels.Code-Review.all",
-                       "2026-10-22T07:30:00Z", EARLY, "Jordan votes Code-Review +2 on patch set 3")
-    ev_build = evidence("ev:j-1182", build_ref(1182), "result", "2026-10-23T02:10:00Z", EARLY,
-                        "Jenkins build 1182 passed; GERRIT_CHANGE_NUMBER=4652, patch set 3")
-    ev_test = evidence("ev:m-88187-test", s, "workflow.nodes.regression.owners", "2026-10-24T01:00:00Z", EARLY,
-                       "Meegle regression node started; tester 司马云澜")
-    ev_link = evidence("ev:m-88187-link", s, "links.gerrit", "2026-10-21T03:05:00Z", EARLY,
-                       "Meegle story links change 4652 (confirmed by Riley)")
+    ev_owner = evidence(
+        "ev:m-88187-owner",
+        s,
+        "workflow.nodes.develop.owners",
+        "2026-10-20T02:00:00Z",
+        EARLY,
+        "Meegle develop node owner set to Riley",
+    )
+    ev_change = evidence(
+        "ev:g-4652",
+        c,
+        "owner",
+        "2026-10-21T03:00:00Z",
+        EARLY,
+        "Change 4652 on launcher/orion-ir: owner Riley; reviewer Jordan; merged by Jordan",
+    )
+    ev_vote = evidence(
+        "ev:g-4652-ps3-labels",
+        patchset(4652, 3),
+        "labels.Code-Review.all",
+        "2026-10-22T07:30:00Z",
+        EARLY,
+        "Jordan votes Code-Review +2 on patch set 3",
+    )
+    evidence(
+        "ev:j-1182",
+        build_ref(1182),
+        "result",
+        "2026-10-23T02:10:00Z",
+        EARLY,
+        "Jenkins build 1182 passed; GERRIT_CHANGE_NUMBER=4652, patch set 3",
+    )
+    ev_test = evidence(
+        "ev:m-88187-test",
+        s,
+        "workflow.nodes.regression.owners",
+        "2026-10-24T01:00:00Z",
+        EARLY,
+        "Meegle regression node started; tester 司马云澜",
+    )
+    ev_link = evidence(
+        "ev:m-88187-link",
+        s,
+        "links.gerrit",
+        "2026-10-21T03:05:00Z",
+        EARLY,
+        "Meegle story links change 4652 (confirmed by Riley)",
+    )
     relationships = [
         assigned_meegle("rel-087-meegle", "riley", s, "2026-10-20T02:00:00Z", ev_owner),
-        rel("rel-087-owner", "change_owner", gerrit("riley", ACCOUNTS["riley"]), c, "source_field",
-            "2026-10-21T03:00:00Z", EARLY, [ev_change, ev_link]),
-        rel("rel-087-reviewer", "reviewer_listed", gerrit("jordan", ACCOUNTS["jordan"]), c, "source_field",
-            "2026-10-21T03:10:00Z", EARLY, [ev_change]),
+        rel(
+            "rel-087-owner",
+            "change_owner",
+            gerrit("riley", ACCOUNTS["riley"]),
+            c,
+            "source_field",
+            "2026-10-21T03:00:00Z",
+            EARLY,
+            [ev_change, ev_link],
+        ),
+        rel(
+            "rel-087-reviewer",
+            "reviewer_listed",
+            gerrit("jordan", ACCOUNTS["jordan"]),
+            c,
+            "source_field",
+            "2026-10-21T03:10:00Z",
+            EARLY,
+            [ev_change],
+        ),
         vote("rel-087-cr", "jordan", patchset(4652, 3), 3, 2, "2026-10-22T07:30:00Z", ev_vote),
-        rel("rel-087-submitter", "submitter", gerrit("jordan", ACCOUNTS["jordan"]), c, "source_field",
-            "2026-10-22T08:00:00Z", EARLY, [ev_change]),
-        rel("rel-087-tester", "assigned", person("quinn"), s, "issue_field", "2026-10-24T01:00:00Z", EARLY,
-            [ev_test]),
+        rel(
+            "rel-087-submitter",
+            "submitter",
+            gerrit("jordan", ACCOUNTS["jordan"]),
+            c,
+            "source_field",
+            "2026-10-22T08:00:00Z",
+            EARLY,
+            [ev_change],
+        ),
+        rel(
+            "rel-087-tester",
+            "assigned",
+            person("quinn"),
+            s,
+            "issue_field",
+            "2026-10-24T01:00:00Z",
+            EARLY,
+            [ev_test],
+        ),
     ]
-    return card("ORION-R-087", "88187", "Show the weather card on the lock screen", IR,
-                workflow_state=workflow("回归测试", "regression", "2026-10-24T01:00:00Z"),
-                stage_value=stage("regression", "regression",
-                                  "Meegle node regression in progress; change 4652 merged; build 1182 passed"),
-                started_at="2026-10-20T02:00:00Z", assignee="rel-087-tester", relationships=relationships,
-                code=code(1, 1), build="passed", verification="in_progress",
-                next_action=("Run the regression cases on build 1182", "quinn"))
+    return card(
+        "ORION-R-087",
+        "88187",
+        "Show the weather card on the lock screen",
+        IR,
+        workflow_state=workflow("回归测试", "regression", "2026-10-24T01:00:00Z"),
+        stage_value=stage(
+            "regression",
+            "regression",
+            "Meegle node regression in progress; change 4652 merged; build 1182 passed",
+        ),
+        started_at="2026-10-20T02:00:00Z",
+        assignee="rel-087-tester",
+        relationships=relationships,
+        code=code(1, 1),
+        build="passed",
+        verification="in_progress",
+        next_action=("Run the regression cases on build 1182", "quinn"),
+    )
 
 
 def r090(step: int) -> dict:
     # Follow-up work found during R-101 review; nobody owns it yet.
     s = story("88190")
-    ev = evidence("ev:m-88190", s, "fields.description", "2026-10-25T09:00:00Z", EARLY,
-                  "Follow-up of ORION-R-101 created by Taylor; no owner")
-    relationships = [rel("rel-090-contact", "implementation_contact", person("morgan"), s, "derived",
-                         "2026-10-14T03:20:00Z", EARLY, [ev, "ev:g-4711-ps1"],
-                         derivation="contact-from-history@1")]
-    return card("ORION-R-090", "88190", "Follow-up: remove the regional feature strings from the Settings search index",
-                IR, workflow_state=workflow("待开发", "backlog", "2026-10-25T09:00:00Z"),
-                stage_value=stage("not_started", "backlog", "Meegle node backlog"),
-                started_at=None, assignee=None, relationships=relationships,
-                code=code(0, 0, relation="unrelated"), build="unknown", verification="not_started",
-                next_action=("Assign the follow-up; Morgan knows the code", "taylor"))
+    ev = evidence(
+        "ev:m-88190",
+        s,
+        "fields.description",
+        "2026-10-25T09:00:00Z",
+        EARLY,
+        "Follow-up of ORION-R-101 created by Taylor; no owner",
+    )
+    relationships = [
+        rel(
+            "rel-090-contact",
+            "implementation_contact",
+            person("morgan"),
+            s,
+            "derived",
+            "2026-10-14T03:20:00Z",
+            EARLY,
+            [ev, "ev:g-4711-ps1"],
+            derivation="contact-from-history@1",
+        )
+    ]
+    return card(
+        "ORION-R-090",
+        "88190",
+        "Follow-up: remove the regional feature strings from the Settings search index",
+        IR,
+        workflow_state=workflow("待开发", "backlog", "2026-10-25T09:00:00Z"),
+        stage_value=stage("not_started", "backlog", "Meegle node backlog"),
+        started_at=None,
+        assignee=None,
+        relationships=relationships,
+        code=code(0, 0, relation="unrelated"),
+        build="unknown",
+        verification="not_started",
+        next_action=("Assign the follow-up; Morgan knows the code", "taylor"),
+    )
 
 
 def r096(step: int) -> dict:
     s = story("88196")
-    ev_owner = evidence("ev:m-88196-owner", s, "workflow.nodes.develop.owners", "2026-10-12T02:00:00Z", EARLY,
-                        "Meegle develop node owner set to Kai")
-    ev_accept = evidence("ev:m-88196-accept", s, "workflow.nodes.accept.finished", "2026-10-23T08:00:00Z", EARLY,
-                         "Taylor completes the acceptance node")
+    ev_owner = evidence(
+        "ev:m-88196-owner",
+        s,
+        "workflow.nodes.develop.owners",
+        "2026-10-12T02:00:00Z",
+        EARLY,
+        "Meegle develop node owner set to Kai",
+    )
+    ev_accept = evidence(
+        "ev:m-88196-accept",
+        s,
+        "workflow.nodes.accept.finished",
+        "2026-10-23T08:00:00Z",
+        EARLY,
+        "Taylor completes the acceptance node",
+    )
     relationships = [
         assigned_meegle("rel-096-meegle", "kai", s, "2026-10-12T02:00:00Z", ev_owner),
-        rel("rel-096-verified", "verified", person("quinn"), s, "issue_field", "2026-10-22T06:00:00Z", EARLY,
-            [ev_accept]),
+        rel(
+            "rel-096-verified",
+            "verified",
+            person("quinn"),
+            s,
+            "issue_field",
+            "2026-10-22T06:00:00Z",
+            EARLY,
+            [ev_accept],
+        ),
     ]
-    return card("ORION-R-096", "88196", "Fix the clock widget overlap at 200% display scale", IR,
-                workflow_state=workflow("已完成", "done", "2026-10-23T08:00:00Z"),
-                stage_value=stage("done", "done", "Meegle acceptance node completed"),
-                started_at="2026-10-12T02:00:00Z", assignee="rel-096-meegle", relationships=relationships,
-                code=code(2, 2), build="passed", verification="passed", next_action=None)
+    return card(
+        "ORION-R-096",
+        "88196",
+        "Fix the clock widget overlap at 200% display scale",
+        IR,
+        workflow_state=workflow("已完成", "done", "2026-10-23T08:00:00Z"),
+        stage_value=stage("done", "done", "Meegle acceptance node completed"),
+        started_at="2026-10-12T02:00:00Z",
+        assignee="rel-096-meegle",
+        relationships=relationships,
+        code=code(2, 2),
+        build="passed",
+        verification="passed",
+        next_action=None,
+    )
 
 
 def r093(step: int) -> dict:
     # Blocked by a vendor dependency; the contact has a long name.
     s = story("88193")
     dep = ref("meegle", "orion", "issue", "77104")
-    ev_owner = evidence("ev:m-88193-owner", s, "workflow.nodes.develop.owners", "2026-10-16T02:00:00Z", EARLY,
-                        "Meegle develop node owner set to Riley")
-    ev_block = evidence("ev:m-77104", dep, "fields.status", "2026-10-18T00:00:00Z", EARLY,
-                        "Vendor issue 77104 (BSP drop 2026.11) is open; expected 11-08")
-    relationships = [assigned_meegle("rel-093-meegle", "riley", s, "2026-10-16T02:00:00Z", ev_owner)]
-    blockers = [{"reason": "Waiting for the vendor BSP drop 2026.11 (issue 77104)", "dependency": dep,
-                 "contact": person("avery"), "since": "2026-10-22T03:00:00Z", "evidence": [ev_block]}]
-    return card("ORION-R-093", "88193", "Support the LC3 audio codec in Car Mode", PRO,
-                workflow_state=workflow("开发中", "develop", "2026-10-16T02:00:00Z"),
-                stage_value=stage("implementation", "develop", "Meegle node develop in progress; blocked",
-                                  overlays=["blocked"]),
-                started_at="2026-10-16T02:00:00Z", assignee="rel-093-meegle", relationships=relationships,
-                code=code(0, 0, relation="unrelated"), build="unknown", verification="not_started",
-                next_action=("Ask the vendor for the BSP drop date", "avery"), blockers=blockers)
+    ev_owner = evidence(
+        "ev:m-88193-owner",
+        s,
+        "workflow.nodes.develop.owners",
+        "2026-10-16T02:00:00Z",
+        EARLY,
+        "Meegle develop node owner set to Riley",
+    )
+    ev_block = evidence(
+        "ev:m-77104",
+        dep,
+        "fields.status",
+        "2026-10-18T00:00:00Z",
+        EARLY,
+        "Vendor issue 77104 (BSP drop 2026.11) is open; expected 11-08",
+    )
+    relationships = [
+        assigned_meegle("rel-093-meegle", "riley", s, "2026-10-16T02:00:00Z", ev_owner)
+    ]
+    blockers = [
+        {
+            "reason": "Waiting for the vendor BSP drop 2026.11 (issue 77104)",
+            "dependency": dep,
+            "contact": person("avery"),
+            "since": "2026-10-22T03:00:00Z",
+            "evidence": [ev_block],
+        }
+    ]
+    return card(
+        "ORION-R-093",
+        "88193",
+        "Support the LC3 audio codec in Car Mode",
+        PRO,
+        workflow_state=workflow("开发中", "develop", "2026-10-16T02:00:00Z"),
+        stage_value=stage(
+            "implementation",
+            "develop",
+            "Meegle node develop in progress; blocked",
+            overlays=["blocked"],
+        ),
+        started_at="2026-10-16T02:00:00Z",
+        assignee="rel-093-meegle",
+        relationships=relationships,
+        code=code(0, 0, relation="unrelated"),
+        build="unknown",
+        verification="not_started",
+        next_action=("Ask the vendor for the BSP drop date", "avery"),
+        blockers=blockers,
+    )
 
 
 def r099(step: int) -> dict:
     # Meegle and a later Lark statement disagree about the owner.
     s = story("88199")
-    ev_owner = evidence("ev:m-88199-owner", s, "workflow.nodes.develop.owners", "2026-10-23T02:00:00Z", EARLY,
-                        "Meegle develop node owner set to Casey")
-    ev_ask = evidence("ev:l-dock", ref("lark", "orion-pro-chat", "message", "om_dock"), "content.text",
-                      "2026-10-25T02:05:00Z", base.LARK_SEEN, "Taylor asks who takes the classic dock layout")
-    ev_say = evidence("ev:l-dock-reply", ref("lark", "orion-pro-chat", "message", "om_dock_reply"),
-                      "content.text", "2026-10-25T02:20:00Z", base.LARK_SEEN, "Gale replies: \"Morgan takes it\"")
+    ev_owner = evidence(
+        "ev:m-88199-owner",
+        s,
+        "workflow.nodes.develop.owners",
+        "2026-10-23T02:00:00Z",
+        EARLY,
+        "Meegle develop node owner set to Casey",
+    )
+    ev_ask = evidence(
+        "ev:l-dock",
+        ref("lark", "orion-pro-chat", "message", "om_dock"),
+        "content.text",
+        "2026-10-25T02:05:00Z",
+        base.LARK_SEEN,
+        "Taylor asks who takes the classic dock layout",
+    )
+    ev_say = evidence(
+        "ev:l-dock-reply",
+        ref("lark", "orion-pro-chat", "message", "om_dock_reply"),
+        "content.text",
+        "2026-10-25T02:20:00Z",
+        base.LARK_SEEN,
+        'Gale replies: "Morgan takes it"',
+    )
     relationships = [
         assigned_meegle("rel-099-meegle", "casey", s, "2026-10-23T02:00:00Z", ev_owner),
-        rel("rel-099-lark", "assigned", person("morgan"), s, "explicit_statement", "2026-10-25T02:20:00Z",
-            base.LARK_SEEN, [ev_ask, ev_say], status="conflicting",
-            statement={"author": person("gale"), "kind": "direct", "authority": "unknown"}),
+        rel(
+            "rel-099-lark",
+            "assigned",
+            person("morgan"),
+            s,
+            "explicit_statement",
+            "2026-10-25T02:20:00Z",
+            base.LARK_SEEN,
+            [ev_ask, ev_say],
+            status="conflicting",
+            statement={"author": person("gale"), "kind": "direct", "authority": "unknown"},
+        ),
     ]
-    conflicts = [{"field": "assignee", "relationship_ids": ["rel-099-meegle", "rel-099-lark"],
-                  "explanation": "Gale named Morgan in Lark on 10-25 10:20; the Meegle owner is Casey"}]
-    return card("ORION-R-099", "88199", "Restore the classic dock layout", PRO,
-                workflow_state=workflow("待开发", "backlog", "2026-10-23T02:00:00Z"),
-                stage_value=stage("not_started", "backlog", "Meegle node backlog"),
-                started_at=None, assignee="rel-099-meegle", relationships=relationships,
-                code=code(0, 0, relation="unrelated"), build="unknown", verification="not_started",
-                next_action=("Confirm the owner: Meegle says Casey, Gale said Morgan", "taylor"),
-                conflicts=conflicts)
+    conflicts = [
+        {
+            "field": "assignee",
+            "relationship_ids": ["rel-099-meegle", "rel-099-lark"],
+            "explanation": "Gale named Morgan in Lark on 10-25 10:20; the Meegle owner is Casey",
+        }
+    ]
+    return card(
+        "ORION-R-099",
+        "88199",
+        "Restore the classic dock layout",
+        PRO,
+        workflow_state=workflow("待开发", "backlog", "2026-10-23T02:00:00Z"),
+        stage_value=stage("not_started", "backlog", "Meegle node backlog"),
+        started_at=None,
+        assignee="rel-099-meegle",
+        relationships=relationships,
+        code=code(0, 0, relation="unrelated"),
+        build="unknown",
+        verification="not_started",
+        next_action=("Confirm the owner: Meegle says Casey, Gale said Morgan", "taylor"),
+        conflicts=conflicts,
+    )
 
 
 def r112(step: int) -> dict:
     # Long Chinese title; the change waits for review. Gerrit fails to refresh in step 3.
     s = story("88212")
     c = change(4790)
-    ev_owner = evidence("ev:m-88212-owner", s, "workflow.nodes.develop.owners", "2026-10-19T02:00:00Z", EARLY,
-                        "Meegle develop node owner set to Kai")
-    ev_change = evidence("ev:g-4790", c, "reviewers", "2026-10-25T08:00:00Z", EARLY,
-                         "Change 4790 patch set 2 by Kai; Jordan listed as reviewer; no votes yet")
+    ev_owner = evidence(
+        "ev:m-88212-owner",
+        s,
+        "workflow.nodes.develop.owners",
+        "2026-10-19T02:00:00Z",
+        EARLY,
+        "Meegle develop node owner set to Kai",
+    )
+    ev_change = evidence(
+        "ev:g-4790",
+        c,
+        "reviewers",
+        "2026-10-25T08:00:00Z",
+        EARLY,
+        "Change 4790 patch set 2 by Kai; Jordan listed as reviewer; no votes yet",
+    )
     relationships = [
         assigned_meegle("rel-112-meegle", "kai", s, "2026-10-19T02:00:00Z", ev_owner),
-        rel("rel-112-owner", "change_owner", gerrit("kai", ACCOUNTS["kai"]), c, "source_field",
-            "2026-10-24T03:00:00Z", EARLY, [ev_change]),
-        rel("rel-112-reviewer", "reviewer_listed", gerrit("jordan", ACCOUNTS["jordan"]), c, "source_field",
-            "2026-10-25T08:00:00Z", EARLY, [ev_change]),
+        rel(
+            "rel-112-owner",
+            "change_owner",
+            gerrit("kai", ACCOUNTS["kai"]),
+            c,
+            "source_field",
+            "2026-10-24T03:00:00Z",
+            EARLY,
+            [ev_change],
+        ),
+        rel(
+            "rel-112-reviewer",
+            "reviewer_listed",
+            gerrit("jordan", ACCOUNTS["jordan"]),
+            c,
+            "source_field",
+            "2026-10-25T08:00:00Z",
+            EARLY,
+            [ev_change],
+        ),
     ]
-    return card("ORION-R-112", "88212", "桌面搜索框在横屏模式与深色主题切换后保持位置一致，并同步到副屏", PRO,
-                workflow_state=workflow("代码评审", "review", "2026-10-25T08:00:00Z"),
-                stage_value=stage("review", "review", "Meegle node review; change 4790 open"),
-                started_at="2026-10-19T02:00:00Z", assignee="rel-112-meegle", relationships=relationships,
-                code=code(1, 0, open_=1), build="passed", verification="not_started",
-                next_action=("Review change 4790", "jordan"))
+    return card(
+        "ORION-R-112",
+        "88212",
+        "桌面搜索框在横屏模式与深色主题切换后保持位置一致，并同步到副屏",
+        PRO,
+        workflow_state=workflow("代码评审", "review", "2026-10-25T08:00:00Z"),
+        stage_value=stage("review", "review", "Meegle node review; change 4790 open"),
+        started_at="2026-10-19T02:00:00Z",
+        assignee="rel-112-meegle",
+        relationships=relationships,
+        code=code(1, 0, open_=1),
+        build="passed",
+        verification="not_started",
+        next_action=("Review change 4790", "jordan"),
+    )
 
 
 def r115(step: int) -> dict:
     s = story("88215")
-    ev_owner = evidence("ev:m-88215-owner", s, "workflow.nodes.develop.owners", "2026-10-26T01:00:00Z", EARLY,
-                        "Meegle develop node owner set to Morgan")
-    relationships = [assigned_meegle("rel-115-meegle", "morgan", s, "2026-10-26T01:00:00Z", ev_owner)]
-    return card("ORION-R-115", "88215", "Follow-up: count how often people use the Search visibility switch",
-                PRO, workflow_state=workflow("待开发", "backlog", "2026-10-26T01:00:00Z"),
-                stage_value=stage("not_started", "backlog", "Meegle node backlog"),
-                started_at=None, assignee="rel-115-meegle", relationships=relationships,
-                code=code(0, 0, relation="unrelated"), build="unknown", verification="not_started",
-                next_action=None)
+    ev_owner = evidence(
+        "ev:m-88215-owner",
+        s,
+        "workflow.nodes.develop.owners",
+        "2026-10-26T01:00:00Z",
+        EARLY,
+        "Meegle develop node owner set to Morgan",
+    )
+    relationships = [
+        assigned_meegle("rel-115-meegle", "morgan", s, "2026-10-26T01:00:00Z", ev_owner)
+    ]
+    return card(
+        "ORION-R-115",
+        "88215",
+        "Follow-up: count how often people use the Search visibility switch",
+        PRO,
+        workflow_state=workflow("待开发", "backlog", "2026-10-26T01:00:00Z"),
+        stage_value=stage("not_started", "backlog", "Meegle node backlog"),
+        started_at=None,
+        assignee="rel-115-meegle",
+        relationships=relationships,
+        code=code(0, 0, relation="unrelated"),
+        build="unknown",
+        verification="not_started",
+        next_action=None,
+    )
 
 
 def r108(step: int) -> dict:
     # Waits for acceptance; Meegle records the acceptance in step 3 and the card moves to Done.
     s = story("88208")
-    ev_owner = evidence("ev:m-88208-owner", s, "workflow.nodes.develop.owners", "2026-10-13T02:00:00Z", EARLY,
-                        "Meegle develop node owner set to Casey")
-    ev_reg = evidence("ev:m-88208-regression", s, "workflow.nodes.regression.finished", "2026-10-24T09:00:00Z",
-                      EARLY, "Regression passed on build 1176; tester 司马云澜")
+    ev_owner = evidence(
+        "ev:m-88208-owner",
+        s,
+        "workflow.nodes.develop.owners",
+        "2026-10-13T02:00:00Z",
+        EARLY,
+        "Meegle develop node owner set to Casey",
+    )
+    ev_reg = evidence(
+        "ev:m-88208-regression",
+        s,
+        "workflow.nodes.regression.finished",
+        "2026-10-24T09:00:00Z",
+        EARLY,
+        "Regression passed on build 1176; tester 司马云澜",
+    )
     relationships = [
         assigned_meegle("rel-108-meegle", "casey", s, "2026-10-13T02:00:00Z", ev_owner),
-        rel("rel-108-verified", "verified", person("quinn"), s, "issue_field", "2026-10-24T09:00:00Z", EARLY,
-            [ev_reg]),
+        rel(
+            "rel-108-verified",
+            "verified",
+            person("quinn"),
+            s,
+            "issue_field",
+            "2026-10-24T09:00:00Z",
+            EARLY,
+            [ev_reg],
+        ),
     ]
-    common = dict(started_at="2026-10-13T02:00:00Z", assignee="rel-108-meegle", code=code(3, 3),
-                  build="passed", verification="passed")
+    common = dict(
+        started_at="2026-10-13T02:00:00Z",
+        assignee="rel-108-meegle",
+        code=code(3, 3),
+        build="passed",
+        verification="passed",
+    )
     if step < 2:
-        return card("ORION-R-108", "88208", "Add a per-app notification summary", PRO,
-                    workflow_state=workflow("待验收", "accept", "2026-10-24T09:00:00Z"),
-                    stage_value=stage("acceptance", "accept", "Meegle node accept; regression passed"),
-                    relationships=relationships, next_action=("Accept or reject the notification summary", "taylor"),
-                    **common)
-    ev_accept = evidence("ev:m-88208-accept", s, "workflow.nodes.accept.finished", "2026-10-27T06:18:00Z",
-                         "2026-10-27T06:20:00Z", "Taylor completes the acceptance node")
-    relationships = [*relationships,
-                     rel("rel-108-accepted", "accepted", person("taylor"), s, "issue_field",
-                         "2026-10-27T06:18:00Z", "2026-10-27T06:20:00Z", [ev_accept])]
-    return card("ORION-R-108", "88208", "Add a per-app notification summary", PRO,
-                workflow_state=workflow("已完成", "done", "2026-10-27T06:18:00Z"),
-                stage_value=stage("done", "done", "Meegle acceptance node completed"),
-                relationships=relationships, next_action=None,
-                observed={"meegle": "2026-10-27T06:20:00Z", "gerrit": EARLY, "people": base.LARK_SEEN},
-                **common)
+        return card(
+            "ORION-R-108",
+            "88208",
+            "Add a per-app notification summary",
+            PRO,
+            workflow_state=workflow("待验收", "accept", "2026-10-24T09:00:00Z"),
+            stage_value=stage("acceptance", "accept", "Meegle node accept; regression passed"),
+            relationships=relationships,
+            next_action=("Accept or reject the notification summary", "taylor"),
+            **common,
+        )
+    ev_accept = evidence(
+        "ev:m-88208-accept",
+        s,
+        "workflow.nodes.accept.finished",
+        "2026-10-27T06:18:00Z",
+        "2026-10-27T06:20:00Z",
+        "Taylor completes the acceptance node",
+    )
+    relationships = [
+        *relationships,
+        rel(
+            "rel-108-accepted",
+            "accepted",
+            person("taylor"),
+            s,
+            "issue_field",
+            "2026-10-27T06:18:00Z",
+            "2026-10-27T06:20:00Z",
+            [ev_accept],
+        ),
+    ]
+    return card(
+        "ORION-R-108",
+        "88208",
+        "Add a per-app notification summary",
+        PRO,
+        workflow_state=workflow("已完成", "done", "2026-10-27T06:18:00Z"),
+        stage_value=stage("done", "done", "Meegle acceptance node completed"),
+        relationships=relationships,
+        next_action=None,
+        observed={"meegle": "2026-10-27T06:20:00Z", "gerrit": EARLY, "people": base.LARK_SEEN},
+        **common,
+    )
 
 
 def r120(step: int) -> dict:
     # Code activity ahead of the workflow: patch sets exist, Meegle still says backlog.
     s = story("88220")
     c = change(4801)
-    ev_owner = evidence("ev:m-88220-owner", s, "workflow.nodes.develop.owners", "2026-10-21T02:00:00Z", EARLY,
-                        "Meegle develop node owner set to Kai; node not started")
-    ev_change = evidence("ev:g-4801", c, "revisions.1.created", "2026-10-24T06:00:00Z", EARLY,
-                         "Change 4801 patch set 1 by Kai on launcher/orion-lite")
+    ev_owner = evidence(
+        "ev:m-88220-owner",
+        s,
+        "workflow.nodes.develop.owners",
+        "2026-10-21T02:00:00Z",
+        EARLY,
+        "Meegle develop node owner set to Kai; node not started",
+    )
+    ev_change = evidence(
+        "ev:g-4801",
+        c,
+        "revisions.1.created",
+        "2026-10-24T06:00:00Z",
+        EARLY,
+        "Change 4801 patch set 1 by Kai on launcher/orion-lite",
+    )
     relationships = [
         assigned_meegle("rel-120-meegle", "kai", s, "2026-10-21T02:00:00Z", ev_owner),
-        rel("rel-120-owner", "change_owner", gerrit("kai", ACCOUNTS["kai"]), c, "source_field",
-            "2026-10-24T06:00:00Z", EARLY, [ev_change]),
+        rel(
+            "rel-120-owner",
+            "change_owner",
+            gerrit("kai", ACCOUNTS["kai"]),
+            c,
+            "source_field",
+            "2026-10-24T06:00:00Z",
+            EARLY,
+            [ev_change],
+        ),
     ]
-    return card("ORION-R-120", "88220", "Start the Launcher cold in under 800 ms on Orion Lite", LITE,
-                workflow_state=workflow("待开发", "backlog", "2026-10-21T02:00:00Z"),
-                stage_value=stage("implementation", "backlog",
-                                  "Change 4801 has a patch set; Meegle node is still backlog",
-                                  basis="activity_evidence", overlays=["workflow_lag"]),
-                started_at="2026-10-24T06:00:00Z", assignee="rel-120-meegle", relationships=relationships,
-                code=code(1, 0, open_=1), build="unknown", verification="not_started",
-                next_action=("Start the develop node in Meegle", "kai"))
+    return card(
+        "ORION-R-120",
+        "88220",
+        "Start the Launcher cold in under 800 ms on Orion Lite",
+        LITE,
+        workflow_state=workflow("待开发", "backlog", "2026-10-21T02:00:00Z"),
+        stage_value=stage(
+            "implementation",
+            "backlog",
+            "Change 4801 has a patch set; Meegle node is still backlog",
+            basis="activity_evidence",
+            overlays=["workflow_lag"],
+        ),
+        started_at="2026-10-24T06:00:00Z",
+        assignee="rel-120-meegle",
+        relationships=relationships,
+        code=code(1, 0, open_=1),
+        build="unknown",
+        verification="not_started",
+        next_action=("Start the develop node in Meegle", "kai"),
+    )
 
 
 def r121(step: int) -> dict:
     s = story("88221")
-    ev_owner = evidence("ev:m-88221-node", s, "workflow.current_node", "2026-10-25T03:00:00Z", EARLY,
-                        "Meegle node 待评审(新) has no board mapping in policy revision 3")
-    relationships = [assigned_meegle("rel-121-meegle", "riley", s, "2026-10-25T03:00:00Z", ev_owner)]
-    return card("ORION-R-121", "88221", "Move the wallpaper picker to the new storage API", LITE,
-                workflow_state=workflow("待评审(新)", "review_new", "2026-10-25T03:00:00Z"),
-                stage_value=stage("unmapped", "待评审(新)", "Meegle node 待评审(新) is not in the stage mapping",
-                                  basis="unmapped"),
-                started_at=None, assignee="rel-121-meegle", relationships=relationships,
-                code=code(0, 0, relation="unrelated"), build="unknown", verification="not_started",
-                next_action=("Add 待评审(新) to the board stage mapping", "taylor"))
+    ev_owner = evidence(
+        "ev:m-88221-node",
+        s,
+        "workflow.current_node",
+        "2026-10-25T03:00:00Z",
+        EARLY,
+        "Meegle node 待评审(新) has no board mapping in policy revision 3",
+    )
+    relationships = [
+        assigned_meegle("rel-121-meegle", "riley", s, "2026-10-25T03:00:00Z", ev_owner)
+    ]
+    return card(
+        "ORION-R-121",
+        "88221",
+        "Move the wallpaper picker to the new storage API",
+        LITE,
+        workflow_state=workflow("待评审(新)", "review_new", "2026-10-25T03:00:00Z"),
+        stage_value=stage(
+            "unmapped",
+            "待评审(新)",
+            "Meegle node 待评审(新) is not in the stage mapping",
+            basis="unmapped",
+        ),
+        started_at=None,
+        assignee="rel-121-meegle",
+        relationships=relationships,
+        code=code(0, 0, relation="unrelated"),
+        build="unknown",
+        verification="not_started",
+        next_action=("Add 待评审(新) to the board stage mapping", "taylor"),
+    )
 
 
 def r124(step: int) -> dict:
     # Regression failed after merge: implementation done, requirement not accepted.
     s = story("88224")
     c = change(4766)
-    ev_owner = evidence("ev:m-88224-owner", s, "workflow.nodes.develop.owners", "2026-10-15T02:00:00Z", EARLY,
-                        "Meegle develop node owner set to Kai")
-    ev_change = evidence("ev:g-4766", c, "status", "2026-10-22T04:00:00Z", EARLY,
-                         "Change 4766 merged; owner Kai; reviewer Riley")
-    ev_vote = evidence("ev:g-4766-ps2-labels", patchset(4766, 2), "labels.Code-Review.all",
-                       "2026-10-22T03:30:00Z", EARLY, "Riley votes Code-Review +2 on patch set 2")
-    ev_fail = evidence("ev:m-88224-regression", s, "workflow.nodes.regression.result", "2026-10-25T07:00:00Z",
-                       EARLY, "Regression failed on build 1190: Search box hidden after rotation")
+    ev_owner = evidence(
+        "ev:m-88224-owner",
+        s,
+        "workflow.nodes.develop.owners",
+        "2026-10-15T02:00:00Z",
+        EARLY,
+        "Meegle develop node owner set to Kai",
+    )
+    ev_change = evidence(
+        "ev:g-4766",
+        c,
+        "status",
+        "2026-10-22T04:00:00Z",
+        EARLY,
+        "Change 4766 merged; owner Kai; reviewer Riley",
+    )
+    ev_vote = evidence(
+        "ev:g-4766-ps2-labels",
+        patchset(4766, 2),
+        "labels.Code-Review.all",
+        "2026-10-22T03:30:00Z",
+        EARLY,
+        "Riley votes Code-Review +2 on patch set 2",
+    )
+    ev_fail = evidence(
+        "ev:m-88224-regression",
+        s,
+        "workflow.nodes.regression.result",
+        "2026-10-25T07:00:00Z",
+        EARLY,
+        "Regression failed on build 1190: Search box hidden after rotation",
+    )
     relationships = [
         assigned_meegle("rel-124-meegle", "kai", s, "2026-10-15T02:00:00Z", ev_owner),
-        rel("rel-124-owner", "change_owner", gerrit("kai", ACCOUNTS["kai"]), c, "source_field",
-            "2026-10-20T02:00:00Z", EARLY, [ev_change]),
+        rel(
+            "rel-124-owner",
+            "change_owner",
+            gerrit("kai", ACCOUNTS["kai"]),
+            c,
+            "source_field",
+            "2026-10-20T02:00:00Z",
+            EARLY,
+            [ev_change],
+        ),
         vote("rel-124-cr", "riley", patchset(4766, 2), 2, 2, "2026-10-22T03:30:00Z", ev_vote),
-        rel("rel-124-verified", "verified", person("quinn"), s, "issue_field", "2026-10-25T07:00:00Z", EARLY,
-            [ev_fail]),
+        rel(
+            "rel-124-verified",
+            "verified",
+            person("quinn"),
+            s,
+            "issue_field",
+            "2026-10-25T07:00:00Z",
+            EARLY,
+            [ev_fail],
+        ),
     ]
-    return card("ORION-R-124", "88224", "Keep the Search box visible in Simple Mode", LITE,
-                workflow_state=workflow("回归测试", "regression", "2026-10-25T07:00:00Z"),
-                stage_value=stage("regression", "regression", "Meegle node regression; result failed"),
-                started_at="2026-10-15T02:00:00Z", assignee="rel-124-meegle", relationships=relationships,
-                code=code(1, 1), build="passed", verification="failed",
-                next_action=("Fix the regression failure from build 1190", "kai"))
+    return card(
+        "ORION-R-124",
+        "88224",
+        "Keep the Search box visible in Simple Mode",
+        LITE,
+        workflow_state=workflow("回归测试", "regression", "2026-10-25T07:00:00Z"),
+        stage_value=stage("regression", "regression", "Meegle node regression; result failed"),
+        started_at="2026-10-15T02:00:00Z",
+        assignee="rel-124-meegle",
+        relationships=relationships,
+        code=code(1, 1),
+        build="passed",
+        verification="failed",
+        next_action=("Fix the regression failure from build 1190", "kai"),
+    )
 
 
 EXTRA = [r087, r090, r096, r093, r099, r112, r115, r108, r120, r121, r124]
@@ -479,7 +1006,9 @@ def sources(step: int) -> list[dict]:
 
 # Approved timeline projection; dates are backend fixture data, never UI guesses.
 def timeline_projection(cards: list[dict], step: int) -> None:
-    date = lambda md: "2026-" + md + "T00:00:00Z"
+    def date(md):
+        return "2026-" + md + "T00:00:00Z"
+
     data = {
         "101": ("11-04", None, [("10-14", "not_started")]),
         "102": ("11-06", None, [("10-22", "not_started")]),
@@ -509,26 +1038,53 @@ def timeline_projection(cards: list[dict], step: int) -> None:
             spans = spans + [("10-24", "acceptance")]
             if step == 2:
                 spans = spans + [("10-27", "done")]
-        c["schedule"] = {"due": date(due), "baseline_due": date(baseline) if baseline else None,
-                         "basis": c["source"]}
-        c["stage_history"] = [{"stage": stage, "from": date(md),
-                               "to": date(spans[i+1][0]) if i+1 < len(spans) else None}
-                              for i, (md, stage) in enumerate(spans)]
-        ids = sorted({e for r in c["relationships"] for e in r["evidence"]}
-                     | {e for b in c["blockers"] for e in b["evidence"]})
-        c["event_marks"] = [{"at": EVIDENCE[e][2], "system": EVIDENCE[e][0]["system"], "evidence_id": e}
-                            for e in ids if EVIDENCE[e][2] <= STEPS[step]["computed_at"]][:12]
+        c["schedule"] = {
+            "due": date(due),
+            "baseline_due": date(baseline) if baseline else None,
+            "basis": c["source"],
+        }
+        c["stage_history"] = [
+            {
+                "stage": stage,
+                "from": date(md),
+                "to": date(spans[i + 1][0]) if i + 1 < len(spans) else None,
+            }
+            for i, (md, stage) in enumerate(spans)
+        ]
+        ids = sorted(
+            {e for r in c["relationships"] for e in r["evidence"]}
+            | {e for b in c["blockers"] for e in b["evidence"]}
+        )
+        c["event_marks"] = [
+            {"at": EVIDENCE[e][2], "system": EVIDENCE[e][0]["system"], "evidence_id": e}
+            for e in ids
+            if EVIDENCE[e][2] <= STEPS[step]["computed_at"]
+        ][:12]
         extra_marks = []
         if n == "103":
             c["progress"] = {"code": code(1, 1), "build": "passed", "verification": "in_progress"}
             c["next_action"] = {"text": "Run regression on build 1187", "owner": person("taylor")}
-            for day, summary in [("10-24", "Taylor approves change 4712"), ("10-25", "Change 4712 merged")]:
-                eid = evidence("ev:timeline-4712-" + day, change(4712), "status", date(day), EARLY, summary)
+            for day, summary in [
+                ("10-24", "Taylor approves change 4712"),
+                ("10-25", "Change 4712 merged"),
+            ]:
+                eid = evidence(
+                    "ev:timeline-4712-" + day, change(4712), "status", date(day), EARLY, summary
+                )
                 extra_marks.append({"at": date(day), "system": "gerrit", "evidence_id": eid})
         if n in ("087", "124"):
-            day, build, summary = (("10-25", 1182, "Regression started on build 1182") if n == "087"
-                                   else ("10-26", 1190, "Regression failed on build 1190: Search hidden after rotation"))
-            eid = evidence("ev:timeline-build-" + n, build_ref(build), "result", date(day), EARLY, summary)
+            day, build, summary = (
+                ("10-25", 1182, "Regression started on build 1182")
+                if n == "087"
+                else (
+                    "10-26",
+                    1190,
+                    "Regression failed on build 1190: Search hidden after rotation",
+                )
+            )
+            eid = evidence(
+                "ev:timeline-build-" + n, build_ref(build), "result", date(day), EARLY, summary
+            )
             extra_marks.append({"at": date(day), "system": "jenkins", "evidence_id": eid})
         c["event_marks"] = (c["event_marks"] + extra_marks)[-12:]
         c["evidence_count"] += len(extra_marks)
@@ -537,21 +1093,43 @@ def timeline_projection(cards: list[dict], step: int) -> None:
             blocker["expected_at"] = date("11-08")
     # Completed requirements appear as small strips, grouped by model.
     cards[:] = [c for c in cards if c["business_number"] != "ORION-R-090"]
-    for n, lane, start, end in [("080", IR, "10-12", "10-19"), ("081", IR, "10-13", "10-21"),
-                                ("090", PRO, "10-14", "10-22"), ("110", LITE, "10-12", "10-18"),
-                                ("111", LITE, "10-15", "10-23")]:
+    for n, lane, start, end in [
+        ("080", IR, "10-12", "10-19"),
+        ("081", IR, "10-13", "10-21"),
+        ("090", PRO, "10-14", "10-22"),
+        ("110", LITE, "10-12", "10-18"),
+        ("111", LITE, "10-15", "10-23"),
+    ]:
         c = copy.deepcopy(next(c for c in cards if c["business_number"] == "ORION-R-096"))
-        c.update(card_id="meegle:acme/orion/story/done-" + n, source=story("done-" + n),
-                 business_number="ORION-R-" + n, title="Completed delivery " + n, swimlane=lane,
-                 schedule={"due": date(end), "baseline_due": None, "basis": story("done-" + n)},
-                 started_at=date(start),
-                 stage_history=[{"stage": "implementation", "from": date(start), "to": date(end)},
-                                {"stage": "done", "from": date(end), "to": None}], event_marks=[])
-        eid = evidence("ev:done-" + n, c["source"], "workflow.nodes.accept.finished",
-                       date(end), EARLY, "Acceptance completed for ORION-R-" + n)
-        c.update(relationships=[], current_assignee=None, evidence_count=1,
-                 event_marks=[{"at": date(end), "system": "meegle", "evidence_id": eid}],
-                 workflow=workflow("已完成", "done", date(end)))
+        c.update(
+            card_id="meegle:acme/orion/story/done-" + n,
+            source=story("done-" + n),
+            business_number="ORION-R-" + n,
+            title="Completed delivery " + n,
+            swimlane=lane,
+            schedule={"due": date(end), "baseline_due": None, "basis": story("done-" + n)},
+            started_at=date(start),
+            stage_history=[
+                {"stage": "implementation", "from": date(start), "to": date(end)},
+                {"stage": "done", "from": date(end), "to": None},
+            ],
+            event_marks=[],
+        )
+        eid = evidence(
+            "ev:done-" + n,
+            c["source"],
+            "workflow.nodes.accept.finished",
+            date(end),
+            EARLY,
+            "Acceptance completed for ORION-R-" + n,
+        )
+        c.update(
+            relationships=[],
+            current_assignee=None,
+            evidence_count=1,
+            event_marks=[{"at": date(end), "system": "meegle", "evidence_id": eid}],
+            workflow=workflow("已完成", "done", date(end)),
+        )
         cards.append(c)
 
 
@@ -592,14 +1170,28 @@ def card_evidence(board: dict) -> list[dict]:
             source, locator, at, seen, summary = EVIDENCE[eid]
             if at > board["computed_at"]:
                 continue
-            items.append({
-                "id": eid, "source": source, "field_locator": locator, "source_time": at,
-                "observed_at": seen, "summary": summary,
-                "relationship_ids": sorted(r["id"] for r in c["relationships"] if eid in r["evidence"]),
-            })
+            items.append(
+                {
+                    "id": eid,
+                    "source": source,
+                    "field_locator": locator,
+                    "source_time": at,
+                    "observed_at": seen,
+                    "summary": summary,
+                    "relationship_ids": sorted(
+                        r["id"] for r in c["relationships"] if eid in r["evidence"]
+                    ),
+                }
+            )
         items.sort(key=lambda item: (item["source_time"], item["id"]))
-        responses.append({"card_id": c["card_id"], "revision": board["revision"], "items": items,
-                          "next_cursor": None})
+        responses.append(
+            {
+                "card_id": c["card_id"],
+                "revision": board["revision"],
+                "items": items,
+                "next_cursor": None,
+            }
+        )
     return responses
 
 

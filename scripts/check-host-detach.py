@@ -1,4 +1,5 @@
 """Check saved configurations and event logs from the native host-detach audit."""
+
 import json
 import re
 import sys
@@ -64,7 +65,7 @@ for case, event in [("cancel-escape", "escape"), ("cancel-right", "right")]:
     text = (root / (case + ".log")).read_text(encoding="utf-8")
     marker = "test cancellation posted after detach cancel=" + event
     assert marker in text, "Cancellation was not delivered during the drag"
-    tail = text[text.index(marker):]
+    tail = text[text.index(marker) :]
     assert "fences=1 dying=0" in tail, "Cancelled windows did not retire"
     assert re.search(r"live .*tabs=3.*client=\(800, 440\)", tail)
     assert not re.search(r" ERROR |PANIC", text)
@@ -87,13 +88,18 @@ assert auto[a]["view"]["autoHeight"]
 assert round(auto[a]["geometry"]["h"] * 2) == int(own_height[1])
 assert auto[a]["geometry"]["y"] + auto[a]["geometry"]["h"] <= auto[a]["geometry"]["workH"] + 0.5
 
-print(json.dumps({
-    "host_in_first_position": "passed: native mouse drag",
-    "child_in_second_position": "passed: native mouse drag",
-    "host_in_middle_of_three": "passed: native mouse drag",
-    "child_in_first_position": "passed: native mouse drag",
-    "remaining_group_geometry_and_content": "preserved",
-    "escape_and_right_cancel": "passed: messages injected during native mouse drag",
-    "cancelled_layouts": "identical to before drag",
-    "automatic_height": "fits the detached content and remains inside the work area",
-}, indent=2))
+print(
+    json.dumps(
+        {
+            "host_in_first_position": "passed: native mouse drag",
+            "child_in_second_position": "passed: native mouse drag",
+            "host_in_middle_of_three": "passed: native mouse drag",
+            "child_in_first_position": "passed: native mouse drag",
+            "remaining_group_geometry_and_content": "preserved",
+            "escape_and_right_cancel": "passed: messages injected during native mouse drag",
+            "cancelled_layouts": "identical to before drag",
+            "automatic_height": "fits the detached content and remains inside the work area",
+        },
+        indent=2,
+    )
+)

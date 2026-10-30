@@ -1,13 +1,13 @@
 """Pure packaging/install tests with synthetic PE files; no desktop or machine installation."""
+
 import json
-from pathlib import Path
-from pathlib import PurePosixPath
 import stat
 import struct
 import tempfile
 import unittest
-from unittest.mock import patch
 import zipfile
+from pathlib import Path, PurePosixPath
+from unittest.mock import patch
 
 import package_desktop as pkg
 
@@ -34,7 +34,9 @@ def image(web=False, dll=False, delay=False, architecture="x64", subsystem=2):
     struct.pack_into("<IIII", data, section + 8, 512, 0x1000, 512, 512)
     if web:
         directory, width = (13, 32) if delay else (1, 20)
-        struct.pack_into("<II", data, optional + directory_offset + directory * 8, 0x1000, width * 2)
+        struct.pack_into(
+            "<II", data, optional + directory_offset + directory * 8, 0x1000, width * 2
+        )
         if delay:
             struct.pack_into("<II", data, 512, 1, 0x1080)
         else:
@@ -50,8 +52,12 @@ class PackagingTests(unittest.TestCase):
         self.release = self.root / "release"
         self.release.mkdir()
         self.inputs = {
-            "version": "0.0.3", "commit": "a" * 40, "dirty": False,
-            "sourceSha256": "b" * 64, "cargoLockSha256": "c" * 64, "rustc": "rustc test",
+            "version": "0.0.3",
+            "commit": "a" * 40,
+            "dirty": False,
+            "sourceSha256": "b" * 64,
+            "cargoLockSha256": "c" * 64,
+            "rustc": "rustc test",
         }
         (self.root / "docs").mkdir()
         (self.root / "scripts").mkdir()
@@ -59,10 +65,15 @@ class PackagingTests(unittest.TestCase):
         sdk_dir.mkdir(parents=True)
         (self.root / "third_party/noto-cjk").mkdir()
         for name in (
-            "LICENSE", "NOTICE", "docs/PORTABLE.md", "docs/UPGRADING.md",
-            "docs/PORTABLE_UPDATE.md", "scripts/update-portable-pair.ps1",
+            "LICENSE",
+            "NOTICE",
+            "docs/PORTABLE.md",
+            "docs/UPGRADING.md",
+            "docs/PORTABLE_UPDATE.md",
+            "scripts/update-portable-pair.ps1",
             "third_party/winappsdk/WINDOWS-APP-SDK-LICENSE.txt",
-            "third_party/winappsdk/app.manifest", "third_party/winappsdk/runtime.txt",
+            "third_party/winappsdk/app.manifest",
+            "third_party/winappsdk/runtime.txt",
             *pkg.FONT_ASSETS,
         ):
             (self.root / name).write_text(name, encoding="utf-8")
@@ -70,13 +81,25 @@ class PackagingTests(unittest.TestCase):
         runtime_two = image(dll=True, architecture="x86")
         self.runtime_manifest = {
             "package": {"id": "Microsoft.WindowsAppSDK.Runtime", "version": "2.5.1"},
-            "license": {"sha256": pkg.digest((self.root / "third_party/winappsdk/WINDOWS-APP-SDK-LICENSE.txt").read_bytes())},
+            "license": {
+                "sha256": pkg.digest(
+                    (self.root / "third_party/winappsdk/WINDOWS-APP-SDK-LICENSE.txt").read_bytes()
+                )
+            },
             "appManifest": {"sha256": "d" * 64},
             "files": [
-                {"path": "Microsoft.UI.Xaml.dll", "bytes": len(runtime_one),
-                 "sha256": pkg.digest(runtime_one), "image": pkg.pe_image(runtime_one)},
-                {"path": "zh-CN/Microsoft.UI.Xaml.dll.mui", "bytes": len(runtime_two),
-                 "sha256": pkg.digest(runtime_two), "image": pkg.pe_image(runtime_two)},
+                {
+                    "path": "Microsoft.UI.Xaml.dll",
+                    "bytes": len(runtime_one),
+                    "sha256": pkg.digest(runtime_one),
+                    "image": pkg.pe_image(runtime_one),
+                },
+                {
+                    "path": "zh-CN/Microsoft.UI.Xaml.dll.mui",
+                    "bytes": len(runtime_two),
+                    "sha256": pkg.digest(runtime_two),
+                    "image": pkg.pe_image(runtime_two),
+                },
             ],
         }
         self.runtime_data = pkg.runtime.manifest_bytes(self.runtime_manifest)
@@ -91,8 +114,14 @@ class PackagingTests(unittest.TestCase):
             path.write_bytes(data)
         self.runtime_patches = [
             patch.object(pkg.runtime, "load_runtime_manifest", return_value=self.runtime_manifest),
-            patch.object(pkg.runtime, "validate_manifest", side_effect=self.validate_runtime_manifest),
-            patch.object(pkg.runtime, "validate_runtime_directory", side_effect=self.validate_runtime_directory),
+            patch.object(
+                pkg.runtime, "validate_manifest", side_effect=self.validate_runtime_manifest
+            ),
+            patch.object(
+                pkg.runtime,
+                "validate_runtime_directory",
+                side_effect=self.validate_runtime_directory,
+            ),
         ]
         for item in self.runtime_patches:
             item.start()
@@ -101,7 +130,9 @@ class PackagingTests(unittest.TestCase):
             "import sys\nfrom pathlib import Path\nPath(sys.argv[1]).write_text('license notice',encoding='utf-8')\n",
             encoding="utf-8",
         )
-        self.inputs["packageInputs"] = {name: pkg.digest((self.root / name).read_bytes()) for name in pkg.PACKAGE_INPUTS}
+        self.inputs["packageInputs"] = {
+            name: pkg.digest((self.root / name).read_bytes()) for name in pkg.PACKAGE_INPUTS
+        }
 
     def validate_runtime_manifest(self, _manifest, *, check_checked_in_files=False):
         records = {record["path"]: record for record in self.runtime_manifest["files"]}
@@ -129,7 +160,13 @@ class PackagingTests(unittest.TestCase):
         web_exe = web_exe or pkg.EXES[0]
         for name in pkg.BINARIES:
             (self.release / name).write_bytes(
-                image(web=web and name == web_exe, delay=delay, architecture=architecture, dll=name == pkg.SHELL_DLL, subsystem=3 if name == "pecofence-cli.exe" else 2)
+                image(
+                    web=web and name == web_exe,
+                    delay=delay,
+                    architecture=architecture,
+                    dll=name == pkg.SHELL_DLL,
+                    subsystem=3 if name == "pecofence-cli.exe" else 2,
+                )
             )
         captured = self.root / "inputs.json"
         captured.write_bytes(pkg.json_bytes(self.inputs))
@@ -155,15 +192,18 @@ class PackagingTests(unittest.TestCase):
 
     def test_pe_static_and_delay_import_detection(self):
         for delay in (False, True):
-            self.assertEqual(pkg.pe_image(image(web=True, delay=delay))["imports"], ["webview2loader.dll"])
+            self.assertEqual(
+                pkg.pe_image(image(web=True, delay=delay))["imports"], ["webview2loader.dll"]
+            )
         self.assertEqual(pkg.pe_image(image())["imports"], [])
         self.assertTrue(pkg.pe_image(image(dll=True))["dll"])
 
     def test_build_rejects_static_and_delay_webview_imports(self):
         for name in pkg.BINARIES:
             for delay in (False, True):
-                with self.subTest(executable=name, delay=delay), self.assertRaisesRegex(
-                    ValueError, "WebView imports"
+                with (
+                    self.subTest(executable=name, delay=delay),
+                    self.assertRaisesRegex(ValueError, "WebView imports"),
                 ):
                     self.receipt(web=True, delay=delay, web_exe=name)
 
@@ -171,10 +211,20 @@ class PackagingTests(unittest.TestCase):
         for name in pkg.EXES:
             expected = 3 if name == "pecofence-cli.exe" else 2
             with self.subTest(name=name):
-                self.assertTrue(pkg.valid_product_image(name, pkg.pe_image(image(subsystem=expected))))
-                self.assertFalse(pkg.valid_product_image(name, pkg.pe_image(image(subsystem=5 - expected))))
-                self.assertFalse(pkg.valid_product_image(name, pkg.pe_image(image(dll=True, subsystem=expected))))
-                self.assertFalse(pkg.valid_product_image(name, pkg.pe_image(image(architecture="x86", subsystem=expected))))
+                self.assertTrue(
+                    pkg.valid_product_image(name, pkg.pe_image(image(subsystem=expected)))
+                )
+                self.assertFalse(
+                    pkg.valid_product_image(name, pkg.pe_image(image(subsystem=5 - expected)))
+                )
+                self.assertFalse(
+                    pkg.valid_product_image(name, pkg.pe_image(image(dll=True, subsystem=expected)))
+                )
+                self.assertFalse(
+                    pkg.valid_product_image(
+                        name, pkg.pe_image(image(architecture="x86", subsystem=expected))
+                    )
+                )
         self.assertFalse(pkg.valid_product_image("unknown.exe", pkg.pe_image(image())))
 
     def test_build_rejects_x86_gui_executables_even_when_the_pe_is_well_formed(self):
@@ -254,15 +304,23 @@ class PackagingTests(unittest.TestCase):
             for delay in (False, True):
                 with self.subTest(executable=name, delay=delay):
                     archive, _, _ = self.package(suffix=f"-{name}-{delay}")
+
                     def add_import(files):
-                        data = image(web=True, delay=delay, dll=name == pkg.SHELL_DLL, subsystem=3 if name == "pecofence-cli.exe" else 2)
+                        data = image(
+                            web=True,
+                            delay=delay,
+                            dll=name == pkg.SHELL_DLL,
+                            subsystem=3 if name == "pecofence-cli.exe" else 2,
+                        )
                         files[name] = data
                         manifest = json.loads(files[pkg.MANIFEST])
                         manifest["images"][name] = pkg.pe_image(data)
                         manifest["files"][name] = {
-                            "bytes": len(data), "sha256": pkg.digest(data),
+                            "bytes": len(data),
+                            "sha256": pkg.digest(data),
                         }
                         files[pkg.MANIFEST] = pkg.json_bytes(manifest)
+
                     checksum = self.rewrite(archive, add_import)
                     with self.assertRaisesRegex(ValueError, "WebView imports"):
                         pkg.read_package(archive, checksum)
@@ -273,6 +331,7 @@ class PackagingTests(unittest.TestCase):
         self.assertTrue(manifest["images"][pkg.SHELL_DLL]["dll"])
         self.assertIn("PORTABLE_UPDATE.md", files)
         self.assertIn("update-portable-pair.ps1", files)
+
         def replace_dll_with_exe(payload):
             data = image()
             payload[pkg.SHELL_DLL] = data
@@ -280,6 +339,7 @@ class PackagingTests(unittest.TestCase):
             metadata["images"][pkg.SHELL_DLL] = pkg.pe_image(data)
             metadata["files"][pkg.SHELL_DLL] = {"bytes": len(data), "sha256": pkg.digest(data)}
             payload[pkg.MANIFEST] = pkg.json_bytes(metadata)
+
         checksum = self.rewrite(archive, replace_dll_with_exe)
         with self.assertRaisesRegex(ValueError, "invalid/mismatched executable image"):
             pkg.read_package(archive, checksum)
@@ -287,7 +347,8 @@ class PackagingTests(unittest.TestCase):
     def test_webview_payload_cannot_be_added_to_a_package(self):
         archive, _, _ = self.package()
         checksum = self.rewrite(
-            archive, lambda files: files.update({"WebView2Loader.dll": image(dll=True)}))
+            archive, lambda files: files.update({"WebView2Loader.dll": image(dll=True)})
+        )
         with self.assertRaisesRegex(ValueError, "WebView payload"):
             pkg.read_package(archive, checksum)
 
@@ -319,13 +380,25 @@ class PackagingTests(unittest.TestCase):
 
     def test_zip_paths_case_duplicates_and_unexpected_keys_rejected(self):
         archive, _, _ = self.package()
-        for name in ("../workspace.v2.json", "config/workspace.v2.json", r"C:\evil.exe", "NOTICE:stream"):
+        for name in (
+            "../workspace.v2.json",
+            "config/workspace.v2.json",
+            r"C:\evil.exe",
+            "NOTICE:stream",
+        ):
             with self.subTest(name=name):
                 checksum = self.rewrite(archive, lambda files: files.update({name: b"bad"}))
-                expected = "unsafe runtime path" if name != "config/workspace.v2.json" else "unexpected/missing payload"
+                expected = (
+                    "unsafe runtime path"
+                    if name != "config/workspace.v2.json"
+                    else "unexpected/missing payload"
+                )
                 with self.assertRaisesRegex(ValueError, expected):
                     pkg.read_package(archive, checksum)
-                self.rewrite(archive, lambda files: files.pop(name if name in files else name.replace("\\", "/")))
+                self.rewrite(
+                    archive,
+                    lambda files: files.pop(name if name in files else name.replace("\\", "/")),
+                )
         for name in ("notice", "signing.pfx"):
             checksum = self.rewrite(archive, lambda files: files.update({name: b"bad"}))
             with self.assertRaises(ValueError):
@@ -384,10 +457,12 @@ class PackagingTests(unittest.TestCase):
 
     def test_webview_runtime_requirement_cannot_be_enabled(self):
         archive, _, _ = self.package()
+
         def enable_runtime(files):
             value = json.loads(files[pkg.MANIFEST])
             value["runtimeRequirements"]["webview2Evergreen"] = True
             files[pkg.MANIFEST] = pkg.json_bytes(value)
+
         checksum = self.rewrite(archive, enable_runtime)
         with self.assertRaisesRegex(ValueError, "WebView runtime"):
             pkg.read_package(archive, checksum)

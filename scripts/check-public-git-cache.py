@@ -4,17 +4,18 @@ Cargo/libgit2 can omit a remote URL from its bare database config. The database
 directory's Cargo SourceId hash plus the lockfile boundary checked in the
 SourceOnly preflight identify that source; any configured remote must also match.
 """
+
 from __future__ import annotations
 
 import argparse
 import hashlib
 import os
-from pathlib import Path
 import re
 import stat
 import subprocess
 import sys
 import tempfile
+from pathlib import Path
 
 WINDOWS_RS_URL = "https://github.com/microsoft/windows-rs"
 WINDOWS_RS_REVISION = "2672e615d9cc0771448a781f3b2fe34e7fd08c6a"
@@ -95,8 +96,9 @@ def _git_config_entries(config: Path) -> list[tuple[str, str]]:
         key, separator, value = item.partition(b"\n")
         if not separator:
             raise CacheValidationError("cached Git configuration has an invalid entry")
-        entries.append((key.decode("utf-8", errors="replace").lower(),
-                        value.decode("utf-8", errors="replace")))
+        entries.append(
+            (key.decode("utf-8", errors="replace").lower(), value.decode("utf-8", errors="replace"))
+        )
     return entries
 
 
@@ -129,7 +131,9 @@ def _validate_snapshot_hashes(database: Path, revision: str) -> None:
     objects = {revision: "commit", root: "tree"}
     listing = subprocess.run(
         ["git", f"--git-dir={database}", "ls-tree", "-r", "-t", "-z", revision],
-        capture_output=True, env=_git_environment(), check=False,
+        capture_output=True,
+        env=_git_environment(),
+        check=False,
     )
     if listing.returncode:
         raise CacheValidationError("cannot enumerate the pinned source snapshot")
@@ -149,7 +153,9 @@ def _validate_snapshot_hashes(database: Path, revision: str) -> None:
         requests.seek(0)
         process = subprocess.Popen(
             ["git", f"--git-dir={database}", "cat-file", "--batch"],
-            stdin=requests, stdout=subprocess.PIPE, stderr=errors,
+            stdin=requests,
+            stdout=subprocess.PIPE,
+            stderr=errors,
             env=_git_environment(),
         )
         try:
@@ -209,9 +215,7 @@ def _validate_database(database: Path, expected_revision: str) -> None:
                 raise CacheValidationError(
                     "cached Git database config contains credential settings"
                 )
-            raise CacheValidationError(
-                "cached Git database config contains an unapproved setting"
-            )
+            raise CacheValidationError("cached Git database config contains an unapproved setting")
         if key in values:
             raise CacheValidationError(
                 "cached Git database config repeats a setting and may override it"
@@ -249,8 +253,10 @@ def _validate_database(database: Path, expected_revision: str) -> None:
         # Older Git templates create this legacy directory; only an empty one is inert.
         if entry.name == "branches" and entry.is_dir() and not any(entry.iterdir()):
             continue
-        if not ((entry.name in files and entry.is_file()) or
-                (entry.name in directories and entry.is_dir())):
+        if not (
+            (entry.name in files and entry.is_file())
+            or (entry.name in directories and entry.is_dir())
+        ):
             raise CacheValidationError(
                 f"cached Git database contains an unapproved root entry: {entry.name}"
             )
@@ -268,9 +274,7 @@ def _validate_database(database: Path, expected_revision: str) -> None:
     if not FULL_REVISION.fullmatch(expected_revision):
         raise CacheValidationError("expected revision must be a full 40-character commit ID")
     try:
-        resolved = _run_git(
-            database, "rev-parse", "--verify", f"{expected_revision}^{{commit}}"
-        )
+        resolved = _run_git(database, "rev-parse", "--verify", f"{expected_revision}^{{commit}}")
     except CacheValidationError as error:
         raise CacheValidationError(
             f"cached Git database does not contain expected revision {expected_revision}: {error}"
@@ -297,7 +301,9 @@ def validate_database_root(
     """Validate the Cargo Git DB root, allowing only its single approved source."""
     database_root = Path(database_root)
     if _is_link_or_reparse(database_root):
-        raise CacheValidationError(f"Cargo Git database root is a link or reparse point: {database_root}")
+        raise CacheValidationError(
+            f"Cargo Git database root is a link or reparse point: {database_root}"
+        )
     if not database_root.exists():
         if allow_empty:
             return None

@@ -1,4 +1,5 @@
 """Bundle dependency license notices from the exact locked Cargo sources."""
+
 import hashlib
 import json
 import subprocess
@@ -8,9 +9,9 @@ from pathlib import Path
 import winappsdk_runtime as runtime
 
 ROOT = Path(__file__).resolve().parents[1]
-metadata = json.loads(subprocess.check_output(
-    ["cargo", "metadata", "--locked", "--format-version", "1"], cwd=ROOT
-))
+metadata = json.loads(
+    subprocess.check_output(["cargo", "metadata", "--locked", "--format-version", "1"], cwd=ROOT)
+)
 members = set(metadata["workspace_members"])
 packages = sorted(
     (package for package in metadata["packages"] if package["id"] not in members),
@@ -23,11 +24,12 @@ lines = [
     "",
 ]
 for package in packages:
-    label = f'{package["name"]} {package["version"]}'
-    lines.append(f'{label}: {package.get("license") or "see upstream license"}')
+    label = f"{package['name']} {package['version']}"
+    lines.append(f"{label}: {package.get('license') or 'see upstream license'}")
     directory = Path(package["manifest_path"]).parent
     files = [
-        path for path in directory.iterdir()
+        path
+        for path in directory.iterdir()
         if path.is_file() and path.name.lower().startswith(("license", "copying", "notice"))
     ]
     if package.get("license_file"):
@@ -45,30 +47,47 @@ for entry in sections.values():
     lines.extend(("", "=" * 72, "\n".join(entry["names"]), "=" * 72, entry["text"]))
 
 sdk = runtime.load_runtime_manifest()
-lines.extend((
-    "", "=" * 72, "Microsoft Windows App SDK Runtime " + runtime.PACKAGE_VERSION,
-    "=" * 72,
-    "Public source: " + sdk["package"]["url"],
-    "NuGet SHA-256: " + sdk["package"]["sha256"],
-    "Redistribution license: WINDOWS-APP-SDK-LICENSE.txt",
-    "License SHA-256: " + sdk["license"]["sha256"],
-    "Runtime inventory provenance: " + sdk["upstreamRuntimeList"]["repository"]
-    + " at " + sdk["upstreamRuntimeList"]["commit"],
-    "Runtime list: " + sdk["upstreamRuntimeList"]["path"],
-    "Runtime list SHA-256: " + sdk["upstreamRuntimeList"]["sha256"],
-))
-lines.extend((
-    "", "=" * 72, "Noto Sans SC 2.004 / Noto Serif SC 2.003 (subset, fonts/)", "=" * 72,
-    "Public source: https://github.com/notofonts/noto-cjk",
-    "Subsetting and provenance: third_party/noto-cjk/README.md",
-    "",
-    (ROOT / "third_party/noto-cjk/OFL.txt").read_text(encoding="utf-8").strip(),
-))
-lines.extend((
-    "", "=" * 72, "China holiday data (holiday-cn)", "=" * 72,
-    "Public source: https://github.com/NateScarlet/holiday-cn",
-    "Provenance: third_party/holiday-cn/README.md", "",
-    (ROOT / "third_party/holiday-cn/LICENSE").read_text(encoding="utf-8").strip(),
-))
+lines.extend(
+    (
+        "",
+        "=" * 72,
+        "Microsoft Windows App SDK Runtime " + runtime.PACKAGE_VERSION,
+        "=" * 72,
+        "Public source: " + sdk["package"]["url"],
+        "NuGet SHA-256: " + sdk["package"]["sha256"],
+        "Redistribution license: WINDOWS-APP-SDK-LICENSE.txt",
+        "License SHA-256: " + sdk["license"]["sha256"],
+        "Runtime inventory provenance: "
+        + sdk["upstreamRuntimeList"]["repository"]
+        + " at "
+        + sdk["upstreamRuntimeList"]["commit"],
+        "Runtime list: " + sdk["upstreamRuntimeList"]["path"],
+        "Runtime list SHA-256: " + sdk["upstreamRuntimeList"]["sha256"],
+    )
+)
+lines.extend(
+    (
+        "",
+        "=" * 72,
+        "Noto Sans SC 2.004 / Noto Serif SC 2.003 (subset, fonts/)",
+        "=" * 72,
+        "Public source: https://github.com/notofonts/noto-cjk",
+        "Subsetting and provenance: third_party/noto-cjk/README.md",
+        "",
+        (ROOT / "third_party/noto-cjk/OFL.txt").read_text(encoding="utf-8").strip(),
+    )
+)
+lines.extend(
+    (
+        "",
+        "=" * 72,
+        "China holiday data (holiday-cn)",
+        "=" * 72,
+        "Public source: https://github.com/NateScarlet/holiday-cn",
+        "Provenance: third_party/holiday-cn/README.md",
+        "",
+        (ROOT / "third_party/holiday-cn/LICENSE").read_text(encoding="utf-8").strip(),
+    )
+)
 Path(sys.argv[1]).write_text("\n".join(lines) + "\n", encoding="utf-8")
-print(f'Bundled {len(sections)} license texts for {len(packages)} dependencies')
+print(f"Bundled {len(sections)} license texts for {len(packages)} dependencies")

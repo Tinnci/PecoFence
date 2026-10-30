@@ -1,4 +1,5 @@
 """Pinned Windows App SDK runtime staging and verification."""
+
 from __future__ import annotations
 
 import base64
@@ -6,13 +7,13 @@ import hashlib
 import io
 import json
 import os
-from pathlib import Path, PurePosixPath
 import re
 import stat
 import tempfile
 import urllib.request
-import zipfile
 import xml.etree.ElementTree as ET
+import zipfile
+from pathlib import Path, PurePosixPath
 
 ROOT = Path(__file__).resolve().parents[1]
 THIRD_PARTY = ROOT / "third_party" / "winappsdk"
@@ -28,14 +29,12 @@ PACKAGE_URL = (
     "microsoft.windowsappsdk.runtime.2.5.1.nupkg"
 )
 PACKAGE_REGISTRATION_URL = (
-    "https://api.nuget.org/v3/registration5-semver1/"
-    "microsoft.windowsappsdk.runtime/2.5.1.json"
+    "https://api.nuget.org/v3/registration5-semver1/microsoft.windowsappsdk.runtime/2.5.1.json"
 )
 PACKAGE_SIZE = 169_661_368
 PACKAGE_SHA256 = "2fbd27012291be50cafed6942306964281d37167af6a6af3887e1163ec5cf063"
 PACKAGE_SHA512_BASE64 = (
-    "WOuScR3S99XeYTk7A3uYaZidAvOWjgzFCLvoGbcYf+tTnsbZHqtsZaSRsCF142Kst"
-    "njDIrxjktH3NpPZyu0MIA=="
+    "WOuScR3S99XeYTk7A3uYaZidAvOWjgzFCLvoGbcYf+tTnsbZHqtsZaSRsCF142KstnjDIrxjktH3NpPZyu0MIA=="
 )
 MSIX_ENTRY = "tools/MSIX/win10-x64/Microsoft.WindowsAppRuntime.2.msix"
 MSIX_SIZE = 48_675_401
@@ -123,7 +122,10 @@ def safe_relative(value: str, *, directory: bool = False) -> str:
 
 
 def zip_entries(
-    archive: zipfile.ZipFile, *, max_entries: int, max_unpacked: int,
+    archive: zipfile.ZipFile,
+    *,
+    max_entries: int,
+    max_unpacked: int,
     allow_directories: bool,
 ) -> dict[str, zipfile.ZipInfo]:
     entries: dict[str, zipfile.ZipInfo] = {}
@@ -176,7 +178,9 @@ def zip_entries(
 
 
 def read_exact_entry(
-    archive: zipfile.ZipFile, entries: dict[str, zipfile.ZipInfo], name: str,
+    archive: zipfile.ZipFile,
+    entries: dict[str, zipfile.ZipInfo],
+    name: str,
 ) -> bytes:
     safe_relative(name)
     entry = entries.get(name)
@@ -187,19 +191,27 @@ def read_exact_entry(
 
 def _package_record() -> dict:
     return {
-        "id": PACKAGE_ID, "version": PACKAGE_VERSION, "url": PACKAGE_URL,
-        "registrationUrl": PACKAGE_REGISTRATION_URL, "size": PACKAGE_SIZE,
-        "sha256": PACKAGE_SHA256, "sha512Base64": PACKAGE_SHA512_BASE64,
+        "id": PACKAGE_ID,
+        "version": PACKAGE_VERSION,
+        "url": PACKAGE_URL,
+        "registrationUrl": PACKAGE_REGISTRATION_URL,
+        "size": PACKAGE_SIZE,
+        "sha256": PACKAGE_SHA256,
+        "sha512Base64": PACKAGE_SHA512_BASE64,
     }
 
 
 def runtime_roots(manifest: dict) -> list[str]:
     upstream = manifest.get("upstreamRuntimeList")
     if not isinstance(upstream, dict) or (
-        upstream.get("repository"), upstream.get("commit"), upstream.get("path"),
+        upstream.get("repository"),
+        upstream.get("commit"),
+        upstream.get("path"),
         upstream.get("sha256"),
     ) != (
-        REACTOR_REPOSITORY, REACTOR_COMMIT, REACTOR_RUNTIME_LIST,
+        REACTOR_REPOSITORY,
+        REACTOR_COMMIT,
+        REACTOR_RUNTIME_LIST,
         REACTOR_RUNTIME_LIST_SHA256,
     ):
         fail("runtime manifest has invalid Reactor runtime-list provenance")
@@ -253,20 +265,31 @@ def validate_file_records(manifest: dict) -> tuple[dict[str, dict], dict[str, di
         image = record.get("image")
         if image is not None:
             expected = {
-                "architecture", "subsystem", "dll", "staticImports", "delayImports", "imports",
+                "architecture",
+                "subsystem",
+                "dll",
+                "staticImports",
+                "delayImports",
+                "imports",
             }
             if not isinstance(image, dict) or set(image) != expected:
                 fail(f"invalid PE import record: {path}")
-            if image["architecture"] not in ("x64", "x86") or type(image["dll"]) is not bool \
-                    or type(image["subsystem"]) is not int:
+            if (
+                image["architecture"] not in ("x64", "x86")
+                or type(image["dll"]) is not bool
+                or type(image["subsystem"]) is not int
+            ):
                 fail(f"invalid PE image metadata: {path}")
             for key in ("staticImports", "delayImports", "imports"):
                 values = image[key]
-                if not isinstance(values, list) or any(
-                    not isinstance(value, str)
-                    or not re.fullmatch(r"[a-z0-9_.-]+\.dll", value)
-                    for value in values
-                ) or values != sorted(set(values)):
+                if (
+                    not isinstance(values, list)
+                    or any(
+                        not isinstance(value, str) or not re.fullmatch(r"[a-z0-9_.-]+\.dll", value)
+                        for value in values
+                    )
+                    or values != sorted(set(values))
+                ):
                     fail(f"invalid PE import names: {path}")
             if image["imports"] != sorted(set(image["staticImports"]) | set(image["delayImports"])):
                 fail(f"PE import set is inconsistent: {path}")
@@ -293,7 +316,9 @@ def validate_activation_manifest(data: bytes, files: dict[str, dict]) -> dict[st
         raise ValueError(f"invalid self-contained activation manifest: {error}") from error
     if root.tag != f"{{{ASM}}}assembly":
         fail("self-contained activation manifest has an unexpected XML root")
-    if [node.text for node in root if node.tag == f"{{{ASM}}}description"] != [SELF_CONTAINED_MARKER]:
+    if [node.text for node in root if node.tag == f"{{{ASM}}}description"] != [
+        SELF_CONTAINED_MARKER
+    ]:
         fail("self-contained activation marker is missing or duplicated")
     runtime_names = {path.casefold() for path in files}
     activation_map: dict[str, int] = {}
@@ -305,16 +330,22 @@ def validate_activation_manifest(data: bytes, files: dict[str, dict]) -> dict[st
         for item in file_node:
             if item.tag == f"{{{WINRT_V1}}}activatableClass":
                 if not item.attrib.get("name") or item.attrib.get("threadingModel") not in (
-                    "both", "sta", "mta",
+                    "both",
+                    "sta",
+                    "mta",
                 ):
                     fail(f"invalid activation factory in checked-in manifest: {name}")
                 count += 1
         if count:
             activation_map[name] = count
     required = {
-        "coremessagingxp.dll", "dcompi.dll", "microsoft.ui.dll",
-        "microsoft.ui.input.dll", "microsoft.ui.windowing.dll",
-        "microsoft.ui.windowing.core.dll", "microsoft.ui.xaml.dll",
+        "coremessagingxp.dll",
+        "dcompi.dll",
+        "microsoft.ui.dll",
+        "microsoft.ui.input.dll",
+        "microsoft.ui.windowing.dll",
+        "microsoft.ui.windowing.core.dll",
+        "microsoft.ui.xaml.dll",
         "microsoft.ui.xaml.controls.dll",
     }
     if not required <= {name.casefold() for name in activation_map}:
@@ -331,7 +362,9 @@ def validate_manifest(
         fail("runtime manifest does not match the pinned public NuGet package")
     runtime_roots(manifest)
     if manifest.get("msix") != {
-        "entry": MSIX_ENTRY, "bytes": MSIX_SIZE, "sha256": MSIX_SHA256,
+        "entry": MSIX_ENTRY,
+        "bytes": MSIX_SIZE,
+        "sha256": MSIX_SHA256,
         "appxManifestEntry": APPX_MANIFEST_ENTRY,
         "appxManifestSha256": APPX_MANIFEST_SHA256,
     }:
@@ -384,7 +417,8 @@ def load_runtime_manifest(path: Path = RUNTIME_MANIFEST) -> dict:
 
 
 def _create_activation_manifest(
-    appx_bytes: bytes, runtime_paths: set[str],
+    appx_bytes: bytes,
+    runtime_paths: set[str],
 ) -> tuple[bytes, dict[str, int]]:
     try:
         source = ET.fromstring(appx_bytes)
@@ -408,7 +442,8 @@ def _create_activation_manifest(
             if "/" in path:
                 fail(f"unexpected nested activation DLL path: {path}")
             classes = [
-                x for x in server
+                x
+                for x in server
                 if x.tag.rsplit("}", 1)[-1] == "ActivatableClass"
                 and "webview" not in x.attrib.get("ActivatableClassId", "").casefold()
             ]
@@ -431,9 +466,13 @@ def _create_activation_manifest(
                 proxies[path] = proxy
 
     required = {
-        "coremessagingxp.dll", "dcompi.dll", "microsoft.ui.dll",
-        "microsoft.ui.input.dll", "microsoft.ui.windowing.dll",
-        "microsoft.ui.windowing.core.dll", "microsoft.ui.xaml.dll",
+        "coremessagingxp.dll",
+        "dcompi.dll",
+        "microsoft.ui.dll",
+        "microsoft.ui.input.dll",
+        "microsoft.ui.windowing.dll",
+        "microsoft.ui.windowing.core.dll",
+        "microsoft.ui.xaml.dll",
         "microsoft.ui.xaml.controls.dll",
     }
     if not required <= {name.casefold() for name in groups}:
@@ -458,18 +497,27 @@ def _create_activation_manifest(
                 if class_id.casefold() in seen:
                     fail(f"duplicate activation class in package manifest: {class_id}")
                 seen.add(class_id.casefold())
-                ET.SubElement(file_node, f"{{{WINRT_V1}}}activatableClass", {
-                    "name": class_id, "threadingModel": threading,
-                })
+                ET.SubElement(
+                    file_node,
+                    f"{{{WINRT_V1}}}activatableClass",
+                    {
+                        "name": class_id,
+                        "threadingModel": threading,
+                    },
+                )
             activation_map[name] = len(classes)
         if key in proxied:
             _, proxy = proxied[key]
             class_id = proxy.attrib.get("ClassId", "")
             if not re.fullmatch(r"[0-9a-fA-F-]{36}", class_id):
                 fail(f"invalid proxy-stub class identifier for {name}")
-            ET.SubElement(file_node, f"{{{ASM_V3}}}comClass", {
-                "clsid": "{" + class_id.upper() + "}",
-            })
+            ET.SubElement(
+                file_node,
+                f"{{{ASM_V3}}}comClass",
+                {
+                    "clsid": "{" + class_id.upper() + "}",
+                },
+            )
             for interface in proxy:
                 if interface.tag.rsplit("}", 1)[-1] != "Interface":
                     continue
@@ -477,9 +525,14 @@ def _create_activation_manifest(
                 interface_name = interface.attrib.get("Name", "")
                 if not interface_name or not re.fullmatch(r"[0-9a-fA-F-]{36}", iid):
                     fail(f"invalid proxy interface metadata for {name}")
-                ET.SubElement(file_node, f"{{{ASM_V3}}}comInterfaceProxyStub", {
-                    "name": interface_name, "iid": "{" + iid.upper() + "}",
-                })
+                ET.SubElement(
+                    file_node,
+                    f"{{{ASM_V3}}}comInterfaceProxyStub",
+                    {
+                        "name": interface_name,
+                        "iid": "{" + iid.upper() + "}",
+                    },
+                )
     ET.indent(assembly, space="    ")
     body = ET.tostring(assembly, encoding="utf-8", xml_declaration=True)
     declaration, rest = body.split(b"?>", 1)
@@ -495,7 +548,10 @@ def _create_activation_manifest(
 def build_candidate(package_bytes: bytes, parse_pe) -> tuple[dict, bytes, bytes]:
     if len(package_bytes) != PACKAGE_SIZE or digest(package_bytes) != PACKAGE_SHA256:
         fail("NuGet runtime package SHA-256 mismatch")
-    if base64.b64encode(hashlib.sha512(package_bytes).digest()).decode("ascii") != PACKAGE_SHA512_BASE64:
+    if (
+        base64.b64encode(hashlib.sha512(package_bytes).digest()).decode("ascii")
+        != PACKAGE_SHA512_BASE64
+    ):
         fail("NuGet runtime package SHA-512 mismatch")
     runtime_list = RUNTIME_LIST.read_bytes()
     if digest(_normalized_text_bytes(runtime_list)) != REACTOR_RUNTIME_LIST_SHA256:
@@ -504,8 +560,10 @@ def build_candidate(package_bytes: bytes, parse_pe) -> tuple[dict, bytes, bytes]
     roots.extend(item["path"] for item in ADDITIONAL_RUNTIME_FILES)
     with zipfile.ZipFile(io.BytesIO(package_bytes)) as package:
         package_entries = zip_entries(
-            package, max_entries=MAX_NUPKG_ENTRIES,
-            max_unpacked=MAX_NUPKG_UNPACKED, allow_directories=True,
+            package,
+            max_entries=MAX_NUPKG_ENTRIES,
+            max_unpacked=MAX_NUPKG_UNPACKED,
+            allow_directories=True,
         )
         msix_data = read_exact_entry(package, package_entries, MSIX_ENTRY)
         license_data = read_exact_entry(package, package_entries, LICENSE_ENTRY)
@@ -515,8 +573,10 @@ def build_candidate(package_bytes: bytes, parse_pe) -> tuple[dict, bytes, bytes]
         fail("pinned Windows App SDK license hash mismatch")
     with zipfile.ZipFile(io.BytesIO(msix_data)) as msix:
         msix_entries = zip_entries(
-            msix, max_entries=MAX_MSIX_ENTRIES,
-            max_unpacked=MAX_MSIX_UNPACKED, allow_directories=True,
+            msix,
+            max_entries=MAX_MSIX_ENTRIES,
+            max_unpacked=MAX_MSIX_UNPACKED,
+            allow_directories=True,
         )
         appx_data = read_exact_entry(msix, msix_entries, APPX_MANIFEST_ENTRY)
         if digest(appx_data) != APPX_MANIFEST_SHA256:
@@ -547,10 +607,15 @@ def build_candidate(package_bytes: bytes, parse_pe) -> tuple[dict, bytes, bytes]
     records = []
     for path, data in sorted(selected.items(), key=lambda item: item[0].casefold()):
         image = _inspect_runtime_pe(path, data, parse_pe)
-        records.append({
-            "path": path, "source": f"{MSIX_ENTRY}!/{path}",
-            "bytes": len(data), "sha256": digest(data), "image": image,
-        })
+        records.append(
+            {
+                "path": path,
+                "source": f"{MSIX_ENTRY}!/{path}",
+                "bytes": len(data),
+                "sha256": digest(data),
+                "image": image,
+            }
+        )
     manifest = {
         "schemaVersion": 1,
         "package": _package_record(),
@@ -564,7 +629,9 @@ def build_candidate(package_bytes: bytes, parse_pe) -> tuple[dict, bytes, bytes]
         "runtimeRoots": roots,
         "additionalRuntimeFiles": list(ADDITIONAL_RUNTIME_FILES),
         "msix": {
-            "entry": MSIX_ENTRY, "bytes": MSIX_SIZE, "sha256": MSIX_SHA256,
+            "entry": MSIX_ENTRY,
+            "bytes": MSIX_SIZE,
+            "sha256": MSIX_SHA256,
             "appxManifestEntry": APPX_MANIFEST_ENTRY,
             "appxManifestSha256": APPX_MANIFEST_SHA256,
         },
@@ -607,7 +674,9 @@ def _inspect_runtime_pe(path: str, data: bytes, parse_pe) -> dict | None:
 
 
 def extract_runtime_files(
-    package_bytes: bytes, manifest: dict, parse_pe,
+    package_bytes: bytes,
+    manifest: dict,
+    parse_pe,
 ) -> tuple[dict[str, bytes], dict[str, dict]]:
     expected, expected_images = validate_file_records(manifest)
     if (
@@ -619,20 +688,27 @@ def extract_runtime_files(
         fail("NuGet runtime package failed its pinned SHA-256/SHA-512 digest")
     with zipfile.ZipFile(io.BytesIO(package_bytes)) as package:
         package_entries = zip_entries(
-            package, max_entries=MAX_NUPKG_ENTRIES,
-            max_unpacked=MAX_NUPKG_UNPACKED, allow_directories=True,
+            package,
+            max_entries=MAX_NUPKG_ENTRIES,
+            max_unpacked=MAX_NUPKG_UNPACKED,
+            allow_directories=True,
         )
         msix_data = read_exact_entry(package, package_entries, MSIX_ENTRY)
         license_data = read_exact_entry(package, package_entries, LICENSE_ENTRY)
-    if len(msix_data) != MSIX_SIZE or len(msix_data) > MAX_MSIX_BYTES \
-            or digest(msix_data) != MSIX_SHA256:
+    if (
+        len(msix_data) != MSIX_SIZE
+        or len(msix_data) > MAX_MSIX_BYTES
+        or digest(msix_data) != MSIX_SHA256
+    ):
         fail("pinned Windows App SDK MSIX hash/size mismatch")
     if digest(license_data) != LICENSE_SHA256:
         fail("pinned Windows App SDK license hash mismatch")
     with zipfile.ZipFile(io.BytesIO(msix_data)) as msix:
         entries = zip_entries(
-            msix, max_entries=MAX_MSIX_ENTRIES,
-            max_unpacked=MAX_MSIX_UNPACKED, allow_directories=True,
+            msix,
+            max_entries=MAX_MSIX_ENTRIES,
+            max_unpacked=MAX_MSIX_UNPACKED,
+            allow_directories=True,
         )
         appx_data = read_exact_entry(msix, entries, APPX_MANIFEST_ENTRY)
         if digest(appx_data) != APPX_MANIFEST_SHA256:
@@ -732,12 +808,15 @@ def _tree_files(root: Path, roots: list[str]) -> dict[str, Path]:
 
 
 def validate_runtime_directory(
-    directory: Path, manifest: dict | None = None, parse_pe=None,
+    directory: Path,
+    manifest: dict | None = None,
+    parse_pe=None,
 ) -> tuple[dict[str, bytes], dict[str, dict]]:
     manifest = manifest or load_runtime_manifest()
     expected, expected_images = validate_file_records(manifest)
     if parse_pe is None:
         from package_desktop import pe_image
+
         parse_pe = pe_image
     root = Path(directory)
     _check_parent_chain(root)
@@ -745,7 +824,11 @@ def validate_runtime_directory(
     if {name.casefold() for name in found} != {name.casefold() for name in expected}:
         missing = sorted(set(expected) - set(found), key=str.casefold)
         extra = sorted(
-            (name for name in found if name.casefold() not in {item.casefold() for item in expected}),
+            (
+                name
+                for name in found
+                if name.casefold() not in {item.casefold() for item in expected}
+            ),
             key=str.casefold,
         )
         fail(f"missing/extra staged runtime file (missing={missing}, extra={extra})")
@@ -802,7 +885,11 @@ def _stage_files(directory: Path, runtime_files: dict[str, bytes], manifest: dic
             with target.open("xb") as output:
                 output.write(data)
         except FileExistsError:
-            if not target.is_file() or _is_reparse(target) or digest(target.read_bytes()) != digest(data):
+            if (
+                not target.is_file()
+                or _is_reparse(target)
+                or digest(target.read_bytes()) != digest(data)
+            ):
                 fail(f"runtime destination changed during staging: {target}")
     validate_runtime_directory(root, manifest)
 
@@ -821,8 +908,10 @@ def _verified_package(cache_dir: Path, manifest: dict) -> bytes:
             fail(f"cached NuGet archive is not a regular file: {archive}")
         data = archive.read_bytes()
         if (
-            len(data) != PACKAGE_SIZE or digest(data) != PACKAGE_SHA256
-            or base64.b64encode(hashlib.sha512(data).digest()).decode("ascii") != PACKAGE_SHA512_BASE64
+            len(data) != PACKAGE_SIZE
+            or digest(data) != PACKAGE_SHA256
+            or base64.b64encode(hashlib.sha512(data).digest()).decode("ascii")
+            != PACKAGE_SHA512_BASE64
         ):
             fail(f"cached NuGet package failed its pinned digest: {archive}")
         return data
@@ -836,8 +925,11 @@ def _verified_package(cache_dir: Path, manifest: dict) -> bytes:
             if length is not None and int(length) != PACKAGE_SIZE:
                 fail("NuGet server returned an unexpected package size")
             with tempfile.NamedTemporaryFile(
-                mode="wb", prefix=".windows-app-sdk-", suffix=".download",
-                dir=cache_dir, delete=False,
+                mode="wb",
+                prefix=".windows-app-sdk-",
+                suffix=".download",
+                dir=cache_dir,
+                delete=False,
             ) as output:
                 temporary = Path(output.name)
                 sha256, sha512, size = hashlib.sha256(), hashlib.sha512(), 0
@@ -860,12 +952,16 @@ def _verified_package(cache_dir: Path, manifest: dict) -> bytes:
 
 
 def stage_runtime(
-    destinations: list[Path], *, cache_dir: Path = DEFAULT_CACHE,
-    manifest: dict | None = None, parse_pe=None,
+    destinations: list[Path],
+    *,
+    cache_dir: Path = DEFAULT_CACHE,
+    manifest: dict | None = None,
+    parse_pe=None,
 ) -> dict[str, dict]:
     manifest = manifest or load_runtime_manifest()
     if parse_pe is None:
         from package_desktop import pe_image
+
         parse_pe = pe_image
     package = _verified_package(Path(cache_dir), manifest)
     files, images = extract_runtime_files(package, manifest, parse_pe)
@@ -875,7 +971,11 @@ def stage_runtime(
 
 
 def copy_runtime(
-    source: Path, destination: Path, *, manifest: dict | None = None, parse_pe=None,
+    source: Path,
+    destination: Path,
+    *,
+    manifest: dict | None = None,
+    parse_pe=None,
 ) -> None:
     manifest = manifest or load_runtime_manifest()
     files, _ = validate_runtime_directory(source, manifest, parse_pe)
@@ -891,7 +991,5 @@ def runtime_summary(manifest: dict | None = None) -> dict:
         "package_sha256": PACKAGE_SHA256,
         "package_sha512": PACKAGE_SHA512_BASE64,
         "runtime_manifest_sha256": manifest_digest(manifest),
-        "runtime_sha256": {
-            record["path"]: record["sha256"] for record in manifest["files"]
-        },
+        "runtime_sha256": {record["path"]: record["sha256"] for record in manifest["files"]},
     }

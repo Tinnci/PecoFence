@@ -1,6 +1,8 @@
 """Determinism, checked-in fixture parity, and approved delivery dates."""
+
 import json
 import unittest
+
 import board_demo_fixtures as demo
 
 
@@ -24,11 +26,15 @@ class DeliveryFixtures(unittest.TestCase):
             self.assertEqual(blocker["expected_at"][5:10], "11-08")
             for number in ["080", "081", "090", "110", "111"]:
                 self.assertEqual(cards["ORION-R-" + number]["stage"]["stage"], "done")
-            evidence = {e["card_id"]: {i["id"] for i in e["items"]} for e in demo.card_evidence(board)}
+            evidence = {
+                e["card_id"]: {i["id"] for i in e["items"]} for e in demo.card_evidence(board)
+            }
             for c in cards.values():
                 self.assertLessEqual(len(c["event_marks"]), 12)
                 self.assertEqual(c["stage_history"][-1]["stage"], c["stage"]["stage"])
-                self.assertTrue(all(m["evidence_id"] in evidence[c["card_id"]] for m in c["event_marks"]))
+                self.assertTrue(
+                    all(m["evidence_id"] in evidence[c["card_id"]] for m in c["event_marks"])
+                )
 
 
 if __name__ == "__main__":

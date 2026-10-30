@@ -1,4 +1,5 @@
 """Check README translations for missing files and broken relative links."""
+
 import re
 import sys
 import unicodedata
@@ -12,7 +13,9 @@ HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*$", re.M)
 
 def anchor(text):
     text = re.sub(r"[*_`]", "", text).strip().lower()
-    text = "".join(c for c in text if c.isalnum() or c in " -_" or unicodedata.category(c).startswith("M"))
+    text = "".join(
+        c for c in text if c.isalnum() or c in " -_" or unicodedata.category(c).startswith("M")
+    )
     return text.replace(" ", "-")
 
 
@@ -64,8 +67,9 @@ def check_repository(root=ROOT):
     problems = []
     readmes = [(root / "README.md", "README.md")]
     for language in LANGUAGES:
-        readmes.append((root / "docs/readme" / f"README.{language}.md",
-                        f"docs/readme/README.{language}.md"))
+        readmes.append(
+            (root / "docs/readme" / f"README.{language}.md", f"docs/readme/README.{language}.md")
+        )
 
     checked = 0
     for path, label in readmes:

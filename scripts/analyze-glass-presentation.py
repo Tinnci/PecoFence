@@ -4,8 +4,9 @@ The magenta square is part of the displayed fence, so it measures its presented
 position rather than GetWindowRect. The grey ramp encodes wallpaper X. Calibration
 uses settled frames from the same recording, including display colour conversion.
 """
-import csv
+
 import argparse
+import csv
 import json
 import statistics
 import subprocess
@@ -47,9 +48,12 @@ while True:
             y = round((min(ys) + max(ys) + 1) * 0.5 - 16)
             values = [
                 data[((y + dy) * width + round(x) + dx) * 3 + 1]
-                for dy in range(-1, 2) for dx in range(-1, 2)
+                for dy in range(-1, 2)
+                for dx in range(-1, 2)
             ]
-            samples.append({"frame": frame_index, "x": origin_x + x, "grey": statistics.mean(values)})
+            samples.append(
+                {"frame": frame_index, "x": origin_x + x, "grey": statistics.mean(values)}
+            )
     frame_index += 1
 decoder.wait()
 assert decoder.returncode == 0 and len(samples) > 60, "Probe was not visible"
@@ -89,7 +93,7 @@ report = {
     "settled_positions_px": [x for x, _ in calibration],
     "calibrated_grey_per_pixel": slope,
     "registration_error_median_px": statistics.median(errors),
-    "registration_error_p95_px": errors[int((len(errors)-1)*0.95)],
+    "registration_error_p95_px": errors[int((len(errors) - 1) * 0.95)],
     "registration_error_max_px": max(errors),
 }
 video.with_suffix(".json").write_text(json.dumps(report, indent=2), encoding="utf-8")
@@ -98,4 +102,6 @@ with video.with_suffix(".csv").open("w", newline="", encoding="utf-8") as out:
     writer.writeheader()
     writer.writerows(samples)
 print(json.dumps(report, indent=2))
-assert report["registration_error_max_px"] <= args.max_error_px, "Wallpaper and window presented out of step"
+assert report["registration_error_max_px"] <= args.max_error_px, (
+    "Wallpaper and window presented out of step"
+)

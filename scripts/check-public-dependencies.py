@@ -4,22 +4,21 @@ The approved sources are this checkout, crates.io, and the one immutable public
 Microsoft Windows Rust SDK revision below. Changing that boundary requires an
 explicit policy change, not a credential added to CI.
 """
+
 from __future__ import annotations
 
 import argparse
 import json
-from pathlib import Path
 import subprocess
 import sys
 import tomllib
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 REGISTRY = "registry+https://github.com/rust-lang/crates.io-index"
 WINDOWS_RS_URL = "https://github.com/microsoft/windows-rs"
 WINDOWS_RS_REV = "2672e615d9cc0771448a781f3b2fe34e7fd08c6a"
-WINDOWS_RS_SOURCE = (
-    f"git+{WINDOWS_RS_URL}?rev={WINDOWS_RS_REV}#{WINDOWS_RS_REV}"
-)
+WINDOWS_RS_SOURCE = f"git+{WINDOWS_RS_URL}?rev={WINDOWS_RS_REV}#{WINDOWS_RS_REV}"
 WINDOWS_REACTOR_VERSION = "0.100.0"
 WINDOWS_REACTOR_PATH = "vendor/windows-reactor"
 WINDOWS_REACTOR_DEPENDENCY = {
@@ -84,7 +83,14 @@ def approved_workspace_windows_reactor_dependency(name: str, entry: dict) -> boo
         name == "windows-reactor"
         and entry.get("workspace") is True
         and not {
-            "branch", "git", "path", "registry", "rev", "tag", "version", "package"
+            "branch",
+            "git",
+            "path",
+            "registry",
+            "rev",
+            "tag",
+            "version",
+            "package",
         }.intersection(entry)
     )
 
@@ -114,9 +120,9 @@ def check(root: Path, metadata: dict | None = None) -> list[str]:
         errors.append("workspace windows-reactor must use the exact vendored path/version")
     reactor_manifest = root / WINDOWS_REACTOR_PATH / "Cargo.toml"
     if reactor_manifest.is_file():
-        reactor_package = tomllib.loads(
-            reactor_manifest.read_text(encoding="utf-8")
-        ).get("package", {})
+        reactor_package = tomllib.loads(reactor_manifest.read_text(encoding="utf-8")).get(
+            "package", {}
+        )
         if (
             reactor_package.get("name") != "windows-reactor"
             or reactor_package.get("version") != WINDOWS_REACTOR_VERSION
@@ -177,17 +183,13 @@ def check(root: Path, metadata: dict | None = None) -> list[str]:
     contracts = [p for p in lock["package"] if p["name"] == "spm-contracts"]
     if len(contracts) != 1 or contracts[0].get("source") or contracts[0]["version"] != "0.1.0":
         errors.append("Cargo.lock must contain one local spm-contracts 0.1.0")
-    windows_reactors = [
-        p for p in lock["package"] if p["name"] == "windows-reactor"
-    ]
+    windows_reactors = [p for p in lock["package"] if p["name"] == "windows-reactor"]
     if (
         len(windows_reactors) != 1
         or windows_reactors[0].get("source") is not None
         or windows_reactors[0].get("version") != WINDOWS_REACTOR_VERSION
     ):
-        errors.append(
-            "Cargo.lock must contain one local windows-reactor 0.100.0"
-        )
+        errors.append("Cargo.lock must contain one local windows-reactor 0.100.0")
     windows_rs_packages = []
     for package in lock["package"]:
         source = package.get("source")
@@ -200,13 +202,12 @@ def check(root: Path, metadata: dict | None = None) -> list[str]:
             windows_rs_packages.append(package)
         elif source not in (None, REGISTRY):
             errors.append(f"Cargo.lock: unapproved source for {package['name']}")
-    windows_rs_versions = {
-        (package["name"], package["version"]) for package in windows_rs_packages
-    }
+    windows_rs_versions = {(package["name"], package["version"]) for package in windows_rs_packages}
     for package in lock["package"]:
-        if package.get("source") == REGISTRY and (
-            package["name"], package["version"]
-        ) in windows_rs_versions:
+        if (
+            package.get("source") == REGISTRY
+            and (package["name"], package["version"]) in windows_rs_versions
+        ):
             errors.append(
                 f"Cargo.lock: {package['name']} {package['version']} is sourced from both "
                 "the pinned Windows SDK Git revision and crates.io"
@@ -214,9 +215,13 @@ def check(root: Path, metadata: dict | None = None) -> list[str]:
     for config in (root / ".cargo/config", root / ".cargo/config.toml"):
         if config.is_file():
             settings = tomllib.loads(config.read_text(encoding="utf-8"))
-            if (settings.get("source") or settings.get("patch") or settings.get("paths")
-                    or settings.get("replace")
-                    or set(settings.get("registries", {})) - {"crates-io"}):
+            if (
+                settings.get("source")
+                or settings.get("patch")
+                or settings.get("paths")
+                or settings.get("replace")
+                or set(settings.get("registries", {})) - {"crates-io"}
+            ):
                 errors.append("repository Cargo config overrides approved dependency sources")
     for directory in (root / ".github/workflows", root / ".github/actions"):
         if directory.exists():
@@ -224,11 +229,12 @@ def check(root: Path, metadata: dict | None = None) -> list[str]:
                 if path.suffix in (".yml", ".yaml") and path.is_file():
                     text = path.read_text(encoding="utf-8")
                     if any(marker in text for marker in PRIVATE_BUILD_MARKERS):
-                        errors.append(f"{path.relative_to(root)}: private build access reintroduced")
+                        errors.append(
+                            f"{path.relative_to(root)}: private build access reintroduced"
+                        )
     if metadata is not None:
         resolved_windows_reactors = [
-            package for package in metadata["packages"]
-            if package.get("name") == "windows-reactor"
+            package for package in metadata["packages"] if package.get("name") == "windows-reactor"
         ]
         resolved_windows_rs_packages = []
         for package in metadata["packages"]:
@@ -260,9 +266,10 @@ def check(root: Path, metadata: dict | None = None) -> list[str]:
             (package["name"], package["version"]) for package in resolved_windows_rs_packages
         }
         for package in metadata["packages"]:
-            if package.get("source") == REGISTRY and (
-                package["name"], package.get("version")
-            ) in resolved_windows_rs_versions:
+            if (
+                package.get("source") == REGISTRY
+                and (package["name"], package.get("version")) in resolved_windows_rs_versions
+            ):
                 errors.append(
                     f"resolved graph: {package['name']} {package['version']} is sourced from "
                     "both the pinned Windows SDK Git revision and crates.io"
@@ -272,14 +279,19 @@ def check(root: Path, metadata: dict | None = None) -> list[str]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--resolved", action="store_true",
-                        help="also inspect Cargo's locked, offline resolved dependency graph")
+    parser.add_argument(
+        "--resolved",
+        action="store_true",
+        help="also inspect Cargo's locked, offline resolved dependency graph",
+    )
     args = parser.parse_args()
     metadata = None
     if args.resolved:
         result = subprocess.run(
             ["cargo", "metadata", "--locked", "--offline", "--format-version", "1"],
-            cwd=ROOT, text=True, capture_output=True,
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
         )
         if result.returncode:
             print(result.stderr, file=sys.stderr)

@@ -1,11 +1,14 @@
 """Offline regressions for native Rust label scanning."""
+
 import importlib.util
-from pathlib import Path
 import unittest
+from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
-spec = importlib.util.spec_from_file_location("check_locales", Path(__file__).with_name("check-locales.py"))
+spec = importlib.util.spec_from_file_location(
+    "check_locales", Path(__file__).with_name("check-locales.py")
+)
 locales = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(locales)
 

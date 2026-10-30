@@ -4,7 +4,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-spec = importlib.util.spec_from_file_location("actions_policy", Path(__file__).with_name("check-actions.py"))
+spec = importlib.util.spec_from_file_location(
+    "actions_policy", Path(__file__).with_name("check-actions.py")
+)
 policy = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(policy)
 
@@ -18,18 +20,26 @@ class ActionPolicyTests(unittest.TestCase):
         (self.root / ".github/workflows").mkdir(parents=True)
         (self.root / ".github/actions/build-desktop").mkdir(parents=True)
         (self.root / ".github/dependabot.yml").write_text(
-            "updates:\n  - directory: /\n  - directory: /.github/actions/build-desktop\n", encoding="utf-8")
+            "updates:\n  - directory: /\n  - directory: /.github/actions/build-desktop\n",
+            encoding="utf-8",
+        )
         self.workflow = self.root / ".github/workflows/ci.yml"
-        self.workflow.write_text("steps:\n  - uses: ./.github/actions/build-desktop\n", encoding="utf-8")
+        self.workflow.write_text(
+            "steps:\n  - uses: ./.github/actions/build-desktop\n", encoding="utf-8"
+        )
         self.action = self.root / ".github/actions/build-desktop/action.yml"
-        self.action.write_text("steps:\n  - uses: actions/checkout@" + "a" * 40 + "\n", encoding="utf-8")
+        self.action.write_text(
+            "steps:\n  - uses: actions/checkout@" + "a" * 40 + "\n", encoding="utf-8"
+        )
 
     def tearDown(self):
         self.temp.cleanup()
 
     def test_explicit_local_composite_coverage(self):
         self.assertEqual(policy.check(self.root), [])
-        (self.root / ".github/dependabot.yml").write_text("updates:\n  - directory: /\n", encoding="utf-8")
+        (self.root / ".github/dependabot.yml").write_text(
+            "updates:\n  - directory: /\n", encoding="utf-8"
+        )
         self.assertTrue(any("explicit Dependabot" in error for error in policy.check(self.root)))
 
     def test_mutable_pins_and_privileged_pr_event_rejected(self):
@@ -40,13 +50,24 @@ class ActionPolicyTests(unittest.TestCase):
         self.assertTrue(any("pull_request_target" in e for e in errors))
 
     def test_runtime_verification_catches_node20_but_accepts_node24(self):
-        for runtime, valid in [("node20", False), ("node24", True), ("composite", True), ("unknown", False)]:
+        for runtime, valid in [
+            ("node20", False),
+            ("node24", True),
+            ("composite", True),
+            ("unknown", False),
+        ]:
             with self.subTest(runtime=runtime):
-                errors = policy.check(self.root, True, lambda _: f"runs:\n  using: '{runtime}'\n  main: dist/index.js\n")
+                errors = policy.check(
+                    self.root,
+                    True,
+                    lambda _: f"runs:\n  using: '{runtime}'\n  main: dist/index.js\n",
+                )
                 self.assertEqual(not errors, valid)
 
     def test_network_failure_does_not_claim_runtime_verified(self):
-        def failed(_): raise OSError("offline")
+        def failed(_):
+            raise OSError("offline")
+
         self.assertTrue(policy.check(self.root, True, failed))
 
 
@@ -74,10 +95,14 @@ class CiActionContractTests(unittest.TestCase):
 
     def test_git_cache_is_exactly_scoped_and_validated_around_fetch(self):
         source_preflight = self.action_text.index("./scripts/build-and-verify.ps1 -SourceOnly")
-        cache_start = self.action_text.index("- name: Restore pinned public windows-rs Git object database")
+        cache_start = self.action_text.index(
+            "- name: Restore pinned public windows-rs Git object database"
+        )
         cache_end = self.action_text.index("- name: Validate restored public Git object database")
         fetch_start = self.action_text.index("- name: Fetch locked public dependencies")
-        save_start = self.action_text.index("- name: Save validated public windows-rs Git object database")
+        save_start = self.action_text.index(
+            "- name: Save validated public windows-rs Git object database"
+        )
         self.assertLess(source_preflight, cache_start)
         self.assertLess(cache_start, cache_end)
         self.assertLess(cache_end, fetch_start)
@@ -118,6 +143,7 @@ class CiActionContractTests(unittest.TestCase):
         self.assertIn("if: always()", build)
         self.assertIn("target/source-verification.json", build)
         self.assertIn("target/verification.json", build)
+
 
 if __name__ == "__main__":
     unittest.main()

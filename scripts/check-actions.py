@@ -1,8 +1,9 @@
 """Check direct action pins and (optionally) their declared runtimes. Not a YAML validator."""
-from pathlib import Path
+
 import re
 import sys
 import urllib.request
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 USES = re.compile(r"^\s*(?:-\s*)?uses:\s*([^\s#]+)", re.MULTILINE)
@@ -14,7 +15,9 @@ def check(root=ROOT, online=False, fetch=None):
     manifests = sorted((root / ".github/workflows").glob("*.y*ml"))
     manifests += sorted((root / ".github/actions").rglob("action.y*ml"))
     dependency_config = (root / ".github/dependabot.yml").read_text(encoding="utf-8")
-    directories = set(re.findall(r"^\s+(?:-\s*)?directory:\s*['\"]?([^'\"\s]+)", dependency_config, re.MULTILINE))
+    directories = set(
+        re.findall(r"^\s+(?:-\s*)?directory:\s*['\"]?([^'\"\s]+)", dependency_config, re.MULTILINE)
+    )
     if "/" not in directories:
         errors.append("Dependabot must cover root workflows")
     references = set()
@@ -22,7 +25,10 @@ def check(root=ROOT, online=False, fetch=None):
         text = path.read_text(encoding="utf-8")
         if re.search(r"^\s*pull_request_target\s*:", text, re.MULTILINE):
             errors.append(f"{path}: privileged pull_request_target is not permitted")
-        if path.parent.is_relative_to(root / ".github/actions") and "/" + path.parent.relative_to(root).as_posix() not in directories:
+        if (
+            path.parent.is_relative_to(root / ".github/actions")
+            and "/" + path.parent.relative_to(root).as_posix() not in directories
+        ):
             errors.append(f"{path}: local composite action needs explicit Dependabot coverage")
         for value in USES.findall(text):
             value = value.strip("'\"")
@@ -47,14 +53,20 @@ def check(root=ROOT, online=False, fetch=None):
                 if fetch:
                     text = fetch(url)
                 else:
-                    request = urllib.request.Request(url, headers={"User-Agent": "PecoFence-action-policy"})
+                    request = urllib.request.Request(
+                        url, headers={"User-Agent": "PecoFence-action-policy"}
+                    )
                     with urllib.request.urlopen(request, timeout=30) as response:
                         data = response.read(65537)
                     if len(data) > 65536:
                         raise ValueError("oversized action metadata")
                     text = data.decode("utf-8")
                 runs = re.search(r"^runs:\s*\n(.*?)(?=^\S|\Z)", text, re.MULTILINE | re.DOTALL)
-                using = re.search(r"^\s+using:\s*['\"]?([^'\"\s]+)", runs[1], re.MULTILINE) if runs else None
+                using = (
+                    re.search(r"^\s+using:\s*['\"]?([^'\"\s]+)", runs[1], re.MULTILINE)
+                    if runs
+                    else None
+                )
                 runtime = using[1] if using else ""
                 if runtime.startswith("node") and runtime[4:].isdigit():
                     if int(runtime[4:]) < 24:

@@ -1,11 +1,12 @@
 """Offline runtime provenance and hostile archive validation tests."""
+
 import io
-from pathlib import Path
 import stat
 import tempfile
 import unittest
-from unittest import mock
 import zipfile
+from pathlib import Path
+from unittest import mock
 
 import winappsdk_runtime as runtime
 
@@ -37,7 +38,10 @@ class RuntimeTests(unittest.TestCase):
             license_path.write_bytes((runtime.THIRD_PARTY / license_path.name).read_bytes())
             activation = directory / "app.manifest"
             xml = runtime.APP_MANIFEST.read_bytes().replace(b"\r\n", b"\n")
-            with mock.patch.object(runtime, "ROOT", root), mock.patch.object(runtime, "APP_MANIFEST", activation):
+            with (
+                mock.patch.object(runtime, "ROOT", root),
+                mock.patch.object(runtime, "APP_MANIFEST", activation),
+            ):
                 for data in (xml, xml.replace(b"\n", b"\r\n")):
                     activation.write_bytes(data)
                     runtime.validate_manifest(manifest, check_checked_in_files=True)
@@ -50,14 +54,29 @@ class RuntimeTests(unittest.TestCase):
                     runtime.validate_manifest(manifest, check_checked_in_files=True)
 
     def test_unsafe_windows_paths_are_rejected(self):
-        for value in ("../x.dll", "/x.dll", "C:/x.dll", "x.dll:ads", "a\\b", "a//b",
-                      "a/../b", "CON.dll", "a/NUL", "a./b", "a /b", "a/b.", ""):
+        for value in (
+            "../x.dll",
+            "/x.dll",
+            "C:/x.dll",
+            "x.dll:ads",
+            "a\\b",
+            "a//b",
+            "a/../b",
+            "CON.dll",
+            "a/NUL",
+            "a./b",
+            "a /b",
+            "a/b.",
+            "",
+        ):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 runtime.safe_relative(value)
 
     def test_valid_nested_resources_are_preserved(self):
-        self.assertEqual(runtime.safe_relative("zh-CN/Microsoft.UI.Xaml.dll.mui"),
-                         "zh-CN/Microsoft.UI.Xaml.dll.mui")
+        self.assertEqual(
+            runtime.safe_relative("zh-CN/Microsoft.UI.Xaml.dll.mui"),
+            "zh-CN/Microsoft.UI.Xaml.dll.mui",
+        )
 
     def entries(self, pairs, **limits):
         data = io.BytesIO()
@@ -67,8 +86,10 @@ class RuntimeTests(unittest.TestCase):
         data.seek(0)
         with zipfile.ZipFile(data) as archive:
             return runtime.zip_entries(
-                archive, max_entries=limits.get("entries", 10),
-                max_unpacked=limits.get("bytes", 100), allow_directories=True,
+                archive,
+                max_entries=limits.get("entries", 10),
+                max_unpacked=limits.get("bytes", 100),
+                allow_directories=True,
             )
 
     def test_case_aliases_are_rejected(self):
@@ -82,7 +103,10 @@ class RuntimeTests(unittest.TestCase):
                 self.entries(pairs)
 
     def test_dos_reparse_entries_are_rejected(self):
-        for attributes in (runtime.REPARSE_POINT, (stat.S_IFREG | 0o644) << 16 | runtime.REPARSE_POINT):
+        for attributes in (
+            runtime.REPARSE_POINT,
+            (stat.S_IFREG | 0o644) << 16 | runtime.REPARSE_POINT,
+        ):
             link = zipfile.ZipInfo("alias.dll")
             link.external_attr = attributes
             with self.subTest(attributes=attributes), self.assertRaises(ValueError):

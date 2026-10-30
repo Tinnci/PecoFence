@@ -1,4 +1,5 @@
 """Check native source translations, coverage, and interpolation placeholders."""
+
 import json
 import re
 from pathlib import Path
@@ -32,10 +33,10 @@ def rust_literal(token):
             result.append(escapes[escape])
         elif escape == "u" and value[index] == "{":
             end = value.index("}", index)
-            result.append(chr(int(value[index + 1:end].replace("_", ""), 16)))
+            result.append(chr(int(value[index + 1 : end].replace("_", ""), 16)))
             index = end + 1
         elif escape == "x":
-            result.append(chr(int(value[index:index + 2], 16)))
+            result.append(chr(int(value[index : index + 2], 16)))
             index += 2
         elif escape in "\r\n":
             while index < len(value) and value[index].isspace():

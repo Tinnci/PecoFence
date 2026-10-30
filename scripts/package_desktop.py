@@ -227,7 +227,9 @@ def record_build(release: Path, captured: Path, root: Path = ROOT) -> dict:
     reject_webview_imports(images)
     for name, image in images.items():
         if not valid_product_image(name, image):
-            raise ValueError(f"{name} has an invalid x64 product image type (GUI app/watchdog, console CLI, shell DLL)")
+            raise ValueError(
+                f"{name} has an invalid x64 product image type (GUI app/watchdog, console CLI, shell DLL)"
+            )
     _, _, runtime_receipt = _runtime_snapshot(release)
     receipt = {
         "schema": 2,

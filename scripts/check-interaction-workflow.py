@@ -6,6 +6,7 @@ The seed supplies monitor identities/settings only; file operations target fixtu
 Run the debug exe with PECOFENCE_UI_TEST_WINDOWS=1 --portable --no-hide-icons
 --test-script <audit-dir>/workflow.txt. This script does not inject desktop input.
 """
+
 import ast
 import copy
 import json
@@ -23,12 +24,27 @@ def prepare(seed, root):
     # Reject old/malformed input before creating any fixture files. Use the actual domain
     # validator, not a second Python schema or an implicit migration.
     subprocess.run(
-        ["cargo", "run", "--quiet", "--locked", "-p", "pecofence-core",
-         "--example", "validate_workspace", "--", str(seed)],
-        cwd=REPO, check=True,
+        [
+            "cargo",
+            "run",
+            "--quiet",
+            "--locked",
+            "-p",
+            "pecofence-core",
+            "--example",
+            "validate_workspace",
+            "--",
+            str(seed),
+        ],
+        cwd=REPO,
+        check=True,
     )
     cfg = json.loads(seed.read_text(encoding="utf-8-sig"))
-    if not cfg["layouts"] or not cfg["layouts"][0]["contents"] or not cfg["layouts"][0]["containers"]:
+    if (
+        not cfg["layouts"]
+        or not cfg["layouts"][0]["contents"]
+        or not cfg["layouts"][0]["containers"]
+    ):
         raise ValueError("interaction seed needs a populated supported layout")
     root.mkdir(parents=True, exist_ok=True)
     (root / "config").mkdir(exist_ok=True)
@@ -52,16 +68,33 @@ def prepare(seed, root):
     contents, containers = [], []
     for i, title in enumerate(titles):
         f = copy.deepcopy(template)
-        f.update(id=ids[i], title=title, content=dict(
-            kind="folderPortal", root=str(root / "files"), recursive=False,
-            filter=None, navigate=True, hideTitleIcon=False))
+        f.update(
+            id=ids[i],
+            title=title,
+            content=dict(
+                kind="folderPortal",
+                root=str(root / "files"),
+                recursive=False,
+                filter=None,
+                navigate=True,
+                hideTitleIcon=False,
+            ),
+        )
         f["view"].update(layout="details")
         contents.append(f)
         c = copy.deepcopy(layout["containers"][0])
-        c.update(id=container_ids[i], tabs=[ids[i]], activeTab=ids[i],
-                 autoHeight=False, appearance=None, rolledUp=False, locked=False,
-                 expandedH=300, excludeFromQuickHide=False)
-        c["geometry"].update(x=300+i*420, y=200, w=400, h=300, anchor="leftTop")
+        c.update(
+            id=container_ids[i],
+            tabs=[ids[i]],
+            activeTab=ids[i],
+            autoHeight=False,
+            appearance=None,
+            rolledUp=False,
+            locked=False,
+            expandedH=300,
+            excludeFromQuickHide=False,
+        )
+        c["geometry"].update(x=300 + i * 420, y=200, w=400, h=300, anchor="leftTop")
         containers.append(c)
     contents[-1]["content"] = dict(kind="fileCollection", inbox=True, items=[])
     containers[-1].update(rolledUp=True)
@@ -69,11 +102,17 @@ def prepare(seed, root):
     layout.update(contents=contents, containers=containers)
     cfg["layouts"] = [layout]
     (root / "config" / "workspace.v2.json").write_text(
-        json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
+        json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
     for i in range(12):
         (root / "files" / f"Test-{i:02d}.txt").write_text("Interaction fixture\n", encoding="utf-8")
-    lines = ["sleep 500", "pace 8", "pin-test-windows raw",
-             "bounds 标签甲 600 400 800 600", "merge 标签乙 标签甲"]
+    lines = [
+        "sleep 500",
+        "pace 8",
+        "pin-test-windows raw",
+        "bounds 标签甲 600 400 800 600",
+        "merge 标签乙 标签甲",
+    ]
 
     def snap(tag, delay=400):
         lines.extend([f"sleep {delay}", f"dump {tag}"])
@@ -203,8 +242,12 @@ def prepare(seed, root):
     inp("pointer-up", 1250, 436, "标签乙")
     snap("click-expanded", 650)
     for i in range(2):
-        for action, label in [("repairIcons", "shown"), ("hideDesktopIcons", "hidden"),
-                              ("hideDesktopIcons", "hidden-again"), ("repairIcons", "restored")]:
+        for action, label in [
+            ("repairIcons", "shown"),
+            ("hideDesktopIcons", "hidden"),
+            ("hideDesktopIcons", "hidden-again"),
+            ("repairIcons", "restored"),
+        ]:
             lines.append("settings-action " + json.dumps({"action": action}))
             snap(f"icons-{i}-{label}", 200)
     snap("final", 1000)
@@ -222,25 +265,43 @@ def check(log):
         if m:
             tag, rect, title = m.groups()
             s = {"rect": ast.literal_eval(rect)}
-            s["order"] = [t[0] for t in ast.literal_eval(re.search(r"tab_fonts=(\[.*?\])", line)[1])]
+            s["order"] = [
+                t[0] for t in ast.literal_eval(re.search(r"tab_fonts=(\[.*?\])", line)[1])
+            ]
             for key in ("client", "chrome", "client_offset"):
                 s[key] = ast.literal_eval(re.search(rf"\b{key}=(\([^)]*\))", line)[1])
             for key in ("capture", "tab_drag", "window_drag", "detach_pending", "rolled"):
                 s[key] = re.search(rf"\b{key}=(true|false)", line)[1] == "true"
             for key in ("map_builds", "control_map_builds", "wallpaper_uploads"):
                 s[key] = int(re.search(rf"\b{key}(?:=|: )(\d+)", line)[1])
-            w, h = s["rect"][2]-s["rect"][0], s["rect"][3]-s["rect"][1]
+            w, h = s["rect"][2] - s["rect"][0], s["rect"][3] - s["rect"][1]
             assert s["client"] == s["chrome"] == (w, h), (tag, title, "frame mismatch")
             assert s["client_offset"] == (0, 0), (tag, title, "nonclient inset")
             states[tag, title] = s
-        m = re.search(r"\[([^]]+)\] fences=(\d+) dying=(\d+).*hide_setting=(true|false) icons_hidden=(true|false)", line)
+        m = re.search(
+            r"\[([^]]+)\] fences=(\d+) dying=(\d+).*hide_setting=(true|false) icons_hidden=(true|false)",
+            line,
+        )
         if m:
             tag, n, dying, setting, hidden = m.groups()
             totals[tag] = (int(n), int(dying), setting == "true", hidden == "true")
-    get = lambda tag, title="标签甲": states[tag, title]
+
+    def get(tag, title="标签甲"):
+        return states[tag, title]
+
     a, b, c = "标签甲", "标签乙", "标签丙"
-    for tag in ("initial", "two-left", "tear-cancel-escape", "tear-cancel-right", "tear-remerged",
-                "click-threshold", "escape-order", "right-order", "menu-left", "narrow-left"):
+    for tag in (
+        "initial",
+        "two-left",
+        "tear-cancel-escape",
+        "tear-cancel-right",
+        "tear-remerged",
+        "click-threshold",
+        "escape-order",
+        "right-order",
+        "menu-left",
+        "narrow-left",
+    ):
         assert get(tag)["order"] == [a, b], (tag, get(tag)["order"])
     for tag in ("two-right", "capture-order", "menu-right-boundary", "narrow-right"):
         assert get(tag)["order"] == [b, a], (tag, get(tag)["order"])
@@ -274,12 +335,23 @@ def check(log):
         assert get("move-start", b)[key] == get("move-release", b)[key], key
     for (tag, title), state in states.items():
         if "pending" not in tag and tag != "move-burst":
-            assert not any(state[k] for k in ("capture", "tab_drag", "window_drag", "detach_pending")), (tag, title)
+            assert not any(
+                state[k] for k in ("capture", "tab_drag", "window_drag", "detach_pending")
+            ), (tag, title)
     for i in range(2):
-        for label, hidden in [("shown", False), ("hidden", True), ("hidden-again", True), ("restored", False)]:
+        for label, hidden in [
+            ("shown", False),
+            ("hidden", True),
+            ("hidden-again", True),
+            ("restored", False),
+        ]:
             assert totals[f"icons-{i}-{label}"][2:] == (hidden, hidden)
     assert totals["final"] == (2, 0, False, False)
-    print(json.dumps({"checkpoints": len(totals), "window_states": len(states), "result": "PASS"}, indent=2))
+    print(
+        json.dumps(
+            {"checkpoints": len(totals), "window_states": len(states), "result": "PASS"}, indent=2
+        )
+    )
 
 
 if __name__ == "__main__":

@@ -1,4 +1,5 @@
 """Validate the recorded real-mouse audit (sky / SendInput, no scripted input messages)."""
+
 import ast
 import json
 import re
@@ -20,7 +21,7 @@ def read(name):
         r = ast.literal_eval(rect)
         client = ast.literal_eval(re.search(r"client=(\([^)]*\))", line)[1])
         chrome = ast.literal_eval(re.search(r"chrome=(\([^)]*\))", line)[1])
-        assert client == chrome == (r[2]-r[0], r[3]-r[1]), (tag, title)
+        assert client == chrome == (r[2] - r[0], r[3] - r[1]), (tag, title)
         assert "client_offset=(0,0)" in line, (tag, title)
         order = [name for name, _ in ast.literal_eval(re.search(r"tab_fonts=(\[.*?\])", line)[1])]
         result.append(dict(tag=tag, title=title, rect=r, order=order, line=line))
@@ -35,7 +36,7 @@ assert any(s["title"] == a and s["order"] == [a, b] for s in states)
 for title in (a, b):
     assert any(s["title"] == title and s["order"] == [title] for s in states), "Tear-off"
 assert any(s["title"] == b and s["order"] == [b, a] for s in states), "Drag merge"
-narrow = [s for s in states if s["title"] == b and s["rect"][2]-s["rect"][0] <= 300]
+narrow = [s for s in states if s["title"] == b and s["rect"][2] - s["rect"][0] <= 300]
 assert any(s["order"] == [a, b] for s in narrow)
 assert any(s["order"] == [b, a] for s in narrow)
 assert any(s["title"] == b and s["rect"] == (500, 264, 1500, 858) for s in states)
@@ -55,7 +56,7 @@ assert driver.count("SendInput ") == 4, "Four actual pointer passes are required
 assert sum(map(int, re.findall(r"samples=(\d+)", driver))) >= 1000
 cancels = (motion / "cancel.log").read_text(encoding="utf-8-sig")
 for action in ("escape", "right"):
-    line = next(l for l in cancels.splitlines() if f'Some("{action}")' in l)
+    line = next(record for record in cancels.splitlines() if f'Some("{action}")' in record)
     assert "source_before=(600, 400, 1600, 1200)" in line
     assert "source_after=Some((600, 400, 1600, 1200))" in line
     assert "capture_released=true" in line

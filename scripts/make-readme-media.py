@@ -4,6 +4,7 @@ Requires Pillow and FFmpeg. The original recordings remain in the optional local
 video project; the small, selected PNG/GIF outputs are checked in under docs/assets.
 One hero image is rendered per README language (see HERO_TEXT).
 """
+
 import argparse
 import subprocess
 from pathlib import Path
@@ -28,36 +29,66 @@ FONT_FILES = {
 # Headline, subline, caption and badge painted onto each localized hero image.
 # Keep these in step with the matching README in docs/readme/.
 HERO_TEXT = {
-    "en": ("A calmer desktop. Everything within reach.",
-           "Glass panels. Live folders. Your desktop, one shortcut away.",
-           "An actual PecoFence demo desktop · Fluent theme", "10 LANGUAGES"),
-    "zh-CN": ("把桌面还给壁纸，把文件放在手边。",
-              "玻璃栅栏 · 文件夹门户 · 标签页 · 随时浮现",
-              "PecoFence 实际演示桌面 · Fluent 主题", "10 种语言"),
-    "zh-TW": ("把桌面還給桌布，把檔案放在手邊。",
-              "玻璃圍欄 · 資料夾入口 · 分頁 · 隨時浮現",
-              "PecoFence 實際示範桌面 · Fluent 主題", "10 種語言"),
-    "ja": ("静かなデスクトップ。すべてが手の届く場所に。",
-           "ガラスのフェンス · フォルダーポータル · タブ · ショートカットひとつで手前に",
-           "PecoFence の実際のデモデスクトップ · Fluent テーマ", "10 言語対応"),
-    "ko": ("더 차분한 바탕 화면. 모든 것이 손닿는 곳에.",
-           "유리 패널. 살아 있는 폴더. 단축키 하나 거리의 바탕 화면.",
-           "실제 PecoFence 데모 바탕 화면 · Fluent 테마", "10개 언어"),
-    "de": ("Ein ruhigerer Desktop. Alles in Reichweite.",
-           "Glasflächen. Live-Ordner. Ihr Desktop, eine Tastenkombination entfernt.",
-           "Ein echter PecoFence-Demo-Desktop · Fluent-Thema", "10 SPRACHEN"),
-    "fr": ("Un Bureau plus calme. Tout à portée de main.",
-           "Panneaux de verre. Dossiers en direct. Votre Bureau, à un raccourci.",
-           "Un vrai Bureau de démonstration PecoFence · Thème Fluent", "10 LANGUES"),
-    "es": ("Un escritorio más tranquilo. Todo a tu alcance.",
-           "Paneles de cristal. Carpetas en vivo. Tu escritorio, a un atajo de distancia.",
-           "Un escritorio de demostración real de PecoFence · Tema Fluent", "10 IDIOMAS"),
-    "pt-BR": ("Uma área de trabalho mais tranquila. Tudo ao seu alcance.",
-              "Painéis de vidro. Pastas ao vivo. Sua área de trabalho a um atalho de distância.",
-              "Uma área de trabalho real de demonstração do PecoFence · Tema Fluent", "10 IDIOMAS"),
-    "ru": ("Спокойный рабочий стол. Всё под рукой.",
-           "Стеклянные панели. Живые папки. Рабочий стол — одним сочетанием клавиш.",
-           "Настоящий демо-рабочий стол PecoFence · тема Fluent", "10 ЯЗЫКОВ"),
+    "en": (
+        "A calmer desktop. Everything within reach.",
+        "Glass panels. Live folders. Your desktop, one shortcut away.",
+        "An actual PecoFence demo desktop · Fluent theme",
+        "10 LANGUAGES",
+    ),
+    "zh-CN": (
+        "把桌面还给壁纸，把文件放在手边。",
+        "玻璃栅栏 · 文件夹门户 · 标签页 · 随时浮现",
+        "PecoFence 实际演示桌面 · Fluent 主题",
+        "10 种语言",
+    ),
+    "zh-TW": (
+        "把桌面還給桌布，把檔案放在手邊。",
+        "玻璃圍欄 · 資料夾入口 · 分頁 · 隨時浮現",
+        "PecoFence 實際示範桌面 · Fluent 主題",
+        "10 種語言",
+    ),
+    "ja": (
+        "静かなデスクトップ。すべてが手の届く場所に。",
+        "ガラスのフェンス · フォルダーポータル · タブ · ショートカットひとつで手前に",
+        "PecoFence の実際のデモデスクトップ · Fluent テーマ",
+        "10 言語対応",
+    ),
+    "ko": (
+        "더 차분한 바탕 화면. 모든 것이 손닿는 곳에.",
+        "유리 패널. 살아 있는 폴더. 단축키 하나 거리의 바탕 화면.",
+        "실제 PecoFence 데모 바탕 화면 · Fluent 테마",
+        "10개 언어",
+    ),
+    "de": (
+        "Ein ruhigerer Desktop. Alles in Reichweite.",
+        "Glasflächen. Live-Ordner. Ihr Desktop, eine Tastenkombination entfernt.",
+        "Ein echter PecoFence-Demo-Desktop · Fluent-Thema",
+        "10 SPRACHEN",
+    ),
+    "fr": (
+        "Un Bureau plus calme. Tout à portée de main.",
+        "Panneaux de verre. Dossiers en direct. Votre Bureau, à un raccourci.",
+        "Un vrai Bureau de démonstration PecoFence · Thème Fluent",
+        "10 LANGUES",
+    ),
+    "es": (
+        "Un escritorio más tranquilo. Todo a tu alcance.",
+        "Paneles de cristal. Carpetas en vivo. Tu escritorio, a un atajo de distancia.",
+        "Un escritorio de demostración real de PecoFence · Tema Fluent",
+        "10 IDIOMAS",
+    ),
+    "pt-BR": (
+        "Uma área de trabalho mais tranquila. Tudo ao seu alcance.",
+        "Painéis de vidro. Pastas ao vivo. Sua área de trabalho a um atalho de distância.",
+        "Uma área de trabalho real de demonstração do PecoFence · Tema Fluent",
+        "10 IDIOMAS",
+    ),
+    "ru": (
+        "Спокойный рабочий стол. Всё под рукой.",
+        "Стеклянные панели. Живые папки. Рабочий стол — одним сочетанием клавиш.",
+        "Настоящий демо-рабочий стол PecoFence · тема Fluent",
+        "10 ЯЗЫКОВ",
+    ),
 }
 
 
@@ -88,24 +119,25 @@ def hero(language):
     image = Image.alpha_composite(image, overlay)
     draw = ImageDraw.Draw(image)
     blue = "#7bd2ff"
-    x, y, size = 92, 49, 42
+    x, y = 92, 49
     for points in (
-        [(x+12, y), (x+4, y), (x, y+4), (x, y+12)],
-        [(x+30, y), (x+38, y), (x+42, y+4), (x+42, y+12)],
-        [(x, y+30), (x, y+38), (x+4, y+42), (x+12, y+42)],
-        [(x+30, y+42), (x+38, y+42), (x+42, y+38), (x+42, y+30)],
+        [(x + 12, y), (x + 4, y), (x, y + 4), (x, y + 12)],
+        [(x + 30, y), (x + 38, y), (x + 42, y + 4), (x + 42, y + 12)],
+        [(x, y + 30), (x, y + 38), (x + 4, y + 42), (x + 12, y + 42)],
+        [(x + 30, y + 42), (x + 38, y + 42), (x + 42, y + 38), (x + 42, y + 30)],
     ):
         draw.line(points, fill=blue, width=4, joint="curve")
     for ox, oy in ((13, 13), (25, 13), (13, 25), (25, 25)):
-        draw.rounded_rectangle((x+ox-3, y+oy-3, x+ox+4, y+oy+4), 1, fill=blue)
+        draw.rounded_rectangle((x + ox - 3, y + oy - 3, x + ox + 4, y + oy + 4), 1, fill=blue)
     draw.text((151, 39), "PecoFence", font=font(48, bold=True), fill="#f5f9ff")
     right = 1508
     for label in reversed(["WINDOWS 11", badge, "APACHE 2.0"]):
         face = font(15, script=script)
         width = int(draw.textlength(label, font=face)) + 30
-        draw.rounded_rectangle((right-width, 51, right, 86), 17,
-                               fill="#183d5d", outline="#426d8e")
-        draw.text((right-width+15, 59), label, font=face, fill="#c4dff1")
+        draw.rounded_rectangle(
+            (right - width, 51, right, 86), 17, fill="#183d5d", outline="#426d8e"
+        )
+        draw.text((right - width + 15, 59), label, font=face, fill="#c4dff1")
         right -= width + 10
     face = fit(draw, headline, 57 if cjk else 58, 1416, bold=True, script=script)
     draw.text((92, 124), headline, font=face, fill="#f3f8ff")
@@ -130,20 +162,39 @@ def gif(name, start, duration):
     if not recording.exists():
         # These branding-free crops can reuse the original pre-rename recording.
         recording = PROMO / "out/openFence-features-en-1080p.mp4"
-    subprocess.run([
-        "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
-        "-ss", str(start), "-t", str(duration),
-        "-i", str(recording),
-        "-filter_complex", filters, "-an", "-loop", "0",
-        str(OUTPUT / f"{name}.gif"),
-    ], check=True)
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-ss",
+            str(start),
+            "-t",
+            str(duration),
+            "-i",
+            str(recording),
+            "-filter_complex",
+            filters,
+            "-an",
+            "-loop",
+            "0",
+            str(OUTPUT / f"{name}.gif"),
+        ],
+        check=True,
+    )
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--stills-only", action="store_true")
-    parser.add_argument("--languages", nargs="*", default=sorted(HERO_TEXT),
-                        help="hero images to render (default: every language)")
+    parser.add_argument(
+        "--languages",
+        nargs="*",
+        default=sorted(HERO_TEXT),
+        help="hero images to render (default: every language)",
+    )
     args = parser.parse_args()
     OUTPUT.mkdir(parents=True, exist_ok=True)
     for language in args.languages:

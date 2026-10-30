@@ -1,10 +1,11 @@
 import importlib.util
-from pathlib import Path
 import tempfile
 import unittest
+from pathlib import Path
 
 SPEC = importlib.util.spec_from_file_location(
-    "readme_translations", Path(__file__).with_name("check-readme-translations.py"))
+    "readme_translations", Path(__file__).with_name("check-readme-translations.py")
+)
 CHECKER = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(CHECKER)
 
@@ -80,9 +81,9 @@ exemple
 
         self.assertTrue(any("missing link target missing.md" in problem for problem in problems))
         self.assertTrue(any("anchor #absent has no heading" in problem for problem in problems))
-        self.assertTrue(any(
-            "docs/guide.md#absent anchor not found" in problem for problem in problems
-        ))
+        self.assertTrue(
+            any("docs/guide.md#absent anchor not found" in problem for problem in problems)
+        )
 
     def test_invalid_utf8_is_reported_without_aborting(self):
         path = self.root / "README.md"
@@ -91,9 +92,9 @@ exemple
         checked, problems = CHECKER.check_repository(self.root)
 
         self.assertEqual(checked, 10)
-        self.assertTrue(any(
-            "README.md: cannot read UTF-8 content" in problem for problem in problems
-        ))
+        self.assertTrue(
+            any("README.md: cannot read UTF-8 content" in problem for problem in problems)
+        )
 
     def test_duplicate_heading_anchors_use_incrementing_suffixes(self):
         self.write(
@@ -118,9 +119,7 @@ exemple
 """,
         )
         _, problems = CHECKER.check_repository(self.root)
-        self.assertTrue(any(
-            "anchor #repeat-2 has no heading" in problem for problem in problems
-        ))
+        self.assertTrue(any("anchor #repeat-2 has no heading" in problem for problem in problems))
 
 
 if __name__ == "__main__":

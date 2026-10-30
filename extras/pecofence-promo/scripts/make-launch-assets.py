@@ -1,7 +1,9 @@
 """Original sample artwork and a staged project-board window for the launch film."""
-from pathlib import Path
-from PIL import Image, ImageDraw, ImageFont
+
 import math
+from pathlib import Path
+
+from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "public" / "launch"
@@ -47,12 +49,27 @@ d.text((370, 250), "A fresh direction. A shared workspace.", font=font(29), fill
 d.rounded_rectangle((2010, 184, 2275, 244), 16, fill="#163d54")
 d.text((2042, 197), "+ New task", font=font(26, True), fill="#ffffff")
 columns = [
-    ("TO EXPLORE", [("Visual direction", "Moodboards and references", "DESIGN"),
-                    ("A clearer story", "Collect ideas for the new site", "CONTENT")]),
-    ("IN PROGRESS", [("Homepage concepts", "Three directions for review", "DESIGN"),
-                     ("Product photography", "Select the final image set", "CREATIVE")]),
-    ("READY TO SHARE", [("Brand foundations", "Colors, type and tone", "COMPLETE"),
-                       ("Launch checklist", "Everything in one place", "PLANNING")]),
+    (
+        "TO EXPLORE",
+        [
+            ("Visual direction", "Moodboards and references", "DESIGN"),
+            ("A clearer story", "Collect ideas for the new site", "CONTENT"),
+        ],
+    ),
+    (
+        "IN PROGRESS",
+        [
+            ("Homepage concepts", "Three directions for review", "DESIGN"),
+            ("Product photography", "Select the final image set", "CREATIVE"),
+        ],
+    ),
+    (
+        "READY TO SHARE",
+        [
+            ("Brand foundations", "Colors, type and tone", "COMPLETE"),
+            ("Launch checklist", "Everything in one place", "PLANNING"),
+        ],
+    ),
 ]
 for col, (label, cards) in enumerate(columns):
     x = 370 + col * 640

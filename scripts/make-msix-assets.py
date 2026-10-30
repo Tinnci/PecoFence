@@ -45,6 +45,7 @@ def draw_mark(canvas: Image.Image, cx: float, cy: float, size: float) -> None:
         return [pt(x0, y0), pt(x1, y1)]
 
     stroke = int(round(6 * unit))
+
     # Corner brackets: arcs of radius 6 (centre offset 6 from the corners) plus straight legs.
     # Path: M27 8 H14 a6 6 0 0 0 -6 6 V27, etc. Draw as thick lines with round caps.
     def leg(a, b):
@@ -59,16 +60,26 @@ def draw_mark(canvas: Image.Image, cx: float, cy: float, size: float) -> None:
         d.arc(box(cx_ - 9, cy_ - 9, cx_ + 9, cy_ + 9), start, end, fill=ACCENT, width=stroke)
 
     # Top-left
-    leg((27, 8), (14, 8)); arc(14, 14, 180, 270); leg((8, 14), (8, 27))
+    leg((27, 8), (14, 8))
+    arc(14, 14, 180, 270)
+    leg((8, 14), (8, 27))
     # Top-right
-    leg((37, 8), (50, 8)); arc(50, 14, 270, 360); leg((56, 14), (56, 27))
+    leg((37, 8), (50, 8))
+    arc(50, 14, 270, 360)
+    leg((56, 14), (56, 27))
     # Bottom-left
-    leg((8, 37), (8, 50)); arc(14, 50, 90, 180); leg((14, 56), (27, 56))
+    leg((8, 37), (8, 50))
+    arc(14, 50, 90, 180)
+    leg((14, 56), (27, 56))
     # Bottom-right
-    leg((56, 37), (56, 50)); arc(50, 50, 0, 90); leg((50, 56), (37, 56))
+    leg((56, 37), (56, 50))
+    arc(50, 50, 0, 90)
+    leg((50, 56), (37, 56))
 
     def square(x, y, alpha):
-        d.rounded_rectangle(box(x, y, x + 8, y + 8), radius=2 * unit, fill=ACCENT + (int(255 * alpha),))
+        d.rounded_rectangle(
+            box(x, y, x + 8, y + 8), radius=2 * unit, fill=ACCENT + (int(255 * alpha),)
+        )
 
     square(22, 22, 1.0)
     square(35, 22, 0.65)
@@ -101,7 +112,9 @@ def main() -> int:
     for size in TARGET_SIZES:
         # Taskbar / Start list icons fill the whole canvas.
         render(size, size, margin=0.04).save(out / f"Square44x44Logo.targetsize-{size}.png")
-        render(size, size, margin=0.04).save(out / f"Square44x44Logo.targetsize-{size}_altform-unplated.png")
+        render(size, size, margin=0.04).save(
+            out / f"Square44x44Logo.targetsize-{size}_altform-unplated.png"
+        )
         count += 2
     print(f"wrote {count} PNGs to {out}")
     return 0
