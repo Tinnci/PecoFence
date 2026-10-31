@@ -1,4 +1,12 @@
-import { CircleHelp, RefreshCw } from "lucide-react";
+import { ChevronDown, CircleHelp, RefreshCw } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { Spinner } from "@/components/ui/spinner";
 import type { LoadFailure } from "./contracts/hub";
 
 const remedies: Record<
@@ -140,40 +148,46 @@ export default function LoadFailurePanel({
 }) {
   const remedy = remedies[failure.code] ?? remedies.hub_unavailable;
   return (
-    <section className="bootstrap-panel" role="alert" aria-busy={busy}>
-      <div className="bootstrap-heading">
-        <CircleHelp size={22} />
+    <Alert className="bootstrap-panel alert-warning" aria-busy={busy}>
+      <CircleHelp />
+      <AlertTitle className="bootstrap-heading">
         <h2>{remedy.title}</h2>
-      </div>
-      <ol>
-        {remedy.steps.map((step) => (
-          <li key={step}>{step}</li>
-        ))}
-      </ol>
-      {remedy.command ? (
-        <pre>
-          <code>{remedy.command}</code>
-        </pre>
-      ) : null}
-      <div className="bootstrap-footer">
-        <div>
-          <small>
-            上次诊断：
-            <time dateTime={new Date(failure.observed_at_ms).toISOString()}>
-              {new Date(failure.observed_at_ms).toLocaleString("zh-CN")}
-            </time>
-          </small>
-          {retained ? <small>下方保留上次读取结果</small> : null}
+      </AlertTitle>
+      <AlertDescription>
+        <ol>
+          {remedy.steps.map((step) => (
+            <li key={step}>{step}</li>
+          ))}
+        </ol>
+        {remedy.command ? (
+          <pre>
+            <code>{remedy.command}</code>
+          </pre>
+        ) : null}
+        <div className="bootstrap-footer">
+          <div>
+            <small>
+              上次诊断：
+              <time dateTime={new Date(failure.observed_at_ms).toISOString()}>
+                {new Date(failure.observed_at_ms).toLocaleString("zh-CN")}
+              </time>
+            </small>
+            {retained ? <small>下方保留上次读取结果</small> : null}
+          </div>
+          <Button variant="outline" disabled={busy} onClick={onRetry}>
+            {busy ? <Spinner aria-hidden="true" /> : <RefreshCw />}
+            {busy ? "正在重试…" : "重试"}
+          </Button>
         </div>
-        <button className="button secondary" disabled={busy} onClick={onRetry}>
-          <RefreshCw size={15} className={busy ? "spin" : ""} />
-          {busy ? "正在重试…" : "重试"}
-        </button>
-      </div>
-      <details>
-        <summary>诊断代码</summary>
-        <code>{failure.code}</code>
-      </details>
-    </section>
+        <Collapsible>
+          <CollapsibleTrigger className="details-trigger">
+            诊断代码 <ChevronDown size={12} />
+          </CollapsibleTrigger>
+          <CollapsibleContent className="details-content">
+            <code>{failure.code}</code>
+          </CollapsibleContent>
+        </Collapsible>
+      </AlertDescription>
+    </Alert>
   );
 }

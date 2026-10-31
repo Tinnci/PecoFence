@@ -1,26 +1,43 @@
 import type { Component, HubReport, Observation } from "./contracts/hub";
 import { checkExplanation } from "./model";
 import { Status } from "./Status";
-import { ChevronRight, RefreshCw } from "lucide-react";
+import { ChevronDown, ChevronRight, RefreshCw } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { Spinner } from "@/components/ui/spinner";
 
 export function CheckResult({ observation }: { observation?: Observation }) {
   if (!observation || observation.state === "unchecked") return null;
+  const attention = ["action_needed", "unknown"].includes(observation.state);
   return (
-    <div
-      className={`check-result check-result-${observation.state}`}
+    <Alert
       role="status"
+      className={`check-result ${attention ? "alert-warning" : ""}`}
     >
-      <p>{checkExplanation(observation)}</p>
-      {observation.code || observation.exit_code != null ? (
-        <details>
-          <summary>检查详情</summary>
-          {observation.code ? <span>检查代码：{observation.code}</span> : null}
-          {observation.exit_code != null ? (
-            <span>退出码：{observation.exit_code}</span>
-          ) : null}
-        </details>
-      ) : null}
-    </div>
+      <AlertDescription>
+        <p>{checkExplanation(observation)}</p>
+        {observation.code || observation.exit_code != null ? (
+          <Collapsible>
+            <CollapsibleTrigger className="details-trigger">
+              检查详情 <ChevronDown size={12} />
+            </CollapsibleTrigger>
+            <CollapsibleContent className="details-content">
+              {observation.code ? (
+                <span>检查代码：{observation.code}</span>
+              ) : null}
+              {observation.exit_code != null ? (
+                <span>退出码：{observation.exit_code}</span>
+              ) : null}
+            </CollapsibleContent>
+          </Collapsible>
+        ) : null}
+      </AlertDescription>
+    </Alert>
   );
 }
 export function CheckedAt({ component }: { component: Component }) {
@@ -47,15 +64,15 @@ export function CheckButton({
   if (!component.checkable) return null;
   const checking = busy && busyComponent === component.id;
   return (
-    <button
-      className="button secondary"
+    <Button
+      variant="outline"
       aria-label={`检查${component.name}`}
       disabled={busy}
       onClick={() => onCheck(component.id)}
     >
-      <RefreshCw size={14} className={checking ? "spin" : ""} />
+      {checking ? <Spinner aria-hidden="true" /> : <RefreshCw />}
       {checking ? "正在检查…" : "检查此组件"}
-    </button>
+    </Button>
   );
 }
 export function Dependencies({
@@ -74,16 +91,17 @@ export function Dependencies({
       {ids.map((id) => {
         const dependency = report.components.find((c) => c.id === id);
         return dependency ? (
-          <button
+          <Button
             key={id}
-            className="dependency-link"
+            variant="secondary"
+            size="sm"
             onClick={() => onOpen(id)}
             aria-label={`配置${dependency.name}`}
           >
             {dependency.name}
             <Status state={dependency.state} />
-            <ChevronRight size={13} />
-          </button>
+            <ChevronRight />
+          </Button>
         ) : (
           <span key={id} className="muted">
             {id} · 未发现组件

@@ -1,5 +1,7 @@
 import type { Component, HubReport } from "./contracts/hub";
 import { Status } from "./Status";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   CheckButton,
   CheckedAt,
@@ -47,42 +49,53 @@ export default function Health({
   return (
     <section className="health-list" aria-label="组件运行状况">
       {report.components.map((c) => (
-        <article className="health-row" key={c.id} aria-label={c.name}>
-          <div className="health-content">
-            <div className="section-heading">
-              <h3>{c.name}</h3>
-              <Status state={c.state} />
+        <Card
+          className="health-row"
+          key={c.id}
+          role="article"
+          aria-label={c.name}
+        >
+          <CardContent className="health-body">
+            <div className="health-content">
+              <div className="section-heading">
+                <h3>{c.name}</h3>
+                <Status state={c.state} />
+              </div>
+              <p>{c.summary}</p>
+              <CheckedAt component={c} />
+              <CheckResult observation={c.status} />
+              <StepFailures component={c} />
+              <Dependencies
+                ids={c.depends_on}
+                report={report}
+                onOpen={onOpen}
+              />
+              {c.issues.map((issue, i) => (
+                <p className="issue" key={i}>
+                  {issue}
+                </p>
+              ))}
+              {c.lifecycle !== "paused" && !c.checkable ? (
+                <small className="muted">暂无自动检查项</small>
+              ) : null}
             </div>
-            <p>{c.summary}</p>
-            <CheckedAt component={c} />
-            <CheckResult observation={c.status} />
-            <StepFailures component={c} />
-            <Dependencies ids={c.depends_on} report={report} onOpen={onOpen} />
-            {c.issues.map((issue, i) => (
-              <p className="issue" key={i}>
-                {issue}
-              </p>
-            ))}
-            {c.lifecycle !== "paused" && !c.checkable ? (
-              <small className="muted">暂无自动检查项</small>
-            ) : null}
-          </div>
-          <div className="health-actions">
-            <CheckButton
-              component={c}
-              busy={busy}
-              busyComponent={busyComponent}
-              onCheck={onCheck}
-            />
-            <button
-              className="button secondary"
-              onClick={() => onOpen(c.id)}
-              disabled={c.lifecycle === "paused"}
-            >
-              查看配置
-            </button>
-          </div>
-        </article>
+            <div className="health-actions">
+              <CheckButton
+                component={c}
+                busy={busy}
+                busyComponent={busyComponent}
+                onCheck={onCheck}
+              />
+              <Button
+                variant="ghost"
+                onClick={() => onOpen(c.id)}
+                disabled={c.lifecycle === "paused"}
+              >
+                查看配置
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       ))}
     </section>
   );

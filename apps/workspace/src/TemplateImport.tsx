@@ -1,5 +1,24 @@
 import { useState } from "react";
-import { FileJson, RefreshCw } from "lucide-react";
+import { CircleAlert, CircleCheck, FileJson, RefreshCw } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Item, ItemContent, ItemGroup, ItemTitle } from "@/components/ui/item";
+import { Spinner } from "@/components/ui/spinner";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import type {
   ImportPlan,
   ProjectStatus,
@@ -41,16 +60,24 @@ export function failureOf(error: unknown): SetupFailure {
 function FailureNote({ failure }: { failure: SetupFailure }) {
   const text = failures[failure.code] ?? failures.spm_unavailable;
   return (
-    <div className="check-result check-result-action_needed" role="alert">
-      <p>{failure.message ? `${text}：${failure.message}` : text}</p>
-    </div>
+    <Alert className="alert-warning">
+      <CircleAlert />
+      <AlertDescription>
+        {failure.message ? `${text}：${failure.message}` : text}
+      </AlertDescription>
+    </Alert>
   );
 }
 function Missing({ names }: { names: string[] }) {
   return names.length ? (
-    <p className="import-missing">
-      采集前还需设置环境变量：<code>{names.join("、")}</code>
-    </p>
+    <div className="import-missing">
+      <span>采集前还需设置环境变量</span>
+      {names.map((name) => (
+        <Badge key={name} variant="secondary">
+          <code>{name}</code>
+        </Badge>
+      ))}
+    </div>
   ) : null;
 }
 
@@ -108,100 +135,119 @@ export default function TemplateImport({
   return (
     <div className="template-import">
       {status?.projects.length ? (
-        <ul className="import-projects" aria-label="已导入的项目">
+        <ItemGroup aria-label="已导入的项目">
           {status.projects.map((p) => (
-            <li key={p.directory}>
-              <strong>
-                {p.project ?? "?"} / {p.scope ?? "?"}
-              </strong>
-              <span>
-                {!p.check.valid
-                  ? "配置无法加载"
-                  : p.check.ready
-                    ? "可以采集"
-                    : "已导入"}
-              </span>
-              <Missing names={p.check.missing_environment} />
-            </li>
+            <Item key={p.directory} variant="outline" size="sm">
+              <ItemContent>
+                <ItemTitle>
+                  {p.project ?? "?"} / {p.scope ?? "?"}
+                  <Badge variant={p.check.valid ? "secondary" : "destructive"}>
+                    {!p.check.valid
+                      ? "配置无法加载"
+                      : p.check.ready
+                        ? "可以采集"
+                        : "已导入"}
+                  </Badge>
+                </ItemTitle>
+                <Missing names={p.check.missing_environment} />
+              </ItemContent>
+            </Item>
           ))}
-        </ul>
+        </ItemGroup>
       ) : null}
       {(failure ?? statusFailure) ? (
         <FailureNote failure={(failure ?? statusFailure)!} />
       ) : null}
       {result ? (
-        <div className="check-result" role="status">
-          <p>
+        <Alert role="status">
+          <CircleCheck />
+          <AlertTitle>
             已导入 {result.project} / {result.scope}
             {result.backups.length
               ? `，原文件已备份（${result.backups.length} 个）`
               : ""}
             。
-          </p>
-          <Missing names={result.check?.missing_environment ?? []} />
-        </div>
+          </AlertTitle>
+          <AlertDescription>
+            <Missing names={result.check?.missing_environment ?? []} />
+          </AlertDescription>
+        </Alert>
       ) : null}
       {plan ? (
-        <section className="import-plan" aria-label="导入计划">
-          <h4>
-            {plan.template.title}
-            <small>
-              {plan.template.id} · {plan.template.version}
-            </small>
-          </h4>
-          <p>
-            项目 <strong>{plan.project}</strong> · 范围{" "}
-            <strong>{plan.scope}</strong> · 实时采集
-          </p>
-          <ul>
-            {plan.files.map((f) => (
-              <li key={f.role} className={`plan-${f.action}`}>
-                <span>{roles[f.role] ?? f.role}</span>
-                <code title={f.path}>{f.path}</code>
-                <em>{actions[f.action] ?? f.action}</em>
-              </li>
-            ))}
-          </ul>
-          {conflict ? <p>{failures.import_conflict}</p> : null}
-          <div className="import-actions">
+        <Card className="import-plan" role="region" aria-label="导入计划">
+          <CardHeader>
+            <CardTitle>{plan.template.title}</CardTitle>
+            <CardDescription>
+              项目 <strong>{plan.project}</strong> · 范围{" "}
+              <strong>{plan.scope}</strong> · 实时采集
+            </CardDescription>
+            <CardAction>
+              <Badge variant="outline">
+                {plan.template.id} · {plan.template.version}
+              </Badge>
+            </CardAction>
+          </CardHeader>
+          <CardContent>
+            <ul>
+              {plan.files.map((f) => (
+                <li key={f.role} className={`plan-${f.action}`}>
+                  <span>{roles[f.role] ?? f.role}</span>
+                  <Tooltip>
+                    <TooltipTrigger render={<code tabIndex={0} />}>
+                      {f.path}
+                    </TooltipTrigger>
+                    <TooltipContent>{f.path}</TooltipContent>
+                  </Tooltip>
+                  <Badge
+                    variant={
+                      f.action === "conflict"
+                        ? "destructive"
+                        : f.action === "unchanged"
+                          ? "ghost"
+                          : "secondary"
+                    }
+                  >
+                    {actions[f.action] ?? f.action}
+                  </Badge>
+                </li>
+              ))}
+            </ul>
+            {conflict ? (
+              <p className="plan-note">{failures.import_conflict}</p>
+            ) : null}
+          </CardContent>
+          <CardFooter className="import-actions">
             {unchanged ? (
               <span className="muted">配置已与模板一致</span>
             ) : (
-              <button
-                className="button primary"
-                disabled={busy}
-                onClick={() => void apply(!!conflict)}
-              >
+              <Button disabled={busy} onClick={() => void apply(!!conflict)}>
+                {busy ? <Spinner aria-hidden="true" /> : null}
                 {conflict ? "备份并替换" : "导入"}
-              </button>
+              </Button>
             )}
-            <button
-              className="button secondary"
+            <Button
+              variant="outline"
               disabled={busy}
               onClick={() => setPlan(null)}
             >
               {unchanged ? "完成" : "取消"}
-            </button>
-          </div>
-        </section>
+            </Button>
+          </CardFooter>
+        </Card>
       ) : (
         <div className="import-actions">
-          <button
-            className="button primary"
-            disabled={busy}
-            onClick={() => void choose()}
-          >
-            <FileJson size={14} />
+          <Button disabled={busy} onClick={() => void choose()}>
+            {busy ? <Spinner aria-hidden="true" /> : <FileJson />}
             选择项目模板…
-          </button>
-          <button
-            className="button secondary"
+          </Button>
+          <Button
+            variant="outline"
             disabled={busy}
             onClick={() => void refreshStatus()}
           >
-            <RefreshCw size={14} />
+            <RefreshCw />
             重新检查
-          </button>
+          </Button>
         </div>
       )}
     </div>

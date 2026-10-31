@@ -1,10 +1,48 @@
 import { useEffect, useRef, useState } from "react";
 import { Progress } from "@/components/ui/progress";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
+import {
+  Item,
+  ItemContent,
+  ItemDescription,
+  ItemFooter,
+  ItemHeader,
+  ItemTitle,
+} from "@/components/ui/item";
+import { Spinner } from "@/components/ui/spinner";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { BrandMark } from "@/components/brand-mark";
 import {
   ArrowRight,
   Blocks,
-  ChevronRight,
+  ChevronDown,
   Home,
   LayoutDashboard,
   ListChecks,
@@ -39,19 +77,25 @@ function ComponentCard({
   onOpen: () => void;
 }) {
   return (
-    <button className="component-card" onClick={onOpen}>
-      <div className="card-top">
+    <Item
+      variant="outline"
+      className="component-card"
+      render={<button type="button" onClick={onOpen} />}
+    >
+      <ItemHeader>
         <span className="component-icon">
           <Blocks size={18} />
         </span>
         <Status state={component.state} />
-      </div>
-      <h3>{component.name}</h3>
-      <p>{component.summary}</p>
-      <span className="card-bottom">
+      </ItemHeader>
+      <ItemContent>
+        <ItemTitle>{component.name}</ItemTitle>
+        <ItemDescription>{component.summary}</ItemDescription>
+      </ItemContent>
+      <ItemFooter className="card-bottom">
         查看配置 <ArrowRight size={14} />
-      </span>
-    </button>
+      </ItemFooter>
+    </Item>
   );
 }
 export default function App() {
@@ -143,250 +187,278 @@ export default function App() {
     health: ["运行状况", "检查本机工具与连接的当前状态。"],
   };
   return (
-    <div className="app-shell">
-      <aside className="sidebar">
-        <div className="brand">
-          <span className="brand-mark">
-            <BrandMark />
-          </span>
-          <div>
-            工作台<small>TINNCI WORKSPACE</small>
-          </div>
-        </div>
-        <nav aria-label="主导航">
-          {(
-            [
-              { id: "home", title: "首页", icon: Home },
-              { id: "setup", title: "设置清单", icon: ListChecks },
-              { id: "health", title: "运行状况", icon: Activity },
-            ] as const
-          ).map((item) => (
-            <button
-              aria-current={page === item.id ? "page" : undefined}
-              key={item.id}
-              onClick={() => {
-                setSelected(null);
-                setPage(item.id);
-              }}
-            >
-              <item.icon size={18} />
-              {item.title}
-            </button>
-          ))}
-          <span className="nav-caption">交付空间</span>
-          {[
-            { title: "看板", icon: LayoutDashboard },
-            { title: "时间线", icon: Clock3 },
-            { title: "问题与 CI/CD", icon: GitBranch },
-            { title: "账户与来源", icon: UserRound },
-          ].map((item) => (
-            <span className="nav-planned" key={item.title}>
-              <item.icon size={18} />
-              {item.title}
-              <small>待支持</small>
+    <TooltipProvider>
+      <div className="app-shell">
+        <aside className="sidebar">
+          <div className="brand">
+            <span className="brand-mark">
+              <BrandMark />
             </span>
-          ))}
-        </nav>
-        <div className="sidebar-footer">
-          <ShieldCheck size={15} />
-          <span>工具各自运行，工作在此汇聚</span>
-        </div>
-      </aside>
-      <main id="main">
-        <header className="topbar">
-          <span>
-            工作台 <ChevronRight size={13} />{" "}
-            {page === "home"
-              ? "首页"
-              : page === "setup"
-                ? "设置清单"
-                : "运行状况"}
-          </span>
-          <span className="local-indicator">
-            <i />
-            本机工作空间
-          </span>
-        </header>
-        <div className="page-content">
-          <div className="page-heading">
             <div>
-              <span className="eyebrow">YOUR WORK, CONNECTED</span>
-              <h1>{headings[page][0]}</h1>
-              <p>{headings[page][1]}</p>
+              工作台<small>TINNCI WORKSPACE</small>
             </div>
-            <button
-              className="button secondary"
-              disabled={busy}
-              onClick={() => void refresh(true)}
-            >
-              <RefreshCw size={15} className={busy ? "spin" : ""} />
-              {busy
-                ? lastRequest.current.check
-                  ? "正在检查…"
-                  : "正在读取…"
-                : "检查状态"}
-            </button>
           </div>
-          <div aria-live="polite">
-            {error ? (
-              <LoadFailurePanel
-                failure={error}
-                busy={busy}
-                retained={!!report}
-                onRetry={() =>
-                  void refresh(
-                    lastRequest.current.check,
-                    lastRequest.current.component,
-                  )
-                }
-              />
+          <nav aria-label="主导航">
+            {(
+              [
+                { id: "home", title: "首页", icon: Home },
+                { id: "setup", title: "设置清单", icon: ListChecks },
+                { id: "health", title: "运行状况", icon: Activity },
+              ] as const
+            ).map((item) => (
+              <Button
+                variant="ghost"
+                className="nav-item"
+                aria-current={page === item.id ? "page" : undefined}
+                key={item.id}
+                onClick={() => {
+                  setSelected(null);
+                  setPage(item.id);
+                }}
+              >
+                <item.icon />
+                {item.title}
+              </Button>
+            ))}
+            <span className="nav-caption">交付空间</span>
+            {[
+              { title: "看板", icon: LayoutDashboard },
+              { title: "时间线", icon: Clock3 },
+              { title: "问题与 CI/CD", icon: GitBranch },
+              { title: "账户与来源", icon: UserRound },
+            ].map((item) => (
+              <Tooltip key={item.title}>
+                <TooltipTrigger
+                  render={<span className="nav-planned" tabIndex={0} />}
+                >
+                  <item.icon size={18} />
+                  {item.title}
+                  <Badge variant="secondary" className="nav-badge">
+                    待支持
+                  </Badge>
+                </TooltipTrigger>
+                <TooltipContent side="right">将在后续版本提供</TooltipContent>
+              </Tooltip>
+            ))}
+          </nav>
+          <div className="sidebar-footer">
+            <ShieldCheck size={15} />
+            <span>工具各自运行，工作在此汇聚</span>
+          </div>
+        </aside>
+        <main id="main">
+          <header className="topbar">
+            <Breadcrumb>
+              <BreadcrumbList>
+                <BreadcrumbItem>工作台</BreadcrumbItem>
+                <BreadcrumbSeparator />
+                <BreadcrumbItem>
+                  <BreadcrumbPage>
+                    {page === "home"
+                      ? "首页"
+                      : page === "setup"
+                        ? "设置清单"
+                        : "运行状况"}
+                  </BreadcrumbPage>
+                </BreadcrumbItem>
+              </BreadcrumbList>
+            </Breadcrumb>
+            <span className="local-indicator">
+              <i />
+              本机工作空间
+            </span>
+          </header>
+          <div className="page-content">
+            <div className="page-heading">
+              <div>
+                <span className="eyebrow">YOUR WORK, CONNECTED</span>
+                <h1>{headings[page][0]}</h1>
+                <p>{headings[page][1]}</p>
+              </div>
+              <Button
+                variant="outline"
+                size="lg"
+                disabled={busy}
+                onClick={() => void refresh(true)}
+              >
+                {busy ? <Spinner aria-hidden="true" /> : <RefreshCw />}
+                {busy
+                  ? lastRequest.current.check
+                    ? "正在检查…"
+                    : "正在读取…"
+                  : "检查状态"}
+              </Button>
+            </div>
+            <div aria-live="polite">
+              {error ? (
+                <LoadFailurePanel
+                  failure={error}
+                  busy={busy}
+                  retained={!!report}
+                  onRetry={() =>
+                    void refresh(
+                      lastRequest.current.check,
+                      lastRequest.current.component,
+                    )
+                  }
+                />
+              ) : null}
+            </div>
+            {!report && !error ? (
+              <div className="loading" role="status">
+                <Spinner aria-hidden="true" /> 正在发现本机组件…
+              </div>
+            ) : null}
+            {report ? (
+              <>
+                {page === "home" ? (
+                  <>
+                    <Card className="welcome-panel">
+                      <CardContent className="welcome-body">
+                        <div className="welcome-main">
+                          <span className="eyebrow">准备好你的工作空间</span>
+                          <h2>
+                            {totals.total > 0 && totals.done === totals.total
+                              ? "配置已完成"
+                              : "连接工具，开始协作"}
+                          </h2>
+                          <p>
+                            {next
+                              ? `下一步：${next.name} · ${next.setup.find((s) => s.state !== "done")?.title ?? "查看配置"}`
+                              : "查看设置清单，了解本机工具的配置要求。"}
+                          </p>
+                          <Button size="lg" onClick={() => openSetup(next?.id)}>
+                            查看设置清单 <ArrowRight />
+                          </Button>
+                        </div>
+                        <div className="progress-box">
+                          <strong>
+                            {totals.done}
+                            <span> / {totals.total}</span>
+                          </strong>
+                          <p>配置步骤已完成</p>
+                          <Progress
+                            className="setup-progress"
+                            value={
+                              totals.total
+                                ? (totals.done / totals.total) * 100
+                                : 0
+                            }
+                            aria-label="配置完成进度"
+                          />
+                          <small>
+                            {checkedCount
+                              ? `${checkedCount} 个组件已检查`
+                              : "状态尚未检查"}
+                          </small>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    <section className="projects">
+                      <div className="section-heading">
+                        <h2>你的项目</h2>
+                        <span className="quiet-label">SPM</span>
+                      </div>
+                      <Empty className="project-empty">
+                        <EmptyHeader>
+                          <EmptyMedia variant="icon">
+                            <LayoutDashboard />
+                          </EmptyMedia>
+                          <EmptyTitle>从项目配置开始</EmptyTitle>
+                          <EmptyDescription>
+                            导入 SPM 负责人提供的项目模板，再连接来源。
+                          </EmptyDescription>
+                        </EmptyHeader>
+                        <EmptyContent>
+                          <Button
+                            variant="outline"
+                            onClick={() => openSetup("spm")}
+                          >
+                            查看项目配置 <ArrowRight />
+                          </Button>
+                        </EmptyContent>
+                      </Empty>
+                    </section>
+                    {groups.map(([group, title]) => {
+                      const rows = active
+                        .filter((c) => c.group === group)
+                        .sort(
+                          (a, b) =>
+                            Number(b.id === "spm") - Number(a.id === "spm"),
+                        );
+                      return rows.length ? (
+                        <section className="tool-group" key={group}>
+                          <div className="section-heading">
+                            <h2>{title}</h2>
+                            <span className="count">{rows.length}</span>
+                          </div>
+                          <div className="component-grid">
+                            {rows.map((c) => (
+                              <ComponentCard
+                                key={c.id}
+                                component={c}
+                                onOpen={() => openSetup(c.id)}
+                              />
+                            ))}
+                          </div>
+                        </section>
+                      ) : null;
+                    })}
+                    {report.components.some((c) => c.lifecycle === "paused") ? (
+                      <Collapsible className="paused">
+                        <CollapsibleTrigger className="details-trigger">
+                          已暂停的组件 <ChevronDown size={12} />
+                        </CollapsibleTrigger>
+                        <CollapsibleContent>
+                          {report.components
+                            .filter((c) => c.lifecycle === "paused")
+                            .map((c) => (
+                              <p key={c.id}>
+                                {c.name} · {c.summary}
+                              </p>
+                            ))}
+                        </CollapsibleContent>
+                      </Collapsible>
+                    ) : null}
+                  </>
+                ) : page === "setup" ? (
+                  <Checklist
+                    key={selected}
+                    report={report}
+                    selected={selected}
+                    busy={busy}
+                    busyComponent={busyComponent}
+                    onCheck={(id) => void refresh(true, id)}
+                    onOpen={openSetup}
+                    projects={projects}
+                    projectsFailure={projectsFailure}
+                    onProjects={loadProjects}
+                  />
+                ) : (
+                  <Health
+                    report={report}
+                    busy={busy}
+                    busyComponent={busyComponent}
+                    onCheck={(id) => void refresh(true, id)}
+                    onOpen={openSetup}
+                  />
+                )}
+                <footer className="page-footer">
+                  <span>
+                    {report.checked ? "最近全量检查" : "最近读取"} ·{" "}
+                    {new Date(report.observed_at).toLocaleString("zh-CN")}
+                  </span>
+                  {report.unmanifested.length ? (
+                    <span>
+                      {report.unmanifested.length} 个组件尚未提供配置说明
+                    </span>
+                  ) : null}
+                </footer>
+              </>
             ) : null}
           </div>
-          {!report && !error ? (
-            <div className="loading" role="status">
-              正在发现本机组件…
-            </div>
-          ) : null}
-          {report ? (
-            <>
-              {page === "home" ? (
-                <>
-                  <section className="welcome-panel">
-                    <div className="welcome-main">
-                      <span className="eyebrow">准备好你的工作空间</span>
-                      <h2>
-                        {totals.total > 0 && totals.done === totals.total
-                          ? "配置已完成"
-                          : "连接工具，开始协作"}
-                      </h2>
-                      <p>
-                        {next
-                          ? `下一步：${next.name} · ${next.setup.find((s) => s.state !== "done")?.title ?? "查看配置"}`
-                          : "查看设置清单，了解本机工具的配置要求。"}
-                      </p>
-                      <button
-                        className="button primary"
-                        onClick={() => openSetup(next?.id)}
-                      >
-                        查看设置清单 <ArrowRight size={15} />
-                      </button>
-                    </div>
-                    <div className="progress-box">
-                      <strong>
-                        {totals.done}
-                        <span> / {totals.total}</span>
-                      </strong>
-                      <p>配置步骤已完成</p>
-                      <Progress
-                        className="setup-progress"
-                        value={
-                          totals.total ? (totals.done / totals.total) * 100 : 0
-                        }
-                        aria-label="配置完成进度"
-                      />
-                      <small>
-                        {checkedCount
-                          ? `${checkedCount} 个组件已检查`
-                          : "状态尚未检查"}
-                      </small>
-                    </div>
-                  </section>
-                  <section className="projects">
-                    <div className="section-heading">
-                      <h2>你的项目</h2>
-                      <span className="quiet-label">SPM</span>
-                    </div>
-                    <div className="project-empty">
-                      <span className="empty-icon">
-                        <LayoutDashboard size={25} />
-                      </span>
-                      <div>
-                        <h3>从项目配置开始</h3>
-                        <p>查看 SPM 设置要求，准备项目模板和来源连接。</p>
-                      </div>
-                      <button
-                        className="button secondary"
-                        onClick={() => openSetup("spm")}
-                      >
-                        查看项目配置 <ArrowRight size={14} />
-                      </button>
-                    </div>
-                  </section>
-                  {groups.map(([group, title]) => {
-                    const rows = active
-                      .filter((c) => c.group === group)
-                      .sort(
-                        (a, b) =>
-                          Number(b.id === "spm") - Number(a.id === "spm"),
-                      );
-                    return rows.length ? (
-                      <section className="tool-group" key={group}>
-                        <div className="section-heading">
-                          <h2>{title}</h2>
-                          <span className="count">{rows.length}</span>
-                        </div>
-                        <div className="component-grid">
-                          {rows.map((c) => (
-                            <ComponentCard
-                              key={c.id}
-                              component={c}
-                              onOpen={() => openSetup(c.id)}
-                            />
-                          ))}
-                        </div>
-                      </section>
-                    ) : null;
-                  })}
-                  {report.components.some((c) => c.lifecycle === "paused") ? (
-                    <details className="paused">
-                      <summary>已暂停的组件</summary>
-                      {report.components
-                        .filter((c) => c.lifecycle === "paused")
-                        .map((c) => (
-                          <p key={c.id}>
-                            {c.name} · {c.summary}
-                          </p>
-                        ))}
-                    </details>
-                  ) : null}
-                </>
-              ) : page === "setup" ? (
-                <Checklist
-                  key={selected}
-                  report={report}
-                  selected={selected}
-                  busy={busy}
-                  busyComponent={busyComponent}
-                  onCheck={(id) => void refresh(true, id)}
-                  onOpen={openSetup}
-                  projects={projects}
-                  projectsFailure={projectsFailure}
-                  onProjects={loadProjects}
-                />
-              ) : (
-                <Health
-                  report={report}
-                  busy={busy}
-                  busyComponent={busyComponent}
-                  onCheck={(id) => void refresh(true, id)}
-                  onOpen={openSetup}
-                />
-              )}
-              <footer className="page-footer">
-                <span>
-                  {report.checked ? "最近全量检查" : "最近读取"} ·{" "}
-                  {new Date(report.observed_at).toLocaleString("zh-CN")}
-                </span>
-                {report.unmanifested.length ? (
-                  <span>
-                    {report.unmanifested.length} 个组件尚未提供配置说明
-                  </span>
-                ) : null}
-              </footer>
-            </>
-          ) : null}
-        </div>
-      </main>
-    </div>
+        </main>
+      </div>
+    </TooltipProvider>
   );
 }
