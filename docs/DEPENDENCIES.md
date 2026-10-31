@@ -1,23 +1,23 @@
 # Dependency automation and Actions runtimes
 
-Dependabot can open upgrade PRs when an action publishes a newer version with a
-supported runtime. It cannot change the runtime of old upstream code, repair
-breaking action inputs, configure credentials, or guarantee an upgrade passes CI.
+GitHub Actions are updated by hand, committed directly to `main`: there is no
+Dependabot configuration and no upgrade PR. An update replaces the full commit SHA
+after checking it against the publisher's release tag, reads the release notes of
+any major version crossed for removed or changed inputs, and fixes the version
+comment. `scripts/check-actions.py --online` then confirms the declared runtime.
 The desktop workflow does not install a project Node.js runtime. Its scripts use
 Rust and Python; GitHub Actions that declare a Node runtime still execute under
 their own declared `runs.using` version.
 
 ## Current policy
 
-- [.github/dependabot.yml](../.github/dependabot.yml) checks root workflows **and**
-  `/.github/actions/build-desktop` weekly. Root scanning alone can miss the local
-  composite action.
-- Minor/patch updates are grouped; major updates remain allowed as separate PRs.
-  There is no automatic merge.
+- Pins in root workflows **and** the local composite action
+  `/.github/actions/build-desktop` are reviewed together; root workflows alone miss
+  the composite action's own `uses:` lines.
 - Direct remote actions use full commit SHA pins with version comments. Updated
   official actions declare Node 24; Rust/winget wrappers
   are composite actions.
-- `scripts/check-actions.py` checks direct pins, local-action coverage and rejects
+- `scripts/check-actions.py` checks direct pins, that local actions exist, and rejects
   privileged `pull_request_target`. Its `--online` mode fetches pinned public
   action metadata and rejects declared Node runtimes below 24. This is not a full
   YAML validator or a recursive supply-chain audit.
@@ -67,13 +67,10 @@ total CI compute even if Quick completes earlier.
 
 ## Required repository configuration
 
-Adding the file to the default branch enables version-update scheduling, subject
-to repository/organization Dependabot policies. This change does not alter those
-remote settings or supply a credential.
+No dependency-automation file or secret is configured.
 
-Public CI, releases and Dependabot PR builds use this repository plus public
-registries. They do not read `Tinnci/spm` and need no `PRIVATE_REPO_TOKEN`,
-private checkout or Dependabot private-repository secret. The private backend
+Public CI and releases use this repository plus public registries. They do not
+read `Tinnci/spm` and need no `PRIVATE_REPO_TOKEN` or private checkout. The private backend
 remains separate; see [SPM_BOUNDARY.md](SPM_BOUNDARY.md).
 
 Do not use privileged `pull_request_target`, workflow privilege escalation or a

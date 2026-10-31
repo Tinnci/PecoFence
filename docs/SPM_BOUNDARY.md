@@ -97,7 +97,7 @@ remote edits, deletion or visibility changes are part of this migration.
 
 ## Public CI and evidence
 
-Public CI, releases and Dependabot build from public source without
+Public CI and releases build from public source without
 `PRIVATE_REPO_TOKEN` or a private source checkout/cache. Do not use privileged
 `pull_request_target` to bypass that boundary. Dependency caches are limited to
 public registry/NuGet archives and the validated object database for the one

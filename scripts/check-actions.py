@@ -14,22 +14,11 @@ def check(root=ROOT, online=False, fetch=None):
     errors = []
     manifests = sorted((root / ".github/workflows").glob("*.y*ml"))
     manifests += sorted((root / ".github/actions").rglob("action.y*ml"))
-    dependency_config = (root / ".github/dependabot.yml").read_text(encoding="utf-8")
-    directories = set(
-        re.findall(r"^\s+(?:-\s*)?directory:\s*['\"]?([^'\"\s]+)", dependency_config, re.MULTILINE)
-    )
-    if "/" not in directories:
-        errors.append("Dependabot must cover root workflows")
     references = set()
     for path in manifests:
         text = path.read_text(encoding="utf-8")
         if re.search(r"^\s*pull_request_target\s*:", text, re.MULTILINE):
             errors.append(f"{path}: privileged pull_request_target is not permitted")
-        if (
-            path.parent.is_relative_to(root / ".github/actions")
-            and "/" + path.parent.relative_to(root).as_posix() not in directories
-        ):
-            errors.append(f"{path}: local composite action needs explicit Dependabot coverage")
         for value in USES.findall(text):
             value = value.strip("'\"")
             if value.startswith("./"):
@@ -83,4 +72,4 @@ if __name__ == "__main__":
     errors = check(online="--online" in sys.argv)
     if errors:
         raise SystemExit("\n".join(errors))
-    print("Direct action pins and Dependabot coverage passed")
+    print("Direct action pins passed")

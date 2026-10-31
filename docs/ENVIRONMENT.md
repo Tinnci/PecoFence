@@ -116,7 +116,7 @@ PecoFence-lab\
 
 1. `#[tokio::test]` 默认单线程运行时：测试里用 `std::thread::sleep` 会饿死
    同运行时的 spawned 任务（v2_loopback 曾因此失败）。用 `tokio::time::sleep().await`。
-2. 公开 CI/Dependabot 不需要 PRIVATE_REPO_TOKEN，也不得使用特权
+2. 公开 CI 不需要 PRIVATE_REPO_TOKEN，也不得使用特权
    pull_request_target 或私有源码缓存。源码检查及 headless/合成协议测试必须
    执行且失败即失败；feature gate 不得静默跳过。私有 daemon 实机集成必须
    在独立、获授权的私有流程中验证并记录，不能以公开测试代替。

@@ -19,10 +19,6 @@ class ActionPolicyTests(unittest.TestCase):
         self.root = Path(self.temp.name)
         (self.root / ".github/workflows").mkdir(parents=True)
         (self.root / ".github/actions/build-desktop").mkdir(parents=True)
-        (self.root / ".github/dependabot.yml").write_text(
-            "updates:\n  - directory: /\n  - directory: /.github/actions/build-desktop\n",
-            encoding="utf-8",
-        )
         self.workflow = self.root / ".github/workflows/ci.yml"
         self.workflow.write_text(
             "steps:\n  - uses: ./.github/actions/build-desktop\n", encoding="utf-8"
@@ -35,12 +31,11 @@ class ActionPolicyTests(unittest.TestCase):
     def tearDown(self):
         self.temp.cleanup()
 
-    def test_explicit_local_composite_coverage(self):
+    def test_pinned_local_composite_passes_without_dependency_automation(self):
+        # Action updates are applied by hand; no Dependabot configuration is required.
         self.assertEqual(policy.check(self.root), [])
-        (self.root / ".github/dependabot.yml").write_text(
-            "updates:\n  - directory: /\n", encoding="utf-8"
-        )
-        self.assertTrue(any("explicit Dependabot" in error for error in policy.check(self.root)))
+        self.workflow.write_text("steps:\n  - uses: ./.github/actions/missing\n", encoding="utf-8")
+        self.assertTrue(any("missing local action" in e for e in policy.check(self.root)))
 
     def test_mutable_pins_and_privileged_pr_event_rejected(self):
         self.action.write_text("steps:\n  - uses: actions/checkout@v4\n", encoding="utf-8")

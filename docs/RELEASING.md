@@ -48,7 +48,7 @@ Desktop CI and tag releases do not build or deploy a website. Other distribution
 
 ### Credentials and boundaries
 
-Public CI, tag builds, fork PRs and Dependabot PRs require no private token or SPM
+Public CI, tag builds and fork PRs require no private token or SPM
 checkout. Actions no longer reads private SPM source. Do not introduce privileged
 `pull_request_target` or a private-source cache. Checkout uses
 `persist-credentials: false`; caches contain public registry archives and the one
@@ -61,9 +61,8 @@ must not silently skip failures. Live private-daemon integration belongs to a
 separate authorized private workflow and must not be claimed from public CI
 results. See [SPM_BOUNDARY.md](SPM_BOUNDARY.md).
 
-Dependabot needs no `PRIVATE_REPO_TOKEN` secret. Major upgrades remain allowed
-but require review, not auto-merge. Configuration covers both workflows and the
-local composite action. See [DEPENDENCIES.md](DEPENDENCIES.md).
+Action pins are updated by hand on `main`, covering both workflows and the local
+composite action. See [DEPENDENCIES.md](DEPENDENCIES.md).
 
 Other credentials are independent: `GH_TOKEN`/`contents: write` creates the
 draft release; `WINGET_TOKEN` opens the winget PR. No website hosting credentials

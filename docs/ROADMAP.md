@@ -88,7 +88,7 @@
 
 ## 构建维护与原生设置当前状态
 
-Actions 使用已核验的 Node 24/复合 action SHA，Dependabot 显式覆盖工作流与本地 action；
+Actions 使用已核验的 Node 24/复合 action SHA，工作流与本地 action 的 SHA 在 main 上手动更新；
 源码检查先于私有凭据。打包/安装使用共用 PE、构建 receipt、payload manifest 校验，
 不删除旧解压目录的用户配置。见 [DEPENDENCIES](DEPENDENCIES.md) 和 [PACKAGING](PACKAGING.md)。
 
