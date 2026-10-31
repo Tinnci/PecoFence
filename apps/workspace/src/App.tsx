@@ -15,9 +15,17 @@ import {
   GitBranch,
   UserRound,
 } from "lucide-react";
-import { loadHub, navigation, type Page } from "./api";
+import { desktop, loadHub, navigation, projectStatus, type Page } from "./api";
+import type { ProjectStatus, SetupFailure } from "./contracts/setup";
+import { failureOf } from "./TemplateImport";
 import type { Component, HubReport, LoadFailure } from "./contracts/hub";
-import { attention, groups, mergeReport, progress } from "./model";
+import {
+  attention,
+  groups,
+  mergeReport,
+  progress,
+  withProjects,
+} from "./model";
 import { Status } from "./Status";
 import Checklist from "./Checklist";
 import Health from "./Health";
@@ -48,7 +56,7 @@ function ComponentCard({
 }
 export default function App() {
   const [page, setPage] = useState<Page>("home");
-  const [report, setReport] = useState<HubReport | null>(null);
+  const [hub, setHub] = useState<HubReport | null>(null);
   const [busy, setBusy] = useState(false);
   const [busyComponent, setBusyComponent] = useState<string | null>(null);
   const [error, setError] = useState<LoadFailure | null>(null);
@@ -58,6 +66,21 @@ export default function App() {
     check: false,
   });
   const mounted = useRef(false);
+  const [projects, setProjects] = useState<ProjectStatus | null>(null);
+  const [projectsFailure, setProjectsFailure] = useState<SetupFailure | null>(
+    null,
+  );
+  async function loadProjects() {
+    try {
+      const status = await projectStatus();
+      if (mounted.current) {
+        setProjects(status);
+        setProjectsFailure(null);
+      }
+    } catch (failure) {
+      if (mounted.current) setProjectsFailure(failureOf(failure));
+    }
+  }
   async function refresh(check: boolean, component?: string) {
     if (inFlight.current) return;
     inFlight.current = true;
@@ -71,7 +94,7 @@ export default function App() {
       if (component && data.scope !== component)
         throw new Error("hub_update_required");
       if (mounted.current) {
-        setReport(mergeReport(report, data));
+        setHub(mergeReport(hub, data));
         setError(null);
       }
     } catch (failure) {
@@ -87,6 +110,7 @@ export default function App() {
   useEffect(() => {
     mounted.current = true;
     void refresh(false);
+    if (desktop()) void loadProjects();
     let cleanup: (() => void) | undefined;
     void navigation((next) => {
       if (mounted.current) setPage(next);
@@ -105,6 +129,7 @@ export default function App() {
     setSelected(id ?? null);
     setPage("setup");
   }
+  const report = hub ? withProjects(hub, projects) : null;
   const totals = report ? progress(report) : { done: 0, total: 0 };
   const active =
     report?.components.filter((c) => c.lifecycle !== "paused") ?? [];
@@ -334,6 +359,9 @@ export default function App() {
                   busyComponent={busyComponent}
                   onCheck={(id) => void refresh(true, id)}
                   onOpen={openSetup}
+                  projects={projects}
+                  projectsFailure={projectsFailure}
+                  onProjects={loadProjects}
                 />
               ) : (
                 <Health

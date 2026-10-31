@@ -1,6 +1,6 @@
 [package]
 name = "tinnci-workspace"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2024"
 license = "Apache-2.0"
 
@@ -23,6 +23,7 @@ tokio = { version = "1", features = ["process", "io-util", "time", "sync", "rt",
 [target.'cfg(windows)'.dependencies]
 tauri = { version = "2.11.6", features = [] }
 tauri-plugin-single-instance = "2"
+tauri-plugin-dialog = "2"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

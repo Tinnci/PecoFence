@@ -1,13 +1,16 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main",
-  "description": "Local welcome hub reads and validated navigation only",
+  "description": "Local welcome hub reads, validated navigation and owner-run SPM template import",
   "windows": ["main"],
   "permissions": [
     "core:event:allow-listen",
     "core:event:allow-unlisten",
     "allow-load-hub",
     "allow-launch-target",
-    "allow-first-frame"
+    "allow-first-frame",
+    "allow-template-plan",
+    "allow-template-apply",
+    "allow-project-status"
   ]
 }

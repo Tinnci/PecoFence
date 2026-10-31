@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Check, ChevronRight, ShieldCheck } from "lucide-react";
 import type { HubReport } from "./contracts/hub";
 import { label } from "./model";
+import type { ProjectStatus, SetupFailure } from "./contracts/setup";
+import TemplateImport from "./TemplateImport";
 import { Status } from "./Status";
 import {
   CheckButton,
@@ -17,6 +19,9 @@ export default function Checklist({
   busyComponent,
   onCheck,
   onOpen,
+  projects,
+  projectsFailure,
+  onProjects,
 }: {
   report: HubReport;
   selected: string | null;
@@ -24,6 +29,9 @@ export default function Checklist({
   busyComponent: string | null;
   onCheck: (id: string) => void;
   onOpen: (id: string) => void;
+  projects: ProjectStatus | null;
+  projectsFailure: SetupFailure | null;
+  onProjects: () => Promise<void>;
 }) {
   const components = report.components.filter((c) => c.lifecycle !== "paused");
   const [current, setCurrent] = useState(
@@ -141,7 +149,13 @@ export default function Checklist({
                         })}
                       </div>
                     ) : null}
-                    {step.state === "planned" ? (
+                    {component.id === "spm" && step.id === "template" ? (
+                      <TemplateImport
+                        status={projects}
+                        statusFailure={projectsFailure}
+                        onRefresh={onProjects}
+                      />
+                    ) : step.state === "planned" ? (
                       <small>配置入口将在后续版本提供</small>
                     ) : null}
                   </div>

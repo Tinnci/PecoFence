@@ -959,3 +959,94 @@ h1 {
     @apply font-sans;
   }
 }
+
+/* SPM template import */
+.template-import {
+  margin-top: 12px;
+}
+.import-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+.import-projects {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.import-projects li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  font-size: 12px;
+  padding: 10px 12px;
+  border: 1px solid #e4e9dc;
+  border-radius: 6px;
+}
+.import-projects li span {
+  color: #7c8a72;
+}
+.import-projects .import-missing,
+.check-result .import-missing {
+  flex-basis: 100%;
+  margin-top: 4px;
+}
+.import-missing code,
+.import-plan code {
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.import-plan {
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid #dce6d3;
+  border-radius: 8px;
+  background: #f8faf5;
+}
+.import-plan h4 {
+  font-size: 13px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+}
+.import-plan h4 small {
+  margin: 0;
+  font-weight: 400;
+}
+.import-plan ul {
+  list-style: none;
+  padding: 0;
+  margin: 10px 0 0;
+  display: grid;
+  gap: 6px;
+}
+.import-plan li {
+  display: grid;
+  grid-template-columns: 5em minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: baseline;
+  font-size: 12px;
+}
+.import-plan li code {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #7c8a72;
+}
+.import-plan li em {
+  font-style: normal;
+  color: #526e4f;
+}
+.import-plan .plan-conflict em,
+.import-plan .plan-replace em {
+  color: #92733d;
+}
+.import-plan .plan-unchanged em {
+  color: #97a08f;
+}

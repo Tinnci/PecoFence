@@ -1,6 +1,7 @@
 import { isTauri, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { HubReport } from "./contracts/hub";
+import type { ImportPlan, ProjectStatus } from "./contracts/setup";
 export type Page = "home" | "setup" | "health";
 export function isPage(value: unknown): value is Page {
   return value === "home" || value === "setup" || value === "health";
@@ -43,3 +44,23 @@ export async function navigation(onPage: (page: Page) => void) {
   }
   return cleanup;
 }
+// SPM project setup runs only in the desktop shell, through the owner CLI.
+function desktopOnly(): never {
+  throw { code: "desktop_required" };
+}
+export async function projectStatus(): Promise<ProjectStatus> {
+  return isTauri() ? invoke<ProjectStatus>("project_status") : desktopOnly();
+}
+/** Opens the native file dialog and returns the owner's plan; nothing is written. */
+export async function planTemplate(): Promise<ImportPlan> {
+  return isTauri() ? invoke<ImportPlan>("template_plan") : desktopOnly();
+}
+export async function applyTemplate(
+  sha256: string,
+  replace: boolean,
+): Promise<ImportPlan> {
+  return isTauri()
+    ? invoke<ImportPlan>("template_apply", { sha256, replace })
+    : desktopOnly();
+}
+export const desktop = isTauri;

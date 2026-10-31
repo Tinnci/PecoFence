@@ -3,14 +3,15 @@
 # Tinnci Workspace · 工作台
 
 An independent Windows window for discovering the local tool ecosystem and
-understanding first-time setup. Version 0.3 adds first-launch prerequisite diagnosis and recovery. PecoFence and spmd keep their own lifetimes.
+understanding first-time setup. Version 0.3 added first-launch prerequisite diagnosis and recovery; 0.4 imports SPM project templates. PecoFence and spmd keep their own lifetimes.
 Closing Workspace leaves both running.
 
 This first increment provides Home, a per-component setup checklist and Health.
 All cards and steps come from `dev-cli hub --json`; no project or account fixture
 is bundled. Opening Home reads inventory without running checks. Each checkable component can also be checked on its own; other observations and their timestamps are preserved. “检查状态” runs
-`hub --check`, with the CLI's read-only check policy. Unimplemented setup steps
-remain “待支持”; this increment does not execute setup commands or accept tokens.
+`hub --check`, with the CLI's read-only check policy. The SPM template step imports
+a project through the owner CLI (0.4); other unimplemented steps remain “待支持”, and
+Workspace accepts no tokens.
 Board, timeline, issues, CI and accounts pages follow in later increments.
 
 ## Run and build
@@ -174,6 +175,30 @@ incompatible CLI through the real Rust bridge, displayed installation guidance,
 and recovered to inventory using Retry. Missing WSL/distribution cases use the
 controlled process-runner tests. No WSL installation or source configuration was
 changed by verification.
+
+## SPM project template (0.4)
+
+The SPM checklist's template step lists imported projects and imports one more:
+
+1. **选择项目模板…** opens the native file dialog from Rust. Workspace copies the
+   chosen file (at most 1 MiB) to its cache and runs
+   `spm.exe setup import-template <copy>`, which validates and plans without writing.
+2. The plan shows template, project, scope and each file's action. A conflict
+   offers **备份并替换**; identical configuration needs no import.
+3. Confirming runs the same copy with `--apply` (and `--replace`), only if the
+   confirmed sha256 still matches the plan. The result lists backups and the
+   credential environment variables collection still needs.
+
+The frontend calls only `template_plan`, `template_apply(sha256, replace)` and
+`project_status`; it never passes a path or argument. Owner errors arrive as
+`template_invalid`, `import_conflict` or `import_io` with SPM's message; runtime
+failures are controlled codes such as `spm_missing` or `spm_update_required`.
+`spm.exe` is `TINNCI_SPM_EXE`, else the target of `%USERPROFILE%\.local\bin\spm.cmd`,
+else `%USERPROFILE%\.local\bin\spm.exe`; `SPM_CONFIG_ROOT` passes through to SPM.
+
+The step's state comes from the desktop's `spm setup status`, not the hub's WSL check:
+WSL reads another configuration root and cannot read files DLP encrypts for Windows
+writers. Imports use live mode; historical imports stay in the CLI.
 
 ## Icon
 

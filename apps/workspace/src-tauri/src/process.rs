@@ -24,7 +24,11 @@ pub struct Output {
     pub stdout: Vec<u8>,
 }
 
-async fn capture(program: &str, args: &[&str], deadline: Duration) -> Result<Output, String> {
+async fn capture(
+    program: impl AsRef<std::ffi::OsStr>,
+    args: &[&str],
+    deadline: Duration,
+) -> Result<Output, String> {
     let mut command = Command::new(program);
     command
         .args(args)
@@ -71,6 +75,22 @@ async fn capture(program: &str, args: &[&str], deadline: Duration) -> Result<Out
             }
         }
     }
+}
+/// Runs the located SPM owner CLI with literal arguments.
+#[cfg(windows)]
+pub async fn spm(
+    program: &std::path::Path,
+    args: &[&str],
+) -> Result<Output, crate::setup::SetupFailure> {
+    capture(program, args, Duration::from_secs(30))
+        .await
+        .map_err(|code| {
+            crate::setup::SetupFailure::new(match code.as_str() {
+                "executable_missing" => "spm_missing",
+                "hub_timeout" => "spm_timeout",
+                _ => "spm_unavailable",
+            })
+        })
 }
 #[cfg(not(windows))]
 pub async fn run(program: &str, args: &[&str], deadline: Duration) -> Result<Vec<u8>, String> {

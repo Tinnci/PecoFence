@@ -1,6 +1,7 @@
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 mod hub;
 mod process;
+mod setup;
 
 #[cfg(any(windows, test))]
 fn target(args: &[String]) -> Result<String, String> {
@@ -43,6 +44,102 @@ fn desktop() {
         gate: tokio::sync::Semaphore,
         started: std::time::Instant,
         painted: std::sync::atomic::AtomicBool,
+        setup_gate: tokio::sync::Semaphore,
+        /// The private template copy and the sha256 of its last plan.
+        pending: std::sync::Mutex<Option<(std::path::PathBuf, String)>>,
+    }
+    fn spm_exe() -> Result<std::path::PathBuf, setup::SetupFailure> {
+        setup::locate(
+            std::env::var_os("TINNCI_SPM_EXE").map(Into::into),
+            std::env::var_os("USERPROFILE")
+                .map(std::path::PathBuf::from)
+                .as_deref(),
+        )
+    }
+    fn template_arg(path: &std::path::Path) -> Result<&str, setup::SetupFailure> {
+        path.to_str()
+            .ok_or_else(|| setup::SetupFailure::new("template_unreadable"))
+    }
+    #[tauri::command]
+    async fn template_plan(
+        app: tauri::AppHandle,
+        state: tauri::State<'_, State>,
+    ) -> Result<setup::ImportPlan, setup::SetupFailure> {
+        use tauri_plugin_dialog::DialogExt;
+        let _permit = state
+            .setup_gate
+            .try_acquire()
+            .map_err(|_| setup::SetupFailure::new("setup_busy"))?;
+        *state.pending.lock().unwrap() = None;
+        let spm = spm_exe()?;
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        app.dialog()
+            .file()
+            .set_title("选择项目模板")
+            .add_filter("SPM 项目模板", &["json"])
+            .pick_file(move |path| {
+                let _ = sender.send(path);
+            });
+        let source = receiver
+            .await
+            .ok()
+            .flatten()
+            .and_then(|path| path.into_path().ok())
+            .ok_or_else(|| setup::SetupFailure::new("template_cancelled"))?;
+        let cache = app
+            .path()
+            .app_cache_dir()
+            .map_err(|_| setup::SetupFailure::new("template_unreadable"))?;
+        let copy = setup::snapshot(&source, &cache)?;
+        let output = process::spm(
+            &spm,
+            &setup::import_args(template_arg(&copy)?, false, false),
+        )
+        .await?;
+        let plan = setup::decode_plan(output.code, &output.stdout)?;
+        *state.pending.lock().unwrap() = Some((copy, plan.template.sha256.clone()));
+        Ok(plan)
+    }
+    #[tauri::command]
+    async fn template_apply(
+        sha256: String,
+        replace: bool,
+        state: tauri::State<'_, State>,
+    ) -> Result<setup::ImportPlan, setup::SetupFailure> {
+        let _permit = state
+            .setup_gate
+            .try_acquire()
+            .map_err(|_| setup::SetupFailure::new("setup_busy"))?;
+        let (copy, planned) = state
+            .pending
+            .lock()
+            .unwrap()
+            .clone()
+            .filter(|(_, planned)| *planned == sha256)
+            .ok_or_else(|| setup::SetupFailure::new("template_stale"))?;
+        let output = process::spm(
+            &spm_exe()?,
+            &setup::import_args(template_arg(&copy)?, true, replace),
+        )
+        .await?;
+        let plan = setup::decode_plan(output.code, &output.stdout)?;
+        if plan.template.sha256 != planned {
+            return Err(setup::SetupFailure::new("template_stale"));
+        }
+        *state.pending.lock().unwrap() = None;
+        let _ = std::fs::remove_file(copy);
+        Ok(plan)
+    }
+    #[tauri::command]
+    async fn project_status(
+        state: tauri::State<'_, State>,
+    ) -> Result<setup::ProjectStatus, setup::SetupFailure> {
+        let _permit = state
+            .setup_gate
+            .try_acquire()
+            .map_err(|_| setup::SetupFailure::new("setup_busy"))?;
+        let output = process::spm(&spm_exe()?, &["setup", "status"]).await?;
+        setup::decode_status(output.code, &output.stdout)
     }
     #[tauri::command]
     async fn load_hub(
@@ -95,6 +192,7 @@ fn desktop() {
         Err(_) => std::process::exit(2),
     };
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_single_instance::init(|app, args, _| {
             if let Ok(page) = target(&args.into_iter().skip(1).collect::<Vec<_>>()) {
                 *app.state::<State>().target.lock().unwrap() = page.clone();
@@ -111,6 +209,8 @@ fn desktop() {
             gate: tokio::sync::Semaphore::new(1),
             started: std::time::Instant::now(),
             painted: std::sync::atomic::AtomicBool::new(false),
+            setup_gate: tokio::sync::Semaphore::new(1),
+            pending: std::sync::Mutex::new(None),
         })
         .setup(move |app| {
             if let Some(ms) = smoke_ms {
@@ -125,7 +225,10 @@ fn desktop() {
         .invoke_handler(tauri::generate_handler![
             load_hub,
             launch_target,
-            first_frame
+            first_frame,
+            template_plan,
+            template_apply,
+            project_status
         ])
         .run(tauri::generate_context!())
         .expect("workspace runtime");
@@ -133,9 +236,10 @@ fn desktop() {
 
 fn main() {
     if std::env::args().nth(1).as_deref() == Some("--export-types") {
-        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../src/contracts/hub.ts");
-        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        std::fs::write(path, hub::types()).unwrap();
+        let contracts = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../src/contracts");
+        std::fs::create_dir_all(&contracts).unwrap();
+        std::fs::write(contracts.join("hub.ts"), hub::types()).unwrap();
+        std::fs::write(contracts.join("setup.ts"), setup::types()).unwrap();
         return;
     }
     if std::env::args().nth(1).as_deref() == Some("--hub-json") {

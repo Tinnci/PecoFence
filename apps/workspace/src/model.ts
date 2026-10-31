@@ -86,3 +86,35 @@ export function checkExplanation(
     return "组件检查未通过，请查看配置清单和依赖组件。";
   return "尚未确认组件状态，可重试检查。";
 }
+
+/**
+ * The hub checks SPM from WSL, which reads another configuration root and cannot
+ * read files Windows encrypts; the desktop's own `spm setup status` decides the
+ * template step instead.
+ */
+export function withProjects(
+  report: HubReport,
+  status: import("./contracts/setup").ProjectStatus | null,
+): HubReport {
+  if (!status) return report;
+  const imported = status.projects.some((p) => p.check.valid);
+  return {
+    ...report,
+    components: report.components.map((c) =>
+      c.id !== "spm"
+        ? c
+        : {
+            ...c,
+            setup: c.setup.map((s) =>
+              s.id === "template"
+                ? {
+                    ...s,
+                    state: imported ? "done" : "action_needed",
+                    observation: undefined,
+                  }
+                : s,
+            ),
+          },
+    ),
+  };
+}

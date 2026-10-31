@@ -3,7 +3,14 @@ fn main() {
         return;
     }
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(
-        tauri_build::AppManifest::new().commands(&["load_hub", "launch_target", "first_frame"]),
+        tauri_build::AppManifest::new().commands(&[
+            "load_hub",
+            "launch_target",
+            "first_frame",
+            "template_plan",
+            "template_apply",
+            "project_status",
+        ]),
     ))
     .expect("Tauri build configuration");
 }

@@ -4,7 +4,14 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import App from "../src/App";
 import type { HubReport } from "../src/contracts/hub";
-const mocks = vi.hoisted(() => ({ loadHub: vi.fn(), navigation: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  loadHub: vi.fn(),
+  navigation: vi.fn(),
+  desktop: vi.fn(),
+  projectStatus: vi.fn(),
+  planTemplate: vi.fn(),
+  applyTemplate: vi.fn(),
+}));
 vi.mock("../src/api", () => mocks);
 const report: HubReport = {
   schema_version: 1,
@@ -39,6 +46,13 @@ const report: HubReport = {
 beforeEach(() => {
   mocks.loadHub.mockReset().mockResolvedValue(report);
   mocks.navigation.mockReset().mockResolvedValue(() => {});
+  mocks.desktop.mockReset().mockReturnValue(false);
+  for (const fn of [
+    mocks.projectStatus,
+    mocks.planTemplate,
+    mocks.applyTemplate,
+  ])
+    fn.mockReset();
 });
 afterEach(cleanup);
 describe("welcome to setup flow", () => {
@@ -51,7 +65,7 @@ describe("welcome to setup flow", () => {
     expect(
       await screen.findByRole("heading", { name: "导入项目模板" }),
     ).toBeTruthy();
-    expect(screen.getByText("配置入口将在后续版本提供")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /选择项目模板/ })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "执行" })).toBeNull();
   });
   it("shows setup progress with the shadcn Base UI progress bar", async () => {
@@ -286,5 +300,104 @@ describe("first-launch prerequisite recovery", () => {
     render(<App />);
     await screen.findByRole("heading", { name: "无法读取本机工具状态" });
     expect(document.body.textContent).not.toContain("token=secret");
+  });
+});
+
+describe("SPM template import", () => {
+  const plan = {
+    template: {
+      id: "scope-a",
+      version: "1.0",
+      title: "Scope A",
+      sha256: "ab12",
+    },
+    project: "PROJ",
+    scope: "SCOPE",
+    mode: "live",
+    directory: "C:\\cfg\\PROJ\\SCOPE",
+    files: [
+      {
+        role: "deployment",
+        path: "C:\\cfg\\PROJ\\SCOPE\\deployment.json",
+        action: "create",
+      },
+      {
+        role: "live_config",
+        path: "C:\\cfg\\PROJ\\SCOPE\\live.json",
+        action: "conflict",
+      },
+    ],
+    applicable: false,
+    applied: false,
+    backups: [],
+  };
+  const imported = {
+    config_root: "C:\\cfg",
+    projects: [
+      {
+        project: "PROJ",
+        scope: "SCOPE",
+        directory: "C:\\cfg\\PROJ\\SCOPE",
+        check: { valid: true, ready: false, missing_environment: ["JIRA_PAT"] },
+      },
+    ],
+  };
+  async function openTemplateStep() {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(
+      await screen.findByRole("button", { name: /查看项目配置/ }),
+    );
+    await screen.findByRole("heading", { name: "导入项目模板" });
+    return user;
+  }
+  it("plans, confirms a backup-and-replace, and takes the step state from the desktop status", async () => {
+    mocks.desktop.mockReturnValue(true);
+    mocks.projectStatus
+      .mockResolvedValueOnce({ config_root: "C:\\cfg", projects: [] })
+      .mockResolvedValueOnce(imported);
+    mocks.planTemplate.mockResolvedValue(plan);
+    mocks.applyTemplate.mockResolvedValue({
+      ...plan,
+      applied: true,
+      backups: ["live.json.bak-1"],
+      check: imported.projects[0].check,
+    });
+    const user = await openTemplateStep();
+    const step = screen.getByRole("article", { name: "导入项目模板" });
+    await waitFor(() => expect(step.textContent).toContain("需要处理"));
+    await user.click(screen.getByRole("button", { name: /选择项目模板/ }));
+    const planned = await screen.findByRole("region", { name: "导入计划" });
+    expect(planned.textContent).toContain("PROJ");
+    expect(planned.textContent).toContain("与模板不同");
+    expect(mocks.applyTemplate).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "备份并替换" }));
+    expect(mocks.applyTemplate).toHaveBeenCalledWith("ab12", true);
+    await waitFor(() => expect(step.textContent).toContain("已完成"));
+    expect(step.textContent).toContain("原文件已备份（1 个）");
+    expect(step.textContent).toContain("JIRA_PAT");
+    expect(screen.queryByRole("region", { name: "导入计划" })).toBeNull();
+  });
+  it("shows owner validation errors and stays quiet when the dialog is cancelled", async () => {
+    mocks.desktop.mockReturnValue(true);
+    mocks.projectStatus.mockResolvedValue({
+      config_root: "C:\\cfg",
+      projects: [],
+    });
+    mocks.planTemplate
+      .mockRejectedValueOnce({ code: "template_cancelled" })
+      .mockRejectedValueOnce({
+        code: "template_invalid",
+        message: "unknown field `x`",
+      });
+    const user = await openTemplateStep();
+    await user.click(screen.getByRole("button", { name: /选择项目模板/ }));
+    await waitFor(() => expect(mocks.planTemplate).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole("alert")).toBeNull();
+    await user.click(screen.getByRole("button", { name: /选择项目模板/ }));
+    expect((await screen.findByRole("alert")).textContent).toBe(
+      "模板无效：unknown field `x`",
+    );
+    expect(mocks.applyTemplate).not.toHaveBeenCalled();
   });
 });
