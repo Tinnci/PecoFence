@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <title>工作台</title>
+  <!-- Tile -->
+  <rect x="48" y="48" width="928" height="928" rx="216" fill="#4d6a55"/>
+  <!-- 工, drawn as a workbench: top beam, post, desk -->
+  <rect x="252" y="252" width="520" height="112" rx="40" fill="#fffaf0"/>
+  <rect x="456" y="300" width="112" height="420" fill="#fffaf0"/>
+  <rect x="180" y="660" width="664" height="112" rx="40" fill="#fffaf0"/>
+  <!-- Live status light -->
+  <circle cx="704" cy="512" r="72" fill="#f0a73a"/>
+</svg>

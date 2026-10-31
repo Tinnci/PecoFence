@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Progress } from "@/components/ui/progress";
+import { BrandMark } from "@/components/brand-mark";
 import {
   ArrowRight,
   Blocks,
@@ -10,7 +11,6 @@ import {
   RefreshCw,
   ShieldCheck,
   Activity,
-  Layers,
   Clock3,
   GitBranch,
   UserRound,
@@ -122,7 +122,7 @@ export default function App() {
       <aside className="sidebar">
         <div className="brand">
           <span className="brand-mark">
-            <Layers size={22} />
+            <BrandMark />
           </span>
           <div>
             工作台<small>TINNCI WORKSPACE</small>

@@ -1,3 +1,5 @@
+<img src="icons/workspace.svg" alt="" width="64" height="64">
+
 # Tinnci Workspace · 工作台
 
 An independent Windows window for discovering the local tool ecosystem and
@@ -172,3 +174,13 @@ incompatible CLI through the real Rust bridge, displayed installation guidance,
 and recovered to inventory using Retry. Missing WSL/distribution cases use the
 controlled process-runner tests. No WSL installation or source configuration was
 changed by verification.
+
+## Icon
+
+`icons/workspace.svg` is the single source: 工 drawn as a workbench (beam, post,
+desk) on a sage tile, with an amber status light. `npx tauri icon icons/workspace.svg
+-o src-tauri/icons` regenerates the window, taskbar and executable icons (the
+multi-size `icon.ico` holds 16–256 px) and the Windows tile logos; delete the
+generated `android/` and `ios/` folders. `public/icon.svg` is the favicon copy and
+`src/components/brand-mark.tsx` draws the same geometry in the sidebar.
+
