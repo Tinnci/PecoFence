@@ -32,6 +32,17 @@ function localHub(): Plugin {
             new URL(request.url ?? "/", "http://localhost").searchParams.get(
               "check",
             ) === "1";
+          const component = new URL(
+            request.url ?? "/",
+            "http://localhost",
+          ).searchParams.get("component");
+          if (
+            component !== null &&
+            !/^[a-z0-9][a-z0-9-]{0,63}$/.test(component)
+          ) {
+            response.writeHead(400).end();
+            return;
+          }
           const binary = fileURLToPath(
             new URL(
               `./src-tauri/target/debug/tinnci-workspace${process.platform === "win32" ? ".exe" : ""}`,
@@ -40,7 +51,11 @@ function localHub(): Plugin {
           );
           const { stdout } = await execute(
             binary,
-            ["--hub-json", ...(check ? ["--check"] : [])],
+            [
+              "--hub-json",
+              ...(check ? ["--check"] : []),
+              ...(component ? ["--component", component] : []),
+            ],
             {
               timeout: 75000,
               maxBuffer: 4 * 1024 * 1024,

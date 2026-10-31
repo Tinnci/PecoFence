@@ -1,12 +1,12 @@
 # Tinnci Workspace · 工作台
 
 An independent Windows window for discovering the local tool ecosystem and
-understanding first-time setup. PecoFence and spmd keep their own lifetimes.
+understanding first-time setup. Version 0.2 adds component-level diagnosis and retries. PecoFence and spmd keep their own lifetimes.
 Closing Workspace leaves both running.
 
 This first increment provides Home, a per-component setup checklist and Health.
 All cards and steps come from `dev-cli hub --json`; no project or account fixture
-is bundled. Opening Home reads inventory without running checks. “检查状态” runs
+is bundled. Opening Home reads inventory without running checks. Each checkable component can also be checked on its own; other observations and their timestamps are preserved. “检查状态” runs
 `hub --check`, with the CLI's read-only check policy. Unimplemented setup steps
 remain “待支持”; this increment does not execute setup commands or accept tokens.
 Board, timeline, issues, CI and accounts pages follow in later increments.
@@ -15,10 +15,13 @@ Board, timeline, issues, CI and accounts pages follow in later increments.
 
 Requirements: Windows 11 x64, WebView2, Rust MSVC, C++ Build Tools, Node >=24,
 and the default WSL distribution with `dev-cli` installed. The hub command first
-shipped in tooling commit `4884bc0` (task/system-lifecycle). The desktop needs the
+shipped in tooling commit `4884bc0`. Component-scoped checks require
+tooling commit `670b4f6` or newer on `main`. The desktop needs the
 installed CLI, not a tooling checkout at a hardcoded path.
 
-The backend asks WSL for `HOME`, then resolves `.local/bin/dev-cli`. A nonstandard
+The backend asks WSL for `HOME` and `PATH`, then resolves `.local/bin/dev-cli`.
+It prepends the CLI directory and the user tool directory to the child
+process PATH, so non-interactive WSL can discover and run installed tools. A nonstandard
 installation can set the Windows user environment variable `TINNCI_DEV_CLI_WSL`
 to its absolute Linux executable path before starting Workspace. It never runs
 a login shell or accepts arbitrary commands from the frontend.
@@ -73,6 +76,25 @@ CSP blocks remote content. Owner commands use bounded stdout/stderr, an overall
 Windows cleanup terminates the direct child; owner checks retain their own
 bounded subprocess deadlines. The UI retains previous observations on refresh
 failure and labels unchecked and planned states explicitly.
+
+## Diagnosis and prerequisites
+
+Health and the setup checklist display per-component check times, controlled
+failure explanations and expandable error-code/exit-code details. A component
+without declared automatic checks has no retry button. Planned steps stay
+unavailable. Dependency buttons open the prerequisite component's checklist;
+local prerequisite-step buttons focus the referenced step.
+
+Scoped results carry `scope` and exactly one component. Rust validates the
+response scope; React merges that component into the last full inventory.
+A failed attempt retains previous observations, and the error-panel retry
+repeats the same request. `checked_at` means a check ran, including an unknown
+or failed outcome; it is separate from successful setup. Source diagnostic
+messages, command arguments and executable paths stay outside the UI DTO.
+
+The generated DTO contract remains additive. Older full-inventory responses
+are accepted; scoped responses require a current dev-cli. An unexpected scope
+or malformed scoped response leaves the previous inventory intact.
 
 ## Native measurement
 

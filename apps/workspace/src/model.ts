@@ -40,3 +40,49 @@ export function attention(component: Component) {
     "setup_pending",
   ].includes(component.state);
 }
+
+export function mergeReport(
+  current: HubReport | null,
+  incoming: HubReport,
+): HubReport {
+  if (!incoming.scope) return incoming;
+  if (
+    !current ||
+    incoming.components.length !== 1 ||
+    incoming.components[0].id !== incoming.scope ||
+    !current.components.some((c) => c.id === incoming.scope)
+  ) {
+    throw new Error("hub_invalid_scope");
+  }
+  return {
+    ...current,
+    components: current.components.map((c) =>
+      c.id === incoming.scope ? incoming.components[0] : c,
+    ),
+  };
+}
+
+export function checkExplanation(
+  observation: import("./contracts/hub").Observation,
+): string {
+  if (observation.reason === "check_timeout")
+    return "检查超时，暂时无法确认状态。稍后可重试此组件。";
+  if (observation.reason === "check_unavailable")
+    return "检查程序无法运行。请确认组件已安装，再重试。";
+  if (observation.reason === "inconsistent_result")
+    return "检查返回了不一致的结果。请更新组件后重试。";
+  const code = observation.code?.toLowerCase();
+  if (code === "proxy_unavailable")
+    return "网页转发服务无法连接。先检查网页数据转发，再重试。";
+  if (code === "transport_error")
+    return "工具报告连接失败。请检查本机客户端及其连接。";
+  if (
+    code &&
+    /^(auth|unauthorized|forbidden|invalid_token|credentials)/.test(code)
+  )
+    return "请确认登录、凭据和访问权限，再查看此组件的配置要求。";
+  if (observation.state === "done") return "检查已通过。";
+  if (observation.state === "action_needed")
+    return "组件检查未通过，请查看配置清单和依赖组件。";
+  return "尚未确认组件状态，可重试检查。";
+}

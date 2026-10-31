@@ -15,6 +15,26 @@ fn target(args: &[String]) -> Result<String, String> {
     }
 }
 
+fn hub_args(args: &[String]) -> Result<(bool, Option<&str>), &'static str> {
+    let mut check = false;
+    let mut component = None;
+    let mut args = args.iter();
+    while let Some(arg) = args.next() {
+        match arg.as_str() {
+            "--check" if !check => check = true,
+            "--component" if component.is_none() => {
+                let id = args.next().ok_or("hub_invalid_component")?;
+                if !hub::valid_component(id) {
+                    return Err("hub_invalid_component");
+                }
+                component = Some(id.as_str());
+            }
+            _ => return Err("hub_invalid_arguments"),
+        }
+    }
+    Ok((check, component))
+}
+
 #[cfg(windows)]
 fn desktop() {
     use tauri::{Emitter, Manager};
@@ -27,10 +47,14 @@ fn desktop() {
     #[tauri::command]
     async fn load_hub(
         check: bool,
+        component: Option<String>,
         state: tauri::State<'_, State>,
     ) -> Result<hub::HubReport, String> {
         let _permit = state.gate.try_acquire().map_err(|_| "hub_busy")?;
-        hub::decode(&process::hub(check).await?)
+        hub::decode_scoped(
+            &process::hub(check, component.as_deref()).await?,
+            component.as_deref(),
+        )
     }
     #[tauri::command]
     fn launch_target(state: tauri::State<'_, State>) -> String {
@@ -113,8 +137,16 @@ fn main() {
             .enable_all()
             .build()
             .unwrap();
+        let args: Vec<_> = std::env::args().skip(2).collect();
+        let (check, component) = match hub_args(&args) {
+            Ok(parsed) => parsed,
+            Err(code) => {
+                eprintln!("{code}");
+                std::process::exit(2);
+            }
+        };
         let result = runtime.block_on(async {
-            hub::decode(&process::hub(std::env::args().nth(2).as_deref() == Some("--check")).await?)
+            hub::decode_scoped(&process::hub(check, component).await?, component)
         });
         match result {
             Ok(report) => println!("{}", serde_json::to_string(&report).unwrap()),
@@ -133,6 +165,26 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn headless_checks_require_explicit_valid_arguments() {
+        assert_eq!(
+            hub_args(&[
+                "--check".into(),
+                "--component".into(),
+                "jenkins-bridge".into()
+            ])
+            .unwrap(),
+            (true, Some("jenkins-bridge"))
+        );
+        for args in [
+            vec!["--component"],
+            vec!["--component", "bad;command"],
+            vec!["--check", "--check"],
+            vec!["--unknown"],
+        ] {
+            assert!(hub_args(&args.iter().map(|s| s.to_string()).collect::<Vec<_>>()).is_err());
+        }
+    }
     #[test]
     fn accepts_only_implemented_routes_and_literal_arguments() {
         assert_eq!(target(&[]).unwrap(), "home");

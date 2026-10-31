@@ -678,3 +678,118 @@ h1 {
     padding: 18px;
   }
 }
+.check-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 16px 0;
+}
+.checked-at {
+  display: block;
+  color: #8b9681;
+  font-size: 10px;
+}
+.check-result {
+  font-size: 12px;
+  padding: 12px 14px;
+  background: #f4f6ef;
+  border: 1px solid #e4e9dc;
+  border-radius: 6px;
+  margin: 12px 0;
+  color: #75816a;
+}
+.check-result-action_needed,
+.check-result-unknown {
+  background: #fcf5e9;
+  border-color: #eee0c4;
+  color: #92733d;
+}
+.check-result p {
+  font-size: 12px !important;
+  color: inherit !important;
+}
+.check-result summary {
+  font-size: 10px;
+  cursor: pointer;
+  margin-top: 7px;
+}
+.check-result details span {
+  display: block;
+  margin-top: 4px;
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}
+.dependencies,
+.prerequisites {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 14px 0;
+}
+.dependency-caption,
+.prerequisites > small {
+  font-size: 10px;
+  color: #909a85;
+  margin: 0 !important;
+}
+.dependency-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 11px;
+  color: #607650;
+  padding: 6px 9px;
+  background: #f3f6ee;
+  border: 1px solid #e0e7d7;
+  border-radius: 5px;
+}
+.dependency-link:hover {
+  background: #e9f0e1;
+  border-color: #b9cba7;
+}
+.setup-step:focus {
+  outline: 2px solid #7e9a69;
+  outline-offset: 4px;
+  border-radius: 5px;
+}
+.health-content {
+  flex: 1;
+  min-width: 0;
+}
+.health-content .section-heading {
+  margin-bottom: 5px;
+}
+.health-content .section-heading > .status {
+  margin-left: 8px;
+}
+.health-content .checked-at {
+  margin-top: 8px;
+}
+.health-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-self: flex-start;
+  padding-top: 2px;
+}
+@media (max-width: 760px) {
+  .health-row {
+    flex-wrap: wrap;
+  }
+  .health-actions {
+    flex-direction: row;
+  }
+  .health-content {
+    min-width: 100%;
+  }
+  .check-toolbar {
+    flex-wrap: wrap;
+  }
+  .dependency-link {
+    flex-wrap: wrap;
+    white-space: normal;
+    text-align: left;
+  }
+}

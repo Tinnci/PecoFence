@@ -20,6 +20,8 @@ const report: HubReport = {
       host: "both",
       lifecycle: "active",
       installed: true,
+      checkable: false,
+      depends_on: [],
       issues: [],
       state: "setup_pending",
       setup: [
@@ -68,6 +70,150 @@ describe("welcome to setup flow", () => {
           .getByRole("button", { name: "检查状态" })
           .hasAttribute("disabled"),
       ).toBe(false),
+    );
+  });
+});
+
+describe("component diagnosis and retry", () => {
+  const connected: HubReport = {
+    ...report,
+    components: [
+      report.components[0],
+      {
+        id: "jenkins-bridge",
+        name: "Jenkins",
+        group: "delivery",
+        summary: "Build status",
+        host: "wsl",
+        lifecycle: "active",
+        installed: true,
+        checkable: true,
+        state: "action_needed",
+        depends_on: ["cdp-forwarder"],
+        issues: [],
+        checked_at: "2026-10-31T00:01:00Z",
+        status: {
+          state: "action_needed",
+          code: "proxy_unavailable",
+          exit_code: 1,
+        },
+        setup: [
+          {
+            id: "route",
+            title: "访问构建服务",
+            why: "需要网页连接",
+            needs: ["cdp-forwarder"],
+            state: "action_needed",
+          },
+        ],
+      },
+      {
+        id: "cdp-forwarder",
+        name: "网页数据转发",
+        group: "delivery",
+        summary: "Browser access",
+        host: "windows",
+        lifecycle: "active",
+        installed: true,
+        checkable: false,
+        depends_on: [],
+        state: "setup_pending",
+        setup: [],
+        issues: [],
+      },
+    ],
+  };
+  it("checks only the chosen component and preserves its retry context", async () => {
+    mocks.loadHub.mockResolvedValueOnce(connected).mockResolvedValueOnce({
+      ...connected,
+      scope: "jenkins-bridge",
+      checked: true,
+      components: [
+        {
+          ...connected.components[1],
+          state: "ready",
+          checked_at: "2026-10-31T00:02:00Z",
+          status: { state: "done", exit_code: 0 },
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole("button", { name: /查看项目配置/ });
+    await user.click(screen.getByRole("button", { name: "运行状况" }));
+    expect(screen.getByText(/网页转发服务无法连接/)).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "检查Jenkins" }));
+    await screen.findByText("检查已通过。");
+    expect(mocks.loadHub.mock.calls).toEqual([
+      [false],
+      [true, "jenkins-bridge"],
+    ]);
+    expect(screen.getByRole("heading", { name: "SPM" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "网页数据转发" })).toBeTruthy();
+  });
+  it("shows a failed setup check even when the component has no status command", async () => {
+    const tool = {
+      ...connected.components[1],
+      status: undefined,
+      setup: [
+        {
+          id: "connection",
+          title: "确认连接",
+          why: "Read access",
+          needs: [],
+          state: "action_needed",
+          observation: {
+            state: "action_needed",
+            code: "proxy_unavailable",
+            exit_code: 1,
+          },
+        },
+      ],
+    };
+    mocks.loadHub.mockResolvedValue({ ...connected, components: [tool] });
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole("button", { name: /查看项目配置/ });
+    await user.click(screen.getByRole("button", { name: "运行状况" }));
+    expect(screen.getByText("确认连接")).toBeTruthy();
+    expect(screen.getByText(/网页转发服务无法连接/)).toBeTruthy();
+  });
+  it("navigates to the prerequisite component without executing setup", async () => {
+    mocks.loadHub.mockResolvedValue(connected);
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole("button", { name: /查看项目配置/ });
+    await user.click(screen.getByRole("button", { name: "运行状况" }));
+    await user.click(screen.getByRole("button", { name: "配置网页数据转发" }));
+    expect(
+      screen.getByRole("region", { name: "组件设置" }).textContent,
+    ).toContain("网页数据转发");
+    expect(mocks.loadHub.mock.calls).toEqual([[false]]);
+  });
+  it("keeps the last failure visible when an individual retry cannot run", async () => {
+    mocks.loadHub
+      .mockResolvedValueOnce(connected)
+      .mockRejectedValueOnce(new Error("hub_timeout"));
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole("button", { name: /查看项目配置/ });
+    await user.click(screen.getByRole("button", { name: "运行状况" }));
+    await user.click(screen.getByRole("button", { name: "检查Jenkins" }));
+    await screen.findByRole("alert");
+    expect(screen.getByText(/网页转发服务无法连接/)).toBeTruthy();
+    mocks.loadHub.mockResolvedValueOnce({
+      ...connected,
+      scope: "jenkins-bridge",
+      checked: true,
+      components: [connected.components[1]],
+    });
+    await user.click(screen.getByRole("button", { name: "重试" }));
+    await waitFor(() =>
+      expect(mocks.loadHub.mock.calls).toEqual([
+        [false],
+        [true, "jenkins-bridge"],
+        [true, "jenkins-bridge"],
+      ]),
     );
   });
 });

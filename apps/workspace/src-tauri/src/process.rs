@@ -75,46 +75,101 @@ impl Drop for ProcessGroup {
     }
 }
 
-pub async fn hub(check: bool) -> Result<Vec<u8>, String> {
+#[cfg(any(windows, test))]
+fn wsl_environment(bytes: &[u8]) -> Result<(String, String), String> {
+    if bytes.len() > 65536 {
+        return Err("hub_invalid_install_path".into());
+    }
+    let text = std::str::from_utf8(bytes).map_err(|_| "hub_invalid_install_path")?;
+    let mut lines = text.lines();
+    let home = lines.next().ok_or("hub_invalid_install_path")?;
+    let path = lines.next().ok_or("hub_invalid_install_path")?;
+    if lines.next().is_some()
+        || !home.starts_with('/')
+        || home.chars().any(char::is_control)
+        || path.chars().any(char::is_control)
+    {
+        return Err("hub_invalid_install_path".into());
+    }
+    Ok((home.to_owned(), path.to_owned()))
+}
+
+pub async fn hub(check: bool, component: Option<&str>) -> Result<Vec<u8>, String> {
+    if component.is_some_and(|id| !crate::hub::valid_component(id)) {
+        return Err("hub_invalid_component".into());
+    }
     #[cfg(windows)]
     {
+        let bytes = run(
+            "wsl.exe",
+            &["--exec", "/usr/bin/printenv", "HOME", "PATH"],
+            Duration::from_secs(5),
+        )
+        .await?;
+        let (home, inherited_path) = wsl_environment(&bytes)?;
         let binary = match std::env::var("TINNCI_DEV_CLI_WSL") {
             Ok(path) if path.starts_with('/') && !path.chars().any(char::is_control) => path,
             Ok(_) => return Err("hub_invalid_install_path".into()),
-            Err(_) => {
-                let bytes = run(
-                    "wsl.exe",
-                    &["--exec", "/usr/bin/printenv", "HOME"],
-                    Duration::from_secs(5),
-                )
-                .await?;
-                let home = String::from_utf8(bytes).map_err(|_| "hub_invalid_install_path")?;
-                let home = home.trim_end_matches(['\r', '\n']);
-                if !home.starts_with('/') || home.chars().any(char::is_control) {
-                    return Err("hub_invalid_install_path".into());
-                }
-                format!("{home}/.local/bin/dev-cli")
-            }
+            Err(_) => format!("{home}/.local/bin/dev-cli"),
         };
-        let mut args = vec!["--exec", binary.as_str(), "hub", "--json"];
+        let bin_dir = binary
+            .rsplit_once('/')
+            .map(|(dir, _)| dir)
+            .filter(|dir| !dir.is_empty())
+            .unwrap_or("/");
+        // Non-interactive WSL omits ~/.local/bin. Supply a process-local PATH
+        // so discovery and the owner's subprocesses resolve the installed tools.
+        let path = format!("PATH={bin_dir}:{home}/.local/bin:{inherited_path}");
+        let mut args = vec![
+            "--exec",
+            "/usr/bin/env",
+            path.as_str(),
+            binary.as_str(),
+            "hub",
+            "--json",
+        ];
         if check {
             args.push("--check");
+        }
+        if let Some(id) = component {
+            args.extend(["--component", id]);
         }
         run("wsl.exe", &args, Duration::from_secs(65)).await
     }
     #[cfg(not(windows))]
     {
-        let args: &[&str] = if check {
-            &["hub", "--json", "--check"]
-        } else {
-            &["hub", "--json"]
-        };
-        run("dev-cli", args, Duration::from_secs(65)).await
+        let mut args = vec!["hub", "--json"];
+        if check {
+            args.push("--check");
+        }
+        if let Some(id) = component {
+            args.extend(["--component", id]);
+        }
+        run("dev-cli", &args, Duration::from_secs(65)).await
     }
 }
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn wsl_environment_preserves_spaces_and_rejects_extra_records() {
+        assert_eq!(
+            wsl_environment("/home/用户 name\n/usr/bin:/mnt/c/Program Files/Tools\n".as_bytes())
+                .unwrap(),
+            (
+                "/home/用户 name".into(),
+                "/usr/bin:/mnt/c/Program Files/Tools".into()
+            )
+        );
+        for bad in [
+            b"relative\n/bin\n".as_slice(),
+            b"/home/user\n/bin\nextra\n",
+            b"/home/user\n/bin\0secret\n",
+            b"/home/user\n",
+        ] {
+            assert!(wsl_environment(bad).is_err());
+        }
+    }
     #[cfg(unix)]
     #[tokio::test]
     async fn bounds_output_and_deadline_and_preserves_partial_report() {

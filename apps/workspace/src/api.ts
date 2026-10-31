@@ -5,10 +5,19 @@ export type Page = "home" | "setup" | "health";
 export function isPage(value: unknown): value is Page {
   return value === "home" || value === "setup" || value === "health";
 }
-export async function loadHub(check: boolean): Promise<HubReport> {
-  if (isTauri()) return invoke<HubReport>("load_hub", { check });
+export async function loadHub(
+  check: boolean,
+  component?: string,
+): Promise<HubReport> {
+  if (isTauri())
+    return invoke<HubReport>("load_hub", {
+      check,
+      component: component ?? null,
+    });
   if (import.meta.env.DEV) {
-    const response = await fetch(`/__workspace/hub?check=${check ? "1" : "0"}`);
+    const query = new URLSearchParams({ check: check ? "1" : "0" });
+    if (component) query.set("component", component);
+    const response = await fetch(`/__workspace/hub?${query}`);
     if (!response.ok) throw new Error("hub_unavailable");
     return response.json();
   }

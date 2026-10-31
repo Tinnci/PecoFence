@@ -3,7 +3,6 @@ import * as Progress from "@radix-ui/react-progress";
 import {
   ArrowRight,
   Blocks,
-  Check,
   ChevronRight,
   CircleHelp,
   Home,
@@ -19,8 +18,10 @@ import {
 } from "lucide-react";
 import { loadHub, navigation, type Page } from "./api";
 import type { Component, HubReport } from "./contracts/hub";
-import { attention, groups, label, progress } from "./model";
+import { attention, groups, mergeReport, progress } from "./model";
 import { Status } from "./Status";
+import Checklist from "./Checklist";
+import Health from "./Health";
 
 function ComponentCard({
   component,
@@ -45,117 +46,46 @@ function ComponentCard({
     </button>
   );
 }
-function Checklist({
-  report,
-  selected,
-}: {
-  report: HubReport;
-  selected: string | null;
-}) {
-  const components = report.components.filter((c) => c.lifecycle !== "paused");
-  const [current, setCurrent] = useState(selected ?? components[0]?.id ?? "");
-  const component = components.find((c) => c.id === current) ?? components[0];
-  return (
-    <div className="checklist-layout">
-      <aside className="component-list" aria-label="选择组件">
-        {components.map((c) => (
-          <button
-            key={c.id}
-            aria-pressed={component?.id === c.id}
-            onClick={() => setCurrent(c.id)}
-          >
-            <span>
-              {c.name}
-              <small>{label(c.state)}</small>
-            </span>
-            <ChevronRight size={15} />
-          </button>
-        ))}
-      </aside>
-      <section className="setup-detail" aria-label="组件设置">
-        {component ? (
-          <>
-            <div className="section-heading">
-              <h2>{component.name}</h2>
-              <Status state={component.state} />
-            </div>
-            <p className="muted">{component.summary}</p>
-            {component.issues.map((issue, i) => (
-              <p role="status" className="issue" key={i}>
-                {issue}
-              </p>
-            ))}
-            {component.setup.length ? (
-              component.setup.map((step, i) => (
-                <article className="setup-step" key={step.id}>
-                  <span
-                    className={`step-number ${step.state === "done" ? "complete" : ""}`}
-                  >
-                    {step.state === "done" ? <Check size={15} /> : i + 1}
-                  </span>
-                  <div>
-                    <div className="section-heading">
-                      <h3>{step.title}</h3>
-                      <Status state={step.state} />
-                    </div>
-                    <p>{step.why}</p>
-                    {step.needs.length ? (
-                      <small>
-                        前置步骤：
-                        {step.needs
-                          .map(
-                            (id) =>
-                              component.setup.find((s) => s.id === id)?.title ??
-                              id,
-                          )
-                          .join("、")}
-                      </small>
-                    ) : null}
-                    {step.state === "planned" ? (
-                      <small>配置入口将在后续版本提供</small>
-                    ) : null}
-                  </div>
-                </article>
-              ))
-            ) : (
-              <div className="empty-small">
-                <ShieldCheck size={28} />
-                <h3>暂无额外配置步骤</h3>
-                <p>可通过“检查状态”获取组件当前状态。</p>
-              </div>
-            )}
-          </>
-        ) : (
-          <p>尚未发现组件。请先安装开发工具。</p>
-        )}
-      </section>
-    </div>
-  );
-}
 export default function App() {
   const [page, setPage] = useState<Page>("home");
   const [report, setReport] = useState<HubReport | null>(null);
   const [busy, setBusy] = useState(false);
+  const [busyComponent, setBusyComponent] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const inFlight = useRef(false);
+  const lastRequest = useRef<{ check: boolean; component?: string }>({
+    check: false,
+  });
   const mounted = useRef(false);
-  async function refresh(check: boolean) {
+  async function refresh(check: boolean, component?: string) {
     if (inFlight.current) return;
     inFlight.current = true;
+    lastRequest.current = { check, component };
     setBusy(true);
+    setBusyComponent(component ?? null);
     setError(null);
     try {
-      const data = await loadHub(check);
-      if (mounted.current) setReport(data);
-    } catch {
+      const data = component
+        ? await loadHub(check, component)
+        : await loadHub(check);
+      if (component && data.scope !== component)
+        throw new Error("hub_update_required");
+      if (mounted.current) setReport(mergeReport(report, data));
+    } catch (failure) {
       if (mounted.current)
         setError(
-          "无法读取本机工具状态。请确认 WSL 和 dev-cli 已安装，再重试。",
+          (failure instanceof Error ? failure.message : failure) ===
+            "hub_update_required"
+            ? "请更新 dev-cli 后再检查此组件；当前版本尚不支持单独检查。"
+            : "无法读取本机工具状态。请确认 WSL 和 dev-cli 已安装，再重试。",
         );
     } finally {
       inFlight.current = false;
-      if (mounted.current) setBusy(false);
+      if (mounted.current) {
+        setBusy(false);
+        setBusyComponent(null);
+      }
     }
   }
   useEffect(() => {
@@ -185,6 +115,7 @@ export default function App() {
   const next =
     active.find((c) => c.id === "spm" && attention(c)) ??
     active.find((c) => attention(c) && c.setup.length);
+  const checkedCount = active.filter((c) => c.checked_at).length;
   const headings: Record<Page, [string, string]> = {
     home: ["让工作，从这里开始。", "项目、工具与连接，都有各自的位置。"],
     setup: ["设置清单", "按组件查看配置要求和当前进度。"],
@@ -268,7 +199,11 @@ export default function App() {
               onClick={() => void refresh(true)}
             >
               <RefreshCw size={15} className={busy ? "spin" : ""} />
-              {busy ? "正在读取…" : "检查状态"}
+              {busy
+                ? lastRequest.current.check
+                  ? "正在检查…"
+                  : "正在读取…"
+                : "检查状态"}
             </button>
           </div>
           <div aria-live="polite">
@@ -282,7 +217,12 @@ export default function App() {
                 <button
                   className="button secondary"
                   disabled={busy}
-                  onClick={() => void refresh(false)}
+                  onClick={() =>
+                    void refresh(
+                      lastRequest.current.check,
+                      lastRequest.current.component,
+                    )
+                  }
                 >
                   重试
                 </button>
@@ -339,7 +279,9 @@ export default function App() {
                         />
                       </Progress.Root>
                       <small>
-                        {report.checked ? "已检查组件状态" : "状态尚未检查"}
+                        {checkedCount
+                          ? `${checkedCount} 个组件已检查`
+                          : "状态尚未检查"}
                       </small>
                     </div>
                   </section>
@@ -403,28 +345,27 @@ export default function App() {
                   ) : null}
                 </>
               ) : page === "setup" ? (
-                <Checklist key={selected} report={report} selected={selected} />
+                <Checklist
+                  key={selected}
+                  report={report}
+                  selected={selected}
+                  busy={busy}
+                  busyComponent={busyComponent}
+                  onCheck={(id) => void refresh(true, id)}
+                  onOpen={openSetup}
+                />
               ) : (
-                <section className="health-list">
-                  {report.components.map((c) => (
-                    <div className="health-row" key={c.id}>
-                      <div>
-                        <h3>{c.name}</h3>
-                        <p>{c.summary}</p>
-                        {c.issues.map((issue, i) => (
-                          <p className="issue" key={i}>
-                            {issue}
-                          </p>
-                        ))}
-                      </div>
-                      <Status state={c.state} />
-                    </div>
-                  ))}
-                </section>
+                <Health
+                  report={report}
+                  busy={busy}
+                  busyComponent={busyComponent}
+                  onCheck={(id) => void refresh(true, id)}
+                  onOpen={openSetup}
+                />
               )}
               <footer className="page-footer">
                 <span>
-                  {report.checked ? "最近检查" : "最近读取"} ·{" "}
+                  {report.checked ? "最近全量检查" : "最近读取"} ·{" "}
                   {new Date(report.observed_at).toLocaleString("zh-CN")}
                 </span>
                 {report.unmanifested.length ? (
