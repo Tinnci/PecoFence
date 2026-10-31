@@ -45,6 +45,18 @@ For WSL cross-builds, run `./apps/workspace/scripts/build-windows.sh` from the
 repository root. It uses the existing MSVC and SDK overrides documented by
 PecoFence's cross-build script.
 
+To install for the current user, run from Windows (WSL paths via `wslpath -w`):
+
+```powershell
+.\scripts\install-user.ps1 -Executable .\src-tauri\target\x86_64-pc-windows-msvc\release\tinnci-workspace.exe -Version 0.4.0
+```
+
+It copies the executable to `%LOCALAPPDATA%\Tinnci\Workspace\versions\<version>-<sha256
+prefix>` after a checksum check and leaves earlier versions in place. It writes Start menu
+shortcuts under `Tinnci`: 工作台, 工作台 · 设置清单 (`--open setup`) and 工作台 · 运行状况
+(`--open health`), plus a desktop 工作台 unless `-NoDesktop`. Rerunning with a new build
+repoints every shortcut. `-DryRun` prints the target and shortcut paths.
+
 For browser development on WSL:
 
 ```sh
@@ -133,8 +145,8 @@ before adding full data pages; retain both memory metrics for future comparisons
 
 Single-instance activation uses Tauri's official plugin, with validated targets
 `--open home|setup|health`. It stores the latest target before emitting navigation
-so a second launch during initial rendering is not lost. Item-level links and
-installer/shortcut distribution are future work.
+so a second launch during initial rendering is not lost. Item-level links and a
+packaged installer are future work; `scripts/install-user.ps1` installs per user.
 
 References: [Tauri capabilities](https://v2.tauri.app/security/capabilities/),
 [single-instance plugin](https://v2.tauri.app/plugin/single-instance/),
