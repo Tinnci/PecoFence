@@ -123,8 +123,7 @@ svg {
 .brand-mark {
   display: grid;
   place-items: center;
-  width: 38px;
-  height: 38px;
+  color: var(--foreground);
 }
 .sidebar nav {
   display: flex;

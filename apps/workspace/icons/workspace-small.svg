@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <title>工作台 (16–32 px)</title>
+  <!-- 16–32 px: tile and silhouette only, enlarged; frames and rays blur at this size -->
+  <rect x="48" y="48" width="928" height="928" rx="216" fill="#0f2a24"/>
+  <g transform="translate(512 516) scale(1.22) translate(-512 -516)">
+    <g fill="#e8bd5f">
+      <rect x="412" y="236" width="200" height="40"/>
+      <rect x="292" y="276" width="440" height="80"/>
+      <rect x="476" y="356" width="72" height="300"/>
+      <rect x="252" y="656" width="520" height="80"/>
+      <rect x="372" y="736" width="280" height="36"/>
+      <rect x="442" y="772" width="140" height="24"/>
+    </g>
+  </g>
+</svg>

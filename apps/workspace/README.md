@@ -177,11 +177,14 @@ changed by verification.
 
 ## Icon
 
-`icons/workspace.svg` is the single source: an Art Deco 工, drawn as a stepped
-ziggurat workbench with pinstripes and an inlaid diamond, rising from a sunburst
-inside a double gold frame on deep emerald. `npx tauri icon icons/workspace.svg
--o src-tauri/icons` regenerates the window, taskbar and executable icons (the
-multi-size `icon.ico` holds 16–256 px) and the Windows tile logos; delete the
-generated `android/`, `ios/` and `icon.icns`. The favicon and the sidebar
-`BrandMark` load the same file.
+`icons/workspace.svg` is the Windows app icon: an Art Deco 工, drawn as a
+stepped ziggurat workbench with pinstripes and an inlaid diamond, rising from a
+sunburst inside a double gold frame on deep emerald. Frames and rays blur below
+48 px, so `icons/workspace-small.svg` (tile and enlarged silhouette) supplies the
+16, 24 and 32 px sizes used by the title bar, tray and small taskbar.
+`scripts/icons.sh` regenerates `src-tauri/icons` from both.
+
+Following Windows guidance, the plated icon stays on Windows surfaces. Inside the
+app, the sidebar `BrandMark` draws the same stepped 工 as a single-colour glyph in
+the interface's text colour; the browser favicon uses the small variant.
 
