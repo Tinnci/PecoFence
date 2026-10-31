@@ -5,6 +5,7 @@
 
 pub mod board;
 pub mod ci_watch;
+pub mod freshness;
 pub mod issues;
 pub mod navigation;
 pub mod planning;
@@ -200,7 +201,7 @@ pub fn build_view(
     viewport: RectDip,
     tokens: &PanelTokens,
 ) -> PanelView {
-    build_workspace_view(snapshot, viewport, None, tokens)
+    build_workspace_view(snapshot, viewport, None, tokens, chrono::Utc::now())
 }
 
 fn build_workspace_view(
@@ -208,6 +209,7 @@ fn build_workspace_view(
     viewport: RectDip,
     selected_item: Option<usize>,
     tokens: &PanelTokens,
+    now: chrono::DateTime<chrono::Utc>,
 ) -> PanelView {
     let mut nodes = Vec::new();
     let mut records = HashMap::new();
@@ -336,6 +338,7 @@ fn build_workspace_view(
     }
     let narrow = columns == 2;
     let status_top = if narrow { 240.0 } else { 164.0 };
+    let data_freshness = freshness::assess(snapshot, now);
     push(
         30,
         RectDip {
@@ -345,10 +348,14 @@ fn build_workspace_view(
             h: 28.0,
         },
         "status",
-        format!("数据时间 {}", snapshot.computed_at.to_rfc3339()),
+        freshness::status_text(snapshot, &data_freshness),
         None,
         None,
-        secondary,
+        if data_freshness.healthy() {
+            secondary
+        } else {
+            tokens.warning
+        },
     );
     push(
         31,
@@ -667,6 +674,7 @@ fn build_capsule_view(
     snapshot: Option<&ProjectSnapshot>,
     viewport: RectDip,
     tokens: &PanelTokens,
+    now: chrono::DateTime<chrono::Utc>,
 ) -> PanelView {
     let panel = tokens.panel;
     let badge = tokens.subtle;
@@ -693,6 +701,8 @@ fn build_capsule_view(
             )
         })
         .unwrap_or_else(|| ("SPM".into(), "未知".into(), 0));
+    // A stale or degraded capsule keeps its gate counts but is marked and tinted.
+    let attention = snapshot.is_some_and(|s| !freshness::assess(s, now).healthy());
     let mut nodes = vec![ViewNode {
         id: 1,
         rect: viewport,
@@ -739,10 +749,14 @@ fn build_capsule_view(
             h: 32.0,
         },
         role: "status",
-        text: format!("{status} · {pending}"),
+        text: if attention {
+            format!("⚠ {status} · {pending}")
+        } else {
+            format!("{status} · {pending}")
+        },
         action: None,
         fill: Some(badge),
-        foreground: primary,
+        foreground: if attention { tokens.warning } else { primary },
     });
     nodes.push(ViewNode {
         id: 13,
@@ -770,7 +784,14 @@ pub fn build_presentation_view(
     viewport: RectDip,
     tokens: &PanelTokens,
 ) -> PanelView {
-    build_presentation_view_with_selection(snapshot, presentation, viewport, None, tokens)
+    build_presentation_view_with_selection(
+        snapshot,
+        presentation,
+        viewport,
+        None,
+        tokens,
+        chrono::Utc::now(),
+    )
 }
 
 fn build_presentation_view_with_selection(
@@ -779,11 +800,14 @@ fn build_presentation_view_with_selection(
     viewport: RectDip,
     selected_item: Option<usize>,
     tokens: &PanelTokens,
+    now: chrono::DateTime<chrono::Utc>,
 ) -> PanelView {
     match presentation {
-        Presentation::Workspace => build_workspace_view(snapshot, viewport, selected_item, tokens),
+        Presentation::Workspace => {
+            build_workspace_view(snapshot, viewport, selected_item, tokens, now)
+        }
         Presentation::Compact => build_compact_view(snapshot, viewport, tokens),
-        Presentation::Capsule => build_capsule_view(snapshot, viewport, tokens),
+        Presentation::Capsule => build_capsule_view(snapshot, viewport, tokens, now),
     }
 }
 
@@ -1237,6 +1261,7 @@ impl PanelInstance for SpmPanel {
                         .position(|item| &item.record_id == id)
                 }),
                 &self.tokens,
+                chrono::Utc::now(),
             )
         } else {
             PanelView::default()
@@ -1915,6 +1940,7 @@ mod tests {
             },
             Some(0),
             &PanelTokens::dark(),
+            data.computed_at,
         );
         assert!(wide.nodes.iter().any(|node| node.role == "complementary"));
         let narrow = build_workspace_view(
@@ -1927,6 +1953,7 @@ mod tests {
             },
             Some(0),
             &PanelTokens::dark(),
+            data.computed_at,
         );
         assert!(narrow.nodes.iter().any(|node| node.role == "article"));
         assert!(!narrow.nodes.iter().any(|node| node.role == "listitem"));
@@ -1937,6 +1964,115 @@ mod tests {
             .map(|node| node.rect.y)
             .collect();
         assert_eq!(metric_rows, vec![88.0, 88.0, 164.0, 164.0]);
+    }
+
+    #[test]
+    fn data_age_and_degraded_sources_are_shown_without_hiding_gate_counts() {
+        let data = snapshot(DaemonSessionId::new(), 1);
+        let viewport = RectDip {
+            x: 0.0,
+            y: 0.0,
+            w: 1120.0,
+            h: 760.0,
+        };
+        let tokens = PanelTokens::dark();
+        let status = |view: &PanelView| {
+            view.nodes
+                .iter()
+                .find(|node| node.id == 30)
+                .map(|node| (node.text.clone(), node.foreground))
+                .unwrap()
+        };
+        // Fresh: wording and colour stay as before.
+        let fresh = build_workspace_view(Some(&data), viewport, None, &tokens, data.computed_at);
+        let (text, colour) = status(&fresh);
+        assert!(
+            text.starts_with("数据时间 ") && !text.contains("来源异常"),
+            "{text}"
+        );
+        assert_eq!(colour, tokens.secondary);
+        // Older than the TTL: a frozen (or historical) board says so, in the warning colour.
+        let later = data.computed_at
+            + chrono::Duration::seconds(i64::from(data.freshness_ttl_secs) + 3 * 3600);
+        let (text, colour) = status(&build_workspace_view(
+            Some(&data),
+            viewport,
+            None,
+            &tokens,
+            later,
+        ));
+        assert!(text.starts_with("数据已过期：3 小时前更新"), "{text}");
+        assert_eq!(colour, tokens.warning);
+        // A failing source is named even while the snapshot itself is fresh.
+        let mut degraded = data.clone();
+        degraded.sources = vec![spm_contracts::SourceEvidence {
+            source: spm_contracts::SourceSystem::Jenkins,
+            tenant: "ci".into(),
+            observed_at: degraded.computed_at,
+            source_revision: None,
+            watermark: None,
+            coverage: spm_contracts::CoverageState::Complete,
+            page_complete: true,
+            permission_complete: true,
+            freshness_ttl_secs: 300,
+            error: Some(spm_contracts::SourceErrorCode::Unavailable),
+        }];
+        let assessed = freshness::assess(&degraded, degraded.computed_at);
+        assert!(!assessed.stale);
+        assert_eq!(
+            assessed.degraded,
+            vec![spm_contracts::SourceSystem::Jenkins]
+        );
+        let (text, colour) = status(&build_workspace_view(
+            Some(&degraded),
+            viewport,
+            None,
+            &tokens,
+            degraded.computed_at,
+        ));
+        assert!(text.ends_with(" · 来源异常：Jenkins"), "{text}");
+        assert_eq!(colour, tokens.warning);
+        // A healthy source whose own observation outlived its TTL also counts.
+        degraded.sources[0].error = None;
+        let source_late = degraded.computed_at + chrono::Duration::seconds(301);
+        degraded.computed_at = source_late;
+        assert_eq!(
+            freshness::assess(&degraded, source_late).degraded,
+            vec![spm_contracts::SourceSystem::Jenkins]
+        );
+        // The capsule keeps its counts and adds a marker only when attention is needed.
+        let capsule = |now| {
+            build_capsule_view(
+                Some(&data),
+                RectDip {
+                    x: 0.0,
+                    y: 0.0,
+                    w: 360.0,
+                    h: 48.0,
+                },
+                &tokens,
+                now,
+            )
+            .nodes
+            .into_iter()
+            .find(|node| node.id == 12)
+            .unwrap()
+            .text
+        };
+        assert!(!capsule(data.computed_at).starts_with('⚠'));
+        let stale = capsule(later);
+        assert!(stale.starts_with("⚠ ") && stale.contains(" · "), "{stale}");
+        // Clock skew never yields a negative age.
+        let skewed = freshness::assess(&data, data.computed_at - chrono::Duration::hours(1));
+        assert_eq!((skewed.age_secs, skewed.stale), (0, false));
+    }
+
+    #[test]
+    fn age_labels_cover_minutes_hours_and_days() {
+        assert_eq!(freshness::age_label(5), "不到 1 分钟");
+        assert_eq!(freshness::age_label(120), "2 分钟");
+        assert_eq!(freshness::age_label(7200), "2 小时");
+        assert_eq!(freshness::age_label(3 * 86_400), "3 天");
     }
 
     #[test]
