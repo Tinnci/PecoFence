@@ -62,7 +62,7 @@ pub fn live_config() -> (u16, serde_json::Value) {
     )
 }
 pub fn demo_snapshot() -> CiWatchSnapshot {
-    serde_json::from_str(include_str!("../../fixtures/ci-watch-demo.json"))
+    serde_json::from_str(demo_fixture!("../../fixtures/ci-watch-demo.json"))
         .expect("verified deterministic CI fixture")
 }
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -127,6 +127,7 @@ impl PanelProvider for CiWatchPlugin {
         }
         let parsed: Config =
             serde_json::from_slice(&config.bytes).map_err(|e| Error::Invalid(e.to_string()))?;
+        crate::validate_demo(parsed.demo)?;
         if parsed.timezone.len() > 64 {
             return Err(Error::Invalid("invalid timezone".into()));
         }

@@ -4,8 +4,7 @@
 //! Projection and business rules stay in the SPM backend; this panel shows the
 //! board it receives and keeps view state (selection, filters, scroll) by card
 //! identity. With `"source": "demo"` a deterministic in-process backend
-//! ([`demo`]) serves the same contract, because the SPM daemon has no board
-//! producer yet.
+//! ([`demo`]) serves the same contract, only when explicitly enabled for development.
 
 pub mod demo;
 pub mod layout;
@@ -77,6 +76,8 @@ pub fn demo_config() -> (u16, serde_json::Value) {
     )
 }
 
+pub use crate::project_setup::live_config;
+
 pub struct BoardPlugin;
 
 impl PanelProvider for BoardPlugin {
@@ -93,13 +94,24 @@ impl PanelProvider for BoardPlugin {
         if config.version != CONFIG_VERSION {
             return Err(Error::Invalid("unsupported board config version".into()));
         }
+        if crate::project_setup::unselected(&config.bytes) {
+            return Ok(());
+        }
         let parsed: BoardConfig = serde_json::from_slice(&config.bytes)
             .map_err(|error| Error::Invalid(error.to_string()))?;
+        crate::validate_demo(parsed.source == BoardSource::Demo)?;
         crate::navigation::validate_origins(&parsed.navigation_origins)
     }
 
     fn create(&self, ctx: PluginContext, input: CreatePanel) -> Result<Box<dyn PanelInstance>> {
         self.validate(&input.config)?;
+        if crate::project_setup::unselected(&input.config.bytes) {
+            return Ok(Box::new(crate::project_setup::ProjectSetup::new(
+                ctx,
+                input.key,
+                crate::project_setup::Kind::Board,
+            )));
+        }
         let config: BoardConfig = serde_json::from_slice(&input.config.bytes)
             .map_err(|error| Error::Invalid(error.to_string()))?;
         Ok(Box::new(BoardPanel::new(

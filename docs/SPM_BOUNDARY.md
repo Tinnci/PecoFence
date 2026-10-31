@@ -126,3 +126,22 @@ A missing `spmd` process is an installation/startup fault, not a rendering failu
 Transport retries continue with their existing backoff. The first or changed connection error is logged immediately; unchanged errors are summarized at most every five minutes with a suppressed count. Opening a connection resets suppression. State transitions are logged separately so recovery is visible. This diagnostic policy does not replace starting the daemon and does not treat an open pipe as a successful protocol handshake.
 
 Live repair on 2026-10-20 found no daemon process or login entry and thousands of repeated missing-pipe warnings. Restoring the installed daemon with its existing database stopped new warnings; protocol Hello succeeded. The login entry was configured, but a future Windows logon has not been exercised by this repair. Native transport tests cover suppression, changed errors and reset along with existing correlation/cancellation/recovery behavior; logs remain private and are not bundled in the repository.
+
+## First-run panel configuration
+
+New board, timeline and issues fences start with `{"selection":null}` and no
+subscription or request. The project selector uses the host's existing text
+editor: board/timeline require a project ID and delivery-scope ID, issues a
+project ID. It validates the IDs, activates the live provider and persists the
+configuration. The daemon does not yet advertise a project-list API; this is
+manual selection, pending the project-template workflow in Workspace.
+
+Existing explicit live panel configurations remain supported. The issues
+provider requires an explicit project ID; it no longer supplies a fixture
+project when one is missing. New live issue searches start empty.
+
+Demo board, issues, plan and CI configurations require a developer build:
+`cargo build -p pecofence --features demo-data`. Normal builds exclude fixture payloads and reject demo
+provider configurations. Saved demo fences should be recreated as live panels;
+normal upgrades do not rewrite the user's saved layout. Fixture tests continue
+using deterministic demo inputs.

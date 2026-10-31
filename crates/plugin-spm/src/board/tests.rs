@@ -8,6 +8,8 @@ use std::cell::{Cell, RefCell};
 
 #[derive(Default)]
 struct Calls {
+    subscriptions: Cell<usize>,
+    requests: Cell<usize>,
     copied: RefCell<Vec<String>>,
     opened: Cell<u64>,
 }
@@ -27,9 +29,11 @@ impl ScopeLease for Mock {
 }
 impl IpcService for Mock {
     fn subscribe(&self, _: &ScopeHandle, _: Query) -> Result<Token> {
+        self.0.subscriptions.set(self.0.subscriptions.get() + 1);
         Ok(Token(1))
     }
     fn send(&self, _: &ScopeHandle, _: Arc<[u8]>) -> Result<Token> {
+        self.0.requests.set(self.0.requests.get() + 1);
         Ok(Token(2))
     }
     fn cancel(&self, _: Token) -> Result<()> {
@@ -1471,4 +1475,97 @@ fn board_capsule_with_ci_segment_snapshot() {
         [background[0], background[1], background[2], 1.0],
     );
     pecofence_render::raster::assert_snapshot(&pixmap, &dir.join("board-capsule-ci-light-360.png"));
+}
+
+#[test]
+fn fresh_panels_wait_for_explicit_project_and_preserve_timeline_target() {
+    for (provider, live, ids) in [
+        (
+            &BoardPlugin as &dyn PanelProvider,
+            live_config().1,
+            "project-a scope-a",
+        ),
+        (
+            &crate::issues::IssuesPlugin as &dyn PanelProvider,
+            crate::issues::live_config().1,
+            "project-a",
+        ),
+    ] {
+        let h = harness_with(None);
+        let ctx = h.panel.ctx;
+        let scope = ctx.scope.clone();
+        let mut panel = provider
+            .create(
+                ctx,
+                CreatePanel {
+                    key: KEY,
+                    config: PanelConfig {
+                        version: 1,
+                        bytes: serde_json::to_vec(&live).unwrap().into(),
+                    },
+                },
+            )
+            .unwrap();
+        panel
+            .mount(MountContext {
+                key: MountKey {
+                    instance: KEY,
+                    generation: 1,
+                },
+                scope,
+                viewport: input(800.0, 600.0, 1.0).viewport,
+                dpi: 96,
+            })
+            .unwrap();
+        let frame = panel.prepare_frame(input(800.0, 600.0, 1.0)).unwrap();
+        assert!(
+            frame
+                .semantics()
+                .iter()
+                .any(|n| n.name.contains("Choose a project"))
+        );
+        assert!(!frame.semantics().iter().any(|n| n.name.contains("orion")));
+        panel
+            .event(PanelEvent::TextSubmitted {
+                action: 1,
+                text: "".into(),
+            })
+            .unwrap();
+        let invalid = panel.prepare_frame(input(800.0, 600.0, 1.0)).unwrap();
+        assert!(
+            invalid
+                .semantics()
+                .iter()
+                .any(|n| n.name.contains("Invalid project"))
+        );
+        assert_eq!(h.calls.subscriptions.get(), 0);
+        assert_eq!(h.calls.requests.get(), 0);
+        panel
+            .event(PanelEvent::Context {
+                topic: "board.timeline".into(),
+                json: "{}".into(),
+            })
+            .unwrap();
+        let update = panel
+            .event(PanelEvent::TextSubmitted {
+                action: 1,
+                text: ids.into(),
+            })
+            .unwrap();
+        assert!(
+            update
+                .commands
+                .iter()
+                .any(|c| matches!(c, HostCommand::PersistConfig(_)))
+        );
+        let frame = panel.prepare_frame(input(800.0, 600.0, 1.0)).unwrap();
+        assert!(
+            !frame
+                .semantics()
+                .iter()
+                .any(|n| n.name.contains("Choose a project"))
+        );
+        panel.begin_stop(StopReason::Shutdown);
+        assert!(panel.event(PanelEvent::Wake).is_err());
+    }
 }

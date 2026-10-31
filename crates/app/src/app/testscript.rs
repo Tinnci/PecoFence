@@ -485,7 +485,7 @@ impl App {
                         self.schedule_save();
                     }
                 }
-                ["ci-monitor-demo"] => {
+                ["ci-monitor-demo"] if cfg!(feature = "demo-data") => {
                     // What the hidden monitor publishes in live use, from the demo fixture: the
                     // tray counts and the board's capsule segment follow it.
                     let json =

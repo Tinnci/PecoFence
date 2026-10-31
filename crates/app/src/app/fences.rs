@@ -1020,15 +1020,14 @@ impl App {
             SpmPanel::Board => (
                 "交付看板",
                 pecofence_plugin_spm::board::PROVIDER_ID,
-                pecofence_plugin_spm::board::demo_config(),
+                pecofence_plugin_spm::board::live_config(),
                 1120.0,
                 760.0,
             ),
-            // spmd serves issues only from its Orion fixture until the Meegle join exists.
             SpmPanel::Issues => (
                 "我的问题",
                 pecofence_plugin_spm::issues::PROVIDER_ID,
-                pecofence_plugin_spm::issues::demo_config(),
+                pecofence_plugin_spm::issues::live_config(),
                 480.0,
                 780.0,
             ),
@@ -1053,7 +1052,7 @@ impl App {
     /// A board fence that opens in its timeline view. The view is set by a context the board
     /// reads once it is mounted, so the fence never starts on the wrong tab.
     pub(super) fn new_timeline_near(&mut self, x: i32, y: i32, near: Option<ContainerId>) {
-        let (version, config) = pecofence_plugin_spm::board::demo_config();
+        let (version, config) = pecofence_plugin_spm::board::live_config();
         let rect = self.place_new_fence_dip(1120.0, 760.0, x, y, near);
         let Some(content) = self.state.new_panel_fence(
             pecofence_core::i18n::text("交付时间线"),

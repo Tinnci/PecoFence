@@ -20,16 +20,16 @@ use std::time::{Duration, Instant};
 
 const STEPS: [(&str, &str); 3] = [
     (
-        include_str!("../../fixtures/board-demo/step1-board.json"),
-        include_str!("../../fixtures/board-demo/step1-evidence.json"),
+        demo_fixture!("../../fixtures/board-demo/step1-board.json"),
+        demo_fixture!("../../fixtures/board-demo/step1-evidence.json"),
     ),
     (
-        include_str!("../../fixtures/board-demo/step2-board.json"),
-        include_str!("../../fixtures/board-demo/step2-evidence.json"),
+        demo_fixture!("../../fixtures/board-demo/step2-board.json"),
+        demo_fixture!("../../fixtures/board-demo/step2-evidence.json"),
     ),
     (
-        include_str!("../../fixtures/board-demo/step3-board.json"),
-        include_str!("../../fixtures/board-demo/step3-evidence.json"),
+        demo_fixture!("../../fixtures/board-demo/step3-board.json"),
+        demo_fixture!("../../fixtures/board-demo/step3-evidence.json"),
     ),
 ];
 

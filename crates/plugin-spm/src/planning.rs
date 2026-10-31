@@ -33,7 +33,7 @@ pub fn live_config() -> (u16, serde_json::Value) {
     (1, serde_json::json!({"selection":null}))
 }
 pub fn demo_snapshot() -> DeliveryPlanView {
-    serde_json::from_str(include_str!("../fixtures/planning-demo.json"))
+    serde_json::from_str(demo_fixture!("../fixtures/planning-demo.json"))
         .expect("synthetic plan fixture")
 }
 pub fn demo_config() -> (u16, serde_json::Value) {
@@ -55,6 +55,7 @@ impl PanelProvider for PlanningPlugin {
         }
         let config: Config =
             serde_json::from_slice(&c.bytes).map_err(|e| Error::Invalid(e.to_string()))?;
+        crate::validate_demo(config.demo)?;
         if let Some(s) = config.selection {
             request(&s, None, 0)
                 .validate()

@@ -4,6 +4,10 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[features]
+default = []
+demo-data = []
+
 [dependencies]
 pecofence-plugin-api = { path = "../plugin-api" }
 spm-contracts.workspace = true

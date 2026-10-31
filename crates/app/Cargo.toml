@@ -8,6 +8,10 @@ license.workspace = true
 name = "pecofence"
 path = "src/main.rs"
 
+[features]
+default = []
+demo-data = ["pecofence-plugin-spm/demo-data"]
+
 [dependencies]
 chrono.workspace = true
 pecofence-spm-transport = { path = "../spm-transport" }

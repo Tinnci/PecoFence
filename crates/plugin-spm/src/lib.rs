@@ -3,11 +3,36 @@
 //! Business decisions remain daemon-owned. This crate consumes versioned read-model snapshots and
 //! turns them into layout, hit-test, semantic, and paint data without depending on Win32.
 
+// Fixture payloads are absent from ordinary builds. Providers reject demo
+// configurations before a demo parser can be reached.
+macro_rules! demo_fixture {
+    ($path:literal) => {{
+        #[cfg(any(test, feature = "demo-data"))]
+        {
+            include_str!($path)
+        }
+        #[cfg(not(any(test, feature = "demo-data")))]
+        {
+            ""
+        }
+    }};
+}
+
 pub mod board;
 pub mod ci_watch;
 pub mod issues;
 pub mod navigation;
 pub mod planning;
+mod project_setup;
+
+pub(crate) fn validate_demo(enabled: bool) -> pecofence_plugin_api::Result<()> {
+    if enabled && !cfg!(any(test, feature = "demo-data")) {
+        return Err(pecofence_plugin_api::Error::Invalid(
+            "demo data requires the demo-data developer feature".into(),
+        ));
+    }
+    Ok(())
+}
 pub(crate) mod scene_builder;
 
 use pecofence_plugin_api::design::{self, ContentScale, LayoutTracker};
