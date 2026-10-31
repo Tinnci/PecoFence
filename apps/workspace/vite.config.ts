@@ -116,6 +116,7 @@ function localHub(): Plugin {
 export default defineConfig({
   plugins: [tailwindcss(), localHub()],
   clearScreen: false,
+  resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
   server: {
     host: "127.0.0.1",
     port: 1428,

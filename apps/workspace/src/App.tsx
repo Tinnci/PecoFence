@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import * as Progress from "@radix-ui/react-progress";
+import { Progress } from "@/components/ui/progress";
 import {
   ArrowRight,
   Blocks,
@@ -252,20 +252,13 @@ export default function App() {
                         <span> / {totals.total}</span>
                       </strong>
                       <p>配置步骤已完成</p>
-                      <Progress.Root
-                        className="progress-track"
+                      <Progress
+                        className="setup-progress"
                         value={
                           totals.total ? (totals.done / totals.total) * 100 : 0
                         }
                         aria-label="配置完成进度"
-                      >
-                        <Progress.Indicator
-                          className="progress-value"
-                          style={{
-                            transform: `translateX(-${100 - (totals.total ? (totals.done / totals.total) * 100 : 0)}%)`,
-                          }}
-                        />
-                      </Progress.Root>
+                      />
                       <small>
                         {checkedCount
                           ? `${checkedCount} 个组件已检查`

@@ -54,6 +54,27 @@ describe("welcome to setup flow", () => {
     expect(screen.getByText("配置入口将在后续版本提供")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "执行" })).toBeNull();
   });
+  it("shows setup progress with the shadcn Base UI progress bar", async () => {
+    const step = report.components[0].setup[0];
+    mocks.loadHub.mockReset().mockResolvedValue({
+      ...report,
+      components: [
+        {
+          ...report.components[0],
+          setup: [step, { ...step, id: "mode", state: "done" }],
+        },
+      ],
+    });
+    render(<App />);
+    const bar = await screen.findByRole("progressbar", {
+      name: "配置完成进度",
+    });
+    expect(bar.getAttribute("aria-valuenow")).toBe("50");
+    const indicator = bar.querySelector<HTMLElement>(
+      '[data-slot="progress-indicator"]',
+    );
+    expect(indicator?.style.width).toBe("50%");
+  });
   it("runs checks only on request and retains prior results when they fail", async () => {
     const user = userEvent.setup();
     render(<App />);
