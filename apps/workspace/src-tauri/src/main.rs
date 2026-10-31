@@ -45,9 +45,11 @@ fn desktop() {
         started: std::time::Instant,
         painted: std::sync::atomic::AtomicBool,
         setup_gate: tokio::sync::Semaphore,
+        connection_gate: tokio::sync::Semaphore,
         /// The private template copy and the sha256 of its last plan.
         pending: std::sync::Mutex<Option<(std::path::PathBuf, String)>>,
     }
+    const SETUP_DEADLINE: std::time::Duration = std::time::Duration::from_secs(30);
     fn spm_exe() -> Result<std::path::PathBuf, setup::SetupFailure> {
         setup::locate(
             std::env::var_os("TINNCI_SPM_EXE").map(Into::into),
@@ -94,6 +96,7 @@ fn desktop() {
         let output = process::spm(
             &spm,
             &setup::import_args(template_arg(&copy)?, false, false),
+            SETUP_DEADLINE,
         )
         .await?;
         let plan = setup::decode_plan(output.code, &output.stdout)?;
@@ -120,6 +123,7 @@ fn desktop() {
         let output = process::spm(
             &spm_exe()?,
             &setup::import_args(template_arg(&copy)?, true, replace),
+            SETUP_DEADLINE,
         )
         .await?;
         let plan = setup::decode_plan(output.code, &output.stdout)?;
@@ -138,8 +142,46 @@ fn desktop() {
             .setup_gate
             .try_acquire()
             .map_err(|_| setup::SetupFailure::new("setup_busy"))?;
-        let output = process::spm(&spm_exe()?, &["setup", "status"]).await?;
+        let output = process::spm(&spm_exe()?, &["setup", "status"], SETUP_DEADLINE).await?;
         setup::decode_status(output.code, &output.stdout)
+    }
+    /// Each source tool's own login, observed by `spm connections` (probes run concurrently).
+    #[tauri::command]
+    async fn connections(
+        state: tauri::State<'_, State>,
+    ) -> Result<setup::ConnectionReport, setup::SetupFailure> {
+        let _permit = state
+            .connection_gate
+            .try_acquire()
+            .map_err(|_| setup::SetupFailure::new("setup_busy"))?;
+        let output = process::spm(
+            &spm_exe()?,
+            &["connections"],
+            std::time::Duration::from_secs(90),
+        )
+        .await?;
+        setup::decode_connections(output.code, &output.stdout)
+    }
+    /// Runs the tool's own browser login; only Meegle offers one.
+    #[tauri::command]
+    async fn connection_sign_in(
+        source: String,
+        state: tauri::State<'_, State>,
+    ) -> Result<setup::ConnectionReport, setup::SetupFailure> {
+        if source != "meegle" {
+            return Err(setup::SetupFailure::new("sign_in_unsupported"));
+        }
+        let _permit = state
+            .connection_gate
+            .try_acquire()
+            .map_err(|_| setup::SetupFailure::new("setup_busy"))?;
+        let output = process::spm(
+            &spm_exe()?,
+            &["connections", "sign-in", "meegle"],
+            std::time::Duration::from_secs(630),
+        )
+        .await?;
+        setup::decode_sign_in(output.code, &output.stdout)
     }
     #[tauri::command]
     async fn load_hub(
@@ -210,6 +252,7 @@ fn desktop() {
             started: std::time::Instant::now(),
             painted: std::sync::atomic::AtomicBool::new(false),
             setup_gate: tokio::sync::Semaphore::new(1),
+            connection_gate: tokio::sync::Semaphore::new(1),
             pending: std::sync::Mutex::new(None),
         })
         .setup(move |app| {
@@ -228,7 +271,9 @@ fn desktop() {
             first_frame,
             template_plan,
             template_apply,
-            project_status
+            project_status,
+            connections,
+            connection_sign_in
         ])
         .run(tauri::generate_context!())
         .expect("workspace runtime");

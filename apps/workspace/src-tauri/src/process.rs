@@ -81,16 +81,15 @@ async fn capture(
 pub async fn spm(
     program: &std::path::Path,
     args: &[&str],
+    deadline: Duration,
 ) -> Result<Output, crate::setup::SetupFailure> {
-    capture(program, args, Duration::from_secs(30))
-        .await
-        .map_err(|code| {
-            crate::setup::SetupFailure::new(match code.as_str() {
-                "executable_missing" => "spm_missing",
-                "hub_timeout" => "spm_timeout",
-                _ => "spm_unavailable",
-            })
+    capture(program, args, deadline).await.map_err(|code| {
+        crate::setup::SetupFailure::new(match code.as_str() {
+            "executable_missing" => "spm_missing",
+            "hub_timeout" => "spm_timeout",
+            _ => "spm_unavailable",
         })
+    })
 }
 #[cfg(not(windows))]
 pub async fn run(program: &str, args: &[&str], deadline: Duration) -> Result<Vec<u8>, String> {

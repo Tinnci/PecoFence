@@ -18,3 +18,13 @@ export type ImportedProject = {
  */
 project: string | null, scope: string | null, directory: string, check: ProjectCheck, };
 export type ProjectStatus = { config_root: string, projects: Array<ImportedProject>, };
+export type Connection = { 
+/**
+ * meegle, jira, gerrit or jenkins
+ */
+source: string, tool: string, 
+/**
+ * connected, signed_out, not_configured, unreachable, not_installed or error
+ */
+state: string, account?: string, host?: string, code?: string, sign_in: boolean, };
+export type ConnectionReport = { checked_at: string, connections: Array<Connection>, };

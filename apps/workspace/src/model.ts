@@ -19,6 +19,11 @@ export const stateLabels: Record<string, string> = {
   planned: "待支持",
   manual: "需手动配置",
   done: "已完成",
+  connected: "已连接",
+  signed_out: "未登录",
+  not_configured: "未配置",
+  unreachable: "无法连接",
+  error: "检查失败",
 };
 export function label(state: string) {
   return stateLabels[state] ?? "状态未知";
@@ -90,7 +95,7 @@ export function checkExplanation(
 /**
  * The hub checks SPM from WSL, which reads another configuration root and cannot
  * read files Windows encrypts; the desktop's own `spm setup status` decides the
- * template step instead.
+ * project step instead (a project imported from a file counts as chosen).
  */
 export function withProjects(
   report: HubReport,
@@ -106,10 +111,41 @@ export function withProjects(
         : {
             ...c,
             setup: c.setup.map((s) =>
-              s.id === "template"
+              s.id === "project"
                 ? {
                     ...s,
                     state: imported ? "done" : "action_needed",
+                    observation: undefined,
+                  }
+                : s,
+            ),
+          },
+    ),
+  };
+}
+
+/** At least one issue source must be connected; Gerrit and Jenkins are optional. */
+export const issueSources = ["meegle", "jira"];
+export function withConnections(
+  report: HubReport,
+  connections: import("./contracts/setup").ConnectionReport | null,
+): HubReport {
+  if (!connections) return report;
+  const ready = connections.connections.some(
+    (c) => issueSources.includes(c.source) && c.state === "connected",
+  );
+  return {
+    ...report,
+    components: report.components.map((c) =>
+      c.id !== "spm"
+        ? c
+        : {
+            ...c,
+            setup: c.setup.map((s) =>
+              s.id === "connect"
+                ? {
+                    ...s,
+                    state: ready ? "done" : "action_needed",
                     observation: undefined,
                   }
                 : s,

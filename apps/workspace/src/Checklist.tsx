@@ -21,8 +21,19 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { HubReport } from "./contracts/hub";
 import { label } from "./model";
-import type { ProjectStatus, SetupFailure } from "./contracts/setup";
+import type {
+  ConnectionReport,
+  ProjectStatus,
+  SetupFailure,
+} from "./contracts/setup";
 import TemplateImport from "./TemplateImport";
+import ConnectSources from "./ConnectSources";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { ChevronDown } from "lucide-react";
 import { Status } from "./Status";
 import {
   CheckButton,
@@ -41,6 +52,10 @@ export default function Checklist({
   projects,
   projectsFailure,
   onProjects,
+  connections,
+  connectionsFailure,
+  onConnections,
+  onConnectionReport,
 }: {
   report: HubReport;
   selected: string | null;
@@ -51,6 +66,10 @@ export default function Checklist({
   projects: ProjectStatus | null;
   projectsFailure: SetupFailure | null;
   onProjects: () => Promise<void>;
+  connections: ConnectionReport | null;
+  connectionsFailure: SetupFailure | null;
+  onConnections: () => Promise<void>;
+  onConnectionReport: (report: ConnectionReport) => void;
 }) {
   const components = report.components.filter((c) => c.lifecycle !== "paused");
   const [current, setCurrent] = useState(
@@ -181,13 +200,30 @@ export default function Checklist({
                           })}
                         </div>
                       ) : null}
-                      {component.id === "spm" && step.id === "template" ? (
-                        <TemplateImport
-                          status={projects}
-                          statusFailure={projectsFailure}
-                          onRefresh={onProjects}
+                      {component.id === "spm" && step.id === "connect" ? (
+                        <ConnectSources
+                          report={connections}
+                          failure={connectionsFailure}
+                          onRefresh={onConnections}
+                          onReport={onConnectionReport}
+                          onOpen={onOpen}
                         />
-                      ) : step.state === "planned" ? (
+                      ) : null}
+                      {component.id === "spm" && step.id === "project" ? (
+                        <Collapsible className="advanced-import">
+                          <CollapsibleTrigger className="details-trigger">
+                            高级 · 从配置文件导入 <ChevronDown size={12} />
+                          </CollapsibleTrigger>
+                          <CollapsibleContent>
+                            <TemplateImport
+                              status={projects}
+                              statusFailure={projectsFailure}
+                              onRefresh={onProjects}
+                            />
+                          </CollapsibleContent>
+                        </Collapsible>
+                      ) : null}
+                      {step.state === "planned" ? (
                         <small>配置入口将在后续版本提供</small>
                       ) : null}
                     </div>

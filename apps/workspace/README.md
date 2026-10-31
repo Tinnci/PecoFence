@@ -188,6 +188,23 @@ and recovered to inventory using Retry. Missing WSL/distribution cases use the
 controlled process-runner tests. No WSL installation or source configuration was
 changed by verification.
 
+## Connect sources (0.5)
+
+SPM setup follows [ADR-0004](../../../tooling/docs/ADR-0004-guided-project-setup.md):
+连接来源 → 选择项目 → 设置门槛 → 确认并开始采集. Each source keeps the login of the tool that
+owns it; Workspace never handles a token.
+
+连接来源 runs `spm connections` through the native `connections` command and lists
+飞书项目 and Jira as issue sources, Gerrit and Jenkins as code and build sources. Each row
+shows account, host and state (已连接, 未登录, 未配置, 无法连接, 未安装, 检查失败) with the fix
+for that state. 飞书项目 offers 登录, which runs `spm connections sign-in meegle`
+(`connection_sign_in`): Meegle's own browser login for the remembered site, up to 10 minutes.
+Unreachable Jenkins links to 网页数据转发. The step completes when 飞书项目 or Jira is
+connected; this state comes from the desktop's `spm connections`, not the hub's WSL check.
+
+The remaining steps arrive with R1.3. Template import (below) now sits under
+选择项目 → 高级 · 从配置文件导入.
+
 ## SPM project template (0.4)
 
 The SPM checklist's template step lists imported projects and imports one more:

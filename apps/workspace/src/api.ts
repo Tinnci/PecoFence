@@ -1,7 +1,11 @@
 import { isTauri, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { HubReport } from "./contracts/hub";
-import type { ImportPlan, ProjectStatus } from "./contracts/setup";
+import type {
+  ConnectionReport,
+  ImportPlan,
+  ProjectStatus,
+} from "./contracts/setup";
 export type Page = "home" | "setup" | "health";
 export function isPage(value: unknown): value is Page {
   return value === "home" || value === "setup" || value === "health";
@@ -64,3 +68,13 @@ export async function applyTemplate(
     : desktopOnly();
 }
 export const desktop = isTauri;
+/** Each source tool's own login, observed by `spm connections`. */
+export async function loadConnections(): Promise<ConnectionReport> {
+  return isTauri() ? invoke<ConnectionReport>("connections") : desktopOnly();
+}
+/** Runs the tool's browser login (Meegle) and returns the rechecked row. */
+export async function signIn(source: string): Promise<ConnectionReport> {
+  return isTauri()
+    ? invoke<ConnectionReport>("connection_sign_in", { source })
+    : desktopOnly();
+}

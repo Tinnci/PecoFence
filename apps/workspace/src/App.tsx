@@ -53,8 +53,19 @@ import {
   GitBranch,
   UserRound,
 } from "lucide-react";
-import { desktop, loadHub, navigation, projectStatus, type Page } from "./api";
-import type { ProjectStatus, SetupFailure } from "./contracts/setup";
+import {
+  desktop,
+  loadConnections as fetchConnections,
+  loadHub,
+  navigation,
+  projectStatus,
+  type Page,
+} from "./api";
+import type {
+  ConnectionReport,
+  ProjectStatus,
+  SetupFailure,
+} from "./contracts/setup";
 import { failureOf } from "./TemplateImport";
 import type { Component, HubReport, LoadFailure } from "./contracts/hub";
 import {
@@ -62,6 +73,7 @@ import {
   groups,
   mergeReport,
   progress,
+  withConnections,
   withProjects,
 } from "./model";
 import { Status } from "./Status";
@@ -114,6 +126,20 @@ export default function App() {
   const [projectsFailure, setProjectsFailure] = useState<SetupFailure | null>(
     null,
   );
+  const [connections, setConnections] = useState<ConnectionReport | null>(null);
+  const [connectionsFailure, setConnectionsFailure] =
+    useState<SetupFailure | null>(null);
+  async function loadConnections() {
+    try {
+      const report = await fetchConnections();
+      if (mounted.current) {
+        setConnections(report);
+        setConnectionsFailure(null);
+      }
+    } catch (failure) {
+      if (mounted.current) setConnectionsFailure(failureOf(failure));
+    }
+  }
   async function loadProjects() {
     try {
       const status = await projectStatus();
@@ -154,7 +180,10 @@ export default function App() {
   useEffect(() => {
     mounted.current = true;
     void refresh(false);
-    if (desktop()) void loadProjects();
+    if (desktop()) {
+      void loadProjects();
+      void loadConnections();
+    }
     let cleanup: (() => void) | undefined;
     void navigation((next) => {
       if (mounted.current) setPage(next);
@@ -173,7 +202,9 @@ export default function App() {
     setSelected(id ?? null);
     setPage("setup");
   }
-  const report = hub ? withProjects(hub, projects) : null;
+  const report = hub
+    ? withConnections(withProjects(hub, projects), connections)
+    : null;
   const totals = report ? progress(report) : { done: 0, total: 0 };
   const active =
     report?.components.filter((c) => c.lifecycle !== "paused") ?? [];
@@ -433,6 +464,10 @@ export default function App() {
                     projects={projects}
                     projectsFailure={projectsFailure}
                     onProjects={loadProjects}
+                    connections={connections}
+                    connectionsFailure={connectionsFailure}
+                    onConnections={loadConnections}
+                    onConnectionReport={setConnections}
                   />
                 ) : (
                   <Health

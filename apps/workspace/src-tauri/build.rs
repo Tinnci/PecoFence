@@ -10,6 +10,8 @@ fn main() {
             "template_plan",
             "template_apply",
             "project_status",
+            "connections",
+            "connection_sign_in",
         ]),
     ))
     .expect("Tauri build configuration");

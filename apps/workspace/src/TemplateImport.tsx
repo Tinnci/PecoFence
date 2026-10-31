@@ -40,6 +40,10 @@ const failures: Record<string, string> = {
   template_invalid: "模板无效",
   import_conflict: "已有文件与模板不同，可以备份后替换。",
   import_io: "写入项目配置失败",
+  sign_in_failed: "登录没有完成，可以再试一次",
+  sign_in_host_unknown:
+    "尚未选择飞书项目站点，请先在终端运行 meegle auth login",
+  sign_in_unsupported: "此来源由它自己的工具配置",
 };
 const roles: Record<string, string> = {
   deployment: "部署配置",
@@ -57,7 +61,7 @@ export function failureOf(error: unknown): SetupFailure {
     ? (error as SetupFailure)
     : { code: "spm_unavailable" };
 }
-function FailureNote({ failure }: { failure: SetupFailure }) {
+export function FailureNote({ failure }: { failure: SetupFailure }) {
   const text = failures[failure.code] ?? failures.spm_unavailable;
   return (
     <Alert className="alert-warning">

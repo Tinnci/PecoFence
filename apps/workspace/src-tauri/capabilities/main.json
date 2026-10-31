@@ -11,6 +11,8 @@
     "allow-first-frame",
     "allow-template-plan",
     "allow-template-apply",
-    "allow-project-status"
+    "allow-project-status",
+    "allow-connections",
+    "allow-connection-sign-in"
   ]
 }

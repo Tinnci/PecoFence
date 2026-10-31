@@ -27,7 +27,8 @@ impl SetupFailure {
             | "template_cancelled"
             | "template_unreadable"
             | "template_too_large"
-            | "template_stale" => code.as_ref(),
+            | "template_stale"
+            | "sign_in_unsupported" => code.as_ref(),
             _ => "spm_unavailable",
         };
         Self {
@@ -40,6 +41,9 @@ impl SetupFailure {
             "TEMPLATE_INVALID" => "template_invalid",
             "IMPORT_CONFLICT" => "import_conflict",
             "IMPORT_IO" => "import_io",
+            "SIGN_IN_HOST_UNKNOWN" => "sign_in_host_unknown",
+            "SIGN_IN_FAILED" => "sign_in_failed",
+            "SIGN_IN_UNSUPPORTED" => "sign_in_unsupported",
             _ => return Self::new("spm_invalid_response"),
         };
         Self {
@@ -103,6 +107,37 @@ pub struct ProjectStatus {
     pub projects: Vec<ImportedProject>,
 }
 
+/// One source tool's login as observed by `spm connections` (ADR-0004).
+#[derive(Debug, Serialize, Deserialize, TS)]
+pub struct Connection {
+    /// meegle, jira, gerrit or jenkins
+    pub source: String,
+    pub tool: String,
+    /// connected, signed_out, not_configured, unreachable, not_installed or error
+    pub state: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub account: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub host: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub code: Option<String>,
+    #[serde(default)]
+    pub sign_in: bool,
+}
+#[derive(Debug, Serialize, Deserialize, TS)]
+pub struct ConnectionReport {
+    pub checked_at: String,
+    pub connections: Vec<Connection>,
+}
+#[derive(Deserialize)]
+struct SignedIn {
+    checked_at: String,
+    connection: Connection,
+}
+
 #[derive(Deserialize)]
 struct Envelope {
     ok: bool,
@@ -152,6 +187,34 @@ pub fn decode_status(code: Option<i32>, stdout: &[u8]) -> Result<ProjectStatus, 
         return Err(SetupFailure::new("spm_invalid_response"));
     }
     serde_json::from_value(envelope.data).map_err(|_| SetupFailure::new("spm_invalid_response"))
+}
+
+pub fn decode_connections(
+    code: Option<i32>,
+    stdout: &[u8],
+) -> Result<ConnectionReport, SetupFailure> {
+    let envelope = envelope(code, stdout)?;
+    if !envelope.ok {
+        return Err(SetupFailure::new("spm_invalid_response"));
+    }
+    serde_json::from_value(envelope.data).map_err(|_| SetupFailure::new("spm_invalid_response"))
+}
+
+/// A completed sign-in returns the rechecked connection, reported like a status row.
+pub fn decode_sign_in(code: Option<i32>, stdout: &[u8]) -> Result<ConnectionReport, SetupFailure> {
+    let envelope = envelope(code, stdout)?;
+    if !envelope.ok {
+        let error = envelope
+            .error
+            .ok_or(SetupFailure::new("spm_invalid_response"))?;
+        return Err(SetupFailure::owner(&error.code, error.message));
+    }
+    let signed: SignedIn = serde_json::from_value(envelope.data)
+        .map_err(|_| SetupFailure::new("spm_invalid_response"))?;
+    Ok(ConnectionReport {
+        checked_at: signed.checked_at,
+        connections: vec![signed.connection],
+    })
 }
 
 /// The executable named by an installer shim such as `"C:\...\spm.exe" %*`.
@@ -233,6 +296,8 @@ pub fn types() -> String {
             ImportPlan::decl(&config),
             ImportedProject::decl(&config),
             ProjectStatus::decl(&config),
+            Connection::decl(&config),
+            ConnectionReport::decl(&config),
         ]
         .map(|decl| format!("export {decl}\n"))
         .concat()
@@ -318,6 +383,45 @@ mod tests {
         let status = decode_status(Some(0), fixture!("status.json")).unwrap();
         assert_eq!(status.projects[0].scope.as_deref(), Some("TEST_SCOPE"));
         assert!(status.projects[0].check.valid);
+    }
+    #[test]
+    fn decodes_connections_and_sign_in_results() {
+        let report = decode_connections(
+            Some(0),
+            include_bytes!("../tests/fixtures/connections.json"),
+        )
+        .unwrap();
+        let states: Vec<_> = report
+            .connections
+            .iter()
+            .map(|c| (c.source.as_str(), c.state.as_str()))
+            .collect();
+        assert_eq!(
+            states,
+            [
+                ("meegle", "connected"),
+                ("jira", "connected"),
+                ("gerrit", "connected"),
+                ("jenkins", "unreachable")
+            ]
+        );
+        assert!(report.connections[0].sign_in && report.connections[0].account.is_none());
+        assert_eq!(
+            decode_connections(Some(2), b"error: unrecognized subcommand")
+                .unwrap_err()
+                .code,
+            "spm_update_required"
+        );
+        let signed = br#"{"ok":true,"data":{"checked_at":"t","connection":{"source":"meegle","tool":"meegle","state":"connected","sign_in":true}}}"#;
+        assert_eq!(
+            decode_sign_in(Some(0), signed).unwrap().connections[0].state,
+            "connected"
+        );
+        let host = br#"{"ok":false,"data":null,"error":{"code":"SIGN_IN_HOST_UNKNOWN","message":"run `meegle auth login` once"}}"#;
+        assert_eq!(
+            decode_sign_in(Some(1), host).unwrap_err().code,
+            "sign_in_host_unknown"
+        );
     }
     #[test]
     fn status_keeps_listing_for_empty_and_invalid_projects() {

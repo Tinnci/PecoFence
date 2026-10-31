@@ -11,6 +11,8 @@ const mocks = vi.hoisted(() => ({
   projectStatus: vi.fn(),
   planTemplate: vi.fn(),
   applyTemplate: vi.fn(),
+  loadConnections: vi.fn(),
+  signIn: vi.fn(),
 }));
 vi.mock("../src/api", () => mocks);
 const report: HubReport = {
@@ -33,11 +35,18 @@ const report: HubReport = {
       state: "setup_pending",
       setup: [
         {
-          id: "template",
-          title: "导入项目模板",
-          why: "由项目负责人提供",
-          state: "planned",
+          id: "connect",
+          title: "连接来源",
+          why: "账号由各来源工具登录和保存",
+          state: "unchecked",
           needs: [],
+        },
+        {
+          id: "project",
+          title: "选择项目",
+          why: "从已连接账号能看到的范围中选择",
+          state: "planned",
+          needs: ["connect"],
         },
       ],
     },
@@ -51,8 +60,15 @@ beforeEach(() => {
     mocks.projectStatus,
     mocks.planTemplate,
     mocks.applyTemplate,
+    mocks.signIn,
   ])
     fn.mockReset();
+});
+beforeEach(() => {
+  mocks.loadConnections.mockReset().mockResolvedValue({
+    checked_at: "2026-11-01T00:00:00Z",
+    connections: [],
+  });
 });
 afterEach(cleanup);
 describe("welcome to setup flow", () => {
@@ -63,9 +79,11 @@ describe("welcome to setup flow", () => {
     expect(mocks.loadHub.mock.calls).toEqual([[false]]);
     await user.click(screen.getByRole("button", { name: /查看项目配置/ }));
     expect(
-      await screen.findByRole("heading", { name: "导入项目模板" }),
+      await screen.findByRole("heading", { name: "连接来源" }),
     ).toBeTruthy();
-    expect(screen.getByRole("button", { name: /选择项目模板/ })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "选择项目" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /从配置文件导入/ })).toBeTruthy();
+    expect(mocks.loadConnections).not.toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: "执行" })).toBeNull();
   });
   it("shows setup progress with the shadcn Base UI progress bar", async () => {
@@ -348,7 +366,8 @@ describe("SPM template import", () => {
     await user.click(
       await screen.findByRole("button", { name: /查看项目配置/ }),
     );
-    await screen.findByRole("heading", { name: "导入项目模板" });
+    await screen.findByRole("heading", { name: "选择项目" });
+    await user.click(screen.getByRole("button", { name: /从配置文件导入/ }));
     return user;
   }
   it("plans, confirms a backup-and-replace, and takes the step state from the desktop status", async () => {
@@ -364,7 +383,7 @@ describe("SPM template import", () => {
       check: imported.projects[0].check,
     });
     const user = await openTemplateStep();
-    const step = screen.getByRole("article", { name: "导入项目模板" });
+    const step = screen.getByRole("article", { name: "选择项目" });
     await waitFor(() => expect(step.textContent).toContain("需要处理"));
     await user.click(screen.getByRole("button", { name: /选择项目模板/ }));
     const planned = await screen.findByRole("region", { name: "导入计划" });
@@ -399,5 +418,112 @@ describe("SPM template import", () => {
       "模板无效：unknown field `x`",
     );
     expect(mocks.applyTemplate).not.toHaveBeenCalled();
+  });
+});
+
+describe("connect sources", () => {
+  const row = (name: string) => screen.getByRole("listitem", { name });
+  async function openChecklist() {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(
+      await screen.findByRole("button", { name: /查看项目配置/ }),
+    );
+    await screen.findByRole("heading", { name: "连接来源" });
+    return user;
+  }
+  it("shows each tool's login, signs in to Meegle through its own flow and completes the step", async () => {
+    mocks.desktop.mockReturnValue(true);
+    mocks.projectStatus.mockResolvedValue({
+      config_root: "C:\\cfg",
+      projects: [],
+    });
+    mocks.loadConnections.mockResolvedValue({
+      checked_at: "2026-11-01T00:00:00Z",
+      connections: [
+        {
+          source: "meegle",
+          tool: "meegle",
+          state: "signed_out",
+          host: "project.feishu.cn",
+          sign_in: true,
+        },
+        {
+          source: "jira",
+          tool: "jira-cli",
+          state: "not_configured",
+          sign_in: false,
+        },
+        {
+          source: "gerrit",
+          tool: "grr",
+          state: "connected",
+          account: "shitianchi",
+          host: "gerrit.example",
+          sign_in: false,
+        },
+        {
+          source: "jenkins",
+          tool: "jenkins-bridge",
+          state: "unreachable",
+          account: "work",
+          code: "transport_error",
+          sign_in: false,
+        },
+      ],
+    });
+    mocks.signIn.mockResolvedValue({
+      checked_at: "2026-11-01T00:01:00Z",
+      connections: [
+        {
+          source: "meegle",
+          tool: "meegle",
+          state: "connected",
+          host: "project.feishu.cn",
+          sign_in: true,
+        },
+      ],
+    });
+    const user = await openChecklist();
+    const step = screen.getByRole("article", { name: "连接来源" });
+    await waitFor(() => expect(step.textContent).toContain("需要处理"));
+    expect(row("Jira").textContent).toContain("个人访问令牌文件");
+    expect(row("Gerrit").textContent).toContain("shitianchi · gerrit.example");
+    expect(row("Jenkins").textContent).toContain("网页数据转发");
+    await user.click(screen.getByRole("button", { name: "登录" }));
+    expect(mocks.signIn).toHaveBeenCalledWith("meegle");
+    await waitFor(() =>
+      expect(row("飞书项目").textContent).toContain("已连接"),
+    );
+    expect(step.textContent).toContain("已完成");
+    expect(screen.queryByRole("button", { name: "登录" })).toBeNull();
+  });
+  it("explains a sign-in that needs the site chosen in a terminal", async () => {
+    mocks.desktop.mockReturnValue(true);
+    mocks.projectStatus.mockResolvedValue({
+      config_root: "C:\\cfg",
+      projects: [],
+    });
+    mocks.loadConnections.mockResolvedValue({
+      checked_at: "2026-11-01T00:00:00Z",
+      connections: [
+        {
+          source: "meegle",
+          tool: "meegle",
+          state: "signed_out",
+          host: "project.feishu.cn",
+          sign_in: true,
+        },
+      ],
+    });
+    mocks.signIn.mockRejectedValue({
+      code: "sign_in_host_unknown",
+      message: "run meegle auth login",
+    });
+    const user = await openChecklist();
+    await user.click(await screen.findByRole("button", { name: "登录" }));
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "尚未选择飞书项目站点",
+    );
   });
 });
