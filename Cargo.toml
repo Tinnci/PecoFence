@@ -17,7 +17,7 @@ members = [
     "crates/watchdog",
     "tools/bindgen",
 ]
-exclude = ["vendor/windows-reactor"]
+exclude = ["vendor/windows-reactor", "apps/workspace/src-tauri"]
 
 [workspace.package]
 version = "0.0.6"
