@@ -1,11 +1,23 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
   <title>工作台</title>
-  <!-- Tile -->
-  <rect x="48" y="48" width="928" height="928" rx="216" fill="#4d6a55"/>
-  <!-- 工, drawn as a workbench: top beam, post, desk -->
-  <rect x="252" y="252" width="520" height="112" rx="40" fill="#fffaf0"/>
-  <rect x="456" y="300" width="112" height="420" fill="#fffaf0"/>
-  <rect x="180" y="660" width="664" height="112" rx="40" fill="#fffaf0"/>
-  <!-- Live status light -->
-  <circle cx="704" cy="512" r="72" fill="#f0a73a"/>
+  <!-- Tile with a double gold frame -->
+  <rect x="48" y="48" width="928" height="928" rx="216" fill="#0f2a24"/>
+  <rect x="96" y="96" width="832" height="832" rx="176" fill="#d9a94e"/>
+  <rect x="112" y="112" width="800" height="800" rx="160" fill="#0f2a24"/>
+  <rect x="136" y="136" width="752" height="752" rx="138" fill="#d9a94e"/>
+  <rect x="142" y="142" width="740" height="740" rx="132" fill="#0f2a24"/>
+  <!-- Rising sunburst behind the desk -->
+  <path d="M512 656L176.5 638.4L180.1 603.4ZM512 656L187.4 569.0L198.3 535.6ZM512 656L212.6 503.5L230.2 473.0ZM512 656L250.9 444.5L274.4 418.4ZM512 656L300.5 394.9L329.0 374.2ZM512 656L359.5 356.6L391.6 342.3ZM512 656L425.0 331.4L459.4 324.1ZM512 656L494.4 320.5L529.6 320.5ZM512 656L564.6 324.1L599.0 331.4ZM512 656L632.4 342.3L664.5 356.6ZM512 656L695.0 374.2L723.5 394.9ZM512 656L749.6 418.4L773.1 444.5ZM512 656L793.8 473.0L811.4 503.5ZM512 656L825.7 535.6L836.6 569.0ZM512 656L843.9 603.4L847.5 638.4Z" fill="#235245"/>
+  <!-- 工 as a stepped ziggurat: cap, beam, post with pinstripes, desk, plinths -->
+  <g fill="#e8bd5f">
+    <rect x="412" y="236" width="200" height="40"/>
+    <rect x="292" y="276" width="440" height="80"/>
+    <rect x="476" y="356" width="72" height="300"/>
+    <rect x="444" y="388" width="14" height="236"/>
+    <rect x="566" y="388" width="14" height="236"/>
+    <rect x="252" y="656" width="520" height="80"/>
+    <rect x="372" y="736" width="280" height="36"/>
+    <rect x="442" y="772" width="140" height="24"/>
+  </g>
+  <path d="M512 474 L534 506 L512 538 L490 506 Z" fill="#0f2a24"/>
 </svg>

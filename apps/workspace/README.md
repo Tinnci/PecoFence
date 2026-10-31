@@ -177,10 +177,11 @@ changed by verification.
 
 ## Icon
 
-`icons/workspace.svg` is the single source: 工 drawn as a workbench (beam, post,
-desk) on a sage tile, with an amber status light. `npx tauri icon icons/workspace.svg
+`icons/workspace.svg` is the single source: an Art Deco 工, drawn as a stepped
+ziggurat workbench with pinstripes and an inlaid diamond, rising from a sunburst
+inside a double gold frame on deep emerald. `npx tauri icon icons/workspace.svg
 -o src-tauri/icons` regenerates the window, taskbar and executable icons (the
 multi-size `icon.ico` holds 16–256 px) and the Windows tile logos; delete the
-generated `android/` and `ios/` folders. `public/icon.svg` is the favicon copy and
-`src/components/brand-mark.tsx` draws the same geometry in the sidebar.
+generated `android/`, `ios/` and `icon.icns`. The favicon and the sidebar
+`BrandMark` load the same file.
 
