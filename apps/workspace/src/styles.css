@@ -793,3 +793,48 @@ h1 {
     text-align: left;
   }
 }
+
+.bootstrap-panel {
+  background: #fffaf0;
+  border: 1px solid #dfcc9f;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 24px;
+}
+.bootstrap-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.bootstrap-heading h2 {
+  margin: 0;
+  font-size: 20px;
+}
+.bootstrap-panel ol {
+  padding-left: 24px;
+  line-height: 1.8;
+}
+.bootstrap-panel pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: #f2eddf;
+  padding: 12px;
+  border-radius: 6px;
+}
+.bootstrap-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.bootstrap-footer small {
+  display: block;
+  color: #6f7167;
+}
+.bootstrap-panel details {
+  margin-top: 16px;
+  font-size: 12px;
+}
+.bootstrap-panel summary {
+  cursor: pointer;
+}

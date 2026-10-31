@@ -3,3 +3,4 @@ export type Observation = { state: string, reason?: string, code?: string, exit_
 export type Step = { id: string, title: string, why: string, state: string, needs: Array<string>, observation?: Observation, };
 export type Component = { id: string, name: string, group: string, summary: string, host: string, lifecycle: string, state: string, installed: boolean, checkable: boolean, issues: Array<string>, setup: Array<Step>, depends_on: Array<string>, status?: Observation, checked_at?: string, };
 export type HubReport = { schema_version: number, observed_at: string, checked: boolean, scope?: string, components: Array<Component>, unmanifested: Array<string>, };
+export type LoadFailure = { code: string, observed_at_ms: number, };

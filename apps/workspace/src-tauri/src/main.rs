@@ -49,12 +49,18 @@ fn desktop() {
         check: bool,
         component: Option<String>,
         state: tauri::State<'_, State>,
-    ) -> Result<hub::HubReport, String> {
-        let _permit = state.gate.try_acquire().map_err(|_| "hub_busy")?;
+    ) -> Result<hub::HubReport, hub::LoadFailure> {
+        let _permit = state
+            .gate
+            .try_acquire()
+            .map_err(|_| hub::LoadFailure::new("hub_busy"))?;
         hub::decode_scoped(
-            &process::hub(check, component.as_deref()).await?,
+            &process::hub(check, component.as_deref())
+                .await
+                .map_err(hub::LoadFailure::new)?,
             component.as_deref(),
         )
+        .map_err(hub::LoadFailure::new)
     }
     #[tauri::command]
     fn launch_target(state: tauri::State<'_, State>) -> String {
@@ -151,7 +157,10 @@ fn main() {
         match result {
             Ok(report) => println!("{}", serde_json::to_string(&report).unwrap()),
             Err(code) => {
-                eprintln!("{code}");
+                eprintln!(
+                    "{}",
+                    serde_json::to_string(&hub::LoadFailure::new(code)).unwrap()
+                );
                 std::process::exit(1);
             }
         }

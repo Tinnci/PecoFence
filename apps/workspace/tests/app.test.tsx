@@ -217,3 +217,53 @@ describe("component diagnosis and retry", () => {
     );
   });
 });
+
+describe("first-launch prerequisite recovery", () => {
+  it.each([
+    ["wsl_missing", "尚未安装 WSL"],
+    ["wsl_distribution_missing", "未找到可启动的 Linux 发行版"],
+    ["wsl_distribution_unavailable", "默认 Linux 发行版无法启动"],
+    ["cli_missing", "尚未找到可运行的 dev-cli"],
+    ["hub_update_required", "需要更新 dev-cli"],
+    ["hub_invalid_response", "工具清单返回的数据无效"],
+    ["hub_timeout", "读取工具状态超时"],
+  ])(
+    "explains %s and recovers to inventory without checks",
+    async (code, title) => {
+      mocks.loadHub.mockRejectedValueOnce({
+        code,
+        observed_at_ms: 1793440000000,
+      });
+      const user = userEvent.setup();
+      render(<App />);
+      await screen.findByRole("heading", { name: title });
+      let finish: (value: HubReport) => void = () => {};
+      mocks.loadHub.mockImplementationOnce(
+        () =>
+          new Promise<HubReport>((resolve) => {
+            finish = resolve;
+          }),
+      );
+      await user.click(screen.getByRole("button", { name: "重试" }));
+      expect(screen.getByRole("heading", { name: title })).toBeTruthy();
+      expect(
+        screen
+          .getByRole("button", { name: "正在重试…" })
+          .hasAttribute("disabled"),
+      ).toBe(true);
+      finish(report);
+      await screen.findByRole("button", { name: /查看项目配置/ });
+      expect(screen.queryByRole("alert")).toBeNull();
+      expect(mocks.loadHub.mock.calls).toEqual([[false], [false]]);
+    },
+  );
+  it("does not render raw process errors", async () => {
+    mocks.loadHub.mockRejectedValueOnce({
+      code: "private /home/user/token=secret",
+      observed_at_ms: Infinity,
+    });
+    render(<App />);
+    await screen.findByRole("heading", { name: "无法读取本机工具状态" });
+    expect(document.body.textContent).not.toContain("token=secret");
+  });
+});

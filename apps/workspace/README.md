@@ -1,7 +1,7 @@
 # Tinnci Workspace · 工作台
 
 An independent Windows window for discovering the local tool ecosystem and
-understanding first-time setup. Version 0.2 adds component-level diagnosis and retries. PecoFence and spmd keep their own lifetimes.
+understanding first-time setup. Version 0.3 adds first-launch prerequisite diagnosis and recovery. PecoFence and spmd keep their own lifetimes.
 Closing Workspace leaves both running.
 
 This first increment provides Home, a per-component setup checklist and Health.
@@ -135,4 +135,40 @@ installer/shortcut distribution are future work.
 
 References: [Tauri capabilities](https://v2.tauri.app/security/capabilities/),
 [single-instance plugin](https://v2.tauri.app/plugin/single-instance/),
-[application ADR](https://github.com/Tinnci/dev-cli-tools/blob/task/system-lifecycle/docs/ADR-0003-spm-workspace-app.md).
+[application ADR](https://github.com/Tinnci/dev-cli-tools/blob/main/docs/ADR-0003-spm-workspace-app.md).
+
+## First-launch recovery (0.3)
+
+A failed inventory load now returns a generated `LoadFailure` DTO with a controlled
+code and observation time. Home explains missing/unavailable WSL, a default
+Linux distribution that cannot start, a missing or non-executable dev-cli,
+an incompatible hub capability, invalid JSON, timeout and output limits. It
+shows owner installation instructions and a retry; no installation runs on open.
+WSL installation guidance follows [Microsoft's installation guide](https://learn.microsoft.com/en-us/windows/wsl/install)
+and [command reference](https://learn.microsoft.com/en-us/windows/wsl/basic-commands).
+
+Windows probes the distribution listing, launches the default distribution to
+read its environment, verifies the CLI executable and checks `hub --help` for
+`--component`. A successful launch takes precedence over an empty distribution
+listing: this host's WSL can return an empty listing when launched without a
+console. These bounded probes and the hub call share an overall 65-second
+budget. The frontend retains the last diagnostic while retrying, preserves the
+previous inventory on failure, and repeats the original check/scope. Successful
+recovery clears the diagnostic and renders inventory without restarting the app.
+The development bridge relays only allow-listed diagnostic codes, never raw
+process stderr. Diagnostic timestamps record attempts rather than successful setup.
+
+Automated cases cover prerequisite failures stopping before component checks,
+literal paths with spaces/Unicode, empty-listing recovery, capability mismatch,
+first-launch recovery and scoped retry preservation. Native Windows and browser
+verification results are recorded with the corresponding release checkpoint.
+
+0.3 local verification, 2026-10-31: frontend 19 tests and native 11 tests passed;
+strict Clippy passed for Linux and Windows targets. The Windows release
+`--hub-json` returned `cli_missing` for a process-local missing CLI override and
+`hub_invalid_response` for a temporary malformed-output CLI, then recovered to
+all 13 real components with the override removed. The browser exercised an
+incompatible CLI through the real Rust bridge, displayed installation guidance,
+and recovered to inventory using Retry. Missing WSL/distribution cases use the
+controlled process-runner tests. No WSL installation or source configuration was
+changed by verification.

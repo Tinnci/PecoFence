@@ -67,8 +67,45 @@ function localHub(): Plugin {
               "Cache-Control": "no-store",
             })
             .end(stdout);
-        } catch {
-          response.writeHead(503).end('{"error":"hub_unavailable"}');
+        } catch (failure) {
+          // The bridge emits a structured, controlled diagnostic, never raw stderr.
+          let diagnostic = {
+            code: "hub_unavailable",
+            observed_at_ms: Date.now(),
+          };
+          try {
+            const value = JSON.parse(
+              (failure as { stderr?: string }).stderr ?? "",
+            );
+            const codes = new Set([
+              "wsl_missing",
+              "wsl_timeout",
+              "wsl_unavailable",
+              "wsl_distribution_missing",
+              "wsl_distribution_unavailable",
+              "cli_missing",
+              "cli_unavailable",
+              "hub_update_required",
+              "hub_invalid_install_path",
+              "hub_timeout",
+              "hub_invalid_response",
+              "hub_incompatible_version",
+              "hub_invalid_scope",
+              "hub_output_limit",
+              "hub_busy",
+              "hub_unavailable",
+            ]);
+            if (codes.has(value.code))
+              diagnostic = { code: value.code, observed_at_ms: Date.now() };
+          } catch {
+            /* Unknown process errors stay outside the response. */
+          }
+          response
+            .writeHead(503, {
+              "Content-Type": "application/json",
+              "Cache-Control": "no-store",
+            })
+            .end(JSON.stringify(diagnostic));
         } finally {
           busy = false;
         }

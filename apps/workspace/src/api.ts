@@ -18,7 +18,10 @@ export async function loadHub(
     const query = new URLSearchParams({ check: check ? "1" : "0" });
     if (component) query.set("component", component);
     const response = await fetch(`/__workspace/hub?${query}`);
-    if (!response.ok) throw new Error("hub_unavailable");
+    if (!response.ok) {
+      const failure = await response.json().catch(() => null);
+      throw failure ?? new Error("hub_unavailable");
+    }
     return response.json();
   }
   throw new Error("desktop_required");

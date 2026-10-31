@@ -4,7 +4,6 @@ import {
   ArrowRight,
   Blocks,
   ChevronRight,
-  CircleHelp,
   Home,
   LayoutDashboard,
   ListChecks,
@@ -17,11 +16,12 @@ import {
   UserRound,
 } from "lucide-react";
 import { loadHub, navigation, type Page } from "./api";
-import type { Component, HubReport } from "./contracts/hub";
+import type { Component, HubReport, LoadFailure } from "./contracts/hub";
 import { attention, groups, mergeReport, progress } from "./model";
 import { Status } from "./Status";
 import Checklist from "./Checklist";
 import Health from "./Health";
+import LoadFailurePanel, { loadFailure } from "./LoadFailure";
 
 function ComponentCard({
   component,
@@ -51,7 +51,7 @@ export default function App() {
   const [report, setReport] = useState<HubReport | null>(null);
   const [busy, setBusy] = useState(false);
   const [busyComponent, setBusyComponent] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<LoadFailure | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const inFlight = useRef(false);
   const lastRequest = useRef<{ check: boolean; component?: string }>({
@@ -64,22 +64,18 @@ export default function App() {
     lastRequest.current = { check, component };
     setBusy(true);
     setBusyComponent(component ?? null);
-    setError(null);
     try {
       const data = component
         ? await loadHub(check, component)
         : await loadHub(check);
       if (component && data.scope !== component)
         throw new Error("hub_update_required");
-      if (mounted.current) setReport(mergeReport(report, data));
+      if (mounted.current) {
+        setReport(mergeReport(report, data));
+        setError(null);
+      }
     } catch (failure) {
-      if (mounted.current)
-        setError(
-          (failure instanceof Error ? failure.message : failure) ===
-            "hub_update_required"
-            ? "请更新 dev-cli 后再检查此组件；当前版本尚不支持单独检查。"
-            : "无法读取本机工具状态。请确认 WSL 和 dev-cli 已安装，再重试。",
-        );
+      if (mounted.current) setError(loadFailure(failure));
     } finally {
       inFlight.current = false;
       if (mounted.current) {
@@ -208,25 +204,17 @@ export default function App() {
           </div>
           <div aria-live="polite">
             {error ? (
-              <div className="error-panel" role="alert">
-                <CircleHelp size={20} />
-                <div>
-                  {error}
-                  {report ? <small>下方保留上次读取结果</small> : null}
-                </div>
-                <button
-                  className="button secondary"
-                  disabled={busy}
-                  onClick={() =>
-                    void refresh(
-                      lastRequest.current.check,
-                      lastRequest.current.component,
-                    )
-                  }
-                >
-                  重试
-                </button>
-              </div>
+              <LoadFailurePanel
+                failure={error}
+                busy={busy}
+                retained={!!report}
+                onRetry={() =>
+                  void refresh(
+                    lastRequest.current.check,
+                    lastRequest.current.component,
+                  )
+                }
+              />
             ) : null}
           </div>
           {!report && !error ? (
