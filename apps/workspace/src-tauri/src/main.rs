@@ -46,6 +46,8 @@ fn desktop() {
         painted: std::sync::atomic::AtomicBool,
         setup_gate: tokio::sync::Semaphore,
         connection_gate: tokio::sync::Semaphore,
+        /// One discovery or draft at a time; later requests wait their turn.
+        discover_gate: tokio::sync::Semaphore,
         /// The private template copy and the sha256 of its last plan.
         pending: std::sync::Mutex<Option<(std::path::PathBuf, String)>>,
     }
@@ -162,6 +164,50 @@ fn desktop() {
         .await?;
         setup::decode_connections(output.code, &output.stdout)
     }
+    /// One discovery list through `spm discover`; the arguments are validated keys.
+    #[tauri::command]
+    async fn discover(
+        list: String,
+        space: Option<String>,
+        kind: Option<String>,
+        search: Option<String>,
+        state: tauri::State<'_, State>,
+    ) -> Result<setup::Discovery, setup::SetupFailure> {
+        let args = setup::discover_args(&list, space.as_deref(), kind.as_deref(), search.as_deref())
+            .ok_or_else(|| setup::SetupFailure::new("invalid_input"))?;
+        let _permit = state
+            .discover_gate
+            .acquire()
+            .await
+            .map_err(|_| setup::SetupFailure::new("setup_busy"))?;
+        let output = process::spm(&spm_exe()?, &args, std::time::Duration::from_secs(90)).await?;
+        setup::decode_discovery(output.code, &output.stdout)
+    }
+    /// `spm setup draft`: resolves the scope and detects mappings; with `sha256`, applies the
+    /// draft only if it still matches what the user confirmed.
+    #[tauri::command]
+    async fn draft(
+        choices: setup::DraftChoices,
+        sha256: Option<String>,
+        state: tauri::State<'_, State>,
+    ) -> Result<setup::Draft, setup::SetupFailure> {
+        let args = setup::draft_args(sha256.is_some(), sha256.as_deref())
+            .ok_or_else(|| setup::SetupFailure::new("invalid_input"))?;
+        let input = serde_json::to_vec(&choices).map_err(|_| setup::SetupFailure::new("invalid_input"))?;
+        let _permit = state
+            .discover_gate
+            .acquire()
+            .await
+            .map_err(|_| setup::SetupFailure::new("setup_busy"))?;
+        let output = process::spm_with(
+            &spm_exe()?,
+            &args,
+            Some(&input),
+            std::time::Duration::from_secs(240),
+        )
+        .await?;
+        setup::decode_draft(output.code, &output.stdout)
+    }
     /// Runs the tool's own browser login; only Meegle offers one.
     #[tauri::command]
     async fn connection_sign_in(
@@ -253,6 +299,7 @@ fn desktop() {
             painted: std::sync::atomic::AtomicBool::new(false),
             setup_gate: tokio::sync::Semaphore::new(1),
             connection_gate: tokio::sync::Semaphore::new(1),
+            discover_gate: tokio::sync::Semaphore::new(1),
             pending: std::sync::Mutex::new(None),
         })
         .setup(move |app| {
@@ -273,7 +320,9 @@ fn desktop() {
             template_apply,
             project_status,
             connections,
-            connection_sign_in
+            connection_sign_in,
+            discover,
+            draft
         ])
         .run(tauri::generate_context!())
         .expect("workspace runtime");

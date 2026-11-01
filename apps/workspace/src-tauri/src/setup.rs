@@ -44,6 +44,16 @@ impl SetupFailure {
             "SIGN_IN_HOST_UNKNOWN" => "sign_in_host_unknown",
             "SIGN_IN_FAILED" => "sign_in_failed",
             "SIGN_IN_UNSUPPORTED" => "sign_in_unsupported",
+            "INVALID_INPUT" => "invalid_input",
+            "NOT_INSTALLED" => "tool_missing",
+            "SIGNED_OUT" => "signed_out",
+            "SOURCE_FAILED" => "source_failed",
+            "SCOPE_EMPTY" => "scope_empty",
+            "SCOPE_TOO_LARGE" => "scope_too_large",
+            "SCOPE_INCOMPLETE" => "scope_incomplete",
+            "MAPPING_UNDETECTED" => "mapping_undetected",
+            "QUESTIONS_OPEN" => "questions_open",
+            "DRAFT_CHANGED" => "draft_changed",
             _ => return Self::new("spm_invalid_response"),
         };
         Self {
@@ -216,6 +226,206 @@ pub fn decode_sign_in(code: Option<i32>, stdout: &[u8]) -> Result<ConnectionRepo
 }
 
 /// The executable named by an installer shim such as `"C:\...\spm.exe" %*`.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct Space {
+    pub project_key: String,
+    pub simple_name: String,
+    pub name: String,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct WorkItemType {
+    pub type_key: String,
+    pub api_name: String,
+    pub name: String,
+    pub issue_like: bool,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct Group {
+    pub field: String,
+    pub name: String,
+    pub target_type: String,
+    pub target_name: String,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct Item {
+    pub id: String,
+    pub name: String,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct JiraProject {
+    pub key: String,
+    pub name: String,
+}
+/// What `spm discover` returned; exactly one list is present.
+#[derive(Debug, Default, Serialize, Deserialize, TS)]
+pub struct Discovery {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub spaces: Option<Vec<Space>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub types: Option<Vec<WorkItemType>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub groups: Option<Vec<Group>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub items: Option<Vec<Item>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub projects: Option<Vec<JiraProject>>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+pub struct MeegleFilter {
+    pub field: String,
+    pub field_name: String,
+    pub id: String,
+    pub label: String,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+// SPM rejects unknown scope fields itself; ts-rs cannot express deny_unknown_fields on an enum.
+#[serde(tag = "source", rename_all = "snake_case")]
+pub enum ScopeQuery {
+    Meegle {
+        space: String,
+        type_key: String,
+        work_item_type: String,
+        type_name: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        filter: Option<MeegleFilter>,
+    },
+    Jira {
+        project: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        jql: Option<String>,
+    },
+}
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+pub struct Answers {
+    #[serde(default)]
+    pub severities: std::collections::BTreeMap<String, String>,
+    #[serde(default)]
+    pub stages: std::collections::BTreeMap<String, String>,
+}
+/// The user's choices, passed to `spm setup draft` on stdin; SPM validates every value.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+pub struct DraftChoices {
+    pub project: String,
+    pub scope_id: String,
+    pub scope: ScopeQuery,
+    pub phase: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub milestone_date: Option<String>,
+    pub severe_target_pct: u32,
+    pub overall_target_pct: u32,
+    pub fatal_max: u32,
+    #[serde(default)]
+    pub scope_complete: bool,
+    #[serde(default)]
+    pub answers: Answers,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct Question {
+    pub field: String,
+    pub value: String,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct DraftMapping {
+    pub severity_from: String,
+    pub severities: std::collections::BTreeMap<String, String>,
+    pub stages: std::collections::BTreeMap<String, String>,
+    pub dispositions: std::collections::BTreeMap<String, String>,
+}
+#[derive(Debug, Serialize, Deserialize, TS)]
+pub struct Draft {
+    pub template: TemplateInfo,
+    pub project: String,
+    pub scope: String,
+    pub directory: String,
+    pub files: Vec<PlanFile>,
+    pub applicable: bool,
+    #[serde(default)]
+    pub applied: bool,
+    #[serde(default)]
+    pub backups: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub check: Option<ProjectCheck>,
+    pub summary: String,
+    pub count: u32,
+    pub questions: Vec<Question>,
+    pub mapping: DraftMapping,
+}
+
+/// Keys the frontend may pass to `spm discover`: Meegle space, type and field keys.
+pub fn valid_key(key: &str) -> bool {
+    (1..=64).contains(&key.len())
+        && key
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+}
+/// Arguments for one discovery list; `None` when an argument is malformed.
+pub fn discover_args<'a>(
+    list: &str,
+    space: Option<&'a str>,
+    kind: Option<&'a str>,
+    search: Option<&'a str>,
+) -> Option<Vec<&'a str>> {
+    let key = |k: Option<&'a str>| k.filter(|k| valid_key(k));
+    let mut args = vec!["discover"];
+    match list {
+        "spaces" => args.push("spaces"),
+        "jira_projects" => args.push("jira-projects"),
+        "types" => args.extend(["types", "--space", key(space)?]),
+        "groups" => args.extend(["groups", "--space", key(space)?, "--type", key(kind)?]),
+        "items" => {
+            args.extend(["items", "--space", key(space)?, "--type", key(kind)?]);
+            if let Some(search) = search.map(str::trim).filter(|s| !s.is_empty()) {
+                if search.chars().count() > 60 || search.chars().any(char::is_control) {
+                    return None;
+                }
+                args.extend(["--search", search]);
+            }
+        }
+        _ => return None,
+    }
+    Some(args)
+}
+pub fn draft_args(apply: bool, expect: Option<&str>) -> Option<Vec<&str>> {
+    let mut args = vec!["setup", "draft"];
+    if apply {
+        let sha = expect.filter(|s| s.len() == 64 && s.bytes().all(|b| b.is_ascii_hexdigit()))?;
+        args.extend(["--apply", "--replace", "--expect", sha]);
+    }
+    Some(args)
+}
+
+fn owner_data<T: serde::de::DeserializeOwned>(
+    code: Option<i32>,
+    stdout: &[u8],
+) -> Result<T, SetupFailure> {
+    let envelope = envelope(code, stdout)?;
+    if !envelope.ok {
+        let error = envelope
+            .error
+            .ok_or(SetupFailure::new("spm_invalid_response"))?;
+        return Err(SetupFailure::owner(&error.code, error.message));
+    }
+    serde_json::from_value(envelope.data).map_err(|_| SetupFailure::new("spm_invalid_response"))
+}
+pub fn decode_discovery(code: Option<i32>, stdout: &[u8]) -> Result<Discovery, SetupFailure> {
+    owner_data(code, stdout)
+}
+pub fn decode_draft(code: Option<i32>, stdout: &[u8]) -> Result<Draft, SetupFailure> {
+    owner_data(code, stdout)
+}
+
 pub fn shim_target(shim: &str) -> Option<PathBuf> {
     shim.lines().find_map(|line| {
         let rest = line.trim().strip_prefix('"')?;
@@ -296,6 +506,19 @@ pub fn types() -> String {
             ProjectStatus::decl(&config),
             Connection::decl(&config),
             ConnectionReport::decl(&config),
+            Space::decl(&config),
+            WorkItemType::decl(&config),
+            Group::decl(&config),
+            Item::decl(&config),
+            JiraProject::decl(&config),
+            Discovery::decl(&config),
+            MeegleFilter::decl(&config),
+            ScopeQuery::decl(&config),
+            Answers::decl(&config),
+            DraftChoices::decl(&config),
+            Question::decl(&config),
+            DraftMapping::decl(&config),
+            Draft::decl(&config),
         ]
         .map(|decl| format!("export {decl}\n"))
         .concat()
@@ -316,6 +539,47 @@ mod tests {
                 serde_json::json!({"code":"IMPORT_CONFLICT","message":"live.json differs","retryable":false})
             }}))
         .unwrap()
+    }
+    #[test]
+    fn discovery_and_draft_arguments_are_validated() {
+        assert_eq!(
+            discover_args("items", Some("efzuhc"), Some("693ff1c8"), Some(" E67 ")).unwrap(),
+            ["discover", "items", "--space", "efzuhc", "--type", "693ff1c8", "--search", "E67"]
+        );
+        assert_eq!(discover_args("spaces", None, None, None).unwrap(), ["discover", "spaces"]);
+        assert!(discover_args("types", Some("efz uhc"), None, None).is_none());
+        assert!(discover_args("groups", Some("efzuhc"), None, None).is_none());
+        assert!(discover_args("rm", None, None, None).is_none());
+        assert!(discover_args("items", Some("a"), Some("b"), Some("x\ny")).is_none());
+        assert_eq!(draft_args(false, None).unwrap(), ["setup", "draft"]);
+        let sha = "a".repeat(64);
+        assert_eq!(
+            draft_args(true, Some(&sha)).unwrap(),
+            ["setup", "draft", "--apply", "--replace", "--expect", sha.as_str()]
+        );
+        assert!(draft_args(true, None).is_none());
+        assert!(draft_args(true, Some("--config-root")).is_none());
+    }
+    #[test]
+    fn decodes_drafts_and_discovery_errors() {
+        let draft = serde_json::json!({"schema_version":"1.0","ok":true,"data":{
+            "template":{"id":"E6767SM-main","version":"2026-11-01","title":"E6767SM main","sha256":"ab"},
+            "project":"E6767SM","scope":"main","mode":"live","directory":"C:\\cfg\\E6767SM\\main",
+            "database":{"path":"x","exists":false},
+            "files":[{"role":"scope_query","path":"C:\\cfg\\scope.json","action":"create"}],
+            "applicable":true,"applied":false,"summary":"E6767SM · main：342 个问题。","count":342,
+            "questions":[{"field":"stage","value":"Communication"}],
+            "mapping":{"severity_from":"优先级","severities":{"致命":"Fatal"},"stages":{},"dispositions":{}}}});
+        let draft = decode_draft(Some(0), &serde_json::to_vec(&draft).unwrap()).unwrap();
+        assert_eq!((draft.count, draft.questions[0].value.as_str()), (342, "Communication"));
+        let signed_out = br#"{"ok":false,"data":null,"error":{"code":"SIGNED_OUT","message":"run meegle auth login"}}"#;
+        assert_eq!(decode_discovery(Some(1), signed_out).unwrap_err().code, "signed_out");
+        let spaces = br#"{"ok":true,"data":{"spaces":[{"project_key":"6","simple_name":"efzuhc","name":"IPD"}]}}"#;
+        assert_eq!(decode_discovery(Some(0), spaces).unwrap().spaces.unwrap()[0].name, "IPD");
+        let choices: Result<DraftChoices, _> = serde_json::from_value(serde_json::json!({
+            "project":"P","scope_id":"main","scope":{"source":"jira","project":"PLV"},"argv":["x"],
+            "phase":"TR4","severe_target_pct":95,"overall_target_pct":85,"fatal_max":0}));
+        assert!(choices.is_err());
     }
     #[test]
     fn decodes_plans_and_maps_owner_errors() {

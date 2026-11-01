@@ -864,3 +864,202 @@ h1 {
 .advanced-import {
   margin-top: 10px;
 }
+
+/* 选择项目 / 设置门槛 / 确认: real words on the choice, bars where it loads, one big number */
+.project-setup {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+.scope-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.scope-filters .choose {
+  width: auto;
+  min-width: 140px;
+}
+.scope-filters [data-slot="select-trigger"],
+.question [data-slot="select-trigger"] {
+  min-width: 140px;
+}
+.pick-search {
+  position: relative;
+}
+.pick-search svg {
+  position: absolute;
+  left: 9px;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  transform: translateY(-50%);
+  color: var(--muted-foreground);
+}
+.pick-search input {
+  padding-left: 28px;
+}
+.pick-scroll {
+  height: 216px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.pick-list {
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+}
+div.pick-list[aria-hidden="true"] {
+  height: 216px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.pick-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 34px;
+  flex: none;
+  padding: 0 10px;
+  border-radius: calc(var(--radius) - 4px);
+  font-size: 13px;
+  text-align: left;
+  color: var(--foreground);
+}
+.pick-row [data-slot="skeleton"] {
+  height: 8px;
+}
+button.pick-row:hover {
+  background: var(--muted);
+}
+button.pick-row[aria-selected="true"] {
+  background: var(--secondary);
+  color: var(--secondary-foreground);
+  font-weight: 500;
+}
+.pick-row small {
+  margin: 0;
+  color: var(--muted-foreground);
+}
+.setup-step .pick-row small {
+  display: inline;
+  margin-top: 0;
+}
+.pick-empty {
+  display: grid;
+  place-items: center;
+  height: 216px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+}
+.scope-count {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-height: 44px;
+}
+.scope-count strong {
+  font-size: 32px;
+  font-weight: 600;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  color: var(--foreground);
+  animation: count-in 600ms cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+.scope-count .count-skeleton {
+  width: 64px;
+  height: 30px;
+  align-self: center;
+}
+.setup-step .scope-description,
+.scope-description {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+@keyframes count-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .scope-count strong {
+    animation: none;
+  }
+}
+.scope-hint {
+  min-height: 20px;
+}
+.gate-fields,
+.id-fields {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 14px 24px;
+}
+.gate-fields > [data-slot="field"],
+.id-fields > [data-slot="field"] {
+  width: auto;
+}
+.gate-fields [data-slot="select-trigger"] {
+  width: 112px;
+}
+.gate-fields input[type="date"] {
+  width: 152px;
+}
+.id-fields input {
+  width: 180px;
+}
+.unit-input {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.unit-input input {
+  width: 88px;
+  font-variant-numeric: tabular-nums;
+}
+.unit-input span {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.setup-step .gate-sentence,
+.setup-step .confirm-sentence {
+  font-size: 13px;
+  color: var(--foreground);
+}
+.setup-step .confirm-sentence {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.6;
+}
+.questions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.question {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  max-width: 360px;
+  font-size: 13px;
+}
+.complete-field label {
+  font-size: 13px;
+}
+.confirm-lane {
+  min-height: 20px;
+}
+.alert-success {
+  margin-top: 12px;
+  background: var(--secondary);
+  border-color: var(--border);
+  color: var(--secondary-foreground);
+}
+.alert-success [data-slot="alert-description"] {
+  color: var(--secondary-foreground);
+}

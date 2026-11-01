@@ -30,7 +30,7 @@ const failures: Record<string, string> = {
   desktop_required: "导入需要在工作台桌面版中进行。",
   spm_missing: "未找到 Windows 版 spm。请先安装 SPM。",
   spm_update_required: "已安装的 spm 不支持项目导入，请更新 SPM。",
-  spm_timeout: "spm 未在 30 秒内响应，请重试。",
+  spm_timeout: "spm 未及时响应，请重试。",
   spm_unavailable: "spm 无法运行，请确认安装完整后重试。",
   spm_invalid_response: "spm 返回了无法识别的结果，请更新 SPM 后重试。",
   setup_busy: "另一个项目操作正在进行，请稍候。",
@@ -44,13 +44,24 @@ const failures: Record<string, string> = {
   sign_in_host_unknown:
     "尚未选择飞书项目站点，请先在终端运行 meegle auth login",
   sign_in_unsupported: "此来源由它自己的工具配置",
+  invalid_input: "选择的内容无效",
+  tool_missing: "来源的命令行工具未安装",
+  signed_out: "来源未登录，请先在“连接来源”中登录",
+  source_failed: "来源返回了错误",
+  scope_empty: "这个范围里没有问题",
+  scope_too_large: "范围太大，请缩小选择",
+  scope_incomplete: "来源没有返回完整范围，请重试",
+  mapping_undetected: "无法识别字段",
+  questions_open: "还有状态没有对应",
+  draft_changed: "范围在确认后发生了变化，请重新确认",
 };
-const roles: Record<string, string> = {
+export const roles: Record<string, string> = {
   deployment: "部署配置",
   live_config: "采集配置",
   template_lock: "模板锁定",
+  scope_query: "范围查询",
 };
-const actions: Record<string, string> = {
+export const actions: Record<string, string> = {
   create: "新建",
   unchanged: "不变",
   replace: "备份后替换",

@@ -29,10 +29,24 @@ async fn capture(
     args: &[&str],
     deadline: Duration,
 ) -> Result<Output, String> {
+    capture_with(program, args, None, deadline).await
+}
+
+/// `input`, when given, is written to stdin and closed; otherwise stdin is null.
+async fn capture_with(
+    program: impl AsRef<std::ffi::OsStr>,
+    args: &[&str],
+    input: Option<&[u8]>,
+    deadline: Duration,
+) -> Result<Output, String> {
     let mut command = Command::new(program);
     command
         .args(args)
-        .stdin(Stdio::null())
+        .stdin(if input.is_some() {
+            Stdio::piped()
+        } else {
+            Stdio::null()
+        })
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
@@ -51,8 +65,19 @@ async fn capture(
     let _group = ProcessGroup(child.id().ok_or("hub_unavailable")?);
     let stdout = child.stdout.take().ok_or("hub_read_failed")?;
     let stderr = child.stderr.take().ok_or("hub_read_failed")?;
+    let stdin = child.stdin.take();
     let outcome = tokio::time::timeout(deadline, async {
-        let (out, _, status) = tokio::try_join!(read(stdout), read(stderr), async {
+        let write = async {
+            if let (Some(mut stdin), Some(input)) = (stdin, input) {
+                use tokio::io::AsyncWriteExt;
+                stdin
+                    .write_all(input)
+                    .await
+                    .map_err(|_| "hub_write_failed".to_string())?;
+            }
+            Ok::<_, String>(())
+        };
+        let (_, out, _, status) = tokio::try_join!(write, read(stdout), read(stderr), async {
             child
                 .wait()
                 .await
@@ -83,7 +108,17 @@ pub async fn spm(
     args: &[&str],
     deadline: Duration,
 ) -> Result<Output, crate::setup::SetupFailure> {
-    capture(program, args, deadline).await.map_err(|code| {
+    spm_with(program, args, None, deadline).await
+}
+/// As `spm`, with a JSON document on stdin (`setup draft`, `discover count`).
+#[cfg(windows)]
+pub async fn spm_with(
+    program: &std::path::Path,
+    args: &[&str],
+    input: Option<&[u8]>,
+    deadline: Duration,
+) -> Result<Output, crate::setup::SetupFailure> {
+    capture_with(program, args, input, deadline).await.map_err(|code| {
         crate::setup::SetupFailure::new(match code.as_str() {
             "executable_missing" => "spm_missing",
             "hub_timeout" => "spm_timeout",
@@ -447,6 +482,24 @@ mod tests {
         assert!(calls[4][2].contains("/home/用户 name/.local/bin:/usr/bin:/mnt/c/Program Files"));
     }
     #[cfg(unix)]
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn writes_stdin_and_closes_it_for_drafts() {
+        let output = capture_with(
+            "sh",
+            &["-c", "cat; echo done"],
+            Some("{\"project\":\"E6767SM\"}".as_bytes()),
+            Duration::from_secs(5),
+        )
+        .await
+        .unwrap();
+        assert_eq!(output.code, Some(0));
+        assert_eq!(output.stdout, b"{\"project\":\"E6767SM\"}done\n");
+        let closed = capture("sh", &["-c", "cat; echo end"], Duration::from_secs(5))
+            .await
+            .unwrap();
+        assert_eq!(closed.stdout, b"end\n");
+    }
     #[tokio::test]
     async fn bounds_output_and_deadline_and_preserves_partial_report() {
         assert_eq!(

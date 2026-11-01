@@ -29,6 +29,12 @@ import type {
 import TemplateImport from "./TemplateImport";
 import ConnectSources from "./ConnectSources";
 import {
+  ConfirmStep,
+  GateStep,
+  ScopeStep,
+  type ProjectSetup,
+} from "./ProjectSetup";
+import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
@@ -56,6 +62,7 @@ export default function Checklist({
   connectionsFailure,
   onConnections,
   onConnectionReport,
+  projectSetup,
 }: {
   report: HubReport;
   selected: string | null;
@@ -70,6 +77,7 @@ export default function Checklist({
   connectionsFailure: SetupFailure | null;
   onConnections: () => Promise<void>;
   onConnectionReport: (report: ConnectionReport) => void;
+  projectSetup?: ProjectSetup;
 }) {
   const components = report.components.filter((c) => c.lifecycle !== "paused");
   const [current, setCurrent] = useState(
@@ -208,6 +216,21 @@ export default function Checklist({
                           onReport={onConnectionReport}
                           onOpen={onOpen}
                         />
+                      ) : null}
+                      {component.id === "spm" &&
+                      step.id === "project" &&
+                      projectSetup ? (
+                        <ScopeStep setup={projectSetup} />
+                      ) : null}
+                      {component.id === "spm" &&
+                      step.id === "gates" &&
+                      projectSetup ? (
+                        <GateStep setup={projectSetup} />
+                      ) : null}
+                      {component.id === "spm" &&
+                      step.id === "confirm" &&
+                      projectSetup ? (
+                        <ConfirmStep setup={projectSetup} />
                       ) : null}
                       {component.id === "spm" && step.id === "project" ? (
                         <Collapsible className="advanced-import">

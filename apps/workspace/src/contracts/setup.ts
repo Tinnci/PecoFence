@@ -28,3 +28,16 @@ source: string, tool: string,
  */
 state: string, account?: string, host?: string, code?: string, sign_in: boolean, };
 export type ConnectionReport = { checked_at: string, connections: Array<Connection>, };
+export type Space = { project_key: string, simple_name: string, name: string, };
+export type WorkItemType = { type_key: string, api_name: string, name: string, issue_like: boolean, };
+export type Group = { field: string, name: string, target_type: string, target_name: string, };
+export type Item = { id: string, name: string, };
+export type JiraProject = { key: string, name: string, };
+export type Discovery = { spaces?: Array<Space>, types?: Array<WorkItemType>, groups?: Array<Group>, items?: Array<Item>, projects?: Array<JiraProject>, };
+export type MeegleFilter = { field: string, field_name: string, id: string, label: string, };
+export type ScopeQuery = { "source": "meegle", space: string, type_key: string, work_item_type: string, type_name: string, filter?: MeegleFilter, } | { "source": "jira", project: string, jql?: string, };
+export type Answers = { severities: { [key in string]: string }, stages: { [key in string]: string }, };
+export type DraftChoices = { project: string, scope_id: string, scope: ScopeQuery, phase: string, milestone_date?: string, severe_target_pct: number, overall_target_pct: number, fatal_max: number, scope_complete: boolean, answers: Answers, };
+export type Question = { field: string, value: string, };
+export type DraftMapping = { severity_from: string, severities: { [key in string]: string }, stages: { [key in string]: string }, dispositions: { [key in string]: string }, };
+export type Draft = { template: TemplateInfo, project: string, scope: string, directory: string, files: Array<PlanFile>, applicable: boolean, applied: boolean, backups: Array<string>, check?: ProjectCheck, summary: string, count: number, questions: Array<Question>, mapping: DraftMapping, };

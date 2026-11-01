@@ -154,3 +154,41 @@ export function withConnections(
     ),
   };
 }
+
+/** 选择项目, 设置门槛 and 确认 progress from the draft in hand or an existing project. */
+export function withDraft(
+  report: HubReport,
+  progress: { scoped: boolean; gated: boolean; created: boolean },
+): HubReport {
+  const state = (done: boolean, id: string, s: { state: string }) =>
+    done
+      ? "done"
+      : id === "project" || s.state === "manual"
+        ? "action_needed"
+        : s.state;
+  const done: Record<string, boolean> = {
+    gates: progress.gated,
+    confirm: progress.created,
+  };
+  return {
+    ...report,
+    components: report.components.map((c) =>
+      c.id !== "spm"
+        ? c
+        : {
+            ...c,
+            setup: c.setup.map((s) =>
+              s.id === "project" && progress.scoped
+                ? { ...s, state: "done", observation: undefined }
+                : s.id in done
+                  ? {
+                      ...s,
+                      state: state(done[s.id], s.id, s),
+                      observation: undefined,
+                    }
+                  : s,
+            ),
+          },
+    ),
+  };
+}

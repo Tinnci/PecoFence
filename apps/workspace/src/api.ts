@@ -3,6 +3,9 @@ import { listen } from "@tauri-apps/api/event";
 import type { HubReport } from "./contracts/hub";
 import type {
   ConnectionReport,
+  Discovery,
+  Draft,
+  DraftChoices,
   ImportPlan,
   ProjectStatus,
 } from "./contracts/setup";
@@ -76,5 +79,28 @@ export async function loadConnections(): Promise<ConnectionReport> {
 export async function signIn(source: string): Promise<ConnectionReport> {
   return isTauri()
     ? invoke<ConnectionReport>("connection_sign_in", { source })
+    : desktopOnly();
+}
+/** One `spm discover` list: spaces, types, groups, items or Jira projects. */
+export async function discover(
+  list: "spaces" | "types" | "groups" | "items" | "jira_projects",
+  args: { space?: string; kind?: string; search?: string } = {},
+): Promise<Discovery> {
+  return isTauri()
+    ? invoke<Discovery>("discover", {
+        list,
+        space: args.space ?? null,
+        kind: args.kind ?? null,
+        search: args.search ?? null,
+      })
+    : desktopOnly();
+}
+/** `spm setup draft`; with the confirmed sha256 it creates the project. */
+export async function draft(
+  choices: DraftChoices,
+  sha256?: string,
+): Promise<Draft> {
+  return isTauri()
+    ? invoke<Draft>("draft", { choices, sha256: sha256 ?? null })
     : desktopOnly();
 }

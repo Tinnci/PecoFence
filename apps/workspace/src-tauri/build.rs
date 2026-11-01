@@ -12,6 +12,8 @@ fn main() {
             "project_status",
             "connections",
             "connection_sign_in",
+            "discover",
+            "draft",
         ]),
     ))
     .expect("Tauri build configuration");

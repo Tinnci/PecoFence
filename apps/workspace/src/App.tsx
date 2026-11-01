@@ -73,9 +73,12 @@ import {
   groups,
   mergeReport,
   progress,
+  issueSources,
   withConnections,
+  withDraft,
   withProjects,
 } from "./model";
+import { useProjectSetup, validGates, type Source } from "./ProjectSetup";
 import { Status } from "./Status";
 import Checklist from "./Checklist";
 import Health from "./Health";
@@ -198,12 +201,23 @@ export default function App() {
       cleanup?.();
     };
   }, []);
+  const connectedSources = (connections?.connections ?? [])
+    .filter((c) => issueSources.includes(c.source) && c.state === "connected")
+    .map((c) => c.source as Source);
+  const projectSetup = useProjectSetup(connectedSources, loadProjects);
+  const hasProject = projects?.projects.some((p) => p.check.valid) ?? false;
   function openSetup(id?: string) {
     setSelected(id ?? null);
     setPage("setup");
   }
   const report = hub
-    ? withConnections(withProjects(hub, projects), connections)
+    ? withDraft(withConnections(withProjects(hub, projects), connections), {
+        scoped: projectSetup.preview !== null,
+        gated:
+          (projectSetup.preview !== null && validGates(projectSetup.gates)) ||
+          hasProject,
+        created: projectSetup.created !== null || hasProject,
+      })
     : null;
   const totals = report ? progress(report) : { done: 0, total: 0 };
   const active =
@@ -468,6 +482,7 @@ export default function App() {
                     connectionsFailure={connectionsFailure}
                     onConnections={loadConnections}
                     onConnectionReport={setConnections}
+                    projectSetup={projectSetup}
                   />
                 ) : (
                   <Health
