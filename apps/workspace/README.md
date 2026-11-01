@@ -3,7 +3,7 @@
 # Tinnci Workspace · 工作台
 
 An independent Windows window for discovering the local tool ecosystem and
-understanding first-time setup. Version 0.3 added first-launch prerequisite diagnosis and recovery; 0.4 imports SPM project templates; 0.5 connects sources; 0.6 creates an SPM project from discovery; 0.7 makes it one page that ends with collection running. PecoFence and spmd keep their own lifetimes.
+understanding first-time setup. Version 0.3 added first-launch prerequisite diagnosis and recovery; 0.4 imports SPM project templates; 0.5 connects sources; 0.6 creates an SPM project from discovery; 0.7 makes it one page that ends with collection running; 0.8 adds 代码活动. PecoFence and spmd keep their own lifetimes.
 Closing Workspace leaves both running.
 
 This first increment provides Home, a per-component setup checklist and Health.
@@ -245,6 +245,17 @@ Verified 2026-11-01 on Windows: the installed 0.7.0 listed IPD's 46 projects wit
 without) in 4.9 s. The Jira path, the gate measures and the flow through activation are covered by
 tests and by live `spm` runs; activation was run as a dry run, since it switches the user's
 running service.
+
+## 代码活动 (0.8)
+
+A GitHub-style grid of Gerrit changes per day over the past year, for one repository and,
+optionally, one branch (`--open activity`). The repository box searches all repositories
+(`spm discover gerrit-projects`, 4142 in 5.4 s) and remembers the last choice per viewer; the
+grid comes from `spm discover gerrit-activity` (DreamCamera2's 4444 changes in 5.4 s), one cell
+per local day in Monday-first columns, graded at the quartiles of busy days in Workspace's greens.
+The big number is the year's total with merged/open/abandoned beside it; hovering a day fills a
+reserved line with its count and how many merged; the repository's branches are listed with
+counts and pick the branch view. Selections over 10000 changes ask for a branch.
 
 ## SPM project template (0.4)
 

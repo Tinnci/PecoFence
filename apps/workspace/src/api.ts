@@ -12,13 +12,14 @@ import type {
   ProjectStatus,
   ServiceHealth,
 } from "./contracts/setup";
-export type Page = "home" | "setup" | "health" | "project";
+export type Page = "home" | "setup" | "health" | "project" | "activity";
 export function isPage(value: unknown): value is Page {
   return (
     value === "home" ||
     value === "setup" ||
     value === "health" ||
-    value === "project"
+    value === "project" ||
+    value === "activity"
   );
 }
 export async function loadHub(
@@ -98,7 +99,9 @@ export async function discover(
     | "items"
     | "jira_projects"
     | "jira_versions"
-    | "jira_filters",
+    | "jira_filters"
+    | "gerrit_projects"
+    | "gerrit_activity",
   args: DiscoverArgs = {},
 ): Promise<Discovery> {
   return isTauri()

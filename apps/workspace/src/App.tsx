@@ -49,6 +49,7 @@ import {
   RefreshCw,
   ShieldCheck,
   Activity,
+  CalendarDays,
   Clock3,
   GitBranch,
   UserRound,
@@ -86,6 +87,7 @@ import {
 } from "./ProjectSetup";
 import { Status } from "./Status";
 import Checklist from "./Checklist";
+import ActivityPage from "./Activity";
 import Health from "./Health";
 import LoadFailurePanel, { loadFailure } from "./LoadFailure";
 
@@ -242,6 +244,7 @@ export default function App() {
     setup: ["设置清单", "按组件查看配置要求和当前进度。"],
     health: ["运行状况", "检查本机工具与连接的当前状态。"],
     project: ["新建 SPM 项目", "从选择范围到第一批数据。"],
+    activity: ["代码活动", "Gerrit 变更，按天。"],
   };
   return (
     <TooltipProvider>
@@ -261,6 +264,7 @@ export default function App() {
                 { id: "home", title: "首页", icon: Home },
                 { id: "setup", title: "设置清单", icon: ListChecks },
                 { id: "health", title: "运行状况", icon: Activity },
+                { id: "activity", title: "代码活动", icon: CalendarDays },
               ] as const
             ).map((item) => (
               <Button
@@ -317,7 +321,9 @@ export default function App() {
                         ? "设置清单"
                         : page === "project"
                           ? "新建 SPM 项目"
-                          : "运行状况"}
+                          : page === "activity"
+                            ? "代码活动"
+                            : "运行状况"}
                   </BreadcrumbPage>
                 </BreadcrumbItem>
               </BreadcrumbList>
@@ -337,6 +343,7 @@ export default function App() {
               <Button
                 variant="outline"
                 size="lg"
+                hidden={page === "activity"}
                 disabled={busy}
                 onClick={() => void refresh(true)}
               >
@@ -499,6 +506,8 @@ export default function App() {
                     projectSetup={projectSetup}
                     onOpenProject={() => setPage("project")}
                   />
+                ) : page === "activity" ? (
+                  <ActivityPage />
                 ) : page === "project" ? (
                   <ProjectWizard
                     setup={projectSetup}
@@ -513,7 +522,7 @@ export default function App() {
                     onOpen={openSetup}
                   />
                 )}
-                <footer className="page-footer">
+                <footer className="page-footer" hidden={page === "activity"}>
                   <span>
                     {report.checked ? "最近全量检查" : "最近读取"} ·{" "}
                     {new Date(report.observed_at).toLocaleString("zh-CN")}

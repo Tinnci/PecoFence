@@ -34,7 +34,10 @@ export type Group = { field: string, name: string, target_type: string, target_n
 export type Item = { id: string, name: string, count?: number, };
 export type JiraProject = { key: string, name: string, count: number, };
 export type JiraGroup = { name: string, jql: string, count: number, released?: boolean, };
-export type Discovery = { spaces?: Array<Space>, types?: Array<WorkItemType>, groups?: Array<Group>, items?: Array<Item>, projects?: Array<JiraProject>, jira_groups?: Array<JiraGroup>, 
+export type DayActivity = { date: string, created: number, merged: number, };
+export type BranchCount = { branch: string, count: number, };
+export type Activity = { project?: string, branch?: string, from: string, to: string, days: Array<DayActivity>, total: number, merged: number, open: number, abandoned: number, branches: Array<BranchCount>, };
+export type Discovery = { spaces?: Array<Space>, types?: Array<WorkItemType>, groups?: Array<Group>, items?: Array<Item>, projects?: Array<JiraProject>, jira_groups?: Array<JiraGroup>, gerrit_projects?: Array<string>, activity?: Activity, 
 /**
  * Items of the group type holding no issue, when items were counted.
  */
@@ -51,7 +54,11 @@ count_type?: string, field?: string,
 /**
  * `jira_versions` and `jira_filters`.
  */
-project?: string, };
+project?: string, 
+/**
+ * `gerrit_activity`: a repository path and/or a branch.
+ */
+repo?: string, branch?: string, };
 export type MeegleFilter = { field: string, field_name: string, 
 /**
  * One or more group items forming one scope.

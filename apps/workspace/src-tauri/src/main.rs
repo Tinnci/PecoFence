@@ -9,7 +9,7 @@ fn target(args: &[String]) -> Result<String, String> {
         [] => Ok("home".into()),
         [flag, page]
             if flag == "--open"
-                && ["home", "setup", "health", "project"].contains(&page.as_str()) =>
+                && ["home", "setup", "health", "project", "activity"].contains(&page.as_str()) =>
         {
             Ok(page.clone())
         }

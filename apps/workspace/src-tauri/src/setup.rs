@@ -261,6 +261,35 @@ pub struct Item {
     #[ts(optional)]
     pub count: Option<u32>,
 }
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct DayActivity {
+    pub date: String,
+    pub created: u32,
+    pub merged: u32,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct BranchCount {
+    pub branch: String,
+    pub count: u32,
+}
+/// A year of Gerrit changes per day for a repository and/or branch.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct Activity {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub project: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub branch: Option<String>,
+    pub from: String,
+    pub to: String,
+    pub days: Vec<DayActivity>,
+    pub total: u32,
+    pub merged: u32,
+    pub open: u32,
+    pub abandoned: u32,
+    pub branches: Vec<BranchCount>,
+}
 /// A Jira version or starred filter with its issue count inside the project.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct JiraGroup {
@@ -299,6 +328,12 @@ pub struct Discovery {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub jira_groups: Option<Vec<JiraGroup>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub gerrit_projects: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub activity: Option<Activity>,
     /// Items of the group type holding no issue, when items were counted.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
@@ -570,6 +605,21 @@ pub struct DiscoverArgs {
     #[serde(default)]
     #[ts(optional)]
     pub project: Option<String>,
+    /// `gerrit_activity`: a repository path and/or a branch.
+    #[serde(default)]
+    #[ts(optional)]
+    pub repo: Option<String>,
+    #[serde(default)]
+    #[ts(optional)]
+    pub branch: Option<String>,
+}
+
+/// A Gerrit repository path or branch name: letters, digits and /._-+@.
+pub fn valid_gerrit_name(name: &str) -> bool {
+    (1..=200).contains(&name.len())
+        && name
+            .chars()
+            .all(|c| c.is_alphanumeric() || "/._-+@".contains(c))
 }
 
 /// A Jira project key such as PLV.
@@ -594,6 +644,22 @@ pub fn discover_args<'a>(list: &str, a: &'a DiscoverArgs) -> Option<Vec<&'a str>
         "jira_projects" => args.push("jira-projects"),
         "jira_versions" => args.extend(["jira-versions", "--project", project()?]),
         "jira_filters" => args.extend(["jira-filters", "--project", project()?]),
+        "gerrit_projects" => args.push("gerrit-projects"),
+        "gerrit_activity" => {
+            args.push("gerrit-activity");
+            let name = |n: &'a Option<String>| n.as_deref().filter(|n| valid_gerrit_name(n));
+            match (&a.repo, &a.branch) {
+                (None, None) => return None,
+                (repo, branch) => {
+                    if repo.is_some() {
+                        args.extend(["--project", name(repo)?]);
+                    }
+                    if branch.is_some() {
+                        args.extend(["--branch", name(branch)?]);
+                    }
+                }
+            }
+        }
         "types" => args.extend(["types", "--space", space?]),
         "groups" => args.extend(["groups", "--space", space?, "--type", kind?]),
         "items" => {
@@ -734,6 +800,9 @@ pub fn types() -> String {
             Item::decl(&config),
             JiraProject::decl(&config),
             JiraGroup::decl(&config),
+            DayActivity::decl(&config),
+            BranchCount::decl(&config),
+            Activity::decl(&config),
             Discovery::decl(&config),
             DiscoverArgs::decl(&config),
             MeegleFilter::decl(&config),
@@ -813,6 +882,24 @@ mod tests {
             discover_args("spaces", &DiscoverArgs::default()).unwrap(),
             ["discover", "spaces"]
         );
+        let camera = with(|a| {
+            a.repo = Some("packages/apps/DreamCamera2".into());
+            a.branch = Some("mtk_sys_OS3.4_A16".into());
+        });
+        assert_eq!(
+            discover_args("gerrit_activity", &camera).unwrap(),
+            [
+                "discover",
+                "gerrit-activity",
+                "--project",
+                "packages/apps/DreamCamera2",
+                "--branch",
+                "mtk_sys_OS3.4_A16"
+            ]
+        );
+        assert!(discover_args("gerrit_activity", &DiscoverArgs::default()).is_none());
+        let injected = with(|a| a.repo = Some("x OR project:y".into()));
+        assert!(discover_args("gerrit_activity", &injected).is_none());
         let plv = with(|a| a.project = Some("PLV".into()));
         assert_eq!(
             discover_args("jira_versions", &plv).unwrap(),
