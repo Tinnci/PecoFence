@@ -215,8 +215,9 @@ The SPM checklist's template step lists imported projects and imports one more:
 2. The plan shows template, project, scope and each file's action. A conflict
    offers **备份并替换**; identical configuration needs no import.
 3. Confirming runs the same copy with `--apply` (and `--replace`), only if the
-   confirmed sha256 still matches the plan. The result lists backups and the
-   credential environment variables collection still needs.
+   confirmed sha256 still matches the plan. The result lists backups. Since SPM 0.1.0
+   `b150879` (R1.2) collection reads Meegle, Jira and Gerrit through their own CLIs, so
+   an import needs no environment variables; 连接来源 shows whether each tool is signed in.
 
 The frontend calls only `template_plan`, `template_apply(sha256, replace)` and
 `project_status`; it never passes a path or argument. Owner errors arrive as

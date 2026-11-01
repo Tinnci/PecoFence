@@ -10,7 +10,7 @@ export type PlanFile = { role: string, path: string,
  * create, unchanged, replace or conflict
  */
 action: string, };
-export type ProjectCheck = { valid: boolean, ready: boolean, missing_environment: Array<string>, };
+export type ProjectCheck = { valid: boolean, ready: boolean, };
 export type ImportPlan = { template: TemplateInfo, project: string, scope: string, mode: string, directory: string, files: Array<PlanFile>, applicable: boolean, applied: boolean, backups: Array<string>, check?: ProjectCheck, };
 export type ImportedProject = { 
 /**

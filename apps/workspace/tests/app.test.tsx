@@ -356,7 +356,7 @@ describe("SPM template import", () => {
         project: "PROJ",
         scope: "SCOPE",
         directory: "C:\\cfg\\PROJ\\SCOPE",
-        check: { valid: true, ready: false, missing_environment: ["JIRA_PAT"] },
+        check: { valid: true, ready: true },
       },
     ],
   };
@@ -394,7 +394,7 @@ describe("SPM template import", () => {
     expect(mocks.applyTemplate).toHaveBeenCalledWith("ab12", true);
     await waitFor(() => expect(step.textContent).toContain("已完成"));
     expect(step.textContent).toContain("原文件已备份（1 个）");
-    expect(step.textContent).toContain("JIRA_PAT");
+    expect(step.textContent).toContain("可以采集");
     expect(screen.queryByRole("region", { name: "导入计划" })).toBeNull();
   });
   it("shows owner validation errors and stays quiet when the dialog is cancelled", async () => {

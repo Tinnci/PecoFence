@@ -72,19 +72,6 @@ export function FailureNote({ failure }: { failure: SetupFailure }) {
     </Alert>
   );
 }
-function Missing({ names }: { names: string[] }) {
-  return names.length ? (
-    <div className="import-missing">
-      <span>采集前还需设置环境变量</span>
-      {names.map((name) => (
-        <Badge key={name} variant="secondary">
-          <code>{name}</code>
-        </Badge>
-      ))}
-    </div>
-  ) : null;
-}
-
 /** Plan, confirm and apply one template; project status is owned by the app. */
 export default function TemplateImport({
   status,
@@ -153,7 +140,6 @@ export default function TemplateImport({
                         : "已导入"}
                   </Badge>
                 </ItemTitle>
-                <Missing names={p.check.missing_environment} />
               </ItemContent>
             </Item>
           ))}
@@ -173,7 +159,7 @@ export default function TemplateImport({
             。
           </AlertTitle>
           <AlertDescription>
-            <Missing names={result.check?.missing_environment ?? []} />
+            来源由各自的工具登录，连接状态见“连接来源”。
           </AlertDescription>
         </Alert>
       ) : null}

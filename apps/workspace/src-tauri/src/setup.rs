@@ -72,8 +72,6 @@ pub struct ProjectCheck {
     pub valid: bool,
     #[serde(default)]
     pub ready: bool,
-    #[serde(default)]
-    pub missing_environment: Vec<String>,
 }
 #[derive(Debug, Serialize, Deserialize, TS)]
 pub struct ImportPlan {
@@ -361,8 +359,7 @@ mod tests {
         assert!(plan.files.iter().all(|f| f.action == "create"));
         let applied = decode_plan(Some(0), fixture!("applied.json")).unwrap();
         let check = applied.check.unwrap();
-        assert!(applied.applied && check.valid && !check.ready);
-        assert!(check.missing_environment.contains(&"JIRA_PAT".to_string()));
+        assert!(applied.applied && check.valid && check.ready);
         let conflict = decode_plan(Some(0), fixture!("plan-conflict.json")).unwrap();
         assert!(!conflict.applicable && conflict.files.iter().any(|f| f.action == "conflict"));
         let refused = decode_plan(Some(1), fixture!("apply-conflict.json")).unwrap_err();
@@ -433,13 +430,8 @@ mod tests {
                 .check
                 .valid
         );
-        let ready = br#"{"ok":true,"data":{"config_root":"C:\\cfg","projects":[{"project":"P","scope":"S","directory":"d","check":{"valid":true,"ready":false,"missing_environment":["JIRA_PAT"]}}]}}"#;
-        assert_eq!(
-            decode_status(Some(0), ready).unwrap().projects[0]
-                .check
-                .missing_environment,
-            ["JIRA_PAT"]
-        );
+        let ready = br#"{"ok":true,"data":{"config_root":"C:\\cfg","projects":[{"project":"P","scope":"S","directory":"d","check":{"valid":true,"ready":true}}]}}"#;
+        assert!(decode_status(Some(0), ready).unwrap().projects[0].check.ready);
         let other = br#"{"ok":false,"data":{},"error":{"code":"IMPORT_IO","message":"x"}}"#;
         assert_eq!(
             decode_status(Some(1), other).unwrap_err().code,

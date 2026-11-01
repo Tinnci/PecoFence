@@ -786,18 +786,6 @@ h1 {
 .template-import [data-slot="item-group"] {
   margin-bottom: 12px;
 }
-.import-missing {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  margin-top: 6px;
-  font-size: 11px;
-  color: var(--muted-foreground);
-}
-.import-missing code {
-  font-size: 10px;
-}
 .import-plan {
   margin-top: 12px;
 }
