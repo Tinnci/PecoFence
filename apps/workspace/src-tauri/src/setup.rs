@@ -275,6 +275,8 @@ pub struct JiraGroup {
 pub struct JiraProject {
     pub key: String,
     pub name: String,
+    #[serde(default)]
+    pub count: u32,
 }
 /// What `spm discover` returned; exactly one list is present.
 #[derive(Debug, Default, Serialize, Deserialize, TS)]
@@ -426,15 +428,50 @@ pub struct Draft {
     pub breakdown: Breakdown,
 }
 
-/// The daemon's state after `spm setup activate`.
+/// A gate of the daemon's last snapshot.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct GateSummary {
+    pub gate_id: String,
+    pub state: String,
+    pub n: u32,
+    pub v: u32,
+    pub gap: u32,
+}
+/// A source value the running project's mapping does not cover.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct Unmapped {
+    pub field: String,
+    pub value: String,
+    pub count: u32,
+}
+/// The background service's health (`spmd --health`).
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct ServiceHealth {
     pub state: String,
+    #[serde(default)]
+    pub mode: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub project: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub scope: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub last_poll: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub last_commit: Option<String>,
     #[serde(default)]
+    #[ts(type = "number")]
     pub revision: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub error: Option<String>,
+    #[serde(default)]
+    pub gates: Vec<GateSummary>,
+    #[serde(default)]
+    pub unmapped: Vec<Unmapped>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct Activation {
@@ -442,7 +479,7 @@ pub struct Activation {
     #[ts(optional)]
     pub health: Option<ServiceHealth>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
+    #[ts(optional, type = "number")]
     pub waited_secs: Option<u64>,
 }
 /// `spm setup activate` for a drafted project; identifiers are directory-safe.
@@ -458,6 +495,47 @@ pub fn activate_args<'a>(project: &'a str, scope: &'a str) -> Option<Vec<&'a str
 }
 pub fn decode_activation(code: Option<i32>, stdout: &[u8]) -> Result<Activation, SetupFailure> {
     owner_data(code, stdout)
+}
+pub fn decode_service(code: Option<i32>, stdout: &[u8]) -> Result<ServiceHealth, SetupFailure> {
+    owner_data(code, stdout)
+}
+pub const STAGES: [&str; 8] = [
+    "Open",
+    "Implementing",
+    "Reviewing",
+    "Regression",
+    "Closed",
+    "WaitInfo",
+    "Track",
+    "Ccb",
+];
+/// `spm setup remap … --apply` for stage answers; values are the source's own text.
+pub fn remap_args(
+    project: &str,
+    scope: &str,
+    stages: &std::collections::BTreeMap<String, String>,
+) -> Option<Vec<String>> {
+    let mut args = activate_args(project, scope)?
+        .into_iter()
+        .map(str::to_owned)
+        .collect::<Vec<_>>();
+    args[1] = "remap".into();
+    if stages.is_empty() || stages.len() > 50 {
+        return None;
+    }
+    for (value, stage) in stages {
+        if value.trim().is_empty()
+            || value.chars().count() > 120
+            || value.chars().any(char::is_control)
+            || !STAGES.contains(&stage.as_str())
+        {
+            return None;
+        }
+        args.push("--stage".into());
+        args.push(format!("{value}={stage}"));
+    }
+    args.push("--apply".into());
+    Some(args)
 }
 
 /// Keys the frontend may pass to `spm discover`: Meegle space, type and field keys.
@@ -669,6 +747,8 @@ pub fn types() -> String {
             Breakdown::decl(&config),
             DraftMapping::decl(&config),
             Draft::decl(&config),
+            GateSummary::decl(&config),
+            Unmapped::decl(&config),
             ServiceHealth::decl(&config),
             Activation::decl(&config),
         ]
@@ -764,6 +844,33 @@ mod tests {
         );
         assert!(draft_args(true, None).is_none());
         assert!(draft_args(true, Some("--config-root")).is_none());
+    }
+    #[test]
+    fn remap_arguments_and_service_health() {
+        let answers = [("To Be Confirmed".to_string(), "Open".to_string())].into();
+        assert_eq!(
+            remap_args("E6751SM", "main", &answers).unwrap(),
+            [
+                "setup",
+                "remap",
+                "--project",
+                "E6751SM",
+                "--scope",
+                "main",
+                "--stage",
+                "To Be Confirmed=Open",
+                "--apply"
+            ]
+        );
+        let bad = [("x".to_string(), "Deleted".to_string())].into();
+        assert!(remap_args("E6751SM", "main", &bad).is_none());
+        assert!(remap_args("E6751SM", "main", &Default::default()).is_none());
+        let health = br#"{"ok":true,"data":{"mode":"live","state":"running","project":"E6751SM","scope":"main","revision":2,
+            "gates":[{"gate_id":"severe","state":"satisfied","n":115,"v":111,"gap":0}],
+            "unmapped":[{"field":"stage","value":"Communication","count":3}]}}"#;
+        let health = decode_service(Some(0), health).unwrap();
+        assert_eq!(health.project.as_deref(), Some("E6751SM"));
+        assert_eq!(health.unmapped[0].count, 3);
     }
     #[test]
     fn activation_arguments_and_results() {

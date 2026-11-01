@@ -49,6 +49,8 @@ fn desktop() {
         connection_gate: tokio::sync::Semaphore,
         /// One discovery or draft at a time; later requests wait their turn.
         discover_gate: tokio::sync::Semaphore,
+        /// Health reads run beside an activation so the page can show its progress.
+        service_gate: tokio::sync::Semaphore,
         /// The private template copy and the sha256 of its last plan.
         pending: std::sync::Mutex<Option<(std::path::PathBuf, String)>>,
     }
@@ -226,6 +228,42 @@ fn desktop() {
         let output = process::spm(&spm_exe()?, &args, std::time::Duration::from_secs(360)).await?;
         setup::decode_activation(output.code, &output.stdout)
     }
+    /// The background service's health: project, gates and unmapped values.
+    #[tauri::command]
+    async fn service_status(
+        state: tauri::State<'_, State>,
+    ) -> Result<setup::ServiceHealth, setup::SetupFailure> {
+        let _permit = state
+            .service_gate
+            .try_acquire()
+            .map_err(|_| setup::SetupFailure::new("setup_busy"))?;
+        let output = process::spm(
+            &spm_exe()?,
+            &["setup", "service-status"],
+            std::time::Duration::from_secs(20),
+        )
+        .await?;
+        setup::decode_service(output.code, &output.stdout)
+    }
+    /// Adds stage mappings for values that appeared after creation.
+    #[tauri::command]
+    async fn remap(
+        project: String,
+        scope: String,
+        stages: std::collections::BTreeMap<String, String>,
+        state: tauri::State<'_, State>,
+    ) -> Result<setup::ImportPlan, setup::SetupFailure> {
+        let args = setup::remap_args(&project, &scope, &stages)
+            .ok_or_else(|| setup::SetupFailure::new("invalid_input"))?;
+        let args: Vec<&str> = args.iter().map(String::as_str).collect();
+        let _permit = state
+            .discover_gate
+            .acquire()
+            .await
+            .map_err(|_| setup::SetupFailure::new("setup_busy"))?;
+        let output = process::spm(&spm_exe()?, &args, SETUP_DEADLINE).await?;
+        setup::decode_plan(output.code, &output.stdout)
+    }
     /// Runs the tool's own browser login; only Meegle offers one.
     #[tauri::command]
     async fn connection_sign_in(
@@ -318,6 +356,7 @@ fn desktop() {
             setup_gate: tokio::sync::Semaphore::new(1),
             connection_gate: tokio::sync::Semaphore::new(1),
             discover_gate: tokio::sync::Semaphore::new(1),
+            service_gate: tokio::sync::Semaphore::new(1),
             pending: std::sync::Mutex::new(None),
         })
         .setup(move |app| {
@@ -341,7 +380,9 @@ fn desktop() {
             connection_sign_in,
             discover,
             draft,
-            activate
+            activate,
+            service_status,
+            remap
         ])
         .run(tauri::generate_context!())
         .expect("workspace runtime");

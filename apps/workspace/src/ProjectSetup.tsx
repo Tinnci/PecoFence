@@ -22,6 +22,8 @@ import { Spinner } from "@/components/ui/spinner";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type {
   Activation,
+  GateSummary,
+  ServiceHealth,
   Draft,
   DraftChoices,
   Group,
@@ -34,7 +36,7 @@ import type {
   Space,
   WorkItemType,
 } from "./contracts/setup";
-import { activate, discover, draft } from "./api";
+import { activate, discover, draft, remap, serviceStatus } from "./api";
 import { FailureNote, failureOf } from "./TemplateImport";
 
 export type Source = "meegle" | "jira";
@@ -242,6 +244,19 @@ export function useProjectSetup(
   const [changed, setChanged] = useState<Draft | null>(null);
   const [activating, setActivating] = useState(false);
   const [activation, setActivation] = useState<Activation | null>(null);
+  const [service, setService] = useState<ServiceHealth | null>(null);
+  const [remapping, setRemapping] = useState(false);
+  const [remapFailure, setRemapFailure] = useState<SetupFailure | null>(null);
+  async function refreshService() {
+    try {
+      setService(await serviceStatus());
+    } catch {
+      /* A busy or stopped service keeps the last reading. */
+    }
+  }
+  useEffect(() => {
+    void refreshService();
+  }, []);
   const [activateFailure, setActivateFailure] = useState<SetupFailure | null>(
     null,
   );
@@ -446,12 +461,31 @@ export function useProjectSetup(
   async function start(project: string, scope: string) {
     setActivating(true);
     setActivateFailure(null);
+    // The daemon's own health shows the switch and the first read as they happen.
+    const poll = setInterval(() => void refreshService(), 2500);
     try {
-      setActivation(await activate(project, scope));
+      const result = await activate(project, scope);
+      setActivation(result);
+      if (result.health) setService(result.health);
     } catch (error) {
       setActivateFailure(failureOf(error));
     } finally {
+      clearInterval(poll);
       setActivating(false);
+    }
+  }
+  /** Maps values that appeared after creation, then restarts collection with them. */
+  async function remapAndRestart(answers: Record<string, string>) {
+    if (!service?.project || !service.scope) return;
+    setRemapping(true);
+    setRemapFailure(null);
+    try {
+      await remap(service.project, service.scope, answers);
+      await start(service.project, service.scope);
+    } catch (error) {
+      setRemapFailure(failureOf(error));
+    } finally {
+      setRemapping(false);
     }
   }
   async function create() {
@@ -483,6 +517,11 @@ export function useProjectSetup(
   }
 
   return {
+    service,
+    refreshService,
+    remapping,
+    remapFailure,
+    remapAndRestart,
     connected,
     step,
     setStep,
@@ -831,7 +870,7 @@ function JiraPicker({ setup }: { setup: ProjectSetup }) {
               rows={rows}
               selected={() => false}
               name={(p) => `${p.key} · ${p.name}`}
-              count={() => undefined}
+              count={(p) => p.count}
               onPick={(p) => {
                 setup.setSearch("");
                 setup.setProject(p);
@@ -992,6 +1031,47 @@ function StatusSummary({ draft }: { draft: Draft }) {
   );
 }
 
+/** Before a pick: what the list holds, so the panel is never an empty card. */
+function Overview({ setup }: { setup: ProjectSetup }) {
+  const { lists, group, project } = setup;
+  const noun = group ? group.name.replace(/^关联/, "") || group.name : "项目";
+  const [label, total, where, hint] =
+    setup.source === "meegle"
+      ? [
+          `飞书项目 · ${setup.space?.name ?? ""}`,
+          lists.items?.reduce((n, i) => n + (i.count ?? 0), 0),
+          `个问题分布在 ${lists.items?.length ?? 0} 个${noun}`,
+          `选择一个${noun}，或按住 Ctrl 合并多个。`,
+        ]
+      : project
+        ? [
+            `Jira · ${project.key}`,
+            project.count,
+            `个问题在 ${project.name}`,
+            "选择整个项目、一个版本或一个筛选器。",
+          ]
+        : [
+            "Jira",
+            lists.projects?.reduce((n, p) => n + p.count, 0),
+            `个问题分布在 ${lists.projects?.length ?? 0} 个项目`,
+            "选择一个项目。",
+          ];
+  return (
+    <div className="overview">
+      <span className="preview-label">{label}</span>
+      {total === undefined ? (
+        <Skeleton className="count-skeleton" />
+      ) : (
+        <div className="big-count">
+          <strong>{total}</strong>
+          <span>{where}</span>
+        </div>
+      )}
+      <p className="scope-hint">{hint}</p>
+    </div>
+  );
+}
+
 function Preview({ setup }: { setup: ProjectSetup }) {
   const { preview, scope } = setup;
   const heading =
@@ -1009,7 +1089,7 @@ function Preview({ setup }: { setup: ProjectSetup }) {
   return (
     <aside className="wizard-aside" aria-label="范围预览" aria-live="polite">
       {!scope ? (
-        <p className="scope-hint">选择一个范围，这里显示其中的问题。</p>
+        <Overview setup={setup} />
       ) : (
         <>
           <div className="preview-name">
@@ -1403,7 +1483,7 @@ function ConfirmStep({ setup }: { setup: ProjectSetup }) {
             <div className="later-note">
               <p>
                 {later.map((q) => q.value).join(" 和 ")}{" "}
-                没有自动对应。本范围里没有这些状态的问题，可以先跳过，出现时工作台会提醒你。
+                没有自动对应。本范围里没有这些状态的问题，可以先跳过；出现时，设置清单的“开始采集”会请你选择。
               </p>
               <div className="later-selects">
                 {later.map((q) => (
@@ -1482,6 +1562,121 @@ function ConfirmStep({ setup }: { setup: ProjectSetup }) {
   );
 }
 
+/** Gate results from the daemon's own snapshot. */
+function GateResults({
+  gates,
+  targets,
+}: {
+  gates: GateSummary[];
+  targets: Gates;
+}) {
+  const find = (id: string) => gates.find((g) => g.gate_id === id);
+  const rate = (id: string, title: string, target: number) => {
+    const g = find(id);
+    if (!g) return null;
+    const now = percent(g.v, g.n);
+    const ok = g.gap === 0;
+    return (
+      <article className="gate-card" aria-label={title}>
+        <div className="gate-head row">
+          <strong>{title}</strong>
+          <Verdict ok={ok} text={ok ? "达标" : `还差 ${g.gap} 个`} />
+        </div>
+        <span className="result-number">{now}%</span>
+        <Meter now={now} target={target} ok={ok} />
+        <small>
+          {g.v} / {g.n} · 目标 {target}%
+        </small>
+      </article>
+    );
+  };
+  const fatal = find("fatal");
+  return (
+    <div className="gate-results">
+      {rate("severe", "严重问题解决率", targets.severe)}
+      {rate("overall", "整体解决率", targets.overall)}
+      {fatal ? (
+        <article className="gate-card" aria-label="致命问题">
+          <div className="gate-head row">
+            <strong>致命问题</strong>
+            <Verdict
+              ok={fatal.gap === 0}
+              text={fatal.gap === 0 ? "达标" : `超出 ${fatal.gap} 个`}
+            />
+          </div>
+          <span className="result-number">{fatal.gap + targets.fatal}</span>
+          <small>未解决的致命问题 · 上限 {targets.fatal} 个</small>
+        </article>
+      ) : null}
+    </div>
+  );
+}
+
+/** Statuses that issues took after creation; answering restarts collection. */
+export function UnmappedAlert({ setup }: { setup: ProjectSetup }) {
+  const values = (setup.service?.unmapped ?? []).filter(
+    (u) => u.field === "stage" && u.count > 0,
+  );
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  if (!values.length || !setup.service?.project) return null;
+  const options = Object.entries(stageNames).map(([v, l]) => ({
+    value: v,
+    label: l,
+  }));
+  const total = values.reduce((n, u) => n + u.count, 0);
+  return (
+    <div className="unmapped-alert" role="alert">
+      <p>
+        {setup.service.project} 有 {total}{" "}
+        个问题处于没有对应的状态，暂按“未知”计算。选择对应的 SPM
+        阶段后会重新开始采集。
+      </p>
+      <div className="later-selects">
+        {values.map((u) => (
+          <label key={u.value}>
+            {u.value} · {u.count} 个
+            <Select
+              value={answers[u.value] ?? null}
+              items={options}
+              onValueChange={(stage) =>
+                stage && setAnswers({ ...answers, [u.value]: stage as string })
+              }
+            >
+              <SelectTrigger size="sm" aria-label={`${u.value} 对应`}>
+                <SelectValue placeholder="选择" />
+              </SelectTrigger>
+              <SelectContent>
+                {options.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </label>
+        ))}
+      </div>
+      {setup.remapFailure ? <FailureNote failure={setup.remapFailure} /> : null}
+      <div>
+        <Button
+          size="sm"
+          disabled={
+            setup.remapping ||
+            setup.activating ||
+            values.some((u) => !answers[u.value])
+          }
+          onClick={() => void setup.remapAndRestart(answers)}
+        >
+          {setup.remapping || setup.activating ? (
+            <Spinner aria-hidden="true" />
+          ) : null}
+          保存并重新开始采集
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function CollectStep({
   setup,
   onDone,
@@ -1489,15 +1684,19 @@ function CollectStep({
   setup: ProjectSetup;
   onDone: () => void;
 }) {
-  const { created, activation } = setup;
+  const { created, service } = setup;
   if (!created) return null;
-  const j = judge(created.breakdown.measures, setup.gates);
-  const done = !!activation;
-  const line = (ok: boolean, text: string) => (
+  const ours =
+    service?.mode === "live" &&
+    service.project === created.project &&
+    service.scope === created.scope;
+  const switched = ours || !!setup.activation;
+  const read = !!setup.activation || (ours && (service?.revision ?? 0) > 0);
+  const line = (ok: boolean, busy: boolean, text: string) => (
     <li className={ok ? "ok" : ""}>
       {ok ? (
         <Check aria-hidden="true" />
-      ) : setup.activating ? (
+      ) : busy ? (
         <Spinner aria-hidden="true" />
       ) : (
         <span className="pending-dot" aria-hidden="true" />
@@ -1509,18 +1708,24 @@ function CollectStep({
     <>
       <div className="wizard-title">
         <div>
-          <h2>{done ? "第一批数据已到" : "正在开始采集"}</h2>
+          <h2>{read ? "第一批数据已到" : "正在开始采集"}</h2>
           <p>
-            {done
-              ? `${created.count} 个问题全部读取，门槛按 ${setup.gates.phase} 计算。`
-              : "后台服务切换到新项目后会立即读取一次。"}
+            {read
+              ? `${created.count} 个问题已读取，门槛按 ${setup.gates.phase} 计算。`
+              : switched
+                ? `后台服务正在读取 ${created.count} 个问题。`
+                : "正在停止原来的后台服务，换成新项目。"}
           </p>
         </div>
       </div>
       <ol className="collect-steps" aria-label="开始采集">
-        {line(true, "写入项目配置")}
-        {line(done, `后台服务切换到 ${created.project}`)}
-        {line(done, `读取 ${created.count} 个问题`)}
+        {line(true, false, "写入项目配置")}
+        {line(switched, setup.activating, `后台服务切换到 ${created.project}`)}
+        {line(
+          read,
+          setup.activating && switched,
+          `读取 ${created.count} 个问题`,
+        )}
       </ol>
       {setup.activateFailure ? (
         <div className="collect-failure">
@@ -1534,63 +1739,12 @@ function CollectStep({
           </Button>
         </div>
       ) : null}
-      {done ? (
-        <div className="gate-results">
-          <article className="gate-card" aria-label="严重问题解决率">
-            <div className="gate-head row">
-              <strong>严重问题解决率</strong>
-              <Verdict
-                ok={j.severe.ok}
-                text={j.severe.ok ? "达标" : `还差 ${j.severe.gap} 个`}
-              />
-            </div>
-            <span className="result-number">{j.severe.now}%</span>
-            <Meter
-              now={j.severe.now}
-              target={setup.gates.severe}
-              ok={j.severe.ok}
-            />
-            <small>
-              {j.severe.v} / {j.severe.n} · 目标 {setup.gates.severe}%
-            </small>
-          </article>
-          <article className="gate-card" aria-label="整体解决率">
-            <div className="gate-head row">
-              <strong>整体解决率</strong>
-              <Verdict
-                ok={j.overall.ok}
-                text={j.overall.ok ? "达标" : `还差 ${j.overall.gap} 个`}
-              />
-            </div>
-            <span className="result-number">{j.overall.now}%</span>
-            <Meter
-              now={j.overall.now}
-              target={setup.gates.overall}
-              ok={j.overall.ok}
-            />
-            <small>
-              {j.overall.v} / {j.overall.n} · 目标 {setup.gates.overall}%
-            </small>
-          </article>
-          <article className="gate-card" aria-label="致命问题">
-            <div className="gate-head row">
-              <strong>致命问题</strong>
-              <Verdict
-                ok={j.fatal.ok}
-                text={
-                  j.fatal.ok
-                    ? "达标"
-                    : `超出 ${j.fatal.open - setup.gates.fatal} 个`
-                }
-              />
-            </div>
-            <span className="result-number">{j.fatal.open}</span>
-            <small>未解决的致命问题 · 上限 {setup.gates.fatal} 个</small>
-          </article>
-        </div>
+      {read && ours && service?.gates.length ? (
+        <GateResults gates={service.gates} targets={setup.gates} />
       ) : null}
+      {ours ? <UnmappedAlert setup={setup} /> : null}
       <div className="collect-actions">
-        <Button variant={done ? "default" : "outline"} onClick={onDone}>
+        <Button variant={read ? "default" : "outline"} onClick={onDone}>
           返回设置清单
         </Button>
       </div>
@@ -1632,7 +1786,8 @@ export function ProjectStepSummary({
   step: "project" | "gates" | "confirm" | "start";
   onOpen: () => void;
 }) {
-  const { preview, created, activation, scope } = setup;
+  const { preview, created, scope, service } = setup;
+  const live = service?.mode === "live" && service.project;
   const text =
     step === "project"
       ? preview && scope
@@ -1646,14 +1801,19 @@ export function ProjectStepSummary({
           ? created
             ? `已创建 ${created.project} · ${created.scope}`
             : null
-          : activation
-            ? "采集中，第一批数据已到"
+          : live
+            ? `采集中：${service.project} · ${service.scope}${
+                service.last_commit
+                  ? `，最近一次 ${new Date(service.last_commit).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}`
+                  : ""
+              }`
             : setup.activateFailure
               ? "开始采集没有完成"
               : null;
   return (
     <div className="step-summary">
       {text ? <p>{text}</p> : null}
+      {step === "start" ? <UnmappedAlert setup={setup} /> : null}
       {step === "project" ? (
         <Button size="sm" onClick={onOpen}>
           {preview ? "继续新建项目" : "新建项目"} <ArrowRight />

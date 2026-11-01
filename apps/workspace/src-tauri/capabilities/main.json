@@ -16,6 +16,8 @@
     "allow-connection-sign-in",
     "allow-discover",
     "allow-draft",
-    "allow-activate"
+    "allow-activate",
+    "allow-service-status",
+    "allow-remap"
   ]
 }

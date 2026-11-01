@@ -1496,3 +1496,33 @@ button.pick-row[aria-selected="true"] .pick-bar span {
 .alert-success [data-slot="alert-description"] {
   color: var(--secondary-foreground);
 }
+.overview {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.overview .big-count span {
+  font-size: 13px;
+}
+.overview .scope-hint {
+  padding: 0;
+}
+.overview .count-skeleton {
+  width: 120px;
+  height: 44px;
+}
+.unmapped-alert {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--warning-border);
+  border-radius: 10px;
+  background: var(--warning-surface);
+  color: var(--warning);
+}
+.unmapped-alert p {
+  margin: 0;
+  color: var(--warning);
+}

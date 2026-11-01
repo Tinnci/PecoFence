@@ -16,6 +16,8 @@ const mocks = vi.hoisted(() => ({
   discover: vi.fn(),
   draft: vi.fn(),
   activate: vi.fn(),
+  serviceStatus: vi.fn(),
+  remap: vi.fn(),
 }));
 vi.mock("../src/api", () => mocks);
 const report: HubReport = {
@@ -67,6 +69,7 @@ beforeEach(() => {
     mocks.discover,
     mocks.draft,
     mocks.activate,
+    mocks.remap,
   ])
     fn.mockReset();
 });
@@ -75,6 +78,17 @@ beforeEach(() => {
     checked_at: "2026-11-01T00:00:00Z",
     connections: [],
   });
+});
+beforeEach(() => {
+  mocks.serviceStatus
+    .mockReset()
+    .mockResolvedValue({
+      mode: "historical",
+      state: "historical",
+      revision: 0,
+      gates: [],
+      unmapped: [],
+    });
 });
 afterEach(cleanup);
 describe("welcome to setup flow", () => {
@@ -692,14 +706,21 @@ describe("new SPM project page", () => {
         applied: true,
         check: { valid: true, ready: true },
       });
-    mocks.activate.mockResolvedValue({
-      health: {
-        state: "ready",
-        revision: 1,
-        last_commit: "2026-11-01T10:00:00Z",
-      },
-      waited_secs: 20,
-    });
+    const health = {
+      mode: "live",
+      state: "running",
+      project: "E6767SM",
+      scope: "main",
+      revision: 1,
+      last_commit: "2026-11-01T10:00:00Z",
+      gates: [
+        { gate_id: "severe", state: "satisfied", n: 100, v: 96, gap: 0 },
+        { gate_id: "overall", state: "satisfied", n: 342, v: 281, gap: 0 },
+        { gate_id: "fatal", state: "satisfied", n: 0, v: 0, gap: 0 },
+      ],
+      unmapped: [],
+    };
+    mocks.activate.mockResolvedValue({ health, waited_secs: 20 });
     const user = await openPage();
     const list = await screen.findByRole("listbox", { name: "项目" });
     expect(list.textContent).toContain("E6765SM386");
@@ -785,6 +806,50 @@ describe("new SPM project page", () => {
         mocks.draft.mock.calls.at(-1)?.[0].scope.filter.values,
       ).toHaveLength(1),
     );
+  });
+  it("asks for statuses that appeared after creation and restarts collection", async () => {
+    const running = {
+      mode: "live",
+      state: "running",
+      project: "E6751SM",
+      scope: "main",
+      revision: 4,
+      gates: [],
+      unmapped: [
+        { field: "stage", value: "Communication", count: 3 },
+        { field: "stage", value: "To Be Confirmed", count: 0 },
+      ],
+    };
+    mocks.serviceStatus.mockResolvedValue(running);
+    mocks.remap.mockResolvedValue({});
+    mocks.activate.mockResolvedValue({ health: { ...running, unmapped: [] } });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(
+      await screen.findByRole("button", { name: /查看项目配置/ }),
+    );
+    const start = await screen.findByRole("article", { name: "开始采集" });
+    await waitFor(() =>
+      expect(start.textContent).toContain(
+        "E6751SM 有 3 个问题处于没有对应的状态",
+      ),
+    );
+    expect(start.textContent).toContain("采集中：E6751SM · main");
+    expect(start.textContent).not.toContain("To Be Confirmed");
+    const save = screen.getByRole("button", { name: "保存并重新开始采集" });
+    expect(save.hasAttribute("disabled")).toBe(true);
+    await user.click(
+      screen.getByRole("combobox", { name: "Communication 对应" }),
+    );
+    await user.click(await screen.findByRole("option", { name: "等待信息" }));
+    await user.click(save);
+    await waitFor(() =>
+      expect(mocks.activate).toHaveBeenCalledWith("E6751SM", "main"),
+    );
+    expect(mocks.remap).toHaveBeenCalledWith("E6751SM", "main", {
+      Communication: "WaitInfo",
+    });
+    await waitFor(() => expect(start.textContent).toContain("已完成"));
   });
   it("requires an answer only for unmapped statuses that issues hold, and asks again when the scope moved", async () => {
     const question = [{ field: "stage", value: "复核", count: 3 }];

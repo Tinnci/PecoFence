@@ -15,6 +15,8 @@ fn main() {
             "discover",
             "draft",
             "activate",
+            "service_status",
+            "remap",
         ]),
     ))
     .expect("Tauri build configuration");

@@ -10,6 +10,7 @@ import type {
   DraftChoices,
   ImportPlan,
   ProjectStatus,
+  ServiceHealth,
 } from "./contracts/setup";
 export type Page = "home" | "setup" | "health" | "project";
 export function isPage(value: unknown): value is Page {
@@ -120,5 +121,19 @@ export async function draft(
 ): Promise<Draft> {
   return isTauri()
     ? invoke<Draft>("draft", { choices, sha256: sha256 ?? null })
+    : desktopOnly();
+}
+/** The background service's health: project, last snapshot's gates and unmapped values. */
+export async function serviceStatus(): Promise<ServiceHealth> {
+  return isTauri() ? invoke<ServiceHealth>("service_status") : desktopOnly();
+}
+/** Adds stage mappings for values that appeared after the project was created. */
+export async function remap(
+  project: string,
+  scope: string,
+  stages: Record<string, string>,
+): Promise<ImportPlan> {
+  return isTauri()
+    ? invoke<ImportPlan>("remap", { project, scope, stages })
     : desktopOnly();
 }

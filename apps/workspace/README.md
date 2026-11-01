@@ -226,7 +226,17 @@ step's choice (E6767SM · 342, TR4 · 95%) and goes back on click.
    project and returns on the first snapshot; the page then shows the three gate results.
    A failure shows SPM's reason and a retry.
 
-The frontend calls `discover(list, args)`, `draft(choices, sha256?)` and `activate(project, scope)`.
+开始采集 follows the daemon itself: while `activate` runs, the page reads `service_status`
+(`spm setup service-status`, `spmd --health`) every 2.5 s, so 后台服务切换 completes when the
+daemon reports this project and 读取 when its first revision lands. The results are the gates of
+that snapshot. Statuses that issues take later appear in `unmapped`; the checklist's 开始采集
+then shows them with their counts, and 保存并重新开始采集 runs `remap` (`spm setup remap
+--apply`, new mappings only) and activates again. Before a pick, the preview shows what the list
+holds (issues across the projects, or the Jira project's total) instead of an empty card. Jira
+projects are listed with counts, largest first.
+
+The frontend calls `discover(list, args)`, `draft(choices, sha256?)`, `activate(project, scope)`,
+`service_status()` and `remap(project, scope, stages)`.
 Rust validates list names, Meegle keys, Jira project keys, search text, identifiers and the sha256
 before building `spm` arguments; the choices go to `spm setup draft` on stdin. One discovery, draft
 or activation runs at a time.

@@ -222,7 +222,12 @@ export default function App() {
           (projectSetup.preview !== null && validGates(projectSetup.gates)) ||
           hasProject,
         created: projectSetup.created !== null || hasProject,
-        started: projectSetup.activation !== null,
+        started:
+          projectSetup.service?.mode === "live" &&
+          !!projectSetup.service.project &&
+          !projectSetup.service.unmapped.some(
+            (u) => u.field === "stage" && u.count > 0,
+          ),
       })
     : null;
   const totals = report ? progress(report) : { done: 0, total: 0 };
