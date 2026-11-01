@@ -3,7 +3,7 @@
 # Tinnci Workspace · 工作台
 
 An independent Windows window for discovering the local tool ecosystem and
-understanding first-time setup. Version 0.3 added first-launch prerequisite diagnosis and recovery; 0.4 imports SPM project templates; 0.5 connects sources; 0.6 creates an SPM project from discovery. PecoFence and spmd keep their own lifetimes.
+understanding first-time setup. Version 0.3 added first-launch prerequisite diagnosis and recovery; 0.4 imports SPM project templates; 0.5 connects sources; 0.6 creates an SPM project from discovery; 0.7 makes it one page that ends with collection running. PecoFence and spmd keep their own lifetimes.
 Closing Workspace leaves both running.
 
 This first increment provides Home, a per-component setup checklist and Health.
@@ -204,36 +204,37 @@ connected; this state comes from the desktop's `spm connections`, not the hub's 
 
 Template import (below) sits under 选择项目 → 高级 · 从配置文件导入.
 
-## Create a project (0.6)
+## New SPM project (0.7)
 
-选择项目, 设置门槛 and 确认并创建项目 build a project from what the connected accounts can see,
-through `spm discover` and `spm setup draft` (SPM `docs/CONFIGURATION.md`). 开始采集 stays
-planned until the daemon switches projects (R1.4).
+The design came first ([canvas](https://claude.ai/artifact/1ab2bFH9wZAWUsTAsJoJkw), real IPD and
+PLV data), and SPM and jira-cli were changed to supply what it needs. 新建 SPM 项目 is its own page
+(`--open project`, or 新建项目 on the SPM checklist), with a step bar that shows each finished
+step's choice (E6767SM · 342, TR4 · 95%) and goes back on click.
 
-1. **选择项目**: 飞书项目 or Jira when both are connected. For 飞书项目 the space, the type
-   (issue lists first, 问题管理 before narrower ones) and the grouping field (关联项目, then
-   versions) default to the first entry; a search narrows the group's items. For Jira, pick a
-   project and optionally a JQL filter, applied on Enter or blur. Choosing an item drafts the scope
-   once: the result is one number, the scope's issue count, read to completion. Lists load as
-   skeleton rows at the list's own geometry; the count has a lane reserved from the start.
-2. **设置门槛**: 严重问题解决率 and 整体解决率 (percent), 致命问题上限, 阶段 and an optional
-   里程碑日期, with a live sentence of the policy.
-3. **确认并创建项目**: the project sentence, editable project and scope identifiers, a select for
-   each status SPM could not map (never guessed), and 这是本次交付的全部问题 (`scope_complete`).
-   创建项目 drafts again with the final choices; if the count changed or new questions appeared it
-   shows them and asks again, otherwise it applies with that draft's sha256 (`--expect`), so a scope
-   that moves in between is caught by SPM (`draft_changed`).
+1. **选择项目**: 飞书项目 or Jira. For 飞书项目 the grouping chips are the type's group fields
+   (关联项目, 影响版本, …) and the list holds only groups with issues, largest first, each with its
+   count and a bar (`spm discover items --count-type --field`, one MQL `GROUP BY`); the others sit
+   behind 显示没有问题的 N 个. For Jira: pick a project, then 整个项目, 影响版本 or 我的筛选器
+   (each with counts, from the Tinnci jira-cli fork), or JQL. Picking drafts the scope once; the
+   preview shows the one big number, the severity split and resolved/unresolved counts.
+2. **设置门槛**: −/+ targets with a meter against the scope's own measures (`breakdown.measures`,
+   the same numbers spmd computes), the gap in issues, the phase and the milestone's days left.
+3. **确认**: the project sentence, every source status with its count and SPM stage. Unmapped
+   statuses that issues hold need a choice; those with no issues are listed as skippable.
+   创建并开始采集 drafts again, applies only with that draft's sha256, then activates.
+4. **开始采集**: `spm setup activate` switches the logon entry and the running daemon to the
+   project and returns on the first snapshot; the page then shows the three gate results.
+   A failure shows SPM's reason and a retry.
 
-The frontend calls only `discover(list, space?, kind?, search?)` and `draft(choices, sha256?)`.
-Rust validates the list name, keys (`[A-Za-z0-9_-]{1,64}`), the search text and the sha256 before
-building `spm` arguments; the choices are a typed DTO written to `spm setup draft` on stdin, and
-SPM rejects unknown fields. One discovery or draft runs at a time; later requests wait. Owner
-errors arrive as `signed_out`, `source_failed`, `scope_empty`, `scope_too_large`,
-`scope_incomplete`, `mapping_undetected`, `questions_open` or `draft_changed` with SPM's message.
+The frontend calls `discover(list, args)`, `draft(choices, sha256?)` and `activate(project, scope)`.
+Rust validates list names, Meegle keys, Jira project keys, search text, identifiers and the sha256
+before building `spm` arguments; the choices go to `spm setup draft` on stdin. One discovery, draft
+or activation runs at a time.
 
-Verified 2026-11-01 on Windows: the installed app listed the IPD space's 问题管理 type, 关联项目
-grouping and real project names. The same `spm.exe` drafted E6767SM (342 issues, two status
-questions) in 9.5 s.
+Verified 2026-11-01 on Windows: the installed 0.7.0 listed IPD's 46 projects with issues (60
+without) in 4.9 s. The Jira path, the gate measures and the flow through activation are covered by
+tests and by live `spm` runs; activation was run as a dry run, since it switches the user's
+running service.
 
 ## SPM project template (0.4)
 

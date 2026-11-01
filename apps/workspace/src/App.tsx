@@ -78,7 +78,12 @@ import {
   withDraft,
   withProjects,
 } from "./model";
-import { useProjectSetup, validGates, type Source } from "./ProjectSetup";
+import {
+  ProjectWizard,
+  useProjectSetup,
+  validGates,
+  type Source,
+} from "./ProjectSetup";
 import { Status } from "./Status";
 import Checklist from "./Checklist";
 import Health from "./Health";
@@ -217,6 +222,7 @@ export default function App() {
           (projectSetup.preview !== null && validGates(projectSetup.gates)) ||
           hasProject,
         created: projectSetup.created !== null || hasProject,
+        started: projectSetup.activation !== null,
       })
     : null;
   const totals = report ? progress(report) : { done: 0, total: 0 };
@@ -230,6 +236,7 @@ export default function App() {
     home: ["让工作，从这里开始。", "项目、工具与连接，都有各自的位置。"],
     setup: ["设置清单", "按组件查看配置要求和当前进度。"],
     health: ["运行状况", "检查本机工具与连接的当前状态。"],
+    project: ["新建 SPM 项目", "从选择范围到第一批数据。"],
   };
   return (
     <TooltipProvider>
@@ -303,7 +310,9 @@ export default function App() {
                       ? "首页"
                       : page === "setup"
                         ? "设置清单"
-                        : "运行状况"}
+                        : page === "project"
+                          ? "新建 SPM 项目"
+                          : "运行状况"}
                   </BreadcrumbPage>
                 </BreadcrumbItem>
               </BreadcrumbList>
@@ -314,7 +323,7 @@ export default function App() {
             </span>
           </header>
           <div className="page-content">
-            <div className="page-heading">
+            <div className="page-heading" hidden={page === "project"}>
               <div>
                 <span className="eyebrow">YOUR WORK, CONNECTED</span>
                 <h1>{headings[page][0]}</h1>
@@ -483,6 +492,12 @@ export default function App() {
                     onConnections={loadConnections}
                     onConnectionReport={setConnections}
                     projectSetup={projectSetup}
+                    onOpenProject={() => setPage("project")}
+                  />
+                ) : page === "project" ? (
+                  <ProjectWizard
+                    setup={projectSetup}
+                    onExit={() => openSetup("spm")}
                   />
                 ) : (
                   <Health

@@ -118,13 +118,15 @@ pub async fn spm_with(
     input: Option<&[u8]>,
     deadline: Duration,
 ) -> Result<Output, crate::setup::SetupFailure> {
-    capture_with(program, args, input, deadline).await.map_err(|code| {
-        crate::setup::SetupFailure::new(match code.as_str() {
-            "executable_missing" => "spm_missing",
-            "hub_timeout" => "spm_timeout",
-            _ => "spm_unavailable",
+    capture_with(program, args, input, deadline)
+        .await
+        .map_err(|code| {
+            crate::setup::SetupFailure::new(match code.as_str() {
+                "executable_missing" => "spm_missing",
+                "hub_timeout" => "spm_timeout",
+                _ => "spm_unavailable",
+            })
         })
-    })
 }
 #[cfg(not(windows))]
 pub async fn run(program: &str, args: &[&str], deadline: Duration) -> Result<Vec<u8>, String> {
@@ -482,7 +484,6 @@ mod tests {
         assert!(calls[4][2].contains("/home/用户 name/.local/bin:/usr/bin:/mnt/c/Program Files"));
     }
     #[cfg(unix)]
-    #[cfg(unix)]
     #[tokio::test]
     async fn writes_stdin_and_closes_it_for_drafts() {
         let output = capture_with(
@@ -500,6 +501,7 @@ mod tests {
             .unwrap();
         assert_eq!(closed.stdout, b"end\n");
     }
+    #[cfg(unix)]
     #[tokio::test]
     async fn bounds_output_and_deadline_and_preserves_partial_report() {
         assert_eq!(

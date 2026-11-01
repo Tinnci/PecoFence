@@ -155,20 +155,21 @@ export function withConnections(
   };
 }
 
-/** 选择项目, 设置门槛 and 确认 progress from the draft in hand or an existing project. */
+/** 选择项目, 设置门槛, 确认 and 开始采集 progress from the flow or an existing project. */
 export function withDraft(
   report: HubReport,
-  progress: { scoped: boolean; gated: boolean; created: boolean },
+  progress: {
+    scoped: boolean;
+    gated: boolean;
+    created: boolean;
+    started: boolean;
+  },
 ): HubReport {
-  const state = (done: boolean, id: string, s: { state: string }) =>
-    done
-      ? "done"
-      : id === "project" || s.state === "manual"
-        ? "action_needed"
-        : s.state;
   const done: Record<string, boolean> = {
+    project: progress.scoped,
     gates: progress.gated,
     confirm: progress.created,
+    start: progress.started,
   };
   return {
     ...report,
@@ -178,15 +179,18 @@ export function withDraft(
         : {
             ...c,
             setup: c.setup.map((s) =>
-              s.id === "project" && progress.scoped
-                ? { ...s, state: "done", observation: undefined }
-                : s.id in done
-                  ? {
-                      ...s,
-                      state: state(done[s.id], s.id, s),
-                      observation: undefined,
-                    }
-                  : s,
+              !(s.id in done)
+                ? s
+                : done[s.id]
+                  ? { ...s, state: "done", observation: undefined }
+                  : s.id === "project" && s.state === "done"
+                    ? s
+                    : {
+                        ...s,
+                        state:
+                          s.state === "planned" ? s.state : "action_needed",
+                        observation: undefined,
+                      },
             ),
           },
     ),

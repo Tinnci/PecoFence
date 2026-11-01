@@ -1,16 +1,15 @@
 import { useEffect, useRef, useState } from "react";
-import { CircleCheck, Search } from "lucide-react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  Minus,
+  Plus,
+  Search,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Field,
-  FieldDescription,
-  FieldGroup,
-  FieldLabel,
-} from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Select,
   SelectContent,
@@ -22,20 +21,24 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type {
+  Activation,
   Draft,
   DraftChoices,
   Group,
   Item,
+  JiraGroup,
   JiraProject,
+  Measures,
   ScopeQuery,
   SetupFailure,
   Space,
   WorkItemType,
 } from "./contracts/setup";
-import { discover, draft } from "./api";
+import { activate, discover, draft } from "./api";
 import { FailureNote, failureOf } from "./TemplateImport";
 
 export type Source = "meegle" | "jira";
+export type Step = "project" | "gates" | "confirm" | "collect";
 export const sourceNames: Record<Source, string> = {
   meegle: "飞书项目",
   jira: "Jira",
@@ -66,7 +69,7 @@ export const defaultGates: Gates = {
   fatal: 0,
   milestone: "",
 };
-const stageNames: Record<string, string> = {
+export const stageNames: Record<string, string> = {
   Open: "待处理",
   Implementing: "修改中",
   Reviewing: "审核中",
@@ -82,6 +85,15 @@ const severityNames: Record<string, string> = {
   Normal: "一般",
   Hint: "提示",
 };
+const severityOrder = ["Fatal", "Severe", "Normal", "Hint"];
+const severityColors: Record<string, string> = {
+  Fatal: "#9a4a33",
+  Severe: "#b8743f",
+  Normal: "#8fa889",
+  Hint: "#d5dccd",
+};
+/** Jira grouping: the whole project, an affected version, a starred filter or JQL. */
+export type JiraMode = "all" | "versions" | "filters" | "jql";
 
 /** A directory-safe identifier, as SPM requires for project and scope. */
 export function identifier(text: string) {
@@ -98,6 +110,7 @@ export function describe(scope: ScopeQuery) {
     return scope.filter
       ? `飞书项目「${scope.type_name}」中${scope.filter.field_name}为 ${scope.filter.label} 的`
       : `飞书项目「${scope.type_name}」中全部`;
+  if (scope.label) return `Jira ${scope.project} 中${scope.label}的`;
   return scope.jql
     ? `Jira ${scope.project} 中符合 ${scope.jql} 的`
     : `Jira ${scope.project} 中全部`;
@@ -105,6 +118,7 @@ export function describe(scope: ScopeQuery) {
 export function gateSentence(gates: Gates) {
   const parts = [
     `严重问题解决率不低于 ${gates.severe}%`,
+    `整体不低于 ${gates.overall}%`,
     `致命问题最多 ${gates.fatal} 个`,
     `阶段 ${gates.phase}`,
   ];
@@ -121,50 +135,92 @@ export function validGates(gates: Gates) {
     phases.includes(gates.phase)
   );
 }
+const percent = (v: number, n: number) =>
+  n ? Math.round((v / n) * 1000) / 10 : 0;
+
+/** Each gate judged on the scope's measures; targets only move the threshold. */
+export function judge(measures: Measures, gates: Gates) {
+  const rate = (target: number, v: number, n: number) => {
+    const gap = Math.max(0, Math.ceil((target / 100) * n) - v);
+    return { now: percent(v, n), v, n, gap, ok: gap === 0 };
+  };
+  return {
+    severe: rate(gates.severe, measures.severe_resolved, measures.severe_total),
+    overall: rate(
+      gates.overall,
+      measures.overall_resolved,
+      measures.overall_total,
+    ),
+    fatal: {
+      open: measures.fatal_open,
+      ok: measures.fatal_open <= gates.fatal,
+    },
+  };
+}
+export function daysUntil(date: string, today = new Date()) {
+  if (!date) return null;
+  const target = new Date(`${date}T00:00:00`);
+  const start = new Date(today.toDateString());
+  return Math.round((target.getTime() - start.getTime()) / 86400000);
+}
 
 type Lists = {
   spaces: Space[] | null;
   types: WorkItemType[] | null;
   groups: Group[] | null;
   items: Item[] | null;
+  withoutIssues: number | null;
+  empty: Item[] | null;
   projects: JiraProject[] | null;
+  jiraGroups: JiraGroup[] | null;
 };
 
-/** State shared by 选择项目, 设置门槛 and 确认; lives in App so it survives page changes. */
+/** The new-project flow's state; lives in App so it survives page changes. */
 export function useProjectSetup(
   connected: Source[],
   onCreated: () => Promise<void>,
 ) {
+  const [step, setStep] = useState<Step>("project");
   const [source, setSource] = useState<Source | null>(null);
   const [lists, setLists] = useState<Lists>({
     spaces: null,
     types: null,
     groups: null,
     items: null,
+    withoutIssues: null,
+    empty: null,
     projects: null,
+    jiraGroups: null,
   });
-  const [loading, setLoading] = useState<keyof Lists | null>(null);
   const [failure, setFailure] = useState<SetupFailure | null>(null);
   const [space, setSpace] = useState<Space | null>(null);
   const [type, setType] = useState<WorkItemType | null>(null);
   const [group, setGroup] = useState<Group | null>(null);
   const [search, setSearch] = useState("");
+  const [showEmpty, setShowEmpty] = useState(false);
   const [item, setItem] = useState<Item | null>(null);
   const [project, setProject] = useState<JiraProject | null>(null);
+  const [jiraMode, setJiraMode] = useState<JiraMode>("versions");
+  const [jiraGroup, setJiraGroup] = useState<JiraGroup | null>(null);
   const [jql, setJql] = useState("");
   const [preview, setPreview] = useState<Draft | null>(null);
-  const [previewing, setPreviewing] = useState(false);
+  const [previewAt, setPreviewAt] = useState<Date | null>(null);
   const [previewFailure, setPreviewFailure] = useState<SetupFailure | null>(
     null,
   );
   const [gates, setGates] = useState<Gates>(defaultGates);
   const [ids, setIds] = useState({ project: "", scope: "main" });
-  const [scopeComplete, setScopeComplete] = useState(false);
+  const [scopeComplete, setScopeComplete] = useState(true);
   const [stages, setStages] = useState<Record<string, string>>({});
   const [creating, setCreating] = useState(false);
   const [created, setCreated] = useState<Draft | null>(null);
   const [createFailure, setCreateFailure] = useState<SetupFailure | null>(null);
   const [changed, setChanged] = useState<Draft | null>(null);
+  const [activating, setActivating] = useState(false);
+  const [activation, setActivation] = useState<Activation | null>(null);
+  const [activateFailure, setActivateFailure] = useState<SetupFailure | null>(
+    null,
+  );
   const generation = useRef<Record<string, number>>({});
 
   async function load<K extends keyof Lists>(
@@ -172,7 +228,6 @@ export function useProjectSetup(
     work: () => Promise<Lists[K]>,
   ) {
     const n = (generation.current[key] = (generation.current[key] ?? 0) + 1);
-    setLoading(key);
     setFailure(null);
     try {
       const value = await work();
@@ -182,8 +237,6 @@ export function useProjectSetup(
     } catch (error) {
       if (generation.current[key] === n) setFailure(failureOf(error));
       return null;
-    } finally {
-      if (generation.current[key] === n) setLoading(null);
     }
   }
 
@@ -226,27 +279,60 @@ export function useProjectSetup(
         ).groups ?? [],
     ).then((groups) => setGroup(groups?.[0] ?? null));
   }, [type?.type_key]);
+  // Groups that hold issues, counted, largest first.
   useEffect(() => {
+    setShowEmpty(false);
     setItem(null);
-    setLists((l) => ({ ...l, items: null }));
-    if (!space || !group) return;
+    setLists((l) => ({ ...l, items: null, empty: null, withoutIssues: null }));
+    if (!space || !type || !group) return;
+    void load("items", async () => {
+      const found = await discover("items", {
+        space: space.simple_name,
+        kind: group.target_type,
+        count_type: type.type_key,
+        field: group.field,
+      });
+      setLists((l) => ({ ...l, withoutIssues: found.without_issues ?? null }));
+      return found.items ?? [];
+    });
+  }, [group?.field, type?.type_key]);
+  // Groups without issues, listed on request and narrowed by the search.
+  useEffect(() => {
+    if (!showEmpty || !space || !group) return;
+    setLists((l) => ({ ...l, empty: null }));
     const timer = setTimeout(
       () =>
-        void load(
-          "items",
-          async () =>
+        void load("empty", async () => {
+          const all =
             (
               await discover("items", {
                 space: space.simple_name,
                 kind: group.target_type,
                 search: search.trim() || undefined,
               })
-            ).items ?? [],
-        ),
+            ).items ?? [];
+          const counted = new Set((lists.items ?? []).map((i) => i.id));
+          return all.filter((i) => !counted.has(i.id));
+        }),
       search ? 350 : 0,
     );
     return () => clearTimeout(timer);
-  }, [group?.field, search]);
+  }, [showEmpty, group?.field, search]);
+  useEffect(() => {
+    setJiraGroup(null);
+    setLists((l) => ({ ...l, jiraGroups: null }));
+    if (!project || (jiraMode !== "versions" && jiraMode !== "filters")) return;
+    void load(
+      "jiraGroups",
+      async () =>
+        (
+          await discover(
+            jiraMode === "versions" ? "jira_versions" : "jira_filters",
+            { project: project.key },
+          )
+        ).jira_groups ?? [],
+    );
+  }, [project?.key, jiraMode]);
 
   const scope: ScopeQuery | null =
     source === "meegle" && space && type && group && item
@@ -264,13 +350,29 @@ export function useProjectSetup(
           },
         }
       : source === "jira" && project
-        ? {
-            source: "jira",
-            project: project.key,
-            ...(jql.trim() ? { jql: jql.trim() } : {}),
-          }
+        ? jiraMode === "all"
+          ? { source: "jira", project: project.key }
+          : jiraMode === "jql"
+            ? jql.trim()
+              ? { source: "jira", project: project.key, jql: jql.trim() }
+              : null
+            : jiraGroup
+              ? {
+                  source: "jira",
+                  project: project.key,
+                  jql: jiraGroup.jql,
+                  label:
+                    jiraMode === "versions"
+                      ? `影响版本为 ${jiraGroup.name} `
+                      : `筛选器「${jiraGroup.name}」中`,
+                }
+              : null
         : null;
   const scopeKey = scope ? JSON.stringify(scope) : "";
+  const label =
+    scope?.source === "meegle"
+      ? (scope.filter?.label ?? "")
+      : (project?.name ?? project?.key ?? "");
 
   function choices(answers: Record<string, string>): DraftChoices | null {
     if (!scope) return null;
@@ -287,40 +389,48 @@ export function useProjectSetup(
       answers: { severities: {}, stages: answers },
     };
   }
-  const label =
-    scope?.source === "meegle"
-      ? (scope.filter?.label ?? "")
-      : (project?.name ?? project?.key ?? "");
 
-  // The count and the open mapping questions come from a draft of the scope.
+  // The count, breakdown and mapping questions come from a draft of the scope.
   useEffect(() => {
     setPreview(null);
     setPreviewFailure(null);
     setCreated(null);
     setChanged(null);
+    setActivation(null);
+    setActivateFailure(null);
     setStages({});
     if (!scope) return;
     setIds((current) => ({ ...current, project: identifier(label) }));
     const n = (generation.current.preview =
       (generation.current.preview ?? 0) + 1);
-    setPreviewing(true);
     const request = choices({});
     if (!request) return;
     draft({ ...request, project: identifier(label) })
       .then((d) => {
-        if (generation.current.preview === n) setPreview(d);
+        if (generation.current.preview !== n) return;
+        setPreview(d);
+        setPreviewAt(new Date());
       })
       .catch((error) => {
         if (generation.current.preview === n)
           setPreviewFailure(failureOf(error));
-      })
-      .finally(() => {
-        if (generation.current.preview === n) setPreviewing(false);
       });
   }, [scopeKey]);
 
   const questions = preview?.questions ?? [];
-  const answered = questions.every((q) => stages[q.value]);
+  const blocking = questions.filter((q) => q.count > 0);
+  const answered = blocking.every((q) => stages[q.value]);
+  async function start(project: string, scope: string) {
+    setActivating(true);
+    setActivateFailure(null);
+    try {
+      setActivation(await activate(project, scope));
+    } catch (error) {
+      setActivateFailure(failureOf(error));
+    } finally {
+      setActivating(false);
+    }
+  }
   async function create() {
     const request = choices(stages);
     if (!request || !preview) return;
@@ -329,14 +439,19 @@ export function useProjectSetup(
     setChanged(null);
     try {
       const planned = await draft(request);
-      if (planned.count !== preview.count || planned.questions.length) {
+      if (
+        planned.count !== preview.count ||
+        planned.questions.some((q) => q.count > 0 && !stages[q.value])
+      ) {
         setChanged(planned);
         setPreview(planned);
         return;
       }
       const done = await draft(request, planned.template.sha256);
       setCreated(done);
+      setStep("collect");
       await onCreated();
+      void start(done.project, done.scope);
     } catch (error) {
       setCreateFailure(failureOf(error));
     } finally {
@@ -346,28 +461,32 @@ export function useProjectSetup(
 
   return {
     connected,
+    step,
+    setStep,
     source,
     setSource,
     lists,
-    loading,
     failure,
     space,
-    setSpace,
-    type,
-    setType,
     group,
     setGroup,
     search,
     setSearch,
+    showEmpty,
+    setShowEmpty,
     item,
     setItem,
     project,
     setProject,
+    jiraMode,
+    setJiraMode,
+    jiraGroup,
+    setJiraGroup,
     jql,
     setJql,
     scope,
     preview,
-    previewing,
+    previewAt,
     previewFailure,
     gates,
     setGates,
@@ -378,19 +497,79 @@ export function useProjectSetup(
     stages,
     setStages,
     questions,
+    blocking,
     answered,
     creating,
     created,
     createFailure,
     changed,
     create,
+    activating,
+    activation,
+    activateFailure,
+    start,
   };
 }
 export type ProjectSetup = ReturnType<typeof useProjectSetup>;
 
-/** Rows at the list's own geometry while it loads. */
-function SkeletonRows({ count = 5 }: { count?: number }) {
-  const widths = [62, 45, 70, 52, 58, 40];
+function Stepper({ setup }: { setup: ProjectSetup }) {
+  const order: Step[] = ["project", "gates", "confirm", "collect"];
+  const at = order.indexOf(setup.step);
+  const preview = setup.preview;
+  const name =
+    setup.scope?.source === "meegle"
+      ? setup.scope.filter?.label
+      : (setup.jiraGroup?.name ?? setup.project?.key);
+  const steps: { id: Step; title: string; done?: string }[] = [
+    {
+      id: "project",
+      title: "选择项目",
+      done: preview ? `${name} · ${preview.count}` : undefined,
+    },
+    {
+      id: "gates",
+      title: "设置门槛",
+      done: `${setup.gates.phase} · ${setup.gates.severe}%`,
+    },
+    { id: "confirm", title: "确认" },
+    { id: "collect", title: "开始采集" },
+  ];
+  return (
+    <ol className="wizard-steps" aria-label="新建项目步骤">
+      <li className="wizard-step done">
+        <Check aria-hidden="true" />
+        连接来源
+      </li>
+      {steps.map((s, i) => {
+        const current = i === at;
+        const done = i < at;
+        return (
+          <li
+            key={s.id}
+            className={`wizard-step ${current ? "current" : done ? "done" : ""}`}
+            aria-current={current ? "step" : undefined}
+          >
+            {done && !setup.created ? (
+              <button type="button" onClick={() => setup.setStep(s.id)}>
+                <Check aria-hidden="true" />
+                {s.done ?? s.title}
+              </button>
+            ) : (
+              <span>
+                {done ? <Check aria-hidden="true" /> : null}
+                {current ? `${i + 2} ` : ""}
+                {done ? (s.done ?? s.title) : s.title}
+              </span>
+            )}
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+function SkeletonRows({ count = 8 }: { count?: number }) {
+  const widths = [62, 45, 70, 52, 58, 40, 66, 48];
   return (
     <div className="pick-list" aria-hidden="true">
       {Array.from({ length: count }, (_, i) => (
@@ -402,231 +581,300 @@ function SkeletonRows({ count = 5 }: { count?: number }) {
   );
 }
 
-function Picker<T>({
+/** Rows with a count and a bar scaled to the largest; names are the only words. */
+function CountList<T>({
   label,
   rows,
   selected,
   name,
-  detail,
+  count,
   onPick,
-  loading,
-}: {
-  label: string;
-  rows: T[] | null;
-  selected: T | null;
-  name: (row: T) => string;
-  detail?: (row: T) => string;
-  onPick: (row: T) => void;
-  loading: boolean;
-}) {
-  if (loading || !rows) return <SkeletonRows />;
-  if (!rows.length) return <p className="pick-empty">没有匹配的{label}</p>;
-  return (
-    <ScrollArea className="pick-scroll">
-      <div className="pick-list" role="listbox" aria-label={label}>
-        {rows.map((row) => {
-          const active = selected !== null && name(row) === name(selected);
-          return (
-            <button
-              type="button"
-              role="option"
-              aria-selected={active}
-              className="pick-row"
-              key={name(row) + (detail?.(row) ?? "")}
-              onClick={() => onPick(row)}
-            >
-              <span>{name(row)}</span>
-              {detail ? <small>{detail(row)}</small> : null}
-            </button>
-          );
-        })}
-      </div>
-    </ScrollArea>
-  );
-}
-
-function Choose<T>({
-  label,
-  rows,
-  value,
-  keyOf,
-  nameOf,
-  onChange,
 }: {
   label: string;
   rows: T[];
+  selected: T | null;
+  name: (row: T) => string;
+  count: (row: T) => number | undefined;
+  onPick: (row: T) => void;
+}) {
+  const max = Math.max(1, ...rows.map((r) => count(r) ?? 0));
+  return (
+    <div className="pick-list" role="listbox" aria-label={label}>
+      {rows.map((row) => {
+        const n = count(row);
+        const active = selected !== null && name(row) === name(selected);
+        return (
+          <button
+            type="button"
+            role="option"
+            aria-selected={active}
+            className="pick-row"
+            key={name(row)}
+            onClick={() => onPick(row)}
+          >
+            <span className="pick-name">{name(row)}</span>
+            <span className="pick-count">{n ?? ""}</span>
+            <span className="pick-bar" aria-hidden="true">
+              {n ? (
+                <span
+                  style={{
+                    width: `${Math.max(2, Math.round((n / max) * 100))}%`,
+                  }}
+                />
+              ) : null}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function Chips<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
   value: T | null;
-  keyOf: (row: T) => string;
-  nameOf: (row: T) => string;
-  onChange: (row: T) => void;
+  options: { value: T; title: string }[];
+  onChange: (value: T) => void;
 }) {
   return (
-    <Field className="choose">
-      <FieldLabel>{label}</FieldLabel>
-      <Select
-        value={value ? keyOf(value) : null}
-        items={rows.map((r) => ({ value: keyOf(r), label: nameOf(r) }))}
-        onValueChange={(key) => {
-          const row = rows.find((r) => keyOf(r) === key);
-          if (row) onChange(row);
-        }}
-      >
-        <SelectTrigger aria-label={label}>
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {rows.map((r) => (
-            <SelectItem key={keyOf(r)} value={keyOf(r)}>
-              {nameOf(r)}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </Field>
+    <ToggleGroup
+      variant="outline"
+      size="sm"
+      className="chips"
+      value={value ? [value] : []}
+      onValueChange={(next: string[]) => {
+        if (next[0]) onChange(next[0] as T);
+      }}
+      aria-label={label}
+    >
+      {options.map((o) => (
+        <ToggleGroupItem key={o.value} value={o.value}>
+          {o.title}
+        </ToggleGroupItem>
+      ))}
+    </ToggleGroup>
   );
 }
 
-/** The one number this step produces, in a lane reserved from the start. */
-function ScopeCount({ setup }: { setup: ProjectSetup }) {
-  if (setup.previewFailure)
-    return <FailureNote failure={setup.previewFailure} />;
-  if (!setup.scope)
-    return <p className="scope-hint">选择一个范围后统计其中的问题。</p>;
+function SearchBox({
+  value,
+  label,
+  onChange,
+}: {
+  value: string;
+  label: string;
+  onChange: (value: string) => void;
+}) {
   return (
-    <div className="scope-count" aria-live="polite">
-      {setup.previewing || !setup.preview ? (
-        <>
-          <Skeleton className="count-skeleton" />
-          <span className="scope-description">
-            正在读取{describe(setup.scope)}问题…
-          </span>
-        </>
-      ) : (
-        <>
-          <strong key={setup.preview.count}>{setup.preview.count}</strong>
-          <span className="scope-description">
-            个问题 · {describe(setup.scope)}
-          </span>
-        </>
-      )}
-    </div>
+    <label className="pick-search">
+      <Search aria-hidden="true" />
+      <Input
+        value={value}
+        placeholder={label}
+        aria-label={label}
+        maxLength={60}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </label>
   );
 }
 
-/** 选择项目: a source, its grouping and one group, frozen into record IDs by the draft. */
-export function ScopeStep({ setup }: { setup: ProjectSetup }) {
-  const { lists, loading } = setup;
-  const filtered =
-    lists.projects?.filter((p) =>
-      `${p.key} ${p.name}`.toLowerCase().includes(setup.search.toLowerCase()),
-    ) ?? null;
-  if (!setup.connected.length)
-    return <p className="scope-hint">先连接飞书项目或 Jira。</p>;
+function MeeglePicker({ setup }: { setup: ProjectSetup }) {
+  const { lists, group } = setup;
+  // 关联项目 → 项目; 影响版本 stays.
+  const target = group ? group.name.replace(/^关联/, "") || group.name : "项目";
+  const query = setup.search.trim().toLowerCase();
+  const rows = (lists.items ?? []).filter((i) =>
+    i.name.toLowerCase().includes(query),
+  );
   return (
-    <div className="project-setup">
-      {setup.connected.length > 1 ? (
-        <ToggleGroup
-          variant="outline"
-          size="sm"
-          value={setup.source ? [setup.source] : []}
-          onValueChange={(value: string[]) => {
-            const next = value[0] as Source | undefined;
-            if (next) {
-              setup.setSource(next);
-              setup.setSearch("");
+    <>
+      <div className="picker-head">
+        {lists.groups?.length ? (
+          <Chips
+            label="分组"
+            value={group?.field ?? null}
+            options={lists.groups
+              .slice(0, 4)
+              .map((g) => ({ value: g.field, title: g.name }))}
+            onChange={(field) =>
+              setup.setGroup(
+                lists.groups?.find((g) => g.field === field) ?? null,
+              )
             }
-          }}
-          aria-label="问题来源"
-        >
-          {setup.connected.map((s) => (
-            <ToggleGroupItem key={s} value={s}>
-              {sourceNames[s]}
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
-      ) : null}
-      {setup.failure ? <FailureNote failure={setup.failure} /> : null}
-      {setup.source === "meegle" ? (
-        <>
-          <div className="scope-filters">
-            {lists.spaces && lists.spaces.length > 1 ? (
-              <Choose
-                label="空间"
-                rows={lists.spaces}
-                value={setup.space}
-                keyOf={(s) => s.project_key}
-                nameOf={(s) => s.name}
-                onChange={setup.setSpace}
-              />
-            ) : null}
-            {lists.types?.length ? (
-              <Choose
-                label="类型"
-                rows={lists.types}
-                value={setup.type}
-                keyOf={(t) => t.type_key}
-                nameOf={(t) => t.name}
-                onChange={setup.setType}
-              />
-            ) : null}
-            {lists.groups?.length ? (
-              <Choose
-                label="按"
-                rows={lists.groups}
-                value={setup.group}
-                keyOf={(g) => g.field}
-                nameOf={(g) => g.name}
-                onChange={(g) => {
-                  setup.setSearch("");
-                  setup.setGroup(g);
-                }}
-              />
-            ) : null}
-          </div>
-          <div className="pick-search">
-            <Search aria-hidden="true" />
-            <Input
-              value={setup.search}
-              placeholder={`搜索${setup.group?.target_name ?? ""}`}
-              aria-label={`搜索${setup.group?.target_name ?? ""}`}
-              maxLength={60}
-              onChange={(e) => setup.setSearch(e.target.value)}
+          />
+        ) : null}
+        <SearchBox
+          value={setup.search}
+          label={`搜索${target}`}
+          onChange={setup.setSearch}
+        />
+      </div>
+      <div className="pick-columns" aria-hidden="true">
+        <span>{target}</span>
+        <span>问题</span>
+        <span />
+      </div>
+      <div className="pick-scroll">
+        {lists.items === null ? (
+          <SkeletonRows />
+        ) : setup.showEmpty ? (
+          lists.empty === null ? (
+            <SkeletonRows />
+          ) : (
+            <CountList
+              label={`没有问题的${target}`}
+              rows={lists.empty}
+              selected={setup.item}
+              name={(i) => i.name}
+              count={() => 0}
+              onPick={setup.setItem}
             />
-          </div>
-          <Picker
-            label={setup.group?.target_name ?? "项目"}
-            rows={lists.items}
+          )
+        ) : rows.length ? (
+          <CountList
+            label={target}
+            rows={rows}
             selected={setup.item}
             name={(i) => i.name}
+            count={(i) => i.count}
             onPick={setup.setItem}
-            loading={loading === "items" || (!lists.items && !setup.failure)}
           />
-        </>
-      ) : setup.source === "jira" ? (
-        <>
-          <div className="pick-search">
-            <Search aria-hidden="true" />
-            <Input
-              value={setup.search}
-              placeholder="搜索 Jira 项目"
-              aria-label="搜索 Jira 项目"
-              onChange={(e) => setup.setSearch(e.target.value)}
+        ) : (
+          <p className="pick-empty">没有匹配的{target}</p>
+        )}
+      </div>
+      <div className="picker-foot">
+        <span>
+          {lists.items
+            ? `${lists.items.length} 个${target}有问题，按问题数排列`
+            : ""}
+        </span>
+        {lists.withoutIssues ? (
+          <Button
+            variant="link"
+            size="sm"
+            onClick={() => setup.setShowEmpty(!setup.showEmpty)}
+          >
+            {setup.showEmpty
+              ? "只看有问题的"
+              : `显示没有问题的 ${lists.withoutIssues} 个${target}`}
+          </Button>
+        ) : null}
+      </div>
+    </>
+  );
+}
+
+function JiraPicker({ setup }: { setup: ProjectSetup }) {
+  const { lists, project } = setup;
+  const query = setup.search.trim().toLowerCase();
+  if (!project) {
+    const rows =
+      lists.projects?.filter((p) =>
+        `${p.key} ${p.name}`.toLowerCase().includes(query),
+      ) ?? null;
+    return (
+      <>
+        <div className="picker-head">
+          <SearchBox
+            value={setup.search}
+            label="搜索 Jira 项目"
+            onChange={setup.setSearch}
+          />
+        </div>
+        <div className="pick-scroll">
+          {rows === null ? (
+            <SkeletonRows />
+          ) : (
+            <CountList
+              label="Jira 项目"
+              rows={rows}
+              selected={null}
+              name={(p) => `${p.key} · ${p.name}`}
+              count={() => undefined}
+              onPick={(p) => {
+                setup.setSearch("");
+                setup.setProject(p);
+              }}
             />
-          </div>
-          <Picker
-            label="Jira 项目"
-            rows={filtered}
-            selected={setup.project}
-            name={(p) => p.key}
-            detail={(p) => p.name}
-            onPick={setup.setProject}
-            loading={loading === "projects"}
+          )}
+        </div>
+      </>
+    );
+  }
+  const grouped = setup.jiraMode === "versions" || setup.jiraMode === "filters";
+  const groups =
+    lists.jiraGroups?.filter((g) => g.name.toLowerCase().includes(query)) ??
+    null;
+  return (
+    <>
+      <div className="picker-head">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            setup.setProject(null);
+            setup.setSearch("");
+          }}
+        >
+          <ArrowLeft />
+          {project.key}
+        </Button>
+        <Chips<JiraMode>
+          label="范围"
+          value={setup.jiraMode}
+          options={[
+            { value: "all", title: "整个项目" },
+            { value: "versions", title: "影响版本" },
+            { value: "filters", title: "我的筛选器" },
+            { value: "jql", title: "JQL" },
+          ]}
+          onChange={(mode) => {
+            setup.setSearch("");
+            setup.setJiraMode(mode);
+          }}
+        />
+        {grouped ? (
+          <SearchBox
+            value={setup.search}
+            label={setup.jiraMode === "versions" ? "搜索版本" : "搜索筛选器"}
+            onChange={setup.setSearch}
           />
-          <JqlField setup={setup} />
-        </>
-      ) : null}
-      <ScopeCount setup={setup} />
-    </div>
+        ) : null}
+      </div>
+      {grouped ? (
+        <div className="pick-scroll">
+          {groups === null ? (
+            <SkeletonRows />
+          ) : groups.length ? (
+            <CountList
+              label={setup.jiraMode === "versions" ? "影响版本" : "筛选器"}
+              rows={groups}
+              selected={setup.jiraGroup}
+              name={(g) => g.name}
+              count={(g) => g.count}
+              onPick={setup.setJiraGroup}
+            />
+          ) : (
+            <p className="pick-empty">
+              {setup.jiraMode === "filters"
+                ? "你还没有收藏筛选器。在 Jira 中收藏后，这里会列出来。"
+                : "这个项目没有版本。"}
+            </p>
+          )}
+        </div>
+      ) : setup.jiraMode === "jql" ? (
+        <JqlField setup={setup} />
+      ) : (
+        <p className="pick-empty">跟踪 {project.key} 的全部问题。</p>
+      )}
+    </>
   );
 }
 
@@ -635,10 +883,9 @@ function JqlField({ setup }: { setup: ProjectSetup }) {
   const [text, setText] = useState(setup.jql);
   const commit = () => setup.setJql(text.trim());
   return (
-    <Field>
-      <FieldLabel htmlFor="scope-jql">筛选</FieldLabel>
+    <label className="jql-field">
+      <span>JQL，在项目内筛选</span>
       <Input
-        id="scope-jql"
         value={text}
         placeholder="issuetype = 缺陷"
         maxLength={500}
@@ -648,218 +895,736 @@ function JqlField({ setup }: { setup: ProjectSetup }) {
           if (e.key === "Enter") commit();
         }}
       />
-      <FieldDescription>JQL，可留空</FieldDescription>
-    </Field>
+    </label>
   );
 }
 
-function NumberField({
-  id,
-  label,
-  unit,
-  value,
-  max,
-  onChange,
-}: {
-  id: string;
-  label: string;
-  unit: string;
-  value: number;
-  max?: number;
-  onChange: (n: number) => void;
-}) {
+function SeverityBar({ draft }: { draft: Draft }) {
+  const counts = Object.fromEntries(
+    severityOrder.map((s) => [
+      s,
+      draft.breakdown.severities
+        .filter((v) => v.mapped === s)
+        .reduce((n, v) => n + v.count, 0),
+    ]),
+  );
   return (
-    <Field>
-      <FieldLabel htmlFor={id}>{label}</FieldLabel>
-      <div className="unit-input">
-        <Input
-          id={id}
-          type="number"
-          inputMode="numeric"
-          min={0}
-          max={max}
-          step={1}
-          value={Number.isFinite(value) ? value : ""}
-          onChange={(e) => onChange(e.target.valueAsNumber)}
-        />
-        <span>{unit}</span>
+    <div className="preview-block">
+      <span className="preview-label">严重度</span>
+      <div className="severity-bar" aria-hidden="true">
+        {severityOrder.map((s) =>
+          counts[s] ? (
+            <span
+              key={s}
+              style={{
+                width: `${(counts[s] / draft.count) * 100}%`,
+                background: severityColors[s],
+              }}
+            />
+          ) : null,
+        )}
       </div>
-    </Field>
-  );
-}
-
-/** 设置门槛: the policy the snapshot is judged against. */
-export function GateStep({ setup }: { setup: ProjectSetup }) {
-  const { gates, setGates } = setup;
-  const set = (patch: Partial<Gates>) => setGates({ ...gates, ...patch });
-  return (
-    <div className="project-setup">
-      <FieldGroup className="gate-fields">
-        <NumberField
-          id="gate-severe"
-          label="严重问题解决率"
-          unit="%"
-          max={100}
-          value={gates.severe}
-          onChange={(severe) => set({ severe })}
-        />
-        <NumberField
-          id="gate-overall"
-          label="整体解决率"
-          unit="%"
-          max={100}
-          value={gates.overall}
-          onChange={(overall) => set({ overall })}
-        />
-        <NumberField
-          id="gate-fatal"
-          label="致命问题上限"
-          unit="个"
-          value={gates.fatal}
-          onChange={(fatal) => set({ fatal })}
-        />
-        <Field>
-          <FieldLabel>阶段</FieldLabel>
-          <Select
-            value={gates.phase}
-            onValueChange={(phase) => phase && set({ phase: phase as string })}
-          >
-            <SelectTrigger aria-label="阶段">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {phases.map((p) => (
-                <SelectItem key={p} value={p}>
-                  {p}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
-        <Field>
-          <FieldLabel htmlFor="gate-milestone">里程碑日期</FieldLabel>
-          <Input
-            id="gate-milestone"
-            type="date"
-            value={gates.milestone}
-            onChange={(e) => set({ milestone: e.target.value })}
-          />
-        </Field>
-      </FieldGroup>
-      <p className="gate-sentence">
-        {validGates(gates)
-          ? `${gateSentence(gates)}。`
-          : "门槛需为 0–100 的整数。"}
-      </p>
+      <dl className="severity-legend">
+        {severityOrder.map((s) => (
+          <div key={s}>
+            <dt>{severityNames[s]}</dt>
+            <dd>{counts[s]}</dd>
+          </div>
+        ))}
+      </dl>
     </div>
   );
 }
 
-/** 确认: one sentence, the open mapping questions, then the project is written. */
-export function ConfirmStep({ setup }: { setup: ProjectSetup }) {
-  const { preview, scope, created } = setup;
-  if (created)
-    return (
-      <Alert className="alert-success">
-        <CircleCheck />
-        <AlertDescription>
-          已创建 {created.project} · {created.scope}，{created.count} 个问题
-          {created.check?.ready ? "，配置检查通过" : ""}。
-        </AlertDescription>
-      </Alert>
-    );
-  if (!scope || !preview)
-    return <p className="scope-hint">选择项目后在这里确认。</p>;
-  const ready = validGates(setup.gates) && setup.answered && !setup.creating;
+function StatusSummary({ draft }: { draft: Draft }) {
+  const m = draft.breakdown.measures;
+  const top = draft.breakdown.statuses
+    .slice(0, 6)
+    .map((s) => `${s.value} ${s.count}`)
+    .join(" · ");
   return (
-    <div className="project-setup">
-      <p className="confirm-sentence">
-        {identifier(setup.ids.project)} · {identifier(setup.ids.scope)}：
-        {describe(scope)} {preview.count} 个问题；{gateSentence(setup.gates)}。
-      </p>
-      <FieldGroup className="id-fields">
-        <Field>
-          <FieldLabel htmlFor="draft-project">项目</FieldLabel>
-          <Input
-            id="draft-project"
-            value={setup.ids.project}
-            maxLength={64}
-            onChange={(e) =>
-              setup.setIds({ ...setup.ids, project: e.target.value })
-            }
-          />
-        </Field>
-        <Field>
-          <FieldLabel htmlFor="draft-scope">范围</FieldLabel>
-          <Input
-            id="draft-scope"
-            value={setup.ids.scope}
-            maxLength={64}
-            onChange={(e) =>
-              setup.setIds({ ...setup.ids, scope: e.target.value })
-            }
-          />
-        </Field>
-      </FieldGroup>
-      {setup.questions.length ? (
-        <div className="questions" role="group" aria-label="状态对应">
-          <p>这些状态没有自动对应，请选择：</p>
-          {setup.questions.map((q) => (
-            <div className="question" key={q.field + q.value}>
-              <span>{q.value}</span>
-              <Select
-                value={setup.stages[q.value] ?? null}
-                items={Object.entries(
-                  q.field === "severity" ? severityNames : stageNames,
-                ).map(([value, label]) => ({ value, label }))}
-                onValueChange={(stage) =>
-                  stage &&
-                  setup.setStages({
-                    ...setup.stages,
-                    [q.value]: stage as string,
-                  })
-                }
-              >
-                <SelectTrigger aria-label={`${q.value} 对应`}>
-                  <SelectValue placeholder="选择" />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(
-                    q.field === "severity" ? severityNames : stageNames,
-                  ).map(([value, label]) => (
-                    <SelectItem key={value} value={value}>
-                      {label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          ))}
-        </div>
-      ) : null}
-      <Field orientation="horizontal" className="complete-field">
-        <Checkbox
-          id="scope-complete"
-          checked={setup.scopeComplete}
-          onCheckedChange={(checked) =>
-            setup.setScopeComplete(checked === true)
-          }
-        />
-        <FieldLabel htmlFor="scope-complete">这是本次交付的全部问题</FieldLabel>
-      </Field>
-      <div className="confirm-lane" aria-live="polite">
-        {setup.createFailure ? (
-          <FailureNote failure={setup.createFailure} />
-        ) : setup.changed ? (
-          <p>范围已更新为 {setup.changed.count} 个问题，请再次确认。</p>
-        ) : null}
+    <div className="preview-block">
+      <span className="preview-label">状态</span>
+      <div className="status-line">
+        <span>已解决</span>
+        <strong>{m.overall_resolved}</strong>
       </div>
-      <div className="import-actions">
-        <Button disabled={!ready} onClick={() => void setup.create()}>
-          {setup.creating ? <Spinner aria-hidden="true" /> : null}
-          创建项目
+      <div className="status-line">
+        <span>未解决</span>
+        <strong>{m.overall_total - m.overall_resolved}</strong>
+      </div>
+      <small>{top}</small>
+    </div>
+  );
+}
+
+function Preview({ setup }: { setup: ProjectSetup }) {
+  const { preview, scope } = setup;
+  const heading =
+    scope?.source === "meegle"
+      ? setup.group?.name
+      : setup.jiraMode === "versions"
+        ? "影响版本"
+        : setup.jiraMode === "filters"
+          ? "筛选器"
+          : "Jira 项目";
+  const name =
+    scope?.source === "meegle"
+      ? scope.filter?.label
+      : (setup.jiraGroup?.name ?? setup.project?.key);
+  return (
+    <aside className="wizard-aside" aria-label="范围预览" aria-live="polite">
+      {!scope ? (
+        <p className="scope-hint">选择一个范围，这里显示其中的问题。</p>
+      ) : (
+        <>
+          <div className="preview-name">
+            <span className="preview-label">{heading}</span>
+            <strong>{name}</strong>
+          </div>
+          {setup.previewFailure ? (
+            <FailureNote failure={setup.previewFailure} />
+          ) : !preview ? (
+            <div className="preview-loading" aria-hidden="true">
+              <Skeleton className="count-skeleton" />
+              <span className="preview-label">正在读取严重度和状态…</span>
+              <Skeleton className="bar-skeleton" />
+              <Skeleton style={{ width: "70%" }} />
+              <Skeleton style={{ width: "52%" }} />
+            </div>
+          ) : (
+            <>
+              <div className="big-count">
+                <strong key={preview.count}>{preview.count}</strong>
+                <span>个问题</span>
+              </div>
+              <SeverityBar draft={preview} />
+              <StatusSummary draft={preview} />
+            </>
+          )}
+        </>
+      )}
+      <div className="aside-foot">
+        <span>
+          {setup.previewAt && preview
+            ? `读取于 ${setup.previewAt.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}`
+            : ""}
+        </span>
+        <Button disabled={!preview} onClick={() => setup.setStep("gates")}>
+          设置门槛 <ArrowRight />
         </Button>
       </div>
+    </aside>
+  );
+}
+
+function ProjectStep({ setup }: { setup: ProjectSetup }) {
+  return (
+    <>
+      <div className="wizard-title">
+        <div>
+          <h2>选择项目</h2>
+          <p>选中的范围会冻结为具体的问题单，之后可以刷新。</p>
+        </div>
+        {setup.connected.length > 1 ? (
+          <Chips<Source>
+            label="问题来源"
+            value={setup.source}
+            options={setup.connected.map((s) => ({
+              value: s,
+              title:
+                s === "meegle" && setup.space
+                  ? `飞书项目 · ${setup.space.name}`
+                  : s === "jira" && setup.project
+                    ? `Jira · ${setup.project.key}`
+                    : sourceNames[s],
+            }))}
+            onChange={(s) => {
+              setup.setSource(s);
+              setup.setSearch("");
+            }}
+          />
+        ) : null}
+      </div>
+      {setup.failure ? <FailureNote failure={setup.failure} /> : null}
+      <div className="wizard-columns">
+        <section className="wizard-main picker" aria-label="范围">
+          {setup.source === "meegle" ? (
+            <MeeglePicker setup={setup} />
+          ) : setup.source === "jira" ? (
+            <JiraPicker setup={setup} />
+          ) : (
+            <p className="scope-hint">先连接飞书项目或 Jira。</p>
+          )}
+        </section>
+        <Preview setup={setup} />
+      </div>
+    </>
+  );
+}
+
+function TargetStepper({
+  label,
+  value,
+  unit,
+  max,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  unit: string;
+  max: number;
+  onChange: (n: number) => void;
+}) {
+  const clamp = (n: number) => Math.min(max, Math.max(0, n));
+  return (
+    <div className="stepper" role="group" aria-label={label}>
+      <Button
+        variant="outline"
+        size="icon-sm"
+        aria-label={`降低${label}`}
+        onClick={() => onChange(clamp(value - 1))}
+      >
+        <Minus />
+      </Button>
+      <span>
+        {value}
+        {unit}
+      </span>
+      <Button
+        variant="outline"
+        size="icon-sm"
+        aria-label={`提高${label}`}
+        onClick={() => onChange(clamp(value + 1))}
+      >
+        <Plus />
+      </Button>
+    </div>
+  );
+}
+
+function Meter({
+  now,
+  target,
+  ok,
+}: {
+  now: number;
+  target: number;
+  ok: boolean;
+}) {
+  return (
+    <div className="meter" aria-hidden="true">
+      <span
+        className={ok ? "meter-fill ok" : "meter-fill short"}
+        style={{ width: `${now}%` }}
+      />
+      <span className="meter-mark" style={{ left: `calc(${target}% - 1px)` }} />
+    </div>
+  );
+}
+
+function Verdict({ ok, text }: { ok: boolean; text: string }) {
+  return <span className={ok ? "verdict ok" : "verdict short"}>{text}</span>;
+}
+
+function GatesStep({ setup }: { setup: ProjectSetup }) {
+  const { gates, setGates, preview } = setup;
+  if (!preview) return null;
+  const set = (patch: Partial<Gates>) => setGates({ ...gates, ...patch });
+  const j = judge(preview.breakdown.measures, gates);
+  const m = preview.breakdown.measures;
+  const days = daysUntil(gates.milestone);
+  return (
+    <>
+      <div className="wizard-title">
+        <div>
+          <h2>设置门槛</h2>
+          <p>
+            按现在的 {preview.count}{" "}
+            个问题即时计算，研发交付（回归测试或关闭）即算解决。
+          </p>
+        </div>
+      </div>
+      <div className="wizard-columns">
+        <section className="wizard-main gates" aria-label="门槛">
+          <article className="gate-card" aria-label="严重问题解决率">
+            <div className="gate-head">
+              <strong>严重问题解决率</strong>
+              <span>严重 {m.severe_total} 个，致命计入严重</span>
+            </div>
+            <TargetStepper
+              label="严重问题解决率"
+              value={gates.severe}
+              unit="%"
+              max={100}
+              onChange={(severe) => set({ severe })}
+            />
+            <Meter now={j.severe.now} target={gates.severe} ok={j.severe.ok} />
+            <div className="gate-now">
+              <span>
+                现在 {j.severe.now}%（{j.severe.v} / {j.severe.n}）
+              </span>
+              <Verdict
+                ok={j.severe.ok}
+                text={j.severe.ok ? "达标" : `还差 ${j.severe.gap} 个`}
+              />
+            </div>
+          </article>
+          <article className="gate-card" aria-label="整体解决率">
+            <div className="gate-head">
+              <strong>整体解决率</strong>
+              <span>全部 {m.overall_total} 个，重复和不修改不算解决</span>
+            </div>
+            <TargetStepper
+              label="整体解决率"
+              value={gates.overall}
+              unit="%"
+              max={100}
+              onChange={(overall) => set({ overall })}
+            />
+            <Meter
+              now={j.overall.now}
+              target={gates.overall}
+              ok={j.overall.ok}
+            />
+            <div className="gate-now">
+              <span>
+                现在 {j.overall.now}%（{j.overall.v} / {j.overall.n}）
+              </span>
+              <Verdict
+                ok={j.overall.ok}
+                text={j.overall.ok ? "达标" : `还差 ${j.overall.gap} 个`}
+              />
+            </div>
+          </article>
+          <article className="gate-card" aria-label="致命问题上限">
+            <div className="gate-head">
+              <strong>致命问题上限</strong>
+              <span>未解决的致命问题</span>
+            </div>
+            <TargetStepper
+              label="致命问题上限"
+              value={gates.fatal}
+              unit=" 个"
+              max={999}
+              onChange={(fatal) => set({ fatal })}
+            />
+            <div className="gate-now">
+              <span>现在 {j.fatal.open} 个未解决</span>
+              <Verdict
+                ok={j.fatal.ok}
+                text={
+                  j.fatal.ok ? "达标" : `超出 ${j.fatal.open - gates.fatal} 个`
+                }
+              />
+            </div>
+          </article>
+        </section>
+        <aside className="wizard-aside">
+          <div className="aside-block">
+            <span className="preview-label">阶段</span>
+            <div className="phase-grid" role="group" aria-label="阶段">
+              {phases.map((p) => (
+                <Button
+                  key={p}
+                  size="sm"
+                  variant={gates.phase === p ? "default" : "outline"}
+                  aria-pressed={gates.phase === p}
+                  onClick={() => set({ phase: p })}
+                >
+                  {p}
+                </Button>
+              ))}
+            </div>
+          </div>
+          <label className="aside-block">
+            <span className="preview-label">里程碑日期</span>
+            <Input
+              type="date"
+              value={gates.milestone}
+              onChange={(e) => set({ milestone: e.target.value })}
+            />
+            {days !== null ? (
+              <small>
+                {days >= 0 ? `还有 ${days} 天` : `已过 ${-days} 天`}
+              </small>
+            ) : null}
+          </label>
+          <p className="gate-sentence">{gateSentence(gates)}。</p>
+          <div className="aside-foot">
+            <Button variant="ghost" onClick={() => setup.setStep("project")}>
+              <ArrowLeft /> 返回
+            </Button>
+            <Button
+              disabled={!validGates(gates)}
+              onClick={() => setup.setStep("confirm")}
+            >
+              确认 <ArrowRight />
+            </Button>
+          </div>
+        </aside>
+      </div>
+    </>
+  );
+}
+
+function StageSelect({
+  value,
+  field,
+  setup,
+  optional,
+}: {
+  value: string;
+  field: string;
+  setup: ProjectSetup;
+  optional?: boolean;
+}) {
+  const names = field === "severity" ? severityNames : stageNames;
+  const options = Object.entries(names).map(([v, l]) => ({
+    value: v,
+    label: l,
+  }));
+  return (
+    <Select
+      value={setup.stages[value] ?? null}
+      items={options}
+      onValueChange={(stage) => {
+        const next = { ...setup.stages };
+        if (stage) next[value] = stage as string;
+        else delete next[value];
+        setup.setStages(next);
+      }}
+    >
+      <SelectTrigger size="sm" aria-label={`${value} 对应`}>
+        <SelectValue placeholder={optional ? "稍后再定" : "选择"} />
+      </SelectTrigger>
+      <SelectContent>
+        {options.map((o) => (
+          <SelectItem key={o.value} value={o.value}>
+            {o.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+function ConfirmStep({ setup }: { setup: ProjectSetup }) {
+  const { preview, scope } = setup;
+  if (!preview || !scope) return null;
+  const blockingValues = new Set(setup.blocking.map((q) => q.value));
+  const later = setup.questions.filter((q) => q.count === 0);
+  const ready = validGates(setup.gates) && setup.answered && !setup.creating;
+  return (
+    <>
+      <div className="wizard-title">
+        <div>
+          <h2>确认</h2>
+          <p className="confirm-sentence">
+            {identifier(setup.ids.project)} · {identifier(setup.ids.scope)} 跟踪
+            {describe(scope)} {preview.count} 个问题；
+            {gateSentence(setup.gates)}。
+          </p>
+        </div>
+      </div>
+      <div className="wizard-columns">
+        <section className="wizard-main mapping" aria-label="状态对应">
+          <div className="mapping-head">
+            <strong>状态对应</strong>
+            <span>严重度取「{preview.mapping.severity_from}」</span>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>
+                  {scope.source === "meegle" ? "飞书项目状态" : "Jira 状态"}
+                </th>
+                <th>问题</th>
+                <th>SPM 阶段</th>
+              </tr>
+            </thead>
+            <tbody>
+              {preview.breakdown.statuses.map((s) => (
+                <tr key={s.value}>
+                  <td>{s.value}</td>
+                  <td>{s.count}</td>
+                  <td>
+                    {s.mapped ? (
+                      stageNames[s.mapped]
+                    ) : blockingValues.has(s.value) ? (
+                      <StageSelect
+                        value={s.value}
+                        field="stage"
+                        setup={setup}
+                      />
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {later.length ? (
+            <div className="later-note">
+              <p>
+                {later.map((q) => q.value).join(" 和 ")}{" "}
+                没有自动对应。本范围里没有这些状态的问题，可以先跳过，出现时工作台会提醒你。
+              </p>
+              <div className="later-selects">
+                {later.map((q) => (
+                  <label key={q.value}>
+                    {q.value}
+                    <StageSelect
+                      value={q.value}
+                      field={q.field}
+                      setup={setup}
+                      optional
+                    />
+                  </label>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </section>
+        <aside className="wizard-aside">
+          <div className="id-fields">
+            <label>
+              <span className="preview-label">项目</span>
+              <Input
+                value={setup.ids.project}
+                maxLength={64}
+                onChange={(e) =>
+                  setup.setIds({ ...setup.ids, project: e.target.value })
+                }
+              />
+            </label>
+            <label>
+              <span className="preview-label">范围</span>
+              <Input
+                value={setup.ids.scope}
+                maxLength={64}
+                onChange={(e) =>
+                  setup.setIds({ ...setup.ids, scope: e.target.value })
+                }
+              />
+            </label>
+          </div>
+          <label className="complete-field">
+            <Checkbox
+              checked={setup.scopeComplete}
+              onCheckedChange={(checked) =>
+                setup.setScopeComplete(checked === true)
+              }
+            />
+            <span>
+              这是本次交付的全部问题
+              <small>不勾选时，看板会提示范围可能不完整。</small>
+            </span>
+          </label>
+          <div className="aside-note">
+            <span>写入 {preview.directory}</span>
+            <span>采集每 5 分钟一次，由后台服务 spmd 完成</span>
+          </div>
+          <div className="confirm-lane" aria-live="polite">
+            {setup.createFailure ? (
+              <FailureNote failure={setup.createFailure} />
+            ) : setup.changed ? (
+              <p>范围已更新为 {setup.changed.count} 个问题，请再次确认。</p>
+            ) : null}
+          </div>
+          <div className="aside-foot">
+            <Button variant="ghost" onClick={() => setup.setStep("gates")}>
+              <ArrowLeft /> 返回
+            </Button>
+            <Button disabled={!ready} onClick={() => void setup.create()}>
+              {setup.creating ? <Spinner aria-hidden="true" /> : null}
+              创建并开始采集
+            </Button>
+          </div>
+        </aside>
+      </div>
+    </>
+  );
+}
+
+function CollectStep({
+  setup,
+  onDone,
+}: {
+  setup: ProjectSetup;
+  onDone: () => void;
+}) {
+  const { created, activation } = setup;
+  if (!created) return null;
+  const j = judge(created.breakdown.measures, setup.gates);
+  const done = !!activation;
+  const line = (ok: boolean, text: string) => (
+    <li className={ok ? "ok" : ""}>
+      {ok ? (
+        <Check aria-hidden="true" />
+      ) : setup.activating ? (
+        <Spinner aria-hidden="true" />
+      ) : (
+        <span className="pending-dot" aria-hidden="true" />
+      )}
+      {text}
+    </li>
+  );
+  return (
+    <>
+      <div className="wizard-title">
+        <div>
+          <h2>{done ? "第一批数据已到" : "正在开始采集"}</h2>
+          <p>
+            {done
+              ? `${created.count} 个问题全部读取，门槛按 ${setup.gates.phase} 计算。`
+              : "后台服务切换到新项目后会立即读取一次。"}
+          </p>
+        </div>
+      </div>
+      <ol className="collect-steps" aria-label="开始采集">
+        {line(true, "写入项目配置")}
+        {line(done, `后台服务切换到 ${created.project}`)}
+        {line(done, `读取 ${created.count} 个问题`)}
+      </ol>
+      {setup.activateFailure ? (
+        <div className="collect-failure">
+          <FailureNote failure={setup.activateFailure} />
+          <Button
+            variant="outline"
+            disabled={setup.activating}
+            onClick={() => void setup.start(created.project, created.scope)}
+          >
+            重新开始采集
+          </Button>
+        </div>
+      ) : null}
+      {done ? (
+        <div className="gate-results">
+          <article className="gate-card" aria-label="严重问题解决率">
+            <div className="gate-head row">
+              <strong>严重问题解决率</strong>
+              <Verdict
+                ok={j.severe.ok}
+                text={j.severe.ok ? "达标" : `还差 ${j.severe.gap} 个`}
+              />
+            </div>
+            <span className="result-number">{j.severe.now}%</span>
+            <Meter
+              now={j.severe.now}
+              target={setup.gates.severe}
+              ok={j.severe.ok}
+            />
+            <small>
+              {j.severe.v} / {j.severe.n} · 目标 {setup.gates.severe}%
+            </small>
+          </article>
+          <article className="gate-card" aria-label="整体解决率">
+            <div className="gate-head row">
+              <strong>整体解决率</strong>
+              <Verdict
+                ok={j.overall.ok}
+                text={j.overall.ok ? "达标" : `还差 ${j.overall.gap} 个`}
+              />
+            </div>
+            <span className="result-number">{j.overall.now}%</span>
+            <Meter
+              now={j.overall.now}
+              target={setup.gates.overall}
+              ok={j.overall.ok}
+            />
+            <small>
+              {j.overall.v} / {j.overall.n} · 目标 {setup.gates.overall}%
+            </small>
+          </article>
+          <article className="gate-card" aria-label="致命问题">
+            <div className="gate-head row">
+              <strong>致命问题</strong>
+              <Verdict
+                ok={j.fatal.ok}
+                text={
+                  j.fatal.ok
+                    ? "达标"
+                    : `超出 ${j.fatal.open - setup.gates.fatal} 个`
+                }
+              />
+            </div>
+            <span className="result-number">{j.fatal.open}</span>
+            <small>未解决的致命问题 · 上限 {setup.gates.fatal} 个</small>
+          </article>
+        </div>
+      ) : null}
+      <div className="collect-actions">
+        <Button variant={done ? "default" : "outline"} onClick={onDone}>
+          返回设置清单
+        </Button>
+      </div>
+    </>
+  );
+}
+
+/** 新建 SPM 项目: one focused page from scope to the first snapshot. */
+export function ProjectWizard({
+  setup,
+  onExit,
+}: {
+  setup: ProjectSetup;
+  onExit: () => void;
+}) {
+  return (
+    <div className="wizard">
+      <Stepper setup={setup} />
+      {setup.step === "project" ? (
+        <ProjectStep setup={setup} />
+      ) : setup.step === "gates" ? (
+        <GatesStep setup={setup} />
+      ) : setup.step === "confirm" ? (
+        <ConfirmStep setup={setup} />
+      ) : (
+        <CollectStep setup={setup} onDone={onExit} />
+      )}
+    </div>
+  );
+}
+
+/** The checklist's line for a project step: what is chosen, and the way in. */
+export function ProjectStepSummary({
+  setup,
+  step,
+  onOpen,
+}: {
+  setup: ProjectSetup;
+  step: "project" | "gates" | "confirm" | "start";
+  onOpen: () => void;
+}) {
+  const { preview, created, activation, scope } = setup;
+  const text =
+    step === "project"
+      ? preview && scope
+        ? `${describe(scope)} ${preview.count} 个问题`
+        : null
+      : step === "gates"
+        ? preview
+          ? `${gateSentence(setup.gates)}。`
+          : null
+        : step === "confirm"
+          ? created
+            ? `已创建 ${created.project} · ${created.scope}`
+            : null
+          : activation
+            ? "采集中，第一批数据已到"
+            : setup.activateFailure
+              ? "开始采集没有完成"
+              : null;
+  return (
+    <div className="step-summary">
+      {text ? <p>{text}</p> : null}
+      {step === "project" ? (
+        <Button size="sm" onClick={onOpen}>
+          {preview ? "继续新建项目" : "新建项目"} <ArrowRight />
+        </Button>
+      ) : null}
     </div>
   );
 }

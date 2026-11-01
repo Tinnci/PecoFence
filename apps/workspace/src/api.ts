@@ -2,16 +2,23 @@ import { isTauri, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { HubReport } from "./contracts/hub";
 import type {
+  Activation,
   ConnectionReport,
+  DiscoverArgs,
   Discovery,
   Draft,
   DraftChoices,
   ImportPlan,
   ProjectStatus,
 } from "./contracts/setup";
-export type Page = "home" | "setup" | "health";
+export type Page = "home" | "setup" | "health" | "project";
 export function isPage(value: unknown): value is Page {
-  return value === "home" || value === "setup" || value === "health";
+  return (
+    value === "home" ||
+    value === "setup" ||
+    value === "health" ||
+    value === "project"
+  );
 }
 export async function loadHub(
   check: boolean,
@@ -81,18 +88,29 @@ export async function signIn(source: string): Promise<ConnectionReport> {
     ? invoke<ConnectionReport>("connection_sign_in", { source })
     : desktopOnly();
 }
-/** One `spm discover` list: spaces, types, groups, items or Jira projects. */
+/** One `spm discover` list. */
 export async function discover(
-  list: "spaces" | "types" | "groups" | "items" | "jira_projects",
-  args: { space?: string; kind?: string; search?: string } = {},
+  list:
+    | "spaces"
+    | "types"
+    | "groups"
+    | "items"
+    | "jira_projects"
+    | "jira_versions"
+    | "jira_filters",
+  args: DiscoverArgs = {},
 ): Promise<Discovery> {
   return isTauri()
-    ? invoke<Discovery>("discover", {
-        list,
-        space: args.space ?? null,
-        kind: args.kind ?? null,
-        search: args.search ?? null,
-      })
+    ? invoke<Discovery>("discover", { list, args })
+    : desktopOnly();
+}
+/** Switches the background service to the project; resolves on its first snapshot. */
+export async function activate(
+  project: string,
+  scope: string,
+): Promise<Activation> {
+  return isTauri()
+    ? invoke<Activation>("activate", { project, scope })
     : desktopOnly();
 }
 /** `spm setup draft`; with the confirmed sha256 it creates the project. */

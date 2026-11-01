@@ -31,13 +31,40 @@ export type ConnectionReport = { checked_at: string, connections: Array<Connecti
 export type Space = { project_key: string, simple_name: string, name: string, };
 export type WorkItemType = { type_key: string, api_name: string, name: string, issue_like: boolean, };
 export type Group = { field: string, name: string, target_type: string, target_name: string, };
-export type Item = { id: string, name: string, };
+export type Item = { id: string, name: string, count?: number, };
 export type JiraProject = { key: string, name: string, };
-export type Discovery = { spaces?: Array<Space>, types?: Array<WorkItemType>, groups?: Array<Group>, items?: Array<Item>, projects?: Array<JiraProject>, };
+export type JiraGroup = { name: string, jql: string, count: number, released?: boolean, };
+export type Discovery = { spaces?: Array<Space>, types?: Array<WorkItemType>, groups?: Array<Group>, items?: Array<Item>, projects?: Array<JiraProject>, jira_groups?: Array<JiraGroup>, 
+/**
+ * Items of the group type holding no issue, when items were counted.
+ */
+without_issues?: number, };
+export type DiscoverArgs = { space?: string, 
+/**
+ * A Meegle type key: the issue type for `groups`, the group's target type for `items`.
+ */
+kind?: string, search?: string, 
+/**
+ * `items`: count issues of this type key per group, through `field`.
+ */
+count_type?: string, field?: string, 
+/**
+ * `jira_versions` and `jira_filters`.
+ */
+project?: string, };
 export type MeegleFilter = { field: string, field_name: string, id: string, label: string, };
-export type ScopeQuery = { "source": "meegle", space: string, type_key: string, work_item_type: string, type_name: string, filter?: MeegleFilter, } | { "source": "jira", project: string, jql?: string, };
+export type ScopeQuery = { "source": "meegle", space: string, type_key: string, work_item_type: string, type_name: string, filter?: MeegleFilter, } | { "source": "jira", project: string, jql?: string, label?: string, };
 export type Answers = { severities: { [key in string]: string }, stages: { [key in string]: string }, };
 export type DraftChoices = { project: string, scope_id: string, scope: ScopeQuery, phase: string, milestone_date?: string, severe_target_pct: number, overall_target_pct: number, fatal_max: number, scope_complete: boolean, answers: Answers, };
-export type Question = { field: string, value: string, };
+export type Question = { field: string, value: string, 
+/**
+ * Issues in the scope holding this value; only those block creation.
+ */
+count: number, };
+export type ValueCount = { value: string, count: number, mapped?: string, };
+export type Measures = { severe_total: number, severe_resolved: number, overall_total: number, overall_resolved: number, fatal_open: number, };
+export type Breakdown = { severities: Array<ValueCount>, statuses: Array<ValueCount>, resolutions: Array<ValueCount>, measures: Measures, };
 export type DraftMapping = { severity_from: string, severities: { [key in string]: string }, stages: { [key in string]: string }, dispositions: { [key in string]: string }, };
-export type Draft = { template: TemplateInfo, project: string, scope: string, directory: string, files: Array<PlanFile>, applicable: boolean, applied: boolean, backups: Array<string>, check?: ProjectCheck, summary: string, count: number, questions: Array<Question>, mapping: DraftMapping, };
+export type Draft = { template: TemplateInfo, project: string, scope: string, directory: string, files: Array<PlanFile>, applicable: boolean, applied: boolean, backups: Array<string>, check?: ProjectCheck, summary: string, count: number, questions: Array<Question>, mapping: DraftMapping, breakdown: Breakdown, };
+export type ServiceHealth = { state: string, last_commit?: string, revision: bigint, };
+export type Activation = { health?: ServiceHealth, waited_secs?: bigint, };

@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   signIn: vi.fn(),
   discover: vi.fn(),
   draft: vi.fn(),
+  activate: vi.fn(),
 }));
 vi.mock("../src/api", () => mocks);
 const report: HubReport = {
@@ -65,6 +66,7 @@ beforeEach(() => {
     mocks.signIn,
     mocks.discover,
     mocks.draft,
+    mocks.activate,
   ])
     fn.mockReset();
 });
@@ -532,7 +534,7 @@ describe("connect sources", () => {
   });
 });
 
-describe("project setup from discovery", () => {
+describe("new SPM project page", () => {
   const steps = [
     {
       id: "gates",
@@ -548,10 +550,23 @@ describe("project setup from discovery", () => {
       state: "manual",
       needs: ["gates"],
     },
+    {
+      id: "start",
+      title: "开始采集",
+      why: "采集",
+      state: "manual",
+      needs: ["confirm"],
+    },
+  ];
+  const statuses = [
+    { value: "关闭", count: 242, mapped: "Closed" },
+    { value: "OPEN", count: 32, mapped: "Open" },
+    { value: "回归测试", count: 20, mapped: "Regression" },
   ];
   const draftOf = (
     count: number,
-    questions: { field: string; value: string }[],
+    questions: { field: string; value: string; count: number }[],
+    extra: { value: string; count: number; mapped?: string }[] = [],
   ) => ({
     template: {
       id: "E6767SM-main",
@@ -574,6 +589,22 @@ describe("project setup from discovery", () => {
       severities: {},
       stages: {},
       dispositions: {},
+    },
+    breakdown: {
+      severities: [
+        { value: "一般", count: 237, mapped: "Normal" },
+        { value: "严重", count: 100, mapped: "Severe" },
+        { value: "提示", count: 5, mapped: "Hint" },
+      ],
+      statuses: [...statuses, ...extra],
+      resolutions: [],
+      measures: {
+        severe_total: 100,
+        severe_resolved: 96,
+        overall_total: 342,
+        overall_resolved: 281,
+        fatal_open: 0,
+      },
     },
   });
   beforeEach(() => {
@@ -598,7 +629,7 @@ describe("project setup from discovery", () => {
       ],
     });
     mocks.discover.mockImplementation(
-      async (list: string, args: { search?: string }) => {
+      async (list: string, args: { count_type?: string }) => {
         if (list === "spaces")
           return {
             spaces: [
@@ -627,121 +658,133 @@ describe("project setup from discovery", () => {
               },
             ],
           };
-        return {
-          items: [
-            { id: "7059897737", name: "E6767SM" },
-            { id: "7055355773", name: "E6765SM" },
-          ].filter((i) => !args?.search || i.name.includes(args.search)),
-        };
+        if (args.count_type)
+          return {
+            items: [
+              { id: "7055355773", name: "E6765SM", count: 386 },
+              { id: "7059897737", name: "E6767SM", count: 342 },
+            ],
+            without_issues: 60,
+          };
+        return { items: [{ id: "7141954099", name: "E676KLV" }] };
       },
     );
   });
-  it("freezes a Meegle project, sets gates, answers a status and creates the project", async () => {
+  async function openPage() {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(
+      await screen.findByRole("button", { name: /查看项目配置/ }),
+    );
+    await user.click(await screen.findByRole("button", { name: /新建项目/ }));
+    return user;
+  }
+  it("picks a counted project, judges gates on its issues and starts collection", async () => {
     mocks.draft
       .mockResolvedValueOnce(
-        draftOf(342, [{ field: "stage", value: "Communication" }]),
+        draftOf(342, [{ field: "stage", value: "Communication", count: 0 }]),
       )
-      .mockResolvedValueOnce(draftOf(342, []))
+      .mockResolvedValueOnce(
+        draftOf(342, [{ field: "stage", value: "Communication", count: 0 }]),
+      )
       .mockResolvedValueOnce({
         ...draftOf(342, []),
         applied: true,
         check: { valid: true, ready: true },
       });
-    const user = userEvent.setup();
-    render(<App />);
-    await user.click(
-      await screen.findByRole("button", { name: /查看项目配置/ }),
-    );
-    await screen.findByRole("listbox", { name: "项目管理" });
-    expect(mocks.discover).toHaveBeenCalledWith("groups", {
-      space: "efzuhc",
-      kind: "wentiguanli",
-    });
-    await user.type(
-      screen.getByRole("textbox", { name: "搜索项目管理" }),
-      "E6767",
-    );
-    await waitFor(() =>
-      expect(
-        screen.getByRole("listbox", { name: "项目管理" }).textContent,
-      ).not.toContain("E6765SM"),
-    );
-    await user.click(screen.getByRole("option", { name: "E6767SM" }));
-    const scope = screen.getByRole("article", { name: "选择项目" });
-    await waitFor(() => expect(scope.textContent).toContain("342"));
-    expect(scope.textContent).toContain(
-      "飞书项目「问题管理」中关联项目为 E6767SM 的",
-    );
-    const first = mocks.draft.mock.calls[0][0];
-    expect(first.scope).toEqual({
-      source: "meegle",
-      space: "efzuhc",
-      type_key: "6942",
-      work_item_type: "wentiguanli",
-      type_name: "问题管理",
-      filter: {
-        field: "field_b86050",
-        field_name: "关联项目",
-        id: "7059897737",
-        label: "E6767SM",
+    mocks.activate.mockResolvedValue({
+      health: {
+        state: "ready",
+        revision: 1,
+        last_commit: "2026-11-01T10:00:00Z",
       },
+      waited_secs: 20,
     });
-    expect(mocks.draft.mock.calls[0][1]).toBeUndefined();
-    expect(scope.textContent).toContain("已完成");
-
-    const severe = screen.getByLabelText("严重问题解决率");
-    await user.clear(severe);
-    await user.type(severe, "90");
-    expect(
-      screen.getByRole("article", { name: "设置门槛" }).textContent,
-    ).toContain("严重问题解决率不低于 90%");
-
-    const confirm = screen.getByRole("article", { name: "确认并创建项目" });
-    expect(confirm.textContent).toContain(
-      "E6767SM · main：飞书项目「问题管理」中关联项目为 E6767SM 的 342 个问题；严重问题解决率不低于 90%",
-    );
-    const create = screen.getByRole("button", { name: "创建项目" });
-    expect(create.hasAttribute("disabled")).toBe(true);
+    const user = await openPage();
+    const list = await screen.findByRole("listbox", { name: "项目" });
+    expect(list.textContent).toContain("E6765SM386");
+    expect(mocks.discover).toHaveBeenCalledWith("items", {
+      space: "efzuhc",
+      kind: "693ff1c8",
+      count_type: "6942",
+      field: "field_b86050",
+    });
+    expect(screen.getByText("2 个项目有问题，按问题数排列")).toBeTruthy();
     await user.click(
-      screen.getByRole("combobox", { name: "Communication 对应" }),
+      screen.getByRole("button", { name: "显示没有问题的 60 个项目" }),
     );
-    await user.click(await screen.findByRole("option", { name: "等待信息" }));
-    await user.click(screen.getByRole("checkbox"));
-    await user.click(create);
-    await waitFor(() =>
-      expect(confirm.textContent).toContain(
-        "已创建 E6767SM · main，342 个问题，配置检查通过",
+    expect(await screen.findByRole("option", { name: /E676KLV/ })).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "只看有问题的" }));
+    await user.click(await screen.findByRole("option", { name: /E6767SM/ }));
+    const preview = screen.getByRole("complementary", { name: "范围预览" });
+    await waitFor(() => expect(preview.textContent).toContain("342个问题"));
+    expect(preview.textContent).toContain("严重100");
+    expect(preview.textContent).toContain("已解决281");
+    expect(mocks.draft.mock.calls[0][0].scope.filter).toEqual({
+      field: "field_b86050",
+      field_name: "关联项目",
+      id: "7059897737",
+      label: "E6767SM",
+    });
+
+    await user.click(screen.getByRole("button", { name: /设置门槛/ }));
+    const severe = screen.getByRole("article", { name: "严重问题解决率" });
+    expect(severe.textContent).toContain("现在 96%（96 / 100）");
+    expect(severe.textContent).toContain("达标");
+    const overall = screen.getByRole("article", { name: "整体解决率" });
+    expect(overall.textContent).toContain("还差 10 个");
+    for (let i = 0; i < 3; i++)
+      await user.click(screen.getByRole("button", { name: "降低整体解决率" }));
+    expect(overall.textContent).toContain("达标");
+    await user.click(screen.getByRole("button", { name: "MP" }));
+    expect(screen.getByText(/阶段 MP。$/)).toBeTruthy();
+
+    await user.click(screen.getByRole("button", { name: /确认/ }));
+    expect(
+      screen.getByText(
+        /E6767SM · main 跟踪飞书项目「问题管理」中关联项目为 E6767SM 的 342 个问题；严重问题解决率不低于 95%，整体不低于 82%/,
       ),
-    );
-    const [planned, applied] = mocks.draft.mock.calls.slice(1);
+    ).toBeTruthy();
+    const table = screen.getByRole("region", { name: "状态对应" });
+    expect(table.textContent).toContain("关闭242已关闭");
+    expect(table.textContent).toContain("Communication 没有自动对应");
+    await user.click(screen.getByRole("button", { name: "创建并开始采集" }));
+    await screen.findByRole("heading", { name: "第一批数据已到" });
+    const [, planned, applied] = mocks.draft.mock.calls;
     expect(planned[0]).toMatchObject({
-      severe_target_pct: 90,
+      overall_target_pct: 82,
+      phase: "MP",
       scope_complete: true,
-      answers: { stages: { Communication: "WaitInfo" } },
     });
     expect(planned[1]).toBeUndefined();
     expect(applied[1]).toBe("f".repeat(64));
+    expect(mocks.activate).toHaveBeenCalledWith("E6767SM", "main");
+    expect(
+      screen.getByRole("article", { name: "整体解决率" }).textContent,
+    ).toContain("82.2%");
     expect(mocks.projectStatus).toHaveBeenCalledTimes(2);
   });
-  it("asks again when the scope changed between the count and the confirmation", async () => {
+  it("requires an answer only for unmapped statuses that issues hold, and asks again when the scope moved", async () => {
+    const question = [{ field: "stage", value: "复核", count: 3 }];
     mocks.draft
-      .mockResolvedValueOnce(draftOf(342, []))
-      .mockResolvedValueOnce(draftOf(345, []));
-    const user = userEvent.setup();
-    render(<App />);
-    await user.click(
-      await screen.findByRole("button", { name: /查看项目配置/ }),
-    );
-    await user.click(await screen.findByRole("option", { name: "E6767SM" }));
-    const confirm = screen.getByRole("article", { name: "确认并创建项目" });
-    await waitFor(() => expect(confirm.textContent).toContain("342 个问题"));
-    await user.click(screen.getByRole("button", { name: "创建项目" }));
-    await waitFor(() =>
-      expect(confirm.textContent).toContain(
-        "范围已更新为 345 个问题，请再次确认",
-      ),
-    );
-    expect(confirm.textContent).toContain("345 个问题；");
-    expect(mocks.draft).toHaveBeenCalledTimes(2);
+      .mockResolvedValueOnce(
+        draftOf(342, question, [{ value: "复核", count: 3 }]),
+      )
+      .mockResolvedValueOnce(draftOf(345, [], []));
+    const user = await openPage();
+    await user.click(await screen.findByRole("option", { name: /E6767SM/ }));
+    await user.click(await screen.findByRole("button", { name: /设置门槛/ }));
+    await user.click(screen.getByRole("button", { name: /确认/ }));
+    const create = screen.getByRole("button", { name: "创建并开始采集" });
+    expect(create.hasAttribute("disabled")).toBe(true);
+    await user.click(screen.getByRole("combobox", { name: "复核 对应" }));
+    await user.click(await screen.findByRole("option", { name: "审核中" }));
+    expect(create.hasAttribute("disabled")).toBe(false);
+    await user.click(create);
+    await screen.findByText("范围已更新为 345 个问题，请再次确认。");
+    expect(mocks.draft.mock.calls[1][0].answers.stages).toEqual({
+      复核: "Reviewing",
+    });
+    expect(mocks.activate).not.toHaveBeenCalled();
   });
 });

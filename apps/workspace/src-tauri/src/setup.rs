@@ -28,7 +28,8 @@ impl SetupFailure {
             | "template_unreadable"
             | "template_too_large"
             | "template_stale"
-            | "sign_in_unsupported" => code.as_ref(),
+            | "sign_in_unsupported"
+            | "invalid_input" => code.as_ref(),
             _ => "spm_unavailable",
         };
         Self {
@@ -54,6 +55,12 @@ impl SetupFailure {
             "MAPPING_UNDETECTED" => "mapping_undetected",
             "QUESTIONS_OPEN" => "questions_open",
             "DRAFT_CHANGED" => "draft_changed",
+            "TOOL_OUTDATED" => "tool_outdated",
+            "PROJECT_INVALID" => "project_invalid",
+            "ACTIVATE_UNAVAILABLE" => "activate_unavailable",
+            "ACTIVATE_NOT_READY" => "activate_not_ready",
+            "ACTIVATE_FAILED" => "activate_failed",
+            "ACTIVATE_TIMEOUT" => "activate_timeout",
             _ => return Self::new("spm_invalid_response"),
         };
         Self {
@@ -250,6 +257,19 @@ pub struct Group {
 pub struct Item {
     pub id: String,
     pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub count: Option<u32>,
+}
+/// A Jira version or starred filter with its issue count inside the project.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct JiraGroup {
+    pub name: String,
+    pub jql: String,
+    pub count: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub released: Option<bool>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct JiraProject {
@@ -274,6 +294,13 @@ pub struct Discovery {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub projects: Option<Vec<JiraProject>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub jira_groups: Option<Vec<JiraGroup>>,
+    /// Items of the group type holding no issue, when items were counted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub without_issues: Option<u32>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(deny_unknown_fields)]
@@ -301,6 +328,9 @@ pub enum ScopeQuery {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional)]
         jql: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        label: Option<String>,
     },
 }
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
@@ -334,6 +364,32 @@ pub struct DraftChoices {
 pub struct Question {
     pub field: String,
     pub value: String,
+    /// Issues in the scope holding this value; only those block creation.
+    pub count: u32,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct ValueCount {
+    pub value: String,
+    pub count: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub mapped: Option<String>,
+}
+/// The gate inputs of the scope; targets only move the thresholds.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct Measures {
+    pub severe_total: u32,
+    pub severe_resolved: u32,
+    pub overall_total: u32,
+    pub overall_resolved: u32,
+    pub fatal_open: u32,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct Breakdown {
+    pub severities: Vec<ValueCount>,
+    pub statuses: Vec<ValueCount>,
+    pub resolutions: Vec<ValueCount>,
+    pub measures: Measures,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct DraftMapping {
@@ -361,6 +417,41 @@ pub struct Draft {
     pub count: u32,
     pub questions: Vec<Question>,
     pub mapping: DraftMapping,
+    pub breakdown: Breakdown,
+}
+
+/// The daemon's state after `spm setup activate`.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct ServiceHealth {
+    pub state: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub last_commit: Option<String>,
+    #[serde(default)]
+    pub revision: u64,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct Activation {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub health: Option<ServiceHealth>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub waited_secs: Option<u64>,
+}
+/// `spm setup activate` for a drafted project; identifiers are directory-safe.
+pub fn activate_args<'a>(project: &'a str, scope: &'a str) -> Option<Vec<&'a str>> {
+    let safe = |s: &str| {
+        (1..=64).contains(&s.len())
+            && s.starts_with(|c: char| c.is_ascii_alphanumeric())
+            && s.bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b"._-".contains(&b))
+    };
+    (safe(project) && safe(scope))
+        .then(|| vec!["setup", "activate", "--project", project, "--scope", scope])
+}
+pub fn decode_activation(code: Option<i32>, stdout: &[u8]) -> Result<Activation, SetupFailure> {
+    owner_data(code, stdout)
 }
 
 /// Keys the frontend may pass to `spm discover`: Meegle space, type and field keys.
@@ -370,22 +461,69 @@ pub fn valid_key(key: &str) -> bool {
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
 }
+/// What a discovery list may name: Meegle keys and a Jira project.
+#[derive(Debug, Default, Clone, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+pub struct DiscoverArgs {
+    #[serde(default)]
+    #[ts(optional)]
+    pub space: Option<String>,
+    /// A Meegle type key: the issue type for `groups`, the group's target type for `items`.
+    #[serde(default)]
+    #[ts(optional)]
+    pub kind: Option<String>,
+    #[serde(default)]
+    #[ts(optional)]
+    pub search: Option<String>,
+    /// `items`: count issues of this type key per group, through `field`.
+    #[serde(default)]
+    #[ts(optional)]
+    pub count_type: Option<String>,
+    #[serde(default)]
+    #[ts(optional)]
+    pub field: Option<String>,
+    /// `jira_versions` and `jira_filters`.
+    #[serde(default)]
+    #[ts(optional)]
+    pub project: Option<String>,
+}
+
+/// A Jira project key such as PLV.
+pub fn valid_project(key: &str) -> bool {
+    (1..=20).contains(&key.len())
+        && key.starts_with(|c: char| c.is_ascii_uppercase())
+        && key
+            .bytes()
+            .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit() || b == b'_')
+}
+
 /// Arguments for one discovery list; `None` when an argument is malformed.
-pub fn discover_args<'a>(
-    list: &str,
-    space: Option<&'a str>,
-    kind: Option<&'a str>,
-    search: Option<&'a str>,
-) -> Option<Vec<&'a str>> {
-    let key = |k: Option<&'a str>| k.filter(|k| valid_key(k));
+pub fn discover_args<'a>(list: &str, a: &'a DiscoverArgs) -> Option<Vec<&'a str>> {
+    let key = |k: &'a Option<String>| k.as_deref().filter(|k| valid_key(k));
+    let project = || a.project.as_deref().filter(|p| valid_project(p));
+    let space = key(&a.space);
+    let kind = key(&a.kind);
+    let search = a.search.as_deref();
     let mut args = vec!["discover"];
     match list {
         "spaces" => args.push("spaces"),
         "jira_projects" => args.push("jira-projects"),
-        "types" => args.extend(["types", "--space", key(space)?]),
-        "groups" => args.extend(["groups", "--space", key(space)?, "--type", key(kind)?]),
+        "jira_versions" => args.extend(["jira-versions", "--project", project()?]),
+        "jira_filters" => args.extend(["jira-filters", "--project", project()?]),
+        "types" => args.extend(["types", "--space", space?]),
+        "groups" => args.extend(["groups", "--space", space?, "--type", kind?]),
         "items" => {
-            args.extend(["items", "--space", key(space)?, "--type", key(kind)?]);
+            args.extend(["items", "--space", space?, "--type", kind?]);
+            match (&a.count_type, &a.field) {
+                (Some(_), Some(_)) => args.extend([
+                    "--count-type",
+                    key(&a.count_type)?,
+                    "--field",
+                    key(&a.field)?,
+                ]),
+                (None, None) => {}
+                _ => return None,
+            }
             if let Some(search) = search.map(str::trim).filter(|s| !s.is_empty()) {
                 if search.chars().count() > 60 || search.chars().any(char::is_control) {
                     return None;
@@ -511,14 +649,21 @@ pub fn types() -> String {
             Group::decl(&config),
             Item::decl(&config),
             JiraProject::decl(&config),
+            JiraGroup::decl(&config),
             Discovery::decl(&config),
+            DiscoverArgs::decl(&config),
             MeegleFilter::decl(&config),
             ScopeQuery::decl(&config),
             Answers::decl(&config),
             DraftChoices::decl(&config),
             Question::decl(&config),
+            ValueCount::decl(&config),
+            Measures::decl(&config),
+            Breakdown::decl(&config),
             DraftMapping::decl(&config),
             Draft::decl(&config),
+            ServiceHealth::decl(&config),
+            Activation::decl(&config),
         ]
         .map(|decl| format!("export {decl}\n"))
         .concat()
@@ -542,23 +687,100 @@ mod tests {
     }
     #[test]
     fn discovery_and_draft_arguments_are_validated() {
+        let with = |f: fn(&mut DiscoverArgs)| {
+            let mut a = DiscoverArgs::default();
+            f(&mut a);
+            a
+        };
+        let items = with(|a| {
+            a.space = Some("efzuhc".into());
+            a.kind = Some("693ff1c8".into());
+            a.search = Some(" E67 ".into());
+            a.count_type = Some("6942c93f".into());
+            a.field = Some("field_b86050".into());
+        });
         assert_eq!(
-            discover_args("items", Some("efzuhc"), Some("693ff1c8"), Some(" E67 ")).unwrap(),
-            ["discover", "items", "--space", "efzuhc", "--type", "693ff1c8", "--search", "E67"]
+            discover_args("items", &items).unwrap(),
+            [
+                "discover",
+                "items",
+                "--space",
+                "efzuhc",
+                "--type",
+                "693ff1c8",
+                "--count-type",
+                "6942c93f",
+                "--field",
+                "field_b86050",
+                "--search",
+                "E67"
+            ]
         );
-        assert_eq!(discover_args("spaces", None, None, None).unwrap(), ["discover", "spaces"]);
-        assert!(discover_args("types", Some("efz uhc"), None, None).is_none());
-        assert!(discover_args("groups", Some("efzuhc"), None, None).is_none());
-        assert!(discover_args("rm", None, None, None).is_none());
-        assert!(discover_args("items", Some("a"), Some("b"), Some("x\ny")).is_none());
+        let half = with(|a| {
+            a.space = Some("efzuhc".into());
+            a.kind = Some("693ff1c8".into());
+            a.field = Some("field_b86050".into());
+        });
+        assert!(discover_args("items", &half).is_none());
+        assert_eq!(
+            discover_args("spaces", &DiscoverArgs::default()).unwrap(),
+            ["discover", "spaces"]
+        );
+        let plv = with(|a| a.project = Some("PLV".into()));
+        assert_eq!(
+            discover_args("jira_versions", &plv).unwrap(),
+            ["discover", "jira-versions", "--project", "PLV"]
+        );
+        let lower = with(|a| a.project = Some("plv; rm".into()));
+        assert!(discover_args("jira_filters", &lower).is_none());
+        assert!(discover_args("types", &with(|a| a.space = Some("efz uhc".into()))).is_none());
+        assert!(discover_args("groups", &with(|a| a.space = Some("efzuhc".into()))).is_none());
+        assert!(discover_args("rm", &DiscoverArgs::default()).is_none());
+        let newline = with(|a| {
+            a.space = Some("a".into());
+            a.kind = Some("b".into());
+            a.search = Some("x\ny".into());
+        });
+        assert!(discover_args("items", &newline).is_none());
         assert_eq!(draft_args(false, None).unwrap(), ["setup", "draft"]);
         let sha = "a".repeat(64);
         assert_eq!(
             draft_args(true, Some(&sha)).unwrap(),
-            ["setup", "draft", "--apply", "--replace", "--expect", sha.as_str()]
+            [
+                "setup",
+                "draft",
+                "--apply",
+                "--replace",
+                "--expect",
+                sha.as_str()
+            ]
         );
         assert!(draft_args(true, None).is_none());
         assert!(draft_args(true, Some("--config-root")).is_none());
+    }
+    #[test]
+    fn activation_arguments_and_results() {
+        assert_eq!(
+            activate_args("E6767SM", "main").unwrap(),
+            [
+                "setup",
+                "activate",
+                "--project",
+                "E6767SM",
+                "--scope",
+                "main"
+            ]
+        );
+        assert!(activate_args("../x", "main").is_none());
+        assert!(activate_args("E6767SM", "--dry-run").is_none());
+        let done = br#"{"ok":true,"data":{"dry_run":false,"health":{"mode":"live","state":"ready","last_commit":"2026-11-01T10:00:00Z","revision":2},"waited_secs":21}}"#;
+        let activation = decode_activation(Some(0), done).unwrap();
+        assert_eq!(activation.health.unwrap().revision, 2);
+        let late = br#"{"ok":false,"data":null,"error":{"code":"ACTIVATE_TIMEOUT","message":"no snapshot within 300 s"}}"#;
+        assert_eq!(
+            decode_activation(Some(1), late).unwrap_err().code,
+            "activate_timeout"
+        );
     }
     #[test]
     fn decodes_drafts_and_discovery_errors() {
@@ -568,14 +790,28 @@ mod tests {
             "database":{"path":"x","exists":false},
             "files":[{"role":"scope_query","path":"C:\\cfg\\scope.json","action":"create"}],
             "applicable":true,"applied":false,"summary":"E6767SM · main：342 个问题。","count":342,
-            "questions":[{"field":"stage","value":"Communication"}],
-            "mapping":{"severity_from":"优先级","severities":{"致命":"Fatal"},"stages":{},"dispositions":{}}}});
+            "questions":[{"field":"stage","value":"Communication","count":0}],
+            "mapping":{"severity_from":"优先级","severities":{"致命":"Fatal"},"stages":{},"dispositions":{}},
+            "breakdown":{"severities":[{"value":"严重","count":100,"mapped":"Severe"}],
+                "statuses":[{"value":"Communication","count":0}],"resolutions":[],
+                "measures":{"severe_total":100,"severe_resolved":96,"overall_total":342,"overall_resolved":281,"fatal_open":0}}}});
         let draft = decode_draft(Some(0), &serde_json::to_vec(&draft).unwrap()).unwrap();
-        assert_eq!((draft.count, draft.questions[0].value.as_str()), (342, "Communication"));
+        assert_eq!(
+            (draft.count, draft.questions[0].value.as_str()),
+            (342, "Communication")
+        );
+        assert_eq!(draft.breakdown.measures.severe_resolved, 96);
+        assert!(draft.breakdown.statuses[0].mapped.is_none());
         let signed_out = br#"{"ok":false,"data":null,"error":{"code":"SIGNED_OUT","message":"run meegle auth login"}}"#;
-        assert_eq!(decode_discovery(Some(1), signed_out).unwrap_err().code, "signed_out");
+        assert_eq!(
+            decode_discovery(Some(1), signed_out).unwrap_err().code,
+            "signed_out"
+        );
         let spaces = br#"{"ok":true,"data":{"spaces":[{"project_key":"6","simple_name":"efzuhc","name":"IPD"}]}}"#;
-        assert_eq!(decode_discovery(Some(0), spaces).unwrap().spaces.unwrap()[0].name, "IPD");
+        assert_eq!(
+            decode_discovery(Some(0), spaces).unwrap().spaces.unwrap()[0].name,
+            "IPD"
+        );
         let choices: Result<DraftChoices, _> = serde_json::from_value(serde_json::json!({
             "project":"P","scope_id":"main","scope":{"source":"jira","project":"PLV"},"argv":["x"],
             "phase":"TR4","severe_target_pct":95,"overall_target_pct":85,"fatal_max":0}));
@@ -695,7 +931,11 @@ mod tests {
                 .valid
         );
         let ready = br#"{"ok":true,"data":{"config_root":"C:\\cfg","projects":[{"project":"P","scope":"S","directory":"d","check":{"valid":true,"ready":true}}]}}"#;
-        assert!(decode_status(Some(0), ready).unwrap().projects[0].check.ready);
+        assert!(
+            decode_status(Some(0), ready).unwrap().projects[0]
+                .check
+                .ready
+        );
         let other = br#"{"ok":false,"data":{},"error":{"code":"IMPORT_IO","message":"x"}}"#;
         assert_eq!(
             decode_status(Some(1), other).unwrap_err().code,

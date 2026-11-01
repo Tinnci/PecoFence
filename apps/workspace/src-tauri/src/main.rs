@@ -8,7 +8,8 @@ fn target(args: &[String]) -> Result<String, String> {
     match args {
         [] => Ok("home".into()),
         [flag, page]
-            if flag == "--open" && ["home", "setup", "health"].contains(&page.as_str()) =>
+            if flag == "--open"
+                && ["home", "setup", "health", "project"].contains(&page.as_str()) =>
         {
             Ok(page.clone())
         }
@@ -168,12 +169,10 @@ fn desktop() {
     #[tauri::command]
     async fn discover(
         list: String,
-        space: Option<String>,
-        kind: Option<String>,
-        search: Option<String>,
+        args: setup::DiscoverArgs,
         state: tauri::State<'_, State>,
     ) -> Result<setup::Discovery, setup::SetupFailure> {
-        let args = setup::discover_args(&list, space.as_deref(), kind.as_deref(), search.as_deref())
+        let args = setup::discover_args(&list, &args)
             .ok_or_else(|| setup::SetupFailure::new("invalid_input"))?;
         let _permit = state
             .discover_gate
@@ -193,7 +192,8 @@ fn desktop() {
     ) -> Result<setup::Draft, setup::SetupFailure> {
         let args = setup::draft_args(sha256.is_some(), sha256.as_deref())
             .ok_or_else(|| setup::SetupFailure::new("invalid_input"))?;
-        let input = serde_json::to_vec(&choices).map_err(|_| setup::SetupFailure::new("invalid_input"))?;
+        let input =
+            serde_json::to_vec(&choices).map_err(|_| setup::SetupFailure::new("invalid_input"))?;
         let _permit = state
             .discover_gate
             .acquire()
@@ -207,6 +207,24 @@ fn desktop() {
         )
         .await?;
         setup::decode_draft(output.code, &output.stdout)
+    }
+    /// `spm setup activate`: switches the background service to the project and waits for
+    /// its first snapshot.
+    #[tauri::command]
+    async fn activate(
+        project: String,
+        scope: String,
+        state: tauri::State<'_, State>,
+    ) -> Result<setup::Activation, setup::SetupFailure> {
+        let args = setup::activate_args(&project, &scope)
+            .ok_or_else(|| setup::SetupFailure::new("invalid_input"))?;
+        let _permit = state
+            .discover_gate
+            .acquire()
+            .await
+            .map_err(|_| setup::SetupFailure::new("setup_busy"))?;
+        let output = process::spm(&spm_exe()?, &args, std::time::Duration::from_secs(360)).await?;
+        setup::decode_activation(output.code, &output.stdout)
     }
     /// Runs the tool's own browser login; only Meegle offers one.
     #[tauri::command]
@@ -322,7 +340,8 @@ fn desktop() {
             connections,
             connection_sign_in,
             discover,
-            draft
+            draft,
+            activate
         ])
         .run(tauri::generate_context!())
         .expect("workspace runtime");

@@ -15,6 +15,7 @@
     "allow-connections",
     "allow-connection-sign-in",
     "allow-discover",
-    "allow-draft"
+    "allow-draft",
+    "allow-activate"
   ]
 }

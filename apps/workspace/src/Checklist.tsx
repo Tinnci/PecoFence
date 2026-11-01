@@ -28,12 +28,7 @@ import type {
 } from "./contracts/setup";
 import TemplateImport from "./TemplateImport";
 import ConnectSources from "./ConnectSources";
-import {
-  ConfirmStep,
-  GateStep,
-  ScopeStep,
-  type ProjectSetup,
-} from "./ProjectSetup";
+import { ProjectStepSummary, type ProjectSetup } from "./ProjectSetup";
 import {
   Collapsible,
   CollapsibleContent,
@@ -63,6 +58,7 @@ export default function Checklist({
   onConnections,
   onConnectionReport,
   projectSetup,
+  onOpenProject,
 }: {
   report: HubReport;
   selected: string | null;
@@ -78,6 +74,7 @@ export default function Checklist({
   onConnections: () => Promise<void>;
   onConnectionReport: (report: ConnectionReport) => void;
   projectSetup?: ProjectSetup;
+  onOpenProject?: () => void;
 }) {
   const components = report.components.filter((c) => c.lifecycle !== "paused");
   const [current, setCurrent] = useState(
@@ -218,19 +215,17 @@ export default function Checklist({
                         />
                       ) : null}
                       {component.id === "spm" &&
-                      step.id === "project" &&
-                      projectSetup ? (
-                        <ScopeStep setup={projectSetup} />
-                      ) : null}
-                      {component.id === "spm" &&
-                      step.id === "gates" &&
-                      projectSetup ? (
-                        <GateStep setup={projectSetup} />
-                      ) : null}
-                      {component.id === "spm" &&
-                      step.id === "confirm" &&
-                      projectSetup ? (
-                        <ConfirmStep setup={projectSetup} />
+                      projectSetup &&
+                      onOpenProject &&
+                      (step.id === "project" ||
+                        step.id === "gates" ||
+                        step.id === "confirm" ||
+                        step.id === "start") ? (
+                        <ProjectStepSummary
+                          setup={projectSetup}
+                          step={step.id}
+                          onOpen={onOpenProject}
+                        />
                       ) : null}
                       {component.id === "spm" && step.id === "project" ? (
                         <Collapsible className="advanced-import">
