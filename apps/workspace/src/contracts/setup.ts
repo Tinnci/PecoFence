@@ -52,7 +52,12 @@ count_type?: string, field?: string,
  * `jira_versions` and `jira_filters`.
  */
 project?: string, };
-export type MeegleFilter = { field: string, field_name: string, id: string, label: string, };
+export type MeegleFilter = { field: string, field_name: string, 
+/**
+ * One or more group items forming one scope.
+ */
+values: Array<FilterValue>, };
+export type FilterValue = { id: string, label: string, };
 export type ScopeQuery = { "source": "meegle", space: string, type_key: string, work_item_type: string, type_name: string, filter?: MeegleFilter, } | { "source": "jira", project: string, jql?: string, label?: string, };
 export type Answers = { severities: { [key in string]: string }, stages: { [key in string]: string }, };
 export type DraftChoices = { project: string, scope_id: string, scope: ScopeQuery, phase: string, milestone_date?: string, severe_target_pct: number, overall_target_pct: number, fatal_max: number, scope_complete: boolean, answers: Answers, };

@@ -105,10 +105,25 @@ export function identifier(text: string) {
       .slice(0, 64) || "project"
   );
 }
+/** The labels of a Meegle filter, joined for reading. */
+export function filterLabel(scope: ScopeQuery) {
+  return scope.source === "meegle"
+    ? (scope.filter?.values.map((v) => v.label).join("、") ?? "")
+    : "";
+}
+/** One name for several picked groups: their common prefix (E6751SM-A, E6751SM-B → E6751SM). */
+export function commonName(names: string[]) {
+  if (names.length < 2) return names[0] ?? "";
+  let prefix = names[0];
+  for (const n of names)
+    while (!n.startsWith(prefix)) prefix = prefix.slice(0, -1);
+  prefix = prefix.replace(/[-_ ·.]+$/, "");
+  return prefix.length >= 3 ? prefix : names.join("+");
+}
 export function describe(scope: ScopeQuery) {
   if (scope.source === "meegle")
     return scope.filter
-      ? `飞书项目「${scope.type_name}」中${scope.filter.field_name}为 ${scope.filter.label} 的`
+      ? `飞书项目「${scope.type_name}」中${scope.filter.field_name}为 ${filterLabel(scope)} 的`
       : `飞书项目「${scope.type_name}」中全部`;
   if (scope.label) return `Jira ${scope.project} 中${scope.label}的`;
   return scope.jql
@@ -198,7 +213,16 @@ export function useProjectSetup(
   const [group, setGroup] = useState<Group | null>(null);
   const [search, setSearch] = useState("");
   const [showEmpty, setShowEmpty] = useState(false);
-  const [item, setItem] = useState<Item | null>(null);
+  const [picked, setPicked] = useState<Item[]>([]);
+  /** A click picks one group; Ctrl/⌘-click adds or removes it, for one scope of several. */
+  const pick = (row: Item, add: boolean) =>
+    setPicked((current) =>
+      !add
+        ? [row]
+        : current.some((i) => i.id === row.id)
+          ? current.filter((i) => i.id !== row.id)
+          : [...current, row],
+    );
   const [project, setProject] = useState<JiraProject | null>(null);
   const [jiraMode, setJiraMode] = useState<JiraMode>("versions");
   const [jiraGroup, setJiraGroup] = useState<JiraGroup | null>(null);
@@ -282,7 +306,7 @@ export function useProjectSetup(
   // Groups that hold issues, counted, largest first.
   useEffect(() => {
     setShowEmpty(false);
-    setItem(null);
+    setPicked([]);
     setLists((l) => ({ ...l, items: null, empty: null, withoutIssues: null }));
     if (!space || !type || !group) return;
     void load("items", async () => {
@@ -335,7 +359,7 @@ export function useProjectSetup(
   }, [project?.key, jiraMode]);
 
   const scope: ScopeQuery | null =
-    source === "meegle" && space && type && group && item
+    source === "meegle" && space && type && group && picked.length
       ? {
           source: "meegle",
           space: space.simple_name,
@@ -345,8 +369,7 @@ export function useProjectSetup(
           filter: {
             field: group.field,
             field_name: group.name,
-            id: item.id,
-            label: item.name,
+            values: picked.map((i) => ({ id: i.id, label: i.name })),
           },
         }
       : source === "jira" && project
@@ -371,7 +394,7 @@ export function useProjectSetup(
   const scopeKey = scope ? JSON.stringify(scope) : "";
   const label =
     scope?.source === "meegle"
-      ? (scope.filter?.label ?? "")
+      ? commonName(picked.map((i) => i.name))
       : (project?.name ?? project?.key ?? "");
 
   function choices(answers: Record<string, string>): DraftChoices | null {
@@ -474,8 +497,8 @@ export function useProjectSetup(
     setSearch,
     showEmpty,
     setShowEmpty,
-    item,
-    setItem,
+    picked,
+    pick,
     project,
     setProject,
     jiraMode,
@@ -518,7 +541,7 @@ function Stepper({ setup }: { setup: ProjectSetup }) {
   const preview = setup.preview;
   const name =
     setup.scope?.source === "meegle"
-      ? setup.scope.filter?.label
+      ? filterLabel(setup.scope)
       : (setup.jiraGroup?.name ?? setup.project?.key);
   const steps: { id: Step; title: string; done?: string }[] = [
     {
@@ -589,20 +612,27 @@ function CountList<T>({
   name,
   count,
   onPick,
+  multiple,
 }: {
   label: string;
+  multiple?: boolean;
   rows: T[];
-  selected: T | null;
+  selected: (row: T) => boolean;
   name: (row: T) => string;
   count: (row: T) => number | undefined;
-  onPick: (row: T) => void;
+  onPick: (row: T, add: boolean) => void;
 }) {
   const max = Math.max(1, ...rows.map((r) => count(r) ?? 0));
   return (
-    <div className="pick-list" role="listbox" aria-label={label}>
+    <div
+      className="pick-list"
+      role="listbox"
+      aria-label={label}
+      aria-multiselectable={multiple || undefined}
+    >
       {rows.map((row) => {
         const n = count(row);
-        const active = selected !== null && name(row) === name(selected);
+        const active = selected(row);
         return (
           <button
             type="button"
@@ -610,7 +640,7 @@ function CountList<T>({
             aria-selected={active}
             className="pick-row"
             key={name(row)}
-            onClick={() => onPick(row)}
+            onClick={(e) => onPick(row, e.ctrlKey || e.metaKey)}
           >
             <span className="pick-name">{name(row)}</span>
             <span className="pick-count">{n ?? ""}</span>
@@ -730,20 +760,22 @@ function MeeglePicker({ setup }: { setup: ProjectSetup }) {
             <CountList
               label={`没有问题的${target}`}
               rows={lists.empty}
-              selected={setup.item}
+              multiple
+              selected={(i) => setup.picked.some((p) => p.id === i.id)}
               name={(i) => i.name}
               count={() => 0}
-              onPick={setup.setItem}
+              onPick={setup.pick}
             />
           )
         ) : rows.length ? (
           <CountList
             label={target}
             rows={rows}
-            selected={setup.item}
+            multiple
+            selected={(i) => setup.picked.some((p) => p.id === i.id)}
             name={(i) => i.name}
             count={(i) => i.count}
-            onPick={setup.setItem}
+            onPick={setup.pick}
           />
         ) : (
           <p className="pick-empty">没有匹配的{target}</p>
@@ -751,9 +783,11 @@ function MeeglePicker({ setup }: { setup: ProjectSetup }) {
       </div>
       <div className="picker-foot">
         <span>
-          {lists.items
-            ? `${lists.items.length} 个${target}有问题，按问题数排列`
-            : ""}
+          {setup.picked.length > 1
+            ? `已选 ${setup.picked.length} 个，合并为一个范围`
+            : lists.items
+              ? `${lists.items.length} 个${target}有问题，按问题数排列 · 按住 Ctrl 点击可合并多个`
+              : ""}
         </span>
         {lists.withoutIssues ? (
           <Button
@@ -795,7 +829,7 @@ function JiraPicker({ setup }: { setup: ProjectSetup }) {
             <CountList
               label="Jira 项目"
               rows={rows}
-              selected={null}
+              selected={() => false}
               name={(p) => `${p.key} · ${p.name}`}
               count={() => undefined}
               onPick={(p) => {
@@ -856,7 +890,7 @@ function JiraPicker({ setup }: { setup: ProjectSetup }) {
             <CountList
               label={setup.jiraMode === "versions" ? "影响版本" : "筛选器"}
               rows={groups}
-              selected={setup.jiraGroup}
+              selected={(g) => g.name === setup.jiraGroup?.name}
               name={(g) => g.name}
               count={(g) => g.count}
               onPick={setup.setJiraGroup}
@@ -970,7 +1004,7 @@ function Preview({ setup }: { setup: ProjectSetup }) {
           : "Jira 项目";
   const name =
     scope?.source === "meegle"
-      ? scope.filter?.label
+      ? filterLabel(scope)
       : (setup.jiraGroup?.name ?? setup.project?.key);
   return (
     <aside className="wizard-aside" aria-label="范围预览" aria-live="polite">

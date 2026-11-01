@@ -709,7 +709,7 @@ describe("new SPM project page", () => {
       count_type: "6942",
       field: "field_b86050",
     });
-    expect(screen.getByText("2 个项目有问题，按问题数排列")).toBeTruthy();
+    expect(screen.getByText(/2 个项目有问题，按问题数排列/)).toBeTruthy();
     await user.click(
       screen.getByRole("button", { name: "显示没有问题的 60 个项目" }),
     );
@@ -723,8 +723,7 @@ describe("new SPM project page", () => {
     expect(mocks.draft.mock.calls[0][0].scope.filter).toEqual({
       field: "field_b86050",
       field_name: "关联项目",
-      id: "7059897737",
-      label: "E6767SM",
+      values: [{ id: "7059897737", label: "E6767SM" }],
     });
 
     await user.click(screen.getByRole("button", { name: /设置门槛/ }));
@@ -763,6 +762,29 @@ describe("new SPM project page", () => {
       screen.getByRole("article", { name: "整体解决率" }).textContent,
     ).toContain("82.2%");
     expect(mocks.projectStatus).toHaveBeenCalledTimes(2);
+  });
+  it("merges projects picked with Ctrl into one scope named by their common prefix", async () => {
+    mocks.draft.mockResolvedValue(draftOf(728, []));
+    const user = await openPage();
+    await user.click(await screen.findByRole("option", { name: /E6767SM/ }));
+    await user.keyboard("{Control>}");
+    await user.click(screen.getByRole("option", { name: /E6765SM/ }));
+    await user.keyboard("{/Control}");
+    await screen.findByText("已选 2 个，合并为一个范围");
+    await waitFor(() => expect(mocks.draft).toHaveBeenCalledTimes(2));
+    const merged = mocks.draft.mock.calls[1][0];
+    expect(
+      merged.scope.filter.values.map((v: { label: string }) => v.label),
+    ).toEqual(["E6767SM", "E6765SM"]);
+    expect(merged.project).toBe("E676");
+    const listbox = screen.getByRole("listbox", { name: "项目" });
+    expect(listbox.getAttribute("aria-multiselectable")).toBe("true");
+    await user.click(screen.getByRole("option", { name: /E6765SM/ }));
+    await waitFor(() =>
+      expect(
+        mocks.draft.mock.calls.at(-1)?.[0].scope.filter.values,
+      ).toHaveLength(1),
+    );
   });
   it("requires an answer only for unmapped statuses that issues hold, and asks again when the scope moved", async () => {
     const question = [{ field: "stage", value: "复核", count: 3 }];

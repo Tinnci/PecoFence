@@ -307,6 +307,12 @@ pub struct Discovery {
 pub struct MeegleFilter {
     pub field: String,
     pub field_name: String,
+    /// One or more group items forming one scope.
+    pub values: Vec<FilterValue>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+pub struct FilterValue {
     pub id: String,
     pub label: String,
 }
@@ -653,6 +659,7 @@ pub fn types() -> String {
             Discovery::decl(&config),
             DiscoverArgs::decl(&config),
             MeegleFilter::decl(&config),
+            FilterValue::decl(&config),
             ScopeQuery::decl(&config),
             Answers::decl(&config),
             DraftChoices::decl(&config),
