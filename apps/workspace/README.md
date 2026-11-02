@@ -307,8 +307,13 @@ Each model has 问题 and 需求 beside 概览 (`--open model:<CODE>:issues|requ
 - In 问题 and 需求 the stage bar shares out open work only; 已完成, 已取消 and 全部 sit on the
   right. One 需要关注 row holds 阻塞, 14 天无动态, 到期复查, 本地修正, 与远端冲突 and tags.
   Build names shorten to version and date (V14 · 09-23), full name on hover.
-- Chip groups use Base UI ToggleGroup (arrow keys, one Tab stop, aria-pressed); the sort and
-  correction choices use Select; 领域 classification uses Collapsible; hover hints use Tooltip.
+- Chip groups use Base UI ToggleGroup (arrow keys, one Tab stop, aria-pressed); the sort,
+  correction, timeline build-marker and source-job choices use Select; 领域 classification and
+  依据与历史 use Collapsible; hover hints use Tooltip.
+- The model's sub-pages are Base UI Tabs: a tablist with arrow-key navigation, the content in a
+  tabpanel, and an indicator that slides on the tab's own position (`--active-tab-left/width`).
+- The 构建源码来源 editor in 设置 uses Base UI Field with the app's Input, so each label is tied
+  to its control.
 - A branch's recorded source is one line (current or historical, old → new branch, 查看当前分支)
   with 依据与历史 for cutover, manual build ranges and the note; the timeline's reading note
   sits behind ⓘ.

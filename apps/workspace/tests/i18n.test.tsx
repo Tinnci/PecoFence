@@ -151,17 +151,17 @@ describe("workspace languages", () => {
     render(<App />);
     const nav = await screen.findByRole("navigation", { name: "主导航" });
     await user.click(await within(nav).findByRole("button", { name: "A" }));
-    await user.click(await screen.findByRole("button", { name: "设置" }));
+    await user.click(await screen.findByRole("tab", { name: "设置" }));
     const scroll = document.querySelector<HTMLElement>(".window-scroll")!;
     scroll.scrollTop = 280;
     await user.click(within(nav).getByRole("button", { name: "B" }));
     expect(
-      screen.getByRole("button", { name: "概览" }).getAttribute("aria-current"),
-    ).toBe("page");
+      screen.getByRole("tab", { name: "概览" }).getAttribute("aria-selected"),
+    ).toBe("true");
     await user.click(within(nav).getByRole("button", { name: "A" }));
     expect(
-      screen.getByRole("button", { name: "设置" }).getAttribute("aria-current"),
-    ).toBe("page");
+      screen.getByRole("tab", { name: "设置" }).getAttribute("aria-selected"),
+    ).toBe("true");
     expect(scroll.scrollTop).toBe(280);
     await waitFor(() =>
       expect(
@@ -179,12 +179,12 @@ describe("workspace languages", () => {
     await user.click(
       await screen.findByRole("menuitemradio", { name: "English" }),
     );
-    await screen.findByRole("button", { name: "Settings" });
+    await screen.findByRole("tab", { name: "Settings" });
     expect(
       screen
-        .getByRole("button", { name: "Settings" })
-        .getAttribute("aria-current"),
-    ).toBe("page");
+        .getByRole("tab", { name: "Settings" })
+        .getAttribute("aria-selected"),
+    ).toBe("true");
     expect(screen.getByRole("button", { name: "More" })).toBeTruthy();
     expect(screen.getByRole("region", { name: "Rules" }).textContent).toContain(
       "Features entering MP after freeze",
@@ -195,7 +195,7 @@ describe("workspace languages", () => {
       await i18n.changeLanguage("zh-CN");
     });
     expect(
-      screen.getByRole("button", { name: "设置" }).getAttribute("aria-current"),
-    ).toBe("page");
+      screen.getByRole("tab", { name: "设置" }).getAttribute("aria-selected"),
+    ).toBe("true");
   });
 });

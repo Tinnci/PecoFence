@@ -50,6 +50,7 @@ import {
 } from "./focus-cache";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { Info, RefreshCw } from "lucide-react";
+import { Tabs } from "@base-ui/react/tabs";
 import { AnimatePresence, m as motion } from "motion/react";
 import { Num } from "@/components/motion";
 import { Button } from "@/components/ui/button";
@@ -793,6 +794,24 @@ function BranchesTab({
     sourceTimelineJobs(timelineJobs, branch ?? "", saved),
   );
 
+  const timelineOptions = [
+    {
+      value: "suggested",
+      label:
+        association.kind === "source" || association.kind === "historical"
+          ? t("source.savedRouting")
+          : association.kind === "configured"
+            ? selectedGroup?.jobs !== undefined
+              ? t("release.linkedJobs")
+              : t("association.useSaved")
+            : t("timeline.suggested"),
+    },
+    { value: "off", label: t("timeline.hideBuilds") },
+    ...allJobs.map((job) => ({
+      value: job.job,
+      label: `${job.name}${job.disabled ? ` · ${t("timeline.disabled")}` : ""}`,
+    })),
+  ];
   return (
     <div className="branches-tab">
       <nav className="branch-rail" aria-label={t("model.branches")}>
@@ -924,31 +943,25 @@ function BranchesTab({
           ) : null}
           <ManifestInputs jobs={jobs} />
           <div className="timeline-controls">
-            <label>
-              {t("timeline.builds")}{" "}
-              <select
-                value={timelineJob}
-                onChange={(event) => setTimelineJob(event.target.value)}
-              >
-                <option value="suggested">
-                  {association.kind === "source" ||
-                  association.kind === "historical"
-                    ? t("source.savedRouting")
-                    : association.kind === "configured"
-                      ? selectedGroup?.jobs !== undefined
-                        ? t("release.linkedJobs")
-                        : t("association.useSaved")
-                      : t("timeline.suggested")}
-                </option>
-                <option value="off">{t("timeline.hideBuilds")}</option>
-                {allJobs.map((job) => (
-                  <option key={job.job} value={job.job}>
-                    {job.name}
-                    {job.disabled ? ` · ${t("timeline.disabled")}` : ""}
-                  </option>
+            <span className="timeline-label">{t("timeline.builds")}</span>
+            <Select
+              value={timelineJob}
+              items={timelineOptions}
+              onValueChange={(value) =>
+                value && setTimelineJob(value as string)
+              }
+            >
+              <SelectTrigger size="sm" aria-label={t("timeline.builds")}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {timelineOptions.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
                 ))}
-              </select>
-            </label>
+              </SelectContent>
+            </Select>
             <button
               type="button"
               disabled={builds.loading}
@@ -1976,91 +1989,94 @@ export function ModelPage({
           </div>
         </div>
       </section>
-      <nav
-        className="model-subnav"
-        aria-label={t("model.pages", { v0: m.code })}
+      <Tabs.Root
+        className="model-tabs-root"
+        value={tab}
+        onValueChange={(value) => onTab(value as ModelTab)}
       >
-        {(Object.keys(tabNames) as ModelTab[]).map((tabKey) => (
-          <button
-            type="button"
-            key={tabKey}
-            aria-current={tab === tabKey ? "page" : undefined}
-            onClick={() => onTab(tabKey)}
-          >
-            <ActionIcon name={tabKey} />
-            {tabNames[tabKey]}
-            {tab === tabKey ? <TabLine id="subnav" /> : null}
-            {tabKey === "overview" && m.flagged.length ? (
-              <span className="tab-count short">{m.flagged.length}</span>
-            ) : null}
-            {tabKey === "issues" && issueWork.openCount ? (
-              <span className="tab-count">{issueWork.openCount}</span>
-            ) : null}
-            {tabKey === "requirements" && requirementWork.openCount ? (
-              <span className="tab-count">{requirementWork.openCount}</span>
-            ) : null}
-            {tabKey === "builds" && running ? (
-              <span className="tab-count building">
-                {t("model.building2", { count: running })}
-              </span>
-            ) : null}
-            {tabKey === "settings" && !saved?.freeze ? (
-              <span
-                className="tab-dot"
-                aria-label={t("model.noFreezeDateSet")}
-              />
-            ) : null}
-          </button>
-        ))}
-      </nav>
-      {m.errors.length ? (
-        <FailureNote
-          failure={{ code: "source_failed", message: m.errors.join("；") }}
-        />
-      ) : null}
-      {tab === "overview" ? (
-        <Overview
-          m={m}
-          saved={saved}
-          state={state}
-          builds={builds}
-          issues={issueWork.data}
-          requirements={requirementWork.data}
-          onWork={onTab}
-          onBranch={(b) => {
-            setBranch(b);
-            onTab("branches");
-          }}
-          onBuilds={() => onTab("builds")}
-        />
-      ) : tab === "issues" || tab === "requirements" ? (
-        <WorkItemsTab code={code} kind={tab} saved={saved} state={state} />
-      ) : tab === "branches" ? (
-        <BranchesTab
-          m={m}
-          saved={saved}
-          builds={builds}
-          selected={branch}
-          onSelect={setBranch}
-          onAssociate={
-            saved
-              ? (branch, job) =>
-                  state.save(withBranchJob(saved, branch, job), false)
-              : undefined
-          }
-        />
-      ) : tab === "builds" ? (
-        <BuildsTab builds={builds} saved={saved} />
-      ) : saved ? (
-        <SettingsTab
-          builds={sourceBuilds}
-          m={m}
-          saved={saved}
-          state={state}
-          onEdit={onEdit}
-          onRemoved={onRemoved}
-        />
-      ) : null}
+        <Tabs.List
+          className="model-subnav"
+          aria-label={t("model.pages", { v0: m.code })}
+        >
+          {(Object.keys(tabNames) as ModelTab[]).map((tabKey) => (
+            <Tabs.Tab key={tabKey} value={tabKey}>
+              <ActionIcon name={tabKey} />
+              {tabNames[tabKey]}
+              {tabKey === "overview" && m.flagged.length ? (
+                <span className="tab-count short">{m.flagged.length}</span>
+              ) : null}
+              {tabKey === "issues" && issueWork.openCount ? (
+                <span className="tab-count">{issueWork.openCount}</span>
+              ) : null}
+              {tabKey === "requirements" && requirementWork.openCount ? (
+                <span className="tab-count">{requirementWork.openCount}</span>
+              ) : null}
+              {tabKey === "builds" && running ? (
+                <span className="tab-count building">
+                  {t("model.building2", { count: running })}
+                </span>
+              ) : null}
+              {tabKey === "settings" && !saved?.freeze ? (
+                <span
+                  className="tab-dot"
+                  aria-label={t("model.noFreezeDateSet")}
+                />
+              ) : null}
+            </Tabs.Tab>
+          ))}
+          <Tabs.Indicator className="tab-indicator" />
+        </Tabs.List>
+        <Tabs.Panel value={tab} className="model-panel">
+          {m.errors.length ? (
+            <FailureNote
+              failure={{ code: "source_failed", message: m.errors.join("；") }}
+            />
+          ) : null}
+          {tab === "overview" ? (
+            <Overview
+              m={m}
+              saved={saved}
+              state={state}
+              builds={builds}
+              issues={issueWork.data}
+              requirements={requirementWork.data}
+              onWork={onTab}
+              onBranch={(b) => {
+                setBranch(b);
+                onTab("branches");
+              }}
+              onBuilds={() => onTab("builds")}
+            />
+          ) : tab === "issues" || tab === "requirements" ? (
+            <WorkItemsTab code={code} kind={tab} saved={saved} state={state} />
+          ) : tab === "branches" ? (
+            <BranchesTab
+              m={m}
+              saved={saved}
+              builds={builds}
+              selected={branch}
+              onSelect={setBranch}
+              onAssociate={
+                saved
+                  ? (branch, job) =>
+                      state.save(withBranchJob(saved, branch, job), false)
+                  : undefined
+              }
+            />
+          ) : tab === "builds" ? (
+            <BuildsTab builds={builds} saved={saved} />
+          ) : saved ? (
+            <SettingsTab
+              builds={sourceBuilds}
+              m={m}
+              saved={saved}
+              state={state}
+              onEdit={onEdit}
+              onRemoved={onRemoved}
+            />
+          ) : null}
+        </Tabs.Panel>
+      </Tabs.Root>
     </div>
   );
 }

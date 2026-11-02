@@ -2448,7 +2448,7 @@ button.ledger-row:hover {
 .model-subnav button:hover {
   color: var(--foreground);
 }
-.model-subnav button[aria-current="page"] {
+.model-subnav button[data-active] {
   color: var(--foreground);
   font-weight: 600;
 }
@@ -3797,7 +3797,7 @@ a.external-link.bar { text-decoration: none; }
 .model-head.compact .model-figures small {
   font-size: 11px;
 }
-.model-head.compact + .model-subnav {
+.model-head.compact + .model-tabs-root .model-subnav {
   margin-top: -20px;
 }
 
@@ -3998,4 +3998,66 @@ a.external-link.bar { text-decoration: none; }
 }
 .info-hint:hover {
   background: #ece9e0;
+}
+
+/* Base UI Tabs：激活页签与滑动指示条 */
+.model-subnav {
+  position: relative;
+}
+.model-subnav button:focus-visible {
+  outline: 2px solid var(--ring, #24552b);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.tab-indicator {
+  position: absolute;
+  bottom: -1px;
+  left: var(--active-tab-left);
+  width: var(--active-tab-width);
+  height: 2px;
+  border-radius: 1px;
+  background: var(--foreground);
+  transition:
+    left 0.28s cubic-bezier(0.2, 0.8, 0.2, 1),
+    width 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .tab-indicator {
+    transition: none;
+  }
+}
+.model-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  outline: none;
+}
+.timeline-label {
+  font-size: 13px;
+  color: var(--muted-foreground);
+}
+.timeline-controls [data-slot="select-trigger"] {
+  min-width: 200px;
+}
+/* 来源编辑器：Base UI Field */
+.source-field {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  font-size: 12px;
+}
+.source-field label {
+  color: var(--muted-foreground);
+}
+.source-add-row [data-slot="select-trigger"] {
+  min-width: 220px;
+}
+.model-tabs-root {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+.source-editor-job fieldset > .link,
+.source-history-editor > .link {
+  justify-self: start;
 }

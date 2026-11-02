@@ -1,4 +1,13 @@
-import { useState } from "react";
+import { useState, type ComponentProps } from "react";
+import { Field } from "@base-ui/react/field";
+import { Input } from "./components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./components/ui/select";
 import { useTranslation } from "react-i18next";
 import { t } from "./i18n";
 import type { FocusModel, JobSource, JobView } from "./contracts/setup";
@@ -94,6 +103,18 @@ export function SourceRoutingNote({
     </section>
   );
 }
+/** A labelled input in the source editor (Base UI Field ties the label to the control). */
+function SourceField({
+  label,
+  ...props
+}: { label: string } & ComponentProps<typeof Input>) {
+  return (
+    <Field.Root className="source-field">
+      <Field.Label>{label}</Field.Label>
+      <Input {...props} />
+    </Field.Root>
+  );
+}
 export function JobSourcesEditor({
   jobs,
   sources,
@@ -123,135 +144,115 @@ export function JobSourcesEditor({
         <div className="source-editor-job" key={job}>
           <h3>{job.split("/").pop()}</h3>
           <fieldset>
-            <label>
-              {t("source.branch")}
-              <input
-                value={sources[job].branch}
-                maxLength={200}
-                onChange={(e) => update(job, { branch: e.target.value.trim() })}
-              />
-            </label>
-            <label>
-              {t("source.previous")}
-              <input
-                value={sources[job].previous.join(", ")}
-                onChange={(e) =>
-                  update(job, {
-                    previous: e.target.value
-                      .split(/[,，]/)
-                      .map((v) => v.trim()),
-                  })
-                }
-              />
-            </label>
-            <label>
-              {t("source.firstBuild")}
-              <input
-                type="number"
-                min={1}
-                step={1}
-                placeholder={t("source.unknown")}
-                value={sources[job].since_build ?? ""}
-                onChange={(e) =>
-                  update(job, {
-                    since_build: e.target.value
-                      ? Math.max(1, Math.round(Number(e.target.value)))
-                      : undefined,
-                  })
-                }
-              />
-            </label>
-            <label>
-              {t("source.note")}
-              <input
-                value={sources[job].note}
-                maxLength={1000}
-                onChange={(e) => update(job, { note: e.target.value })}
-              />
-            </label>
+            <SourceField
+              label={t("source.branch")}
+              value={sources[job].branch}
+              maxLength={200}
+              onChange={(e) => update(job, { branch: e.target.value.trim() })}
+            />
+            <SourceField
+              label={t("source.previous")}
+              value={sources[job].previous.join(", ")}
+              onChange={(e) =>
+                update(job, {
+                  previous: e.target.value.split(/[,，]/).map((v) => v.trim()),
+                })
+              }
+            />
+            <SourceField
+              label={t("source.firstBuild")}
+              type="number"
+              min={1}
+              step={1}
+              placeholder={t("source.unknown")}
+              value={sources[job].since_build ?? ""}
+              onChange={(e) =>
+                update(job, {
+                  since_build: e.target.value
+                    ? Math.max(1, Math.round(Number(e.target.value)))
+                    : undefined,
+                })
+              }
+            />
+            <SourceField
+              label={t("source.note")}
+              value={sources[job].note}
+              maxLength={1000}
+              onChange={(e) => update(job, { note: e.target.value })}
+            />
             <fieldset className="source-history-editor">
               <legend>{t("source.historyTitle")}</legend>
               {(sources[job].history ?? []).map((range, i) => (
                 <div key={i} className="source-history-row">
-                  <label>
-                    {t("source.rangeStart")}
-                    <input
-                      type="number"
-                      min={1}
-                      value={range.first_build || ""}
-                      onChange={(e) =>
-                        update(job, {
-                          history: sources[job].history!.map((r, n) =>
-                            n === i
-                              ? {
-                                  ...r,
-                                  first_build: e.target.value
-                                    ? Math.max(
-                                        1,
-                                        Math.round(Number(e.target.value)),
-                                      )
-                                    : 0,
-                                }
-                              : r,
-                          ),
-                        })
-                      }
-                    />
-                  </label>
-                  <label>
-                    {t("source.rangeEnd")}
-                    <input
-                      type="number"
-                      min={1}
-                      value={range.last_build || ""}
-                      onChange={(e) =>
-                        update(job, {
-                          history: sources[job].history!.map((r, n) =>
-                            n === i
-                              ? {
-                                  ...r,
-                                  last_build: e.target.value
-                                    ? Math.max(
-                                        1,
-                                        Math.round(Number(e.target.value)),
-                                      )
-                                    : 0,
-                                }
-                              : r,
-                          ),
-                        })
-                      }
-                    />
-                  </label>
-                  <label>
-                    {t("source.rangeBranch")}
-                    <input
-                      value={range.branch}
-                      onChange={(e) =>
-                        update(job, {
-                          history: sources[job].history!.map((r, n) =>
-                            n === i
-                              ? { ...r, branch: e.target.value.trim() }
-                              : r,
-                          ),
-                        })
-                      }
-                    />
-                  </label>
-                  <label>
-                    {t("source.note")}
-                    <input
-                      value={range.note}
-                      maxLength={1000}
-                      onChange={(e) =>
-                        update(job, {
-                          history: sources[job].history!.map((r, n) =>
-                            n === i ? { ...r, note: e.target.value } : r,
-                          ),
-                        })
-                      }
-                    />
-                  </label>
+                  <SourceField
+                    label={t("source.rangeStart")}
+                    type="number"
+                    min={1}
+                    value={range.first_build || ""}
+                    onChange={(e) =>
+                      update(job, {
+                        history: sources[job].history!.map((r, n) =>
+                          n === i
+                            ? {
+                                ...r,
+                                first_build: e.target.value
+                                  ? Math.max(
+                                      1,
+                                      Math.round(Number(e.target.value)),
+                                    )
+                                  : 0,
+                              }
+                            : r,
+                        ),
+                      })
+                    }
+                  />
+                  <SourceField
+                    label={t("source.rangeEnd")}
+                    type="number"
+                    min={1}
+                    value={range.last_build || ""}
+                    onChange={(e) =>
+                      update(job, {
+                        history: sources[job].history!.map((r, n) =>
+                          n === i
+                            ? {
+                                ...r,
+                                last_build: e.target.value
+                                  ? Math.max(
+                                      1,
+                                      Math.round(Number(e.target.value)),
+                                    )
+                                  : 0,
+                              }
+                            : r,
+                        ),
+                      })
+                    }
+                  />
+                  <SourceField
+                    label={t("source.rangeBranch")}
+                    value={range.branch}
+                    onChange={(e) =>
+                      update(job, {
+                        history: sources[job].history!.map((r, n) =>
+                          n === i ? { ...r, branch: e.target.value.trim() } : r,
+                        ),
+                      })
+                    }
+                  />
+                  <SourceField
+                    label={t("source.note")}
+                    value={range.note}
+                    maxLength={1000}
+                    onChange={(e) =>
+                      update(job, {
+                        history: sources[job].history!.map((r, n) =>
+                          n === i ? { ...r, note: e.target.value } : r,
+                        ),
+                      })
+                    }
+                  />
                   <button
                     type="button"
                     className="link"
@@ -307,18 +308,25 @@ export function JobSourcesEditor({
         </div>
       ))}
       <div className="source-add-row">
-        <select
-          aria-label={t("source.chooseJob")}
-          value={selected}
-          onChange={(e) => setPicked(e.target.value)}
+        <Select
+          value={selected || null}
+          items={available.map((job) => ({
+            value: job,
+            label: job.split("/").pop() ?? job,
+          }))}
+          onValueChange={(value) => setPicked((value as string) ?? "")}
         >
-          <option value="">{t("source.chooseJob")}</option>
-          {available.map((job) => (
-            <option key={job} value={job}>
-              {job.split("/").pop()}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger size="sm" aria-label={t("source.chooseJob")}>
+            <SelectValue placeholder={t("source.chooseJob")} />
+          </SelectTrigger>
+          <SelectContent>
+            {available.map((job) => (
+              <SelectItem key={job} value={job}>
+                {job.split("/").pop()}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <button
           type="button"
           className="link"

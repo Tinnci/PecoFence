@@ -339,8 +339,8 @@ describe("followed models", () => {
       expect(side.textContent).toContain("#96 已运行 1 小时"),
     );
     expect(side.textContent).not.toContain("E6767SM_old");
-    expect(screen.getByRole("button", { name: /构建1 个构建中/ })).toBeTruthy();
-    await user.click(screen.getByRole("button", { name: /设置/ }));
+    expect(screen.getByRole("tab", { name: /构建1 个构建中/ })).toBeTruthy();
+    await user.click(screen.getByRole("tab", { name: /设置/ }));
     const rules = screen.getByRole("region", { name: "规则" });
     expect(rules.textContent).toMatch(/冻结后进入 MP 的新功能/);
     expect(
@@ -652,5 +652,22 @@ describe("followed models", () => {
     ]);
     expect(saved.rules.no_issue_id).toBe("alert");
     expect(mocks.focus).toHaveBeenCalledWith("refresh", { code: "E6751SM" });
+  });
+
+  it("moves between model pages with the arrow keys", async () => {
+    const user = userEvent.setup();
+    render(<Harness view="model" />);
+    const overview = await screen.findByRole("tab", { name: /概览/ });
+    expect(overview.getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByRole("tablist")).toBeTruthy();
+    overview.focus();
+    await user.keyboard("{ArrowRight}");
+    const issues = screen.getByRole("tab", { name: /问题/ });
+    expect(document.activeElement).toBe(issues);
+    await user.keyboard("{Enter}");
+    await waitFor(() =>
+      expect(issues.getAttribute("aria-selected")).toBe("true"),
+    );
+    expect(screen.getByRole("tabpanel")).toBeTruthy();
   });
 });
