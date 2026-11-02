@@ -1,18 +1,38 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 const mocks = vi.hoisted(() => ({ focus: vi.fn() }));
 vi.mock("../src/api", async (original) => ({
   ...(await original<typeof import("../src/api")>()),
   focus: mocks.focus,
 }));
-import { WorkItemsTab, ageDays, isStale } from "../src/WorkItems";
+import { WorkItemsTab, ageDays, isStale, remoteOf } from "../src/WorkItems";
 import { queryClient } from "../src/focus-cache";
 
 const day = 86_400_000;
 const iso = (daysAgo: number) =>
   new Date(Date.now() - daysAgo * day).toISOString();
+const activity = (extra = {}) => ({
+  created: iso(30.5),
+  status_since: iso(3.5),
+  status_since_source: "history",
+  last_comment: null,
+  comment_count: 0,
+  progress: "",
+  found_versions: [],
+  target_versions: [],
+  reopened: 0,
+  last_activity: iso(3.5),
+  ...extra,
+});
 const item = (id: string, group: string, extra = {}) => ({
   id,
   display_id: id,
@@ -26,18 +46,19 @@ const item = (id: string, group: string, extra = {}) => ({
   resolution: "",
   owner: "沈霞",
   severity: "",
-  updated: iso(1),
+  updated: iso(0.5),
   software_evidence: "领域 = Setting",
   origin: "",
   origin_kind: "",
   origin_evidence: "",
   commits: [],
+  activity: activity(),
   ...extra,
 });
 const source = {
   id: "jira-0",
   source: "jira",
-  label: "Jira PLV 中缺陷的",
+  label: "Jira PLV 中缺陷的问题",
   filter: "project = PLV AND issuetype = 缺陷",
   software_filter: "领域：软件类取值",
   total: 1314,
@@ -67,31 +88,61 @@ const saved = {
   accepted: [],
   tracked: [],
 };
-const state = { save: vi.fn(async () => {}) } as never as Parameters<
-  typeof WorkItemsTab
->[0]["state"];
+const save = vi.fn(async (_model: unknown) => {});
+const state = { save } as never as Parameters<typeof WorkItemsTab>[0]["state"];
+const issues = () => ({
+  work_items: {
+    code: "P6700LV",
+    kind: "issues",
+    checked_at: iso(0),
+    sources: [source],
+    items: [
+      item("PLV-1", "blocked", {
+        // Touched yesterday by a field edit, but no person has moved it in 20 days.
+        updated: iso(1),
+        commits: [80020, 79397],
+        activity: activity({
+          status_since: iso(20.5),
+          last_activity: iso(20.5),
+          reopened: 2,
+          comment_count: 3,
+          found_versions: ["V09"],
+          target_versions: ["V12"],
+          last_comment: {
+            at: iso(20.5),
+            by: "李志宏",
+            text: "帮忙提供一下包名信息",
+          },
+        }),
+        local: {
+          tags: ["MP必解"],
+          corrections: [
+            {
+              field: "found_version",
+              value: "V09",
+              remote: "V10",
+              reason: "V09 已复现",
+              at: iso(1),
+              state: "active",
+              remote_now: "V10",
+            },
+          ],
+          notes: [{ at: iso(1), text: "已转测试" }],
+          next_check: "2026-01-01",
+        },
+      }),
+      item("PLV-2", "testing"),
+      item("PLV-3", "done"),
+    ],
+  },
+});
 
 beforeEach(() => {
   queryClient.clear();
-  (state as unknown as { save: ReturnType<typeof vi.fn> }).save.mockClear();
+  save.mockClear();
   mocks.focus.mockReset().mockImplementation(async (action: string) => {
-    if (action.startsWith("issues"))
-      return {
-        work_items: {
-          code: "P6700LV",
-          kind: "issues",
-          checked_at: iso(0),
-          sources: [source],
-          items: [
-            item("PLV-1", "blocked", {
-              updated: iso(20.5),
-              commits: [80020, 79397],
-            }),
-            item("PLV-2", "testing"),
-            item("PLV-3", "done"),
-          ],
-        },
-      };
+    if (action === "annotate") return { local: {} };
+    if (action.startsWith("issues")) return issues();
     return {
       work_items: {
         code: "P6700LV",
@@ -113,6 +164,7 @@ beforeEach(() => {
             origin: "internal",
             origin_kind: "internet",
             origin_evidence: "标题含“内部需求”",
+            activity: activity({ progress: "等待 UI 稿" }),
           }),
           item("PLV-1488", "done", {
             origin: "internal",
@@ -126,7 +178,7 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("software issues and requirements", () => {
-  it("shows open issues by stage, the scope and which domain values count", async () => {
+  it("shows open issues by stage with their activity, versions and local marks", async () => {
     const user = userEvent.setup();
     render(
       <WorkItemsTab
@@ -138,33 +190,121 @@ describe("software issues and requirements", () => {
     );
     expect(await screen.findByText("title PLV-1")).toBeTruthy();
     expect(screen.queryByText("title PLV-3")).toBeNull();
-    expect(document.body.textContent).toContain(
-      "范围 1314 · 软件 1141 · 排除 173",
-    );
-    expect(
-      screen
-        .getByRole("radio", { name: /未完成 2/ })
-        .getAttribute("aria-checked"),
-    ).toBe("true");
-    expect(document.body.textContent).toContain("2 个提交");
-    expect(document.body.textContent).toContain("20 天前更新");
+    const text = document.body.textContent ?? "";
+    expect(text).toContain("范围 1314 · 软件 1141 · 排除 173");
+    expect(text).toContain("当前状态 20 天");
+    expect(text).toContain("重开 2 次");
+    expect(text).toContain("李志宏");
+    expect(text).toContain("帮忙提供一下包名信息");
+    expect(text).toContain("V09 → V12");
+    expect(text).toContain("发现版本：V09V10本地修正");
+    expect(text).toContain("MP必解");
+    expect(text).toContain("01-01 复查");
+    expect(text).toContain("2 个提交");
+    // Stale follows the last human activity, not the field edit from yesterday.
     await user.click(screen.getByRole("switch", { name: /14 天没更新 1/ }));
     expect(screen.queryByText("title PLV-2")).toBeNull();
-    await user.click(screen.getByRole("radio", { name: /全部 3/ }));
     await user.click(screen.getByRole("switch", { name: /14 天没更新/ }));
-    expect(screen.getByText("title PLV-3")).toBeTruthy();
+    await user.click(screen.getByRole("radio", { name: "# MP必解" }));
+    expect(screen.queryByText("title PLV-2")).toBeNull();
+    await user.click(screen.getByRole("radio", { name: "到期复查 1" }));
+    expect(screen.getByText("title PLV-1")).toBeTruthy();
     await user.click(screen.getByText(/领域 怎样算软件/));
     await user.click(screen.getByRole("switch", { name: /硬件/ }));
     await user.click(
       screen.getByRole("button", { name: "保存分类并重新读取" }),
     );
-    const model = (state as unknown as { save: ReturnType<typeof vi.fn> }).save
-      .mock.calls[0][0];
+    const model = save.mock.calls[0][0] as never as {
+      tracking: { jira_software_field: string; jira_software_values: string[] };
+    };
     expect(model.tracking.jira_software_field).toBe("customfield_17302");
     expect(model.tracking.jira_software_values).toEqual(["Setting", "硬件"]);
   });
 
-  it("splits requirements into customer and internal, and saves a correction", async () => {
+  it("tags, corrects and notes an item locally against the source's value", async () => {
+    const user = userEvent.setup();
+    render(
+      <WorkItemsTab
+        code="P6700LV"
+        kind="issues"
+        saved={saved as never}
+        state={state}
+      />,
+    );
+    await screen.findByText("title PLV-2");
+    const row = screen.getByText("title PLV-1").closest("li")!;
+    await user.click(within(row).getByRole("button", { name: "本地标记" }));
+    const dialog = await screen.findByRole("dialog");
+    await user.type(
+      within(dialog).getByRole("textbox", { name: "新标签" }),
+      "客户关注",
+    );
+    await user.click(
+      within(dialog).getAllByRole("button", { name: "添加" })[0],
+    );
+    await waitFor(() =>
+      expect(mocks.focus).toHaveBeenCalledWith("annotate", {
+        source: "jira",
+        item: "PLV-1",
+        op: { op: "tags", tags: ["MP必解", "客户关注"] },
+      }),
+    );
+    expect(within(dialog).getByText("远端现在：V10")).toBeTruthy();
+    await user.type(
+      within(dialog).getByRole("textbox", { name: "修正为" }),
+      "V08",
+    );
+    await user.type(
+      within(dialog).getByRole("textbox", { name: "原因" }),
+      "V08 已出现",
+    );
+    await user.click(within(dialog).getByRole("button", { name: "保存修正" }));
+    await waitFor(() =>
+      expect(mocks.focus).toHaveBeenCalledWith("annotate", {
+        source: "jira",
+        item: "PLV-1",
+        op: {
+          op: "correct",
+          field: "found_version",
+          value: "V08",
+          remote: "V10",
+          reason: "V08 已出现",
+        },
+      }),
+    );
+    await user.type(
+      within(dialog).getByRole("textbox", { name: "记一笔" }),
+      "周四复测",
+    );
+    await user.click(
+      within(dialog).getAllByRole("button", { name: "添加" })[1],
+    );
+    await waitFor(() =>
+      expect(mocks.focus).toHaveBeenCalledWith("annotate", {
+        source: "jira",
+        item: "PLV-1",
+        op: { op: "note", text: "周四复测" },
+      }),
+    );
+    fireEvent.change(
+      within(dialog).getByLabelText("下次复查", { selector: "input" }),
+      {
+        target: { value: "2026-11-09" },
+      },
+    );
+    await waitFor(() =>
+      expect(mocks.focus).toHaveBeenCalledWith("annotate", {
+        source: "jira",
+        item: "PLV-1",
+        op: { op: "next_check", date: "2026-11-09" },
+      }),
+    );
+    expect(mocks.focus).toHaveBeenCalledWith("issues_cached", {
+      code: "P6700LV",
+    });
+  });
+
+  it("splits requirements into customer and internal, and corrects the origin locally", async () => {
     const user = userEvent.setup();
     render(
       <WorkItemsTab
@@ -175,40 +315,56 @@ describe("software issues and requirements", () => {
       />,
     );
     expect(await screen.findByText("title PLV-1507")).toBeTruthy();
-    const customer = screen.getByRole("radio", { name: /客户需求/ });
-    expect(customer.textContent).toContain("1共 1");
+    expect(
+      screen.getByRole("radio", { name: /客户需求/ }).textContent,
+    ).toContain("1共 1");
     await user.click(screen.getByRole("radio", { name: /其中互联网\/运营/ }));
     expect(screen.queryByText("title PLV-1507")).toBeNull();
-    expect(screen.getByText("title PLV-1495")).toBeTruthy();
     expect(document.body.textContent).toContain("内部需求 · 互联网/运营");
-    await user.click(screen.getByRole("button", { name: "改为客户" }));
-    await waitFor(() =>
-      expect(
-        (state as unknown as { save: ReturnType<typeof vi.fn> }).save,
-      ).toHaveBeenCalled(),
+    expect(document.body.textContent).toContain("进展等待 UI 稿");
+    await user.click(screen.getByRole("button", { name: "本地标记" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("远端现在：内部需求")).toBeTruthy();
+    await user.selectOptions(
+      within(dialog).getByRole("combobox", { name: "修正为" }),
+      "customer",
     );
-    const model = (state as unknown as { save: ReturnType<typeof vi.fn> }).save
-      .mock.calls[0][0];
-    expect(model.tracking.origin_overrides).toEqual({ "PLV-1495": "customer" });
+    await user.click(within(dialog).getByRole("button", { name: "保存修正" }));
+    await waitFor(() =>
+      expect(mocks.focus).toHaveBeenCalledWith("annotate", {
+        source: "jira",
+        item: "PLV-1495",
+        op: {
+          op: "correct",
+          field: "origin",
+          value: "customer",
+          remote: "internal",
+          reason: "",
+        },
+      }),
+    );
+    expect(save).not.toHaveBeenCalled();
   });
 
-  it("reads Jira and Meegle update times and marks open items untouched for two weeks", () => {
+  it("dates activity from people, not edits, and keeps the source value behind a correction", () => {
     const now = Date.parse("2026-11-02T12:00:00+08:00");
     expect(ageDays("2026-10-27T16:47:40.000+0800", now)).toBe(5);
     expect(ageDays(String(now - 3 * day), now)).toBe(3);
+    expect(ageDays("2026-10-30 12:00:00", now)).toBe(3);
+    expect(ageDays("2026-10-30", now)).toBe(3);
+    expect(ageDays("2026-10-30T12:00:00+08:00", now)).toBe(3);
+    const old = activity({ last_activity: "2026-10-01T00:00:00.000+0800" });
     expect(
       isStale(
-        item("A", "pending", {
-          updated: "2026-10-01T00:00:00.000+0800",
-        }) as never,
+        item("A", "pending", { updated: iso(0), activity: old }) as never,
         now,
       ),
     ).toBe(true);
-    expect(
-      isStale(
-        item("B", "done", { updated: "2026-10-01T00:00:00.000+0800" }) as never,
-        now,
-      ),
-    ).toBe(false);
+    expect(isStale(item("B", "done", { activity: old }) as never, now)).toBe(
+      false,
+    );
+    const corrected = issues().work_items.items[0];
+    expect(remoteOf(corrected as never, "found_version")).toBe("V10");
+    expect(remoteOf(corrected as never, "owner")).toBe("沈霞");
   });
 });

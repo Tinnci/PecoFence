@@ -122,11 +122,7 @@ export type Flagged = { number: number, subject: string, project: string, branch
 export type IssueLink = { id: string, url: string, resolved: boolean, severe: boolean, fatal: boolean, };
 export type ModelSummary = { code: string, targets: FocusTargets, issues: number, sources: Array<string>, issue_links?: Array<IssueLink>, measures?: Measures, new_issues: number, days: Array<number>, days_from: string, week_changes: number, week_merged: number, branches: Array<BranchStrip>, flagged: Array<Flagged>, rule_counts: { [key in string]: number }, rules: { [key in string]: string }, freeze?: string, errors: Array<string>, };
 export type FocusSummary = { computed_at?: string, models: Array<ModelSummary>, };
-export type TrackingConfig = { jira_software_field?: string, jira_requirement_jql?: string, jira_software_values?: Array<string>, 
-/**
- * Work item ID → customer or internal.
- */
-origin_overrides: { [key in string]: string }, };
+export type TrackingConfig = { jira_software_field?: string, jira_requirement_jql?: string, jira_software_values?: Array<string>, };
 export type WorkItem = { id: string, display_id: string, title: string, url: string, source: string, scope_id: string, status: string, 
 /**
  * pending, active, review, testing, blocked, done, cancelled or unknown.
@@ -143,10 +139,23 @@ origin_kind: string, origin_evidence: string,
 /**
  * Gerrit changes whose subjects name the item.
  */
-commits: Array<number>, };
+commits: Array<number>, activity: ItemActivity, 
+/**
+ * Tags, corrections, notes and the next check kept on this machine.
+ */
+local?: LocalLayer, };
 export type DomainValue = { value: string, count: number, software: boolean, };
+export type ItemActivity = { created: string, status_since: string, 
+/**
+ * history, created, field or observed.
+ */
+status_since_source: string, last_comment: Comment | null, comment_count: number, progress: string, found_versions: Array<string>, target_versions: Array<string>, reopened: number, last_activity: string, };
+export type Comment = { at: string, by: string, text: string, };
+export type LocalLayer = { tags: Array<string>, corrections: Array<Correction>, notes: Array<Note>, next_check: string | null, };
+export type Correction = { field: string, value: string, remote: string, reason: string, at: string, state: string, remote_now: string, };
+export type Note = { at: string, text: string, };
 export type Classification = { field: string, field_name: string, configured: boolean, values: Array<DomainValue>, };
 export type TrackingSource = { id: string, source: string, label: string, filter: string, software_filter: string, total: number, matched: number, excluded: number, unclassified: number, updated_at: string | null, stale: boolean, error: string | null, classification?: Classification, };
 export type WorkItems = { code: string, kind: string, checked_at: string, sources: Array<TrackingSource>, items: Array<WorkItem>, };
-export type FocusData = { work_items?: WorkItems, models?: Array<FocusModel>, suggestions?: Suggestions, summary?: FocusSummary, preview?: Preview, changes?: Array<Listed>, builds?: Builds, };
+export type FocusData = { work_items?: WorkItems, local?: LocalLayer, models?: Array<FocusModel>, suggestions?: Suggestions, summary?: FocusSummary, preview?: Preview, changes?: Array<Listed>, builds?: Builds, };
 export type Activation = { health?: ServiceHealth, waited_secs?: number, };

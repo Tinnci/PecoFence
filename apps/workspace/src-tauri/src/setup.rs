@@ -801,9 +801,6 @@ pub struct TrackingConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub jira_software_values: Option<Vec<String>>,
-    /// Work item ID → customer or internal.
-    #[serde(default)]
-    pub origin_overrides: std::collections::BTreeMap<String, String>,
 }
 /// A software issue or requirement in a model's scope.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -833,6 +830,56 @@ pub struct WorkItem {
     /// Gerrit changes whose subjects name the item.
     #[serde(default)]
     pub commits: Vec<u32>,
+    #[serde(default)]
+    pub activity: ItemActivity,
+    /// Tags, corrections, notes and the next check kept on this machine.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub local: Option<LocalLayer>,
+}
+/// Whether an item is moving: status age, the last human comment, versions, reopens.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+pub struct ItemActivity {
+    pub created: String,
+    pub status_since: String,
+    /// history, created, field or observed.
+    pub status_since_source: String,
+    pub last_comment: Option<Comment>,
+    pub comment_count: u32,
+    pub progress: String,
+    pub found_versions: Vec<String>,
+    pub target_versions: Vec<String>,
+    pub reopened: u32,
+    pub last_activity: String,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct Comment {
+    pub at: String,
+    pub by: String,
+    pub text: String,
+}
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+pub struct LocalLayer {
+    pub tags: Vec<String>,
+    pub corrections: Vec<Correction>,
+    pub notes: Vec<Note>,
+    pub next_check: Option<String>,
+}
+/// A local value with the remote value it replaced; `state` is active, resolved or conflict.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct Correction {
+    pub field: String,
+    pub value: String,
+    pub remote: String,
+    pub reason: String,
+    pub at: String,
+    pub state: String,
+    pub remote_now: String,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct Note {
+    pub at: String,
+    pub text: String,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct DomainValue {
@@ -881,6 +928,9 @@ pub struct FocusData {
     pub work_items: Option<WorkItems>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
+    pub local: Option<LocalLayer>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub models: Option<Vec<FocusModel>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
@@ -899,6 +949,15 @@ pub struct FocusData {
     pub builds: Option<Builds>,
 }
 
+/// A work item the local layer may address: its source and the source's ID.
+pub fn valid_item(source: &str, item: &str) -> bool {
+    matches!(source, "jira" | "meegle")
+        && (1..=64).contains(&item.len())
+        && item.starts_with(|c: char| c.is_ascii_alphanumeric())
+        && item
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
+}
 /// A Gerrit branch name as the frontend may pass it.
 pub fn valid_branch(branch: &str) -> bool {
     (1..=200).contains(&branch.len())
@@ -923,10 +982,21 @@ pub fn focus_args(
     change: Option<u32>,
     review: Option<&str>,
     branch: Option<&str>,
+    annotation: Option<(&str, &str)>,
 ) -> Option<Vec<String>> {
     let code = || code.filter(|c| valid_code(c)).map(str::to_owned);
     let mut args: Vec<String> = vec!["focus".into()];
     match action {
+        "annotate" => {
+            let (source, item) = annotation.filter(|(s, i)| valid_item(s, i))?;
+            args.extend([
+                "annotate".into(),
+                "--source".into(),
+                source.into(),
+                "--item".into(),
+                item.into(),
+            ]);
+        }
         "issues" | "issues_cached" | "requirements" | "requirements_cached" => {
             args.extend([
                 "work-items".into(),
@@ -1243,6 +1313,11 @@ pub fn types() -> String {
             TrackingConfig::decl(&config),
             WorkItem::decl(&config),
             DomainValue::decl(&config),
+            ItemActivity::decl(&config),
+            Comment::decl(&config),
+            LocalLayer::decl(&config),
+            Correction::decl(&config),
+            Note::decl(&config),
             Classification::decl(&config),
             TrackingSource::decl(&config),
             WorkItems::decl(&config),
@@ -1363,13 +1438,21 @@ mod tests {
     #[test]
     fn focus_arguments_and_data() {
         assert_eq!(
-            focus_args("review", Some("E6767SM"), Some(80153), Some("accept"), None).unwrap(),
+            focus_args(
+                "review",
+                Some("E6767SM"),
+                Some(80153),
+                Some("accept"),
+                None,
+                None
+            )
+            .unwrap(),
             [
                 "focus", "review", "--code", "E6767SM", "--change", "80153", "--action", "accept"
             ]
         );
         assert_eq!(
-            focus_args("cached", None, None, None, None).unwrap(),
+            focus_args("cached", None, None, None, None, None).unwrap(),
             ["focus", "summary", "--cached"]
         );
         assert_eq!(
@@ -1378,7 +1461,8 @@ mod tests {
                 Some("E6767SM"),
                 None,
                 None,
-                Some("E6767SM_SYS_A16_MP")
+                Some("E6767SM_SYS_A16_MP"),
+                None
             )
             .unwrap(),
             [
@@ -1396,18 +1480,45 @@ mod tests {
                 Some("E6767SM"),
                 None,
                 None,
-                Some("--config-root")
+                Some("--config-root"),
+                None
             )
             .is_none()
         );
-        assert!(focus_args("changes", Some("E6767SM"), None, None, None).is_none());
+        assert!(focus_args("changes", Some("E6767SM"), None, None, None, None).is_none());
         assert_eq!(
-            focus_args("builds_cached", Some("E6767SM"), None, None, None).unwrap(),
+            focus_args(
+                "annotate",
+                None,
+                None,
+                None,
+                None,
+                Some(("jira", "PLV-1509"))
+            )
+            .unwrap(),
+            [
+                "focus", "annotate", "--source", "jira", "--item", "PLV-1509"
+            ]
+        );
+        assert!(focus_args("annotate", None, None, None, None, Some(("svn", "1"))).is_none());
+        assert!(focus_args("annotate", None, None, None, None, Some(("jira", "--x"))).is_none());
+        assert_eq!(
+            focus_args("builds_cached", Some("E6767SM"), None, None, None, None).unwrap(),
             ["focus", "builds", "--code", "E6767SM", "--cached"]
         );
-        assert!(focus_args("suggest", Some("E6751 SM"), None, None, None).is_none());
-        assert!(focus_args("review", Some("E6767SM"), Some(1), Some("delete"), None).is_none());
-        assert!(focus_args("rm", None, None, None, None).is_none());
+        assert!(focus_args("suggest", Some("E6751 SM"), None, None, None, None).is_none());
+        assert!(
+            focus_args(
+                "review",
+                Some("E6767SM"),
+                Some(1),
+                Some("delete"),
+                None,
+                None
+            )
+            .is_none()
+        );
+        assert!(focus_args("rm", None, None, None, None, None).is_none());
         let summary = br#"{"ok":true,"data":{"summary":{"computed_at":"2026-11-01T11:00:00Z","models":[{"code":"E6767SM",
             "targets":{"severe_pct":95,"overall_pct":85,"fatal_max":0},"issues":342,"sources":["x"],
             "measures":{"severe_total":100,"severe_resolved":96,"overall_total":342,"overall_resolved":281,"fatal_open":0},

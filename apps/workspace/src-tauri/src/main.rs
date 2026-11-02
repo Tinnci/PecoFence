@@ -273,6 +273,9 @@ fn desktop() {
         review: Option<String>,
         branch: Option<String>,
         model: Option<setup::FocusModel>,
+        source: Option<String>,
+        item: Option<String>,
+        op: Option<serde_json::Value>,
         state: tauri::State<'_, State>,
     ) -> Result<setup::FocusData, setup::SetupFailure> {
         let args = setup::focus_args(
@@ -281,13 +284,18 @@ fn desktop() {
             change,
             review.as_deref(),
             branch.as_deref(),
+            source.as_deref().zip(item.as_deref()),
         )
         .ok_or_else(|| setup::SetupFailure::new("invalid_input"))?;
-        let input = match (action.as_str(), &model) {
-            ("save" | "preview", Some(model)) => Some(
+        let input = match (action.as_str(), &model, &op) {
+            ("save" | "preview", Some(model), _) => Some(
                 serde_json::to_vec(model).map_err(|_| setup::SetupFailure::new("invalid_input"))?,
             ),
-            ("save" | "preview", None) => return Err(setup::SetupFailure::new("invalid_input")),
+            // SPM validates the operation; only its shape is checked here.
+            ("annotate", _, Some(op)) if op.is_object() => Some(op.to_string().into_bytes()),
+            ("save" | "preview" | "annotate", _, _) => {
+                return Err(setup::SetupFailure::new("invalid_input"));
+            }
             _ => None,
         };
         let args: Vec<&str> = args.iter().map(String::as_str).collect();
@@ -301,6 +309,7 @@ fn desktop() {
             "builds_cached",
             "issues_cached",
             "requirements_cached",
+            "annotate",
         ]
         .contains(&action.as_str())
         {

@@ -293,8 +293,33 @@ Each model has 问题 and 需求 beside 概览 (`--open model:<CODE>:issues|requ
 - Rows link the ID and title to Jira or 飞书项目 and show the source status coloured by stage,
   resolution, owner, priority, days since the last update and how many Gerrit changes name the item.
 - 需求 splits into 客户需求 and 内部需求, with 互联网/运营 (lockscreen poster, articles, ads, Push,
-  analytics) inside internal. Each row says why (标题含“客户需求”, 标签, 没有客户标记) and
-  改为客户/改为内部 saves a per-item override.
+  analytics) inside internal. Each row says why (标题含“客户需求”, 标签, 没有客户标记); a
+  local correction of 需求来源 changes it.
+
+### Activity and local marks
+
+Rows say whether an item is moving, not just when it was last edited (`updated` moves on any
+field edit, bots included):
+
+- **How long it has held its status**: from Jira's change history, its creation when it never
+  changed, 飞书项目's owner holding time, or the first time this machine saw that status.
+- **The last comment by a person**: who, how many days ago, first line, with the total count;
+  飞书项目's 最新进展记录 when there is no comment.
+- **Versions and reopens**: found → target version, and how often it came back from done.
+
+The stale filter and the default sort (最近动态在前) follow the last status change or human
+comment; the sort also offers 状态停留最久在前 and 最早创建在前.
+
+本地标记 opens one item's local layer, saved through `spm focus annotate` into
+`focus-local.sqlite` in the SPM config root and never written to Jira or 飞书项目:
+
+- **Tags**: your own labels; tags used anywhere in the list become filter chips.
+- **Corrections**: found or target version, severity, owner, stage or origin set locally, with
+  a reason. The row shows the corrected value with the source's value struck through; when the
+  source later agrees the correction shows 来源已改对, and when the source moved to something
+  else it shows 与远端冲突.
+- **Next check**: the date turns orange once due; 到期复查 filters them.
+- **Notes**: a timestamped local log.
 
 ## 标题栏
 
