@@ -562,3 +562,13 @@ project revisions can name shared branches from other models. Complete source
 tracking needs repository/revision pairs and a pinned manifest file/revision.
 Current explicit release lines group the already-followed branches and do not
 expand the source scope automatically.
+
+Suffixless Jenkins jobs are now displayed as “Phase unspecified”. Branch matching
+separates explicit release/local mappings, input-ref matches, name-and-phase
+matches, and unknown-phase candidates. A bare `MODEL-A` job is offered as a
+candidate for `MODEL-A_SYS_A16_MP`; `MODEL-B`, IR/PB and disabled jobs are excluded.
+Candidates contribute no build markers until locally associated. The branch page
+can save/reset a `branch_jobs` mapping without rereading source systems or running
+Jenkins tasks. Configured jobs missing from the current cache are named as a read
+gap instead of being replaced by heuristic matches. Settings can remove these
+local overrides; changing followed branches or excluded jobs preserves valid scope.

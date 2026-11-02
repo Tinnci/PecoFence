@@ -755,5 +755,17 @@
   "release.linkedJobs": "Use release mapping",
   "release.manifestInputs": "Manifest inputs · build parameters",
   "release.manifestExplanation": "The input ref selects a manifest. Source branches come from each project’s revision inside it. T/V retain the original Jenkins parameter names.",
-  "release.layerUnverified": "SYS/VND unverified"
+  "release.layerUnverified": "SYS/VND unverified",
+  "association.candidatesFound": "Matching model job found · association unconfirmed",
+  "association.candidateReason": "The model name matches, but the job has no phase suffix. Inspect an existing build, then save a local association.",
+  "association.confirm": "Associate with this branch",
+  "association.notEstablished": "Build association not established. Refresh jobs or configure a release line in Settings.",
+  "association.configured": "Local association",
+  "association.reset": "Restore automatic matching",
+  "association.input": "Build parameters include this input branch",
+  "association.name": "Matched by job name and phase",
+  "association.missing": "Configured jobs not yet loaded: {{jobs}}",
+  "association.phaseUnspecified": "Phase unspecified",
+  "association.settings": "Branch build associations",
+  "association.useSaved": "Use saved association"
 }

@@ -427,6 +427,55 @@ describe("followed models", () => {
     expect(screen.getByRole("button", { name: "关注 E6765SM" })).toBeTruthy();
   });
 
+  it("persists a suffixless job association locally without refreshing sources or starting a build", async () => {
+    const branch = "E6751SM-A_SYS_A16_MP";
+    const model = summary("E6751SM", [1, 1, 1, 1, 0], {
+      branches: [
+        { branch, phase: "mp", total: 31, flagged: 1, days: Array(84).fill(0) },
+      ],
+    });
+    let saved = {
+      ...followed("E6751SM"),
+      jobs: [],
+      branches: [branch],
+    } as import("../src/contracts/setup").FocusModel;
+    const candidate = {
+      ...builds.jobs[0],
+      job: "folder/E6751SM-A",
+      name: "E6751SM-A",
+      phase: "main",
+      parameters: {},
+      builds: [run(57)],
+    };
+    mocks.focus.mockImplementation(async (action, args) => {
+      if (action === "list") return { models: [saved] };
+      if (["summary", "cached", "refresh"].includes(action))
+        return { summary: { models: [model] } };
+      if (["builds", "builds_cached"].includes(action))
+        return { builds: { ...builds, code: "E6751SM", jobs: [candidate] } };
+      if (action === "changes") return { changes: [] };
+      if (action === "save") {
+        saved = args.model;
+        return { models: [saved] };
+      }
+      return {};
+    });
+    render(<Harness view="model" code="E6751SM" initialTab="branches" />);
+    await screen.findByText("找到同型号候选任务，关联待确认");
+    expect(screen.queryByText(/Jenkins #57/)).toBeNull();
+    mocks.focus.mockClear();
+    await userEvent.click(
+      screen.getByRole("button", { name: "关联到当前分支" }),
+    );
+    await screen.findByText("本地配置关联", { exact: false });
+    expect(saved.branch_jobs).toEqual({ [branch]: ["folder/E6751SM-A"] });
+    expect(mocks.focus.mock.calls.map((c) => c[0])).toEqual(["save"]);
+    expect(screen.getByText(/Jenkins #57/)).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "恢复自动识别" }));
+    await screen.findByText("找到同型号候选任务，关联待确认");
+    expect(saved.branch_jobs).toEqual({});
+  });
+
   it("defers Jenkins reads while editing settings", async () => {
     render(<Harness view="model" initialTab="settings" />);
     await screen.findByRole("region", { name: "规则" });

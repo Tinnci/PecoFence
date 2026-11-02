@@ -1,3 +1,5 @@
+import { buildAssociation, withBranchJob } from "./build-association";
+import { BranchBuildAssociation } from "./BranchBuildAssociation";
 import { ManifestInputs } from "./ManifestInputs";
 import {
   releaseBranchGroups as branchGroups,
@@ -481,7 +483,15 @@ function Config({ job }: { job: JobView }) {
   );
 }
 
-function JobRow({ job, now }: { job: JobView; now: number }) {
+function JobRow({
+  job,
+  now,
+  phaseConfirmed = false,
+}: {
+  job: JobView;
+  now: number;
+  phaseConfirmed?: boolean;
+}) {
   useTranslation();
   return (
     <ContextTarget
@@ -509,7 +519,9 @@ function JobRow({ job, now }: { job: JobView; now: number }) {
               </ExternalLink>
             </strong>
             <span className={`phase phase-${job.phase}`}>
-              {phaseNames[job.phase]}
+              {job.phase === "main" && !phaseConfirmed
+                ? t("association.phaseUnspecified")
+                : phaseNames[job.phase]}
             </span>
             {job.disabled ? (
               <span className="quiet">{t("model.disabled")}</span>
@@ -591,10 +603,18 @@ function BuildsTab({
           <section
             key={g.id}
             className="job-group"
-            aria-label={g.label ?? phaseNames[g.phase]}
+            aria-label={
+              g.label ??
+              (g.phase === "main"
+                ? t("association.phaseUnspecified")
+                : phaseNames[g.phase])
+            }
           >
             <h2>
-              {g.label ?? phaseNames[g.phase]}
+              {g.label ??
+                (g.phase === "main"
+                  ? t("association.phaseUnspecified")
+                  : phaseNames[g.phase])}
               {g.label ? (
                 <span className="release-meta">
                   {phaseNames[g.phase]} · {lifecycleName(g.lifecycle)}
@@ -602,7 +622,12 @@ function BuildsTab({
               ) : null}
             </h2>
             {g.jobs.map((j) => (
-              <JobRow key={j.job} job={j} now={now} />
+              <JobRow
+                key={j.job}
+                job={j}
+                now={now}
+                phaseConfirmed={!!g.label}
+              />
             ))}
           </section>
         ))
@@ -627,22 +652,9 @@ function BuildsTab({
   );
 }
 
-/** Jobs whose current parameters name the branch; otherwise jobs of the same phase whose name,
- * without its phase suffix, starts the branch name (E6767SM_IR → E6767SM_SYS_A16_IR). */
+/** Established mappings only; unknown-phase candidates are offered separately. */
 export function jobsFor(branch: string, phase: string, jobs: JobView[] = []) {
-  const named = jobs.filter((j) =>
-    ["BRANCH", "BRANCH_T", "BRANCH_V"]
-      .map((k) => j.parameters[k])
-      .some(
-        (v) => typeof v === "string" && v.split(/[\s,;:]+/).includes(branch),
-      ),
-  );
-  if (named.length) return named;
-  return jobs.filter((j) => {
-    if (j.disabled || j.phase !== phase) return false;
-    const stem = j.name.replace(/_(IR|PB|MP)$/i, "");
-    return branch.toUpperCase().startsWith(`${stem.toUpperCase()}_`);
-  });
+  return buildAssociation(branch, phase, jobs).jobs;
 }
 
 const stateNames: Record<string, string> = {
@@ -687,12 +699,14 @@ function BranchesTab({
   builds,
   selected,
   onSelect,
+  onAssociate,
 }: {
   m: ModelSummary;
   saved?: FocusModel;
   builds: BuildsState;
   selected: string | null;
   onSelect: (branch: string) => void;
+  onAssociate?: (branch: string, job: string | null) => Promise<unknown>;
 }) {
   useTranslation();
   const groups = branchGroups(m, saved);
@@ -724,14 +738,14 @@ function BranchesTab({
     )
       setFilter("all");
   }, [list]);
-  const jobs =
-    branch && strip
-      ? selectedGroup?.jobs
-        ? (builds.data?.jobs ?? []).filter((j) =>
-            selectedGroup.jobs!.includes(j.job),
-          )
-        : jobsFor(branch, strip.phase, builds.data?.jobs)
-      : [];
+  const association = buildAssociation(
+    branch ?? "",
+    strip?.phase ?? "main",
+    builds.data?.jobs,
+    saved,
+    selectedGroup?.jobs,
+  );
+  const jobs = association.jobs;
   const shown = list?.filter((l) => inFilter(l, filter)) ?? [];
   const [timelineJob, setTimelineJob] = useModelPreference(
     m.code,
@@ -825,6 +839,23 @@ function BranchesTab({
               })}
             </p>
           </header>
+          {builds.data ? (
+            <BranchBuildAssociation
+              key={branch}
+              association={association}
+              loading={builds.loading}
+              onConfirm={
+                onAssociate ? (job) => onAssociate(branch, job.job) : undefined
+              }
+              onReset={
+                onAssociate &&
+                selectedGroup?.jobs === undefined &&
+                saved?.branch_jobs?.[branch] !== undefined
+                  ? () => onAssociate(branch, null)
+                  : undefined
+              }
+            />
+          ) : null}
           {jobs.length ? (
             <div className="branch-jobs">
               {jobs.map((j) => (
@@ -841,8 +872,6 @@ function BranchesTab({
                 </div>
               ))}
             </div>
-          ) : builds.data ? (
-            <p className="quiet">{t("model.noBuildJobsMatchThisBranch")}</p>
           ) : null}
           <ManifestInputs jobs={jobs} />
           <div className="timeline-controls">
@@ -853,8 +882,10 @@ function BranchesTab({
                 onChange={(event) => setTimelineJob(event.target.value)}
               >
                 <option value="suggested">
-                  {selectedGroup?.jobs
-                    ? t("release.linkedJobs")
+                  {association.kind === "configured"
+                    ? selectedGroup?.jobs !== undefined
+                      ? t("release.linkedJobs")
+                      : t("association.useSaved")
                     : t("timeline.suggested")}
                 </option>
                 <option value="off">{t("timeline.hideBuilds")}</option>
@@ -1127,7 +1158,12 @@ const actionOptions = () =>
   }));
 type Draft = Pick<
   FocusModel,
-  "rules" | "freeze" | "targets" | "release_lines" | "ignored_jobs"
+  | "rules"
+  | "freeze"
+  | "targets"
+  | "release_lines"
+  | "ignored_jobs"
+  | "branch_jobs"
 >;
 const draftOf = (m: FocusModel): Draft => ({
   rules: { ...defaultRules, ...m.rules },
@@ -1135,6 +1171,7 @@ const draftOf = (m: FocusModel): Draft => ({
   targets: { ...m.targets },
   release_lines: m.release_lines ?? [],
   ignored_jobs: m.ignored_jobs ?? [],
+  branch_jobs: m.branch_jobs ?? {},
 });
 const bounded = (v: string, max: number) =>
   Math.max(0, Math.min(max, Math.round(Number(v) || 0)));
@@ -1539,9 +1576,48 @@ function SettingsTab({
           jobs={builds.data?.jobs ?? []}
           onRefresh={() => void builds.refresh()}
           onChange={(release_lines, ignored_jobs) =>
-            setDraft({ ...draft, release_lines, ignored_jobs })
+            setDraft({
+              ...draft,
+              release_lines,
+              ignored_jobs,
+              branch_jobs: Object.fromEntries(
+                Object.entries(draft.branch_jobs ?? {}).map(
+                  ([branch, jobs]) => [
+                    branch,
+                    jobs.filter((job) => !ignored_jobs.includes(job)),
+                  ],
+                ),
+              ),
+            })
           }
         />
+        {Object.keys(draft.branch_jobs ?? {}).length ? (
+          <section
+            className="branch-binding-settings"
+            aria-label={t("association.settings")}
+          >
+            <h2>{t("association.settings")}</h2>
+            {Object.entries(draft.branch_jobs ?? {}).map(([branch, jobs]) => (
+              <div key={branch}>
+                <p>
+                  <code>{branch}</code> ·{" "}
+                  {jobs.map((j) => j.split("/").pop()).join(", ") || "—"}
+                </p>
+                <button
+                  type="button"
+                  className="link"
+                  onClick={() => {
+                    const branch_jobs = { ...draft.branch_jobs };
+                    delete branch_jobs[branch];
+                    setDraft({ ...draft, branch_jobs });
+                  }}
+                >
+                  {t("association.reset")}
+                </button>
+              </div>
+            ))}
+          </section>
+        ) : null}
         {failure ? <FailureNote failure={failure} /> : null}
         {dirty || saving ? (
           <div className="settings-bar" role="status">
@@ -1869,6 +1945,12 @@ export function ModelPage({
           builds={builds}
           selected={branch}
           onSelect={setBranch}
+          onAssociate={
+            saved
+              ? (branch, job) =>
+                  state.save(withBranchJob(saved, branch, job), false)
+              : undefined
+          }
         />
       ) : tab === "builds" ? (
         <BuildsTab builds={builds} saved={saved} />

@@ -3720,3 +3720,12 @@ a.external-link.bar { text-decoration: none; }
 .manifest-inputs dt span, .manifest-inputs dd small { display: block; margin-top: 3px; }
 .manifest-inputs dd { overflow-wrap: anywhere; }
 @media (max-width: 760px) { .manifest-inputs dl > div { grid-template-columns: minmax(0, 1fr); gap: 4px; } }
+
+.build-association p { margin: 0; }
+.build-association > p + p { margin-top: 5px; }
+.build-candidate { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 10px 12px; margin-top: 8px; border: 1px dashed var(--border); border-radius: 6px; font-size: 12px; }
+.build-candidate button { display: inline-flex; gap: 5px; align-items: center; margin-left: auto; cursor: pointer; }
+.build-candidate button:disabled, .build-association button:disabled { opacity: .5; cursor: wait; }
+.build-association .quiet { font-size: 12px; }
+.branch-binding-settings > div { padding: 8px 0; overflow-wrap: anywhere; }
+.branch-binding-settings p { font-size: 12px; }

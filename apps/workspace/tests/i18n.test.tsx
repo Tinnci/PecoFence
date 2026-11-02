@@ -168,6 +168,12 @@ describe("workspace languages", () => {
         mocks.focus.mock.calls.filter((call) => call[0] === "refresh"),
       ).toHaveLength(2),
     );
+    // Settings previews are debounced. Finish that initial read before measuring locale changes.
+    await waitFor(() =>
+      expect(
+        document.querySelector('.preview-panel [data-slot="spinner"]'),
+      ).toBeNull(),
+    );
     const calls = mocks.focus.mock.calls.length;
     await user.click(screen.getByRole("button", { name: "更多" }));
     await user.click(

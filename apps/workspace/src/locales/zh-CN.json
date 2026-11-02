@@ -755,5 +755,17 @@
   "release.linkedJobs": "按版本线关联",
   "release.manifestInputs": "manifest 入口 · 构建参数",
   "release.manifestExplanation": "入口分支用于选择 manifest 配方；各源码仓库使用的分支需读取配方中的 revision。T/V 保留 Jenkins 参数原名。",
-  "release.layerUnverified": "SYS/VND 待核对"
+  "release.layerUnverified": "SYS/VND 待核对",
+  "association.candidatesFound": "找到同型号候选任务，关联待确认",
+  "association.candidateReason": "任务名与型号相符，但没有阶段标记。可查看已有构建后，保存本地关联。",
+  "association.confirm": "关联到当前分支",
+  "association.notEstablished": "尚未找到可靠的构建关联，可刷新任务或在设置中配置版本线。",
+  "association.configured": "本地配置关联",
+  "association.reset": "恢复自动识别",
+  "association.input": "构建参数包含当前入口分支",
+  "association.name": "按任务名与阶段匹配",
+  "association.missing": "已配置的任务尚未读到：{{jobs}}",
+  "association.phaseUnspecified": "阶段未标明",
+  "association.settings": "分支构建关联",
+  "association.useSaved": "按已保存关联"
 }

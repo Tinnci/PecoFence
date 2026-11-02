@@ -600,6 +600,9 @@ pub struct ReleaseLine {
 pub struct FocusModel {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
+    pub branch_jobs: Option<BTreeMap<String, Vec<String>>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub release_lines: Option<Vec<ReleaseLine>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]

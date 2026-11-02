@@ -288,13 +288,13 @@ export function useFocus(enabled: boolean) {
     if (enabled && modelsQuery.isSuccess && summaryQuery.isFetched)
       void refresh(undefined, false);
   }, [enabled, modelsQuery.isSuccess, summaryQuery.isFetched]);
-  async function save(model: FocusModel) {
+  async function save(model: FocusModel, refreshSources = true) {
     invalidateModel(model.code);
     await queryClient.cancelQueries({ queryKey: modelsKey });
     await queryClient.cancelQueries({ queryKey: summaryKey });
     const data = await focus("save", { model });
     queryClient.setQueryData(modelsKey, data.models ?? []);
-    await refresh(model.code);
+    if (refreshSources) await refresh(model.code);
   }
   async function remove(code: string) {
     invalidateModel(code);
@@ -651,6 +651,11 @@ export function FollowPage({
         ),
       })),
       ignored_jobs: existing?.ignored_jobs,
+      branch_jobs: Object.fromEntries(
+        Object.entries(existing?.branch_jobs ?? {}).filter(([branch]) =>
+          chosenBranches.some((b) => b.name === branch),
+        ),
+      ),
       tracking: existing?.tracking,
       rules,
       ...(freeze ? { freeze } : {}),
