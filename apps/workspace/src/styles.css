@@ -3000,3 +3000,68 @@ button.ledger-row:hover {
 .state-earlier {
   border-left-color: #e2c3b0;
 }
+
+/* 品牌标记：打开时搭起，读取时绿色块起伏 */
+.brand-mark rect {
+  transform-box: fill-box;
+}
+.brand-mark .bm-beam {
+  animation: bm-drop 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.brand-mark .bm-base {
+  animation: bm-rise 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.brand-mark .bm-cell {
+  transform-origin: 50% 100%;
+  animation: bm-grow 360ms 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.brand-mark .bm-flag {
+  transform-origin: 50% 50%;
+  animation: bm-pop 420ms 520ms cubic-bezier(0.3, 1.6, 0.5, 1) both;
+}
+.brand-mark.busy .bm-cell {
+  animation: bm-pulse 1.2s ease-in-out infinite;
+}
+@keyframes bm-drop {
+  from {
+    transform: translateY(-60%);
+    opacity: 0;
+  }
+}
+@keyframes bm-rise {
+  from {
+    transform: translateY(60%);
+    opacity: 0;
+  }
+}
+@keyframes bm-grow {
+  from {
+    transform: scaleY(0);
+  }
+}
+@keyframes bm-pop {
+  from {
+    transform: scale(0);
+  }
+}
+@keyframes bm-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .brand-mark rect,
+  .brand-mark.busy .bm-cell {
+    animation: none;
+  }
+}
+.lede-loading {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  color: var(--muted-foreground);
+}
+.lede-loading .brand-mark {
+  color: var(--foreground);
+  flex: none;
+}

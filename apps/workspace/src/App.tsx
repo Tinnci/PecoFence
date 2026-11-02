@@ -275,7 +275,7 @@ export default function App() {
               setPage("home");
             }}
           >
-            <BrandMark />
+            <BrandMark busy={focusState.refreshing} />
             工作台
           </button>
           <nav aria-label="主导航" className="model-tabs">

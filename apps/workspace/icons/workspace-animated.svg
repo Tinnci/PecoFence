@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <title>工作台</title>
+  <style>
+    .k { animation: k 4.8s cubic-bezier(.2,.8,.2,1) infinite both; transform-box: fill-box; transform-origin: 50% 50%; }
+    @keyframes k {
+      0% { opacity: 0; transform: scale(.3); }
+      8%, 78% { opacity: 1; transform: scale(1); }
+      90%, 100% { opacity: 0; transform: scale(.3); }
+    }
+    @media (prefers-reduced-motion: reduce) { .k { animation: none; } }
+  </style>
+  <rect x="48" y="48" width="928" height="928" rx="216" fill="#f4f2ec"/>
+  <rect x="50" y="50" width="924" height="924" rx="214" fill="none" stroke="#1b2420" stroke-opacity="0.12" stroke-width="4"/>
+  <g transform="translate(200 252) scale(1) translate(-200 -252)">
+  <rect x="264" y="252" width="496" height="88" rx="14" fill="#1b2420"/>
+  <rect x="200" y="684" width="624" height="88" rx="14" fill="#1b2420"/>
+  <rect class="k" style="animation-delay:0ms" x="400" y="364" width="64" height="64" rx="10" fill="#8fb784"/>
+  <rect class="k" style="animation-delay:120ms" x="480" y="364" width="64" height="64" rx="10" fill="#24552b"/>
+  <rect class="k" style="animation-delay:240ms" x="560" y="364" width="64" height="64" rx="10" fill="#4f8a4a"/>
+  <rect class="k" style="animation-delay:360ms" x="400" y="444" width="64" height="64" rx="10" fill="#4f8a4a"/>
+  <rect class="k" style="animation-delay:480ms" x="480" y="444" width="64" height="64" rx="10" fill="#c6d8bd"/>
+  <rect class="k" style="animation-delay:600ms" x="560" y="444" width="64" height="64" rx="10" fill="#24552b"/>
+  <rect class="k" style="animation-delay:720ms" x="400" y="524" width="64" height="64" rx="10" fill="#24552b"/>
+  <rect class="k" style="animation-delay:840ms" x="480" y="524" width="64" height="64" rx="10" fill="#b4532a"/>
+  <rect class="k" style="animation-delay:960ms" x="560" y="524" width="64" height="64" rx="10" fill="#8fb784"/>
+  <rect class="k" style="animation-delay:1080ms" x="400" y="604" width="64" height="64" rx="10" fill="#c6d8bd"/>
+  <rect class="k" style="animation-delay:1200ms" x="480" y="604" width="64" height="64" rx="10" fill="#4f8a4a"/>
+  <rect class="k" style="animation-delay:1320ms" x="560" y="604" width="64" height="64" rx="10" fill="#24552b"/>
+  </g>
+</svg>

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, RefreshCw } from "lucide-react";
+import { BrandMark } from "@/components/brand-mark";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -291,7 +292,13 @@ export function FocusHome({
           {summary?.computed_at ? ` · ${since(summary.computed_at)} 读取` : ""}
           {state.refreshing ? " · 正在更新…" : ""}
         </span>
-        <h1>{ordered.length ? lede(ordered) : "正在读取关注的机型…"}</h1>
+        {ordered.length ? (
+          <h1>{lede(ordered)}</h1>
+        ) : (
+          <h1 className="lede-loading">
+            <BrandMark size={44} busy /> 正在读取关注的机型…
+          </h1>
+        )}
       </section>
       {state.failure ? <FailureNote failure={state.failure} /> : null}
       <section className="ledger" aria-label="关注的机型">

@@ -1,4 +1,4 @@
-<img src="icons/workspace.svg" alt="" width="64" height="64">
+<img src="icons/banner.svg" alt="工作台 · Tinnci Workspace" width="800">
 
 # Tinnci Workspace · 工作台
 
@@ -336,6 +336,15 @@ keeps the tile on light taskbars. Cells blur below 48 px, so `icons/workspace-sm
 (a fuller tile, heavier bars, one green and one flagged block) supplies the 16, 24 and
 32 px sizes used by the title bar, tray and small taskbar.
 `scripts/icons.sh` regenerates `src-tauri/icons` from both.
+
+The same parts make the rest of the set: `icons/banner.svg` (1600×400, the mark, 工作台 and a
+field of change cells that grows denser to the right, with two flagged; the cells build in
+column by column), `icons/card.svg` (1200×630 for sharing and about pages) and
+`icons/workspace-animated.svg`, whose upright fills cell by cell, holds and clears on a
+4.8 s loop. In the window, the mark builds in once when it appears — beam down, base up,
+the green block grows, the flag pops — and the green block pulses while a summary read
+runs, in the top bar and beside 正在读取关注的机型…. Every animation stops under
+`prefers-reduced-motion`.
 
 Following Windows guidance, the paper tile stays on Windows surfaces. Inside the
 app, the top bar's `BrandMark` draws the small variant's 工 without its tile, beam and
