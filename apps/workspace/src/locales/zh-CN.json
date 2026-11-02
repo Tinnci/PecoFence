@@ -534,5 +534,9 @@
   "app.componentsChecked_one": "{{count}} 个组件已检查",
   "app.componentsChecked_other": "{{count}} 个组件已检查",
   "focus.followedModels_one": "{{v0}} · {{count}} 个关注机型{{v2}}{{v3}}",
-  "focus.followedModels_other": "{{v0}} · {{count}} 个关注机型{{v2}}{{v3}}"
+  "focus.followedModels_other": "{{v0}} · {{count}} 个关注机型{{v2}}{{v3}}",
+  "links.openInBrowser": "在浏览器中打开",
+  "links.openFailed": "无法打开链接，请重试。",
+  "links.console": "构建日志",
+  "links.buildHistory": "构建历史"
 }

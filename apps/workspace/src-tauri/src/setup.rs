@@ -672,6 +672,9 @@ pub struct BuildRun {
     pub number: u32,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
+    pub url: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub result: Option<String>,
     pub building: bool,
     /// Start, epoch milliseconds.

@@ -6,6 +6,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
@@ -65,6 +66,7 @@ const e6767 = summary("E6767SM", [96, 100, 281, 342, 0], {
   flagged: [
     {
       number: 80020,
+      url: "https://review.example.test/c/mobile/+/80020",
       subject: "[HM][E6767SM_VND_A13_MP][Version][Feature]:update WIFI Tx pwr",
       project: "alps/custom",
       branch: "E6767SM_VND_A13_MP",
@@ -115,6 +117,7 @@ const started = Date.now() - hour;
 const run = (number: number, extra = {}) => ({
   number,
   result: "SUCCESS",
+  url: `https://ci.example.test/job/Mobile/${number}/`,
   building: false,
   timestamp: started - (100 - number) * 24 * hour,
   duration: 3 * hour,
@@ -175,6 +178,7 @@ const builds = {
 const listed = (number: number, state: string, rules: string[] = []) => ({
   number,
   subject: `change ${number}`,
+  url: `https://review.example.test/c/mobile/+/${number}`,
   project: "alps/custom",
   branch: "E6767SM_SYS_A16_MP",
   owner: "dev",
@@ -307,8 +311,14 @@ describe("followed models", () => {
     await waitFor(() =>
       expect(list.textContent).toContain("update WIFI Tx pwr"),
     );
+    expect(
+      within(list)
+        .getByRole("link", { name: /update WIFI Tx pwr/ })
+        .getAttribute("href"),
+    ).toBe("https://review.example.test/c/mobile/+/80020");
     expect(list.textContent).toContain("冻结后进入 MP 的新功能");
     expect(list.textContent).toContain("关联 E6767SM-W-10370");
+    expect(document.querySelector("button a, a button, a a")).toBeNull();
     const accepts = screen.getAllByRole("button", { name: "接受" });
     await user.click(accepts[0]);
     expect(list.textContent).not.toContain("update WIFI Tx pwr");
@@ -346,6 +356,9 @@ describe("followed models", () => {
     expect(
       main.querySelector('[role="progressbar"]')?.getAttribute("aria-valuenow"),
     ).toBe("33");
+    expect(
+      within(main).getByRole("link", { name: "构建日志" }).getAttribute("href"),
+    ).toBe("https://ci.example.test/job/Mobile/96/console");
     expect(main.textContent).toContain("#96 改了 1 项");
     const variant = main.querySelector(".config-grid .changed")!;
     expect(variant.textContent).toBe("VARIANTuserdebuguser");
@@ -366,6 +379,11 @@ describe("followed models", () => {
       name: "E6767SM_SYS_A16_MP",
     });
     await waitFor(() => expect(detail.textContent).toContain("change 3"));
+    expect(
+      within(detail)
+        .getByRole("link", { name: "change 3" })
+        .getAttribute("href"),
+    ).toBe("https://review.example.test/c/mobile/+/3");
     expect(detail.textContent).not.toContain("change 2");
     await waitFor(() => expect(detail.textContent).toContain("#96 已运行"));
     const filter = screen.getByRole("radiogroup", { name: "筛选" });

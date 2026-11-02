@@ -410,3 +410,17 @@ language resolver and menu, and extend the catalog parity tests. Run `npm test`
 and `npm run build` before delivery; the tests cover out-of-order responses,
 incremental refresh, failed reads/reviews, navigation restoration, translations
 and language switching without refetching data.
+
+## Browser links
+
+Commit titles in Overview, Branches and settings previews open their Gerrit URL
+in the default browser. Jenkins job names, build results, history bars and older
+parameter-change build numbers also link to their source pages; **Console log**
+opens the newest build's log. Links remain copyable and keyboard accessible.
+
+Jenkins build URLs are supplied by the SPM CLI's optional `BuildRun.url` field.
+Older cached records remain readable; refresh builds with the updated SPM CLI to
+populate their URLs. Job and console paths are derived from those build URLs,
+preserving the configured Jenkins host and context path. Records without a usable
+HTTP(S) URL stay as plain text. If opening the system browser fails, the app shows
+a retryable error beside the link.

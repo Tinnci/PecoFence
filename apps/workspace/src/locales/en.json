@@ -534,5 +534,9 @@
   "app.componentsChecked_one": "{{count}} component checked",
   "app.componentsChecked_other": "{{count}} components checked",
   "focus.followedModels_one": "{{v0}} · {{count}} followed model{{v2}}{{v3}}",
-  "focus.followedModels_other": "{{v0}} · {{count}} followed models{{v2}}{{v3}}"
+  "focus.followedModels_other": "{{v0}} · {{count}} followed models{{v2}}{{v3}}",
+  "links.openInBrowser": "Open in browser",
+  "links.openFailed": "Could not open the link. Try again.",
+  "links.console": "Console log",
+  "links.buildHistory": "Build history"
 }

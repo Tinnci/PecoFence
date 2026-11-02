@@ -2708,6 +2708,7 @@ button.ledger-row:hover {
   cursor: pointer;
 }
 .job-line {
+  cursor: default;
   padding-left: 10px;
   border-left: 3px solid transparent;
 }
@@ -3140,3 +3141,16 @@ number-flow-react {
 :root[data-inactive] .model-tabs {
   opacity: 0.55;
 }
+
+/* Source links preserve the reading layout while making browser jumps visible. */
+a.external-link {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 35%, transparent);
+  text-underline-offset: 0.2em;
+}
+a.external-link:hover { text-decoration-color: currentColor; }
+a.external-link:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
+a.external-link.bar { text-decoration: none; }
+.external-link-error { display: inline-block; margin-inline-start: 0.5em; color: #a64b2a; font-size: 0.85em; }
+.build-console-link { align-self: start; font-size: 0.8rem; }

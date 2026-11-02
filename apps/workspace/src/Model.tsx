@@ -1,3 +1,5 @@
+import { ExternalLink } from "./components/external-link";
+import { jobBrowserUrl, consoleBrowserUrl } from "./browser-links";
 import { useTranslation } from "react-i18next";
 import { t, locale } from "./i18n";
 import { useModelPreference } from "./model-navigation";
@@ -230,7 +232,9 @@ function FlaggedRow({
             ? t("model.abandoned")
             : t("model.awaitingReview")}
       </span>
-      <p className="flagged-subject">{item.subject}</p>
+      <p className="flagged-subject">
+        <ExternalLink href={item.url}>{item.subject}</ExternalLink>
+      </p>
       <span className="flagged-meta">
         {item.project} · {item.branch} · {item.owner} · {item.number}
       </span>
@@ -269,7 +273,7 @@ function RunLine({ job, now }: { job: JobView; now: number }) {
           value={p.pct}
           aria-label={t("model.progress", { v0: job.name, v1: run.number })}
         />
-        <span>
+        <ExternalLink href={run.url}>
           {t("model.runningFor", {
             v0: run.number,
             v1: span(p.elapsed),
@@ -279,18 +283,20 @@ function RunLine({ job, now }: { job: JobView; now: number }) {
                 })
               : t("model.expectedToFinishAt", { v0: clock(p.eta) }),
           })}
-        </span>
+        </ExternalLink>
       </div>
     );
   }
   return (
     <span className={`run-line run-${runState(run)}`}>
-      {t("model.duration", {
-        v0: run.number,
-        v1: resultNames[run.result ?? ""] ?? run.result ?? "",
-        v2: day(run.timestamp),
-        v3: span(run.duration),
-      })}
+      <ExternalLink href={run.url}>
+        {t("model.duration", {
+          v0: run.number,
+          v1: resultNames[run.result ?? ""] ?? run.result ?? "",
+          v2: day(run.timestamp),
+          v3: span(run.duration),
+        })}
+      </ExternalLink>
     </span>
   );
 }
@@ -306,11 +312,16 @@ function History({ builds, now }: { builds: BuildRun[]; now: number }) {
     ),
   );
   return (
-    <div className="build-history" aria-hidden="true">
+    <div
+      className="build-history"
+      role="group"
+      aria-label={t("links.buildHistory")}
+    >
       {runs.map((r) => {
         const d = r.building ? now - r.timestamp : r.duration;
         return (
-          <span
+          <ExternalLink
+            href={r.url}
             key={r.number}
             className={`bar run-${runState(r)}`}
             style={{ height: `${Math.max(8, (d / longest) * 100)}%` }}
@@ -383,8 +394,13 @@ function Config({ job }: { job: JobView }) {
         <ul className="config-history">
           {older.map((c) => (
             <li key={`${c.build}-${c.name}`}>
-              <span className="quiet">#{c.build}</span> {c.name}{" "}
-              <s>{show(c.before)}</s> → {show(c.after)}
+              <ExternalLink
+                className="quiet"
+                href={job.builds.find((run) => run.number === c.build)?.url}
+              >
+                #{c.build}
+              </ExternalLink>{" "}
+              {c.name} <s>{show(c.before)}</s> → {show(c.after)}
             </li>
           ))}
         </ul>
@@ -402,7 +418,9 @@ function JobRow({ job, now }: { job: JobView; now: number }) {
     >
       <div className="job-main">
         <div className="job-title">
-          <strong>{job.name}</strong>
+          <strong>
+            <ExternalLink href={jobBrowserUrl(job)}>{job.name}</ExternalLink>
+          </strong>
           <span className={`phase phase-${job.phase}`}>
             {phaseNames[job.phase]}
           </span>
@@ -424,6 +442,14 @@ function JobRow({ job, now }: { job: JobView; now: number }) {
             </div>
           </>
         )}
+        {consoleBrowserUrl(job.builds[0]) ? (
+          <ExternalLink
+            href={consoleBrowserUrl(job.builds[0])}
+            className="build-console-link"
+          >
+            {t("links.console")}
+          </ExternalLink>
+        ) : null}
       </div>
       {job.error ? null : <Config job={job} />}
     </article>
@@ -675,7 +701,11 @@ function BranchesTab({
                   key={j.job}
                   className={`branch-job job-${runState(j.builds[0])}`}
                 >
-                  <strong>{j.name}</strong>
+                  <strong>
+                    <ExternalLink href={jobBrowserUrl(j)}>
+                      {j.name}
+                    </ExternalLink>
+                  </strong>
                   <RunLine job={j} now={builds.now} />
                 </div>
               ))}
@@ -710,7 +740,9 @@ function BranchesTab({
                 <li key={l.number} className={`change state-${l.state}`}>
                   <span className="change-when">{l.created.slice(5)}</span>
                   <div>
-                    <p>{l.subject}</p>
+                    <p>
+                      <ExternalLink href={l.url}>{l.subject}</ExternalLink>
+                    </p>
                     <span className="flagged-meta">
                       {stateNames[l.state]}
                       {l.rules.length
@@ -793,20 +825,22 @@ function Overview({
             )
           ) : jobs.length ? (
             jobs.map((j) => (
-              <button
-                type="button"
+              <div
                 key={j.job}
                 className={`job-line job-${runState(j.builds[0])}`}
-                onClick={onBuilds}
               >
-                <span className="job-line-name">
+                <button
+                  type="button"
+                  className="link job-line-name"
+                  onClick={onBuilds}
+                >
                   <span className={`phase phase-${j.phase}`}>
                     {phaseNames[j.phase]}
                   </span>
                   {j.name}
-                </span>
+                </button>
                 <RunLine job={j} now={builds.now} />
-              </button>
+              </div>
             ))
           ) : (
             <span className="quiet">
@@ -1075,7 +1109,7 @@ function PreviewPanel({
                   </span>
                   {preview.entering.slice(0, 5).map((f) => (
                     <p key={f.number} className="move in">
-                      {f.subject}
+                      <ExternalLink href={f.url}>{f.subject}</ExternalLink>
                     </p>
                   ))}
                 </>
@@ -1089,7 +1123,7 @@ function PreviewPanel({
                   </span>
                   {preview.leaving.slice(0, 5).map((f) => (
                     <p key={f.number} className="move out">
-                      {f.subject}
+                      <ExternalLink href={f.url}>{f.subject}</ExternalLink>
                     </p>
                   ))}
                 </>

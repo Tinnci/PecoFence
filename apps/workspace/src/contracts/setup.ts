@@ -110,7 +110,7 @@ export type Listed = { number: number, subject: string, project: string, branch:
  * flagged, earlier, tracked, accepted, logged, ignored or clean.
  */
 state: string, };
-export type BuildRun = { number: number, result?: string, building: boolean, 
+export type BuildRun = { number: number, url?: string, result?: string, building: boolean,
 /**
  * Start, epoch milliseconds.
  */
