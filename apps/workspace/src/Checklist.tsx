@@ -1,3 +1,4 @@
+import { ComponentIcon } from "./components/action-icon";
 import { useTranslation } from "react-i18next";
 import { t } from "./i18n";
 import { useState } from "react";
@@ -111,7 +112,10 @@ export default function Checklist({
                 }
               >
                 <ItemContent>
-                  <ItemTitle>{c.name}</ItemTitle>
+                  <ItemTitle>
+                    <ComponentIcon id={c.id} />
+                    {c.name}
+                  </ItemTitle>
                   <ItemDescription>{label(c.state)}</ItemDescription>
                 </ItemContent>
                 <ItemActions>

@@ -1,3 +1,4 @@
+import { ActionIcon } from "./action-icon";
 import { browserUrl } from "../browser-urls";
 export { browserUrl } from "../browser-urls";
 import type { ContextAction } from "./context-menu";
@@ -74,6 +75,11 @@ export function ExternalLink({
       }}
     >
       {children}
+      {children != null ? (
+        <span className="external-link-icon">
+          <ActionIcon name="open" />
+        </span>
+      ) : null}
     </a>
   );
   return (

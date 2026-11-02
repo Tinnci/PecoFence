@@ -1,3 +1,4 @@
+import { ActionIcon } from "./components/action-icon";
 import { useTranslation } from "react-i18next";
 import { t, locale } from "./i18n";
 import { useEffect, useRef, useState } from "react";
@@ -1737,7 +1738,11 @@ function ConfirmStep({ setup }: { setup: ProjectSetup }) {
               <ArrowLeft /> {t("projectSetup.back")}
             </Button>
             <Button disabled={!ready} onClick={() => void setup.create()}>
-              {setup.creating ? <Spinner aria-hidden="true" /> : null}
+              {setup.creating ? (
+                <Spinner aria-hidden="true" />
+              ) : (
+                <ActionIcon name="project" />
+              )}
               {t("projectSetup.createAndStartCollection")}
             </Button>
           </div>
@@ -1963,6 +1968,7 @@ function CollectStep({
             disabled={setup.activating}
             onClick={() => void setup.start(created.project, created.scope)}
           >
+            <ActionIcon name="refresh" />
             {t("projectSetup.restartCollection")}
           </Button>
         </div>
@@ -1973,6 +1979,7 @@ function CollectStep({
       {ours ? <UnmappedAlert setup={setup} /> : null}
       <div className="collect-actions">
         <Button variant={read ? "default" : "outline"} onClick={onDone}>
+          <ActionIcon name="back" />
           {t("projectSetup.backToSetupChecklist")}
         </Button>
       </div>

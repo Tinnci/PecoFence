@@ -1,3 +1,4 @@
+import { ActionIcon, ComponentIcon } from "./components/action-icon";
 import { ContextMenuProvider, ContextTarget } from "./components/context-menu";
 import { modelContextActions } from "./context-actions";
 import { useTranslation } from "react-i18next";
@@ -39,7 +40,6 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { BrandMark } from "@/components/brand-mark";
 import {
   ArrowRight,
-  Blocks,
   ChevronDown,
   LayoutDashboard,
   Menu,
@@ -115,7 +115,7 @@ function ComponentCard({
     >
       <ItemHeader>
         <span className="component-icon">
-          <Blocks size={18} />
+          <ComponentIcon id={component.id} responsive={false} />
         </span>
         <Status state={component.state} />
       </ItemHeader>
@@ -344,6 +344,7 @@ function Workspace() {
               aria-current={page === "home" ? "page" : undefined}
               onClick={() => setPage("home")}
             >
+              <ActionIcon name="follow" />
               {t("app.following")}
               {page === "home" ? <TabLine id="appbar" /> : null}
             </button>
@@ -405,9 +406,12 @@ function Workspace() {
                 </Button>
               }
             />
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" className="workspace-menu">
               <DropdownMenuGroup>
-                <DropdownMenuLabel>{t("language.label")}</DropdownMenuLabel>
+                <DropdownMenuLabel>
+                  <ActionIcon name="language" responsive={false} />
+                  {t("language.label")}
+                </DropdownMenuLabel>
                 <DropdownMenuRadioGroup
                   value={languagePreference()}
                   onValueChange={(value) =>
@@ -434,6 +438,7 @@ function Workspace() {
                     setPage(item.id);
                   }}
                 >
+                  <ActionIcon name={item.id} responsive={false} />
                   {item.title}
                 </DropdownMenuItem>
               ))}

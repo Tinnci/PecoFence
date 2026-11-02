@@ -1,3 +1,4 @@
+import { menuActionIcon } from "./action-icon";
 import { ContextMenu } from "@base-ui/react/context-menu";
 import {
   cloneElement,
@@ -186,7 +187,7 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
                   </ContextMenu.GroupLabel>
                 ) : null}
                 {entry?.actions.map((action) => {
-                  const Icon = action.icon;
+                  const Icon = action.icon ?? menuActionIcon(action.id);
                   return (
                     <div key={action.id} role="presentation">
                       {action.separator ? (

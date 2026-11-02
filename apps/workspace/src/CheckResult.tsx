@@ -1,3 +1,4 @@
+import { ComponentIcon } from "./components/action-icon";
 import { ContextTarget } from "./components/context-menu";
 import { copyContextAction } from "./context-actions";
 import { useTranslation } from "react-i18next";
@@ -184,6 +185,7 @@ export function Dependencies({
             onClick={() => onOpen(id)}
             aria-label={t("checklist.configure", { v0: dependency.name })}
           >
+            <ComponentIcon id={dependency.id} />
             {dependency.name}
             <Status state={dependency.state} />
             <ChevronRight />

@@ -1,3 +1,4 @@
+import { ActionIcon } from "./components/action-icon";
 import { ContextTarget } from "./components/context-menu";
 import { modelContextActions } from "./context-actions";
 import { useTranslation } from "react-i18next";
@@ -813,7 +814,11 @@ export function FollowPage({
                 <ArrowLeft /> {t("focus.cancel")}
               </Button>
               <Button disabled={saving} onClick={() => void follow()}>
-                {saving ? <Spinner aria-hidden="true" /> : null}
+                {saving ? (
+                  <Spinner aria-hidden="true" />
+                ) : (
+                  <ActionIcon name={existing ? "save" : "follow"} />
+                )}
                 {existing
                   ? t("focus.save")
                   : t("focus.follow", { v0: suggestions.code })}

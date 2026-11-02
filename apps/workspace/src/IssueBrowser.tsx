@@ -1,3 +1,4 @@
+import { ActionIcon } from "./components/action-icon";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { t } from "./i18n";
@@ -74,6 +75,7 @@ export function IssueBrowser({
                 setLimit(100);
               }}
             >
+              <ActionIcon name={f} />
               {t(`context.issues.${f}`)}
             </Button>
           ))}
@@ -118,6 +120,7 @@ export function IssueBrowser({
         </ul>
         {shown.length > limit ? (
           <Button variant="outline" onClick={() => setLimit((n) => n + 100)}>
+            <ActionIcon name="expand" />
             {t("context.moreIssues")}
           </Button>
         ) : null}

@@ -469,3 +469,9 @@ recheck connections. Health results offer configuration, recheck and diagnostic
 copy actions. Imported projects and import plans offer folder, project and scope
 copy actions, plus Show folder in Explorer in the desktop app. Native folder reveal
 uses the opener plugin's reveal permission; opening arbitrary files is not enabled.
+
+Decorative Lucide icons accompany navigation, labeled actions, issue filters and
+external links at window widths of 980px and above. Narrower windows retain text
+labels; menus keep their reserved icon column. Tool cards, setup entries and
+health views use component-specific icons. All supplementary icons are hidden
+from assistive technology, preserving the controls' translated accessible names.

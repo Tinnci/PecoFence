@@ -1,3 +1,4 @@
+import { ActionIcon } from "./components/action-icon";
 import { ContextTarget } from "./components/context-menu";
 import { ExternalLink } from "./components/external-link";
 import { copyContextAction, linkContextActions } from "./context-actions";
@@ -151,6 +152,15 @@ function SourceRow({
       >
         <ItemContent>
           <ItemTitle>
+            <ActionIcon
+              name={
+                connection.source === "jenkins"
+                  ? "builds"
+                  : connection.source === "gerrit"
+                    ? "repository"
+                    : "issues"
+              }
+            />
             <ExternalLink href={connection.host} contextMenu={false}>
               {names[connection.source] ?? connection.source}
             </ExternalLink>

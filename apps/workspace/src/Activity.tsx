@@ -1,3 +1,4 @@
+import { ActionIcon } from "./components/action-icon";
 import { ContextTarget } from "./components/context-menu";
 import { ExternalLink } from "./components/external-link";
 import { copyContextAction, linkContextActions } from "./context-actions";
@@ -409,6 +410,7 @@ export default function ActivityPage() {
                     className="link"
                     onClick={() => setBranch(null)}
                   >
+                    <ActionIcon name="branches" />
                     {t("activity.allBranches")}
                   </button>
                 ) : null}

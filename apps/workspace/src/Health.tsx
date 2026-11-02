@@ -1,3 +1,4 @@
+import { ActionIcon, ComponentIcon } from "./components/action-icon";
 import { ContextTarget } from "./components/context-menu";
 import { copyContextAction } from "./context-actions";
 import { useTranslation } from "react-i18next";
@@ -91,7 +92,10 @@ export default function Health({
             <CardContent className="health-body">
               <div className="health-content">
                 <div className="section-heading">
-                  <h3>{c.name}</h3>
+                  <h3>
+                    <ComponentIcon id={c.id} />
+                    {c.name}
+                  </h3>
                   <Status state={c.state} />
                 </div>
                 <p>{c.summary}</p>
@@ -133,6 +137,7 @@ export default function Health({
                   onClick={() => onOpen(c.id)}
                   disabled={c.lifecycle === "paused"}
                 >
+                  <ActionIcon name="configure" />
                   {t("app.viewConfiguration2")}
                 </Button>
               </div>

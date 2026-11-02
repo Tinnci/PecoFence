@@ -1,3 +1,4 @@
+import { ActionIcon } from "./components/action-icon";
 import { ContextTarget } from "./components/context-menu";
 import { copyContextAction, revealContextAction } from "./context-actions";
 import { useTranslation } from "react-i18next";
@@ -361,7 +362,11 @@ export default function TemplateImport({
                 </span>
               ) : (
                 <Button disabled={busy} onClick={() => void apply(!!conflict)}>
-                  {busy ? <Spinner aria-hidden="true" /> : null}
+                  {busy ? (
+                    <Spinner aria-hidden="true" />
+                  ) : (
+                    <ActionIcon name="import" />
+                  )}
                   {conflict
                     ? t("templateImport.backUpAndReplace2")
                     : t("templateImport.import")}
@@ -372,6 +377,7 @@ export default function TemplateImport({
                 disabled={busy}
                 onClick={() => setPlan(null)}
               >
+                <ActionIcon name={unchanged ? "check" : "close"} />
                 {unchanged ? t("templateImport.done") : t("model.cancel")}
               </Button>
             </CardFooter>

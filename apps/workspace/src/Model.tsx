@@ -1,3 +1,4 @@
+import { ActionIcon } from "./components/action-icon";
 import { IssueBrowser, LinkedIssues, type IssueFilter } from "./IssueBrowser";
 import { ContextTarget } from "./components/context-menu";
 import {
@@ -284,6 +285,7 @@ function FlaggedRow({
         </span>
         <div className="flagged-actions">
           <Button size="sm" onClick={() => onReview("accept")}>
+            <ActionIcon name="check" />
             {t("model.accept")}
           </Button>
           <Button
@@ -292,6 +294,7 @@ function FlaggedRow({
             aria-pressed={item.tracked}
             onClick={() => onReview(item.tracked ? "untrack" : "track")}
           >
+            <ActionIcon name={item.tracked ? "untrack" : "track"} />
             {item.tracked ? t("model.tracking") : t("model.keepTracking")}
           </Button>
           <span className="flagged-meta">
@@ -436,6 +439,7 @@ function Config({ job }: { job: JobView }) {
       </dl>
       {ordered.length > shown.length || all ? (
         <button type="button" className="link" onClick={() => setAll(!all)}>
+          <ActionIcon name={all ? "collapse" : "expand"} />
           {all
             ? t("model.collapse")
             : t("model.allParameters", { v0: ordered.length })}
@@ -930,6 +934,7 @@ function Overview({
           <div className="column-head">
             <h2>{t("model.builds")}</h2>
             <button type="button" className="link" onClick={onBuilds}>
+              <ActionIcon name="builds" />
               {t("model.all")}
             </button>
           </div>
@@ -1421,6 +1426,7 @@ function SettingsTab({
                 disabled={saving}
                 onClick={() => setDraft(draftOf(saved))}
               >
+                <ActionIcon name="discard" />
                 {t("model.discard")}
               </Button>
               <Button
@@ -1429,7 +1435,11 @@ function SettingsTab({
                 disabled={saving}
                 onClick={() => void save()}
               >
-                {saving ? <Spinner aria-hidden="true" /> : null}
+                {saving ? (
+                  <Spinner aria-hidden="true" />
+                ) : (
+                  <ActionIcon name="save" />
+                )}
                 {t("focus.save")}
               </Button>
             </div>
@@ -1437,6 +1447,7 @@ function SettingsTab({
         ) : null}
         <section className="model-manage" aria-label={t("model.manage")}>
           <button type="button" className="link" onClick={onEdit}>
+            <ActionIcon name="sources" />
             {t("model.changeIssueSourcesAndBranches")}
           </button>
           <button
@@ -1444,6 +1455,7 @@ function SettingsTab({
             className="link danger"
             onClick={() => setConfirm(true)}
           >
+            <ActionIcon name="remove" />
             {t("model.unfollow")}
           </button>
         </section>
@@ -1457,9 +1469,11 @@ function SettingsTab({
           </DialogDescription>
           <DialogFooter>
             <DialogClose render={<Button variant="ghost" />}>
+              <ActionIcon name="close" />
               {t("model.cancel")}
             </DialogClose>
             <Button variant="destructive" onClick={() => void remove()}>
+              <ActionIcon name="remove" />
               {t("model.unfollow")}
             </Button>
           </DialogFooter>
@@ -1561,6 +1575,7 @@ export function ModelPage({
                 type="button"
                 onClick={() => setIssueFilter("all")}
               >
+                <ActionIcon name="issues" />
                 {t("context.browseIssues", { count: m.issues })}
               </button>
             </ContextTarget>
@@ -1651,6 +1666,7 @@ export function ModelPage({
             aria-current={tab === tabKey ? "page" : undefined}
             onClick={() => onTab(tabKey)}
           >
+            <ActionIcon name={tabKey} />
             {tabNames[tabKey]}
             {tab === tabKey ? <TabLine id="subnav" /> : null}
             {tabKey === "overview" && m.flagged.length ? (

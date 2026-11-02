@@ -3223,3 +3223,23 @@ a.external-link.bar { text-decoration: none; }
   padding: 8px 0;
   border-bottom: 1px solid var(--border);
 }
+
+/* Supplement labels on roomy windows; preserve text and compact layouts. */
+.action-icon { width: 15px; height: 15px; flex-shrink: 0; vertical-align: -0.15em; }
+.responsive-icon { display: none; }
+@media (min-width: 980px) {
+  .responsive-icon { display: inline-block; }
+  button.link:has(> .action-icon) { display: inline-flex; align-items: center; gap: 5px; }
+}
+[data-slot="dropdown-menu-label"]:has(> .action-icon) { display: flex; align-items: center; gap: 6px; }
+
+.external-link-icon { display: none; }
+@media (min-width: 980px) {
+  .external-link-icon { display: inline; margin-inline-start: 3px; white-space: nowrap; }
+  .external-link-icon .action-icon { width: 12px; height: 12px; opacity: .65; }
+  .health-content h3 > .action-icon { margin-inline-end: 6px; }
+}
+
+.workspace-menu { width: max-content; min-width: 210px; max-width: calc(100vw - 16px); }
+
+.component-icon > .action-icon { width: 18px; height: 18px; }
