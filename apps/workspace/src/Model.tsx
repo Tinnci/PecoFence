@@ -1,3 +1,11 @@
+import { ManifestInputs } from "./ManifestInputs";
+import {
+  releaseBranchGroups as branchGroups,
+  releaseJobs,
+  releaseJobGroups,
+} from "./release-lines";
+export { namedPhase as phaseOf } from "./release-lines";
+import { ReleaseLinesEditor, lifecycleName } from "./ReleaseLinesEditor";
 import { branchTimeline } from "./branch-timeline";
 import { BuildMarker, timelineTime } from "./BuildMarker";
 import { ActionIcon } from "./components/action-icon";
@@ -536,7 +544,13 @@ function JobRow({ job, now }: { job: JobView; now: number }) {
   );
 }
 
-function BuildsTab({ builds }: { builds: BuildsState }) {
+function BuildsTab({
+  builds,
+  saved,
+}: {
+  builds: BuildsState;
+  saved?: FocusModel;
+}) {
   useTranslation();
   const { data, now } = builds;
   const [retired, setRetired] = useState(false);
@@ -573,19 +587,25 @@ function BuildsTab({ builds }: { builds: BuildsState }) {
           ))}
         </div>
       ) : (
-        phaseOrder
-          .filter((p) => p !== "old")
-          .map((p) => {
-            const jobs = active.filter((j) => j.phase === p);
-            return jobs.length ? (
-              <section key={p} className="job-group" aria-label={phaseNames[p]}>
-                <h2>{phaseNames[p]}</h2>
-                {jobs.map((j) => (
-                  <JobRow key={j.job} job={j} now={now} />
-                ))}
-              </section>
-            ) : null;
-          })
+        releaseJobGroups(active, saved).map((g) => (
+          <section
+            key={g.id}
+            className="job-group"
+            aria-label={g.label ?? phaseNames[g.phase]}
+          >
+            <h2>
+              {g.label ?? phaseNames[g.phase]}
+              {g.label ? (
+                <span className="release-meta">
+                  {phaseNames[g.phase]} · {lifecycleName(g.lifecycle)}
+                </span>
+              ) : null}
+            </h2>
+            {g.jobs.map((j) => (
+              <JobRow key={j.job} job={j} now={now} />
+            ))}
+          </section>
+        ))
       )}
       {rest.length ? (
         <section className="job-group retired">
@@ -607,45 +627,15 @@ function BuildsTab({ builds }: { builds: BuildsState }) {
   );
 }
 
-/** Branches the model follows, grouped by phase; strips from the summary. */
-function branchGroups(m: ModelSummary, saved?: FocusModel) {
-  const strips = new Map(m.branches.map((b) => [b.branch, b]));
-  for (const name of saved?.branches ?? [])
-    if (!strips.has(name))
-      strips.set(name, {
-        branch: name,
-        phase: phaseOf(name),
-        total: 0,
-        days: Array(84).fill(0),
-        flagged: 0,
-      });
-  const all = [...strips.values()];
-  return phaseOrder
-    .map((p) => ({ phase: p, branches: all.filter((b) => b.phase === p) }))
-    .filter((g) => g.branches.length);
-}
-/** The same reading of names as SPM, for followed branches without recent changes. */
-export function phaseOf(name: string) {
-  const u = name.toUpperCase();
-  const marked = (m: string) =>
-    u.endsWith(m) || u.includes(`${m}_`) || u.includes(`${m}-`);
-  return marked("_OLD")
-    ? "old"
-    : marked("_IR")
-      ? "ir"
-      : marked("_PB")
-        ? "pb"
-        : marked("_MP")
-          ? "mp"
-          : "main";
-}
 /** Jobs whose current parameters name the branch; otherwise jobs of the same phase whose name,
  * without its phase suffix, starts the branch name (E6767SM_IR → E6767SM_SYS_A16_IR). */
 export function jobsFor(branch: string, phase: string, jobs: JobView[] = []) {
   const named = jobs.filter((j) =>
-    Object.values(j.parameters).some(
-      (v) => typeof v === "string" && v.split(/[\s,;:]+/).includes(branch),
-    ),
+    ["BRANCH", "BRANCH_T", "BRANCH_V"]
+      .map((k) => j.parameters[k])
+      .some(
+        (v) => typeof v === "string" && v.split(/[\s,;:]+/).includes(branch),
+      ),
   );
   if (named.length) return named;
   return jobs.filter((j) => {
@@ -713,9 +703,12 @@ function BranchesTab({
     )
       ? selected
       : (groups[0]?.branches[0]?.branch ?? null);
-  const strip = groups
-    .flatMap((g) => g.branches)
-    .find((b) => b.branch === branch);
+  const [lineId, setLineId] = useModelPreference(m.code, "release-line", "");
+  const selectedGroup =
+    groups.find(
+      (g) => g.id === lineId && g.branches.some((b) => b.branch === branch),
+    ) ?? groups.find((g) => g.branches.some((b) => b.branch === branch));
+  const strip = selectedGroup?.branches.find((b) => b.branch === branch);
   const changes = useQuery(
     { ...changesOptions(m.code, branch), enabled: !!branch },
     queryClient,
@@ -732,7 +725,13 @@ function BranchesTab({
       setFilter("all");
   }, [list]);
   const jobs =
-    branch && strip ? jobsFor(branch, strip.phase, builds.data?.jobs) : [];
+    branch && strip
+      ? selectedGroup?.jobs
+        ? (builds.data?.jobs ?? []).filter((j) =>
+            selectedGroup.jobs!.includes(j.job),
+          )
+        : jobsFor(branch, strip.phase, builds.data?.jobs)
+      : [];
   const shown = list?.filter((l) => inFilter(l, filter)) ?? [];
   const [timelineJob, setTimelineJob] = useModelPreference(
     m.code,
@@ -752,8 +751,15 @@ function BranchesTab({
     <div className="branches-tab">
       <nav className="branch-rail" aria-label={t("model.branches")}>
         {groups.map((g) => (
-          <section key={g.phase}>
-            <h2>{phaseNames[g.phase]}</h2>
+          <section key={g.id}>
+            <h2>
+              {g.label ?? phaseNames[g.phase]}
+              {g.label ? (
+                <span className="release-meta">
+                  {phaseNames[g.phase]} · {lifecycleName(g.lifecycle)}
+                </span>
+              ) : null}
+            </h2>
             {g.branches.map((b) => (
               <ContextTarget
                 key={b.branch}
@@ -762,7 +768,10 @@ function BranchesTab({
                   {
                     id: "view",
                     label: t("context.openBranch"),
-                    run: () => onSelect(b.branch),
+                    run: () => {
+                      setLineId(g.id);
+                      onSelect(b.branch);
+                    },
                   },
                   copyContextAction(
                     "copy-branch",
@@ -774,8 +783,15 @@ function BranchesTab({
                 <button
                   type="button"
                   className="branch-pick"
-                  aria-current={b.branch === branch ? "true" : undefined}
-                  onClick={() => onSelect(b.branch)}
+                  aria-current={
+                    b.branch === branch && selectedGroup?.id === g.id
+                      ? "true"
+                      : undefined
+                  }
+                  onClick={() => {
+                    setLineId(g.id);
+                    onSelect(b.branch);
+                  }}
                 >
                   <span className="branch-pick-name">
                     <span>{b.branch}</span>
@@ -796,6 +812,11 @@ function BranchesTab({
             <span className={`phase phase-${strip.phase}`}>
               {phaseNames[strip.phase]}
             </span>
+            {selectedGroup?.label ? (
+              <p className="quiet">
+                {selectedGroup.label} · {lifecycleName(selectedGroup.lifecycle)}
+              </p>
+            ) : null}
             <h2 className="branch-name">{branch}</h2>
             <p className="quiet">
               {t("model.changesOver12WeeksNeedAttention", {
@@ -823,6 +844,7 @@ function BranchesTab({
           ) : builds.data ? (
             <p className="quiet">{t("model.noBuildJobsMatchThisBranch")}</p>
           ) : null}
+          <ManifestInputs jobs={jobs} />
           <div className="timeline-controls">
             <label>
               {t("timeline.builds")}{" "}
@@ -830,7 +852,11 @@ function BranchesTab({
                 value={timelineJob}
                 onChange={(event) => setTimelineJob(event.target.value)}
               >
-                <option value="suggested">{t("timeline.suggested")}</option>
+                <option value="suggested">
+                  {selectedGroup?.jobs
+                    ? t("release.linkedJobs")
+                    : t("timeline.suggested")}
+                </option>
                 <option value="off">{t("timeline.hideBuilds")}</option>
                 {allJobs.map((job) => (
                   <option key={job.job} value={job.job}>
@@ -1063,10 +1089,15 @@ function Overview({
             <span className="quiet">{t("model.last12Weeks")}</span>
           </div>
           {branchGroups(m, saved).map((g) => (
-            <div key={g.phase} className="phase-group">
+            <div key={g.id} className="phase-group">
               <span className={`phase phase-${g.phase}`}>
-                {phaseNames[g.phase]}
+                {g.label ?? phaseNames[g.phase]}
               </span>
+              {g.label ? (
+                <span className="release-meta">
+                  {phaseNames[g.phase]} · {lifecycleName(g.lifecycle)}
+                </span>
+              ) : null}
               {g.branches.map((b) => (
                 <button
                   type="button"
@@ -1094,11 +1125,16 @@ const actionOptions = () =>
     value,
     label,
   }));
-type Draft = Pick<FocusModel, "rules" | "freeze" | "targets">;
+type Draft = Pick<
+  FocusModel,
+  "rules" | "freeze" | "targets" | "release_lines" | "ignored_jobs"
+>;
 const draftOf = (m: FocusModel): Draft => ({
   rules: { ...defaultRules, ...m.rules },
   freeze: m.freeze ?? "",
   targets: { ...m.targets },
+  release_lines: m.release_lines ?? [],
+  ignored_jobs: m.ignored_jobs ?? [],
 });
 const bounded = (v: string, max: number) =>
   Math.max(0, Math.min(max, Math.round(Number(v) || 0)));
@@ -1359,9 +1395,11 @@ function SettingsTab({
   state,
   onEdit,
   onRemoved,
+  builds,
 }: {
   m: ModelSummary;
   saved: FocusModel;
+  builds: BuildsState;
   state: FocusState;
   onEdit: () => void;
   onRemoved: () => void;
@@ -1494,6 +1532,16 @@ function SettingsTab({
             <span className="quiet">{t("model.issues")}</span>
           </div>
         </section>
+        <ReleaseLinesEditor
+          model={saved}
+          lines={draft.release_lines ?? []}
+          ignored={draft.ignored_jobs ?? []}
+          jobs={builds.data?.jobs ?? []}
+          onRefresh={() => void builds.refresh()}
+          onChange={(release_lines, ignored_jobs) =>
+            setDraft({ ...draft, release_lines, ignored_jobs })
+          }
+        />
         {failure ? <FailureNote failure={failure} /> : null}
         {dirty || saving ? (
           <div className="settings-bar" role="status">
@@ -1586,7 +1634,16 @@ export function ModelPage({
   useTranslation();
   const m = state.summary?.models.find((x) => x.code === code);
   const saved = state.models?.find((x) => x.code === code);
-  const builds = useBuilds(code, tab !== "settings");
+  const sourceBuilds = useBuilds(code, tab !== "settings");
+  const builds = {
+    ...sourceBuilds,
+    data: sourceBuilds.data
+      ? {
+          ...sourceBuilds.data,
+          jobs: releaseJobs(sourceBuilds.data.jobs, saved),
+        }
+      : null,
+  };
   const issueWork = useWorkItems(
     code,
     "issues",
@@ -1814,9 +1871,10 @@ export function ModelPage({
           onSelect={setBranch}
         />
       ) : tab === "builds" ? (
-        <BuildsTab builds={builds} />
+        <BuildsTab builds={builds} saved={saved} />
       ) : saved ? (
         <SettingsTab
+          builds={sourceBuilds}
           m={m}
           saved={saved}
           state={state}

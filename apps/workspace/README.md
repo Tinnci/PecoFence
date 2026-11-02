@@ -540,3 +540,25 @@ inclusion/differences require reading the archived XML and resolving each source
 repository revision. BUILD_TAG is never treated as a Git ref, and Jenkins numbers
 are kept separate from effective software numbers found in the log. This feature
 requires the accompanying SPM CLI and jenkins-bridge `total_bytes` log metadata.
+
+### Explicit release lines
+
+Model settings can define release lines with independent lifecycle and phase,
+followed branches and exact Jenkins full job names. Explicit mappings take
+precedence over naming heuristics in overview, branch groups, build groups and
+build-marker association. A shared branch can belong to more than one line; the
+branch rail remembers the selected line. Excluded temporary jobs are hidden from
+normal views and skipped by future build reads, without deleting Jenkins jobs.
+Unassigned branches keep their existing name-based grouping.
+
+Settings can load job metadata on request. Saving edits is local SPM configuration;
+Jenkins integration uses read-only metadata/log queries and browser links. There
+are no trigger/rebuild/stop/configure actions. The existing Branch_query_tool link
+opens its page on the selected Jenkins host/context path; the app never runs it.
+
+Release metadata expresses product intent, while manifest parsing establishes
+source membership. A repo-init branch names a manifest repository ref; individual
+project revisions can name shared branches from other models. Complete source
+tracking needs repository/revision pairs and a pinned manifest file/revision.
+Current explicit release lines group the already-followed branches and do not
+expand the source scope automatically.

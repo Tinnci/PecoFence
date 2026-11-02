@@ -3695,3 +3695,28 @@ a.external-link.bar { text-decoration: none; }
 }
 
 .build-marker p > svg { display: inline-block; vertical-align: middle; margin-right: 4px; }
+
+.release-meta { display: inline-block; margin-left: 8px; font-size: 11px; font-weight: 400; color: var(--muted-foreground); }
+.branch-rail .release-meta { display: block; margin: 4px 0 0; letter-spacing: normal; text-transform: none; }
+.release-editor { display: grid; gap: 14px; }
+.release-editor h2 { display: flex; gap: 6px; align-items: center; }
+.release-line-editor { display: grid; gap: 12px; padding: 14px; border: 1px solid var(--border); border-radius: 6px; min-width: 0; }
+.release-editor legend { font-size: 12px; padding: 0 5px; color: var(--muted-foreground); }
+.release-line-editor > label, .release-selects > label { display: flex; gap: 8px; align-items: center; }
+.release-editor input:not([type=checkbox]), .release-editor select { min-width: 0; padding: 5px 8px; background: var(--background); border: 1px solid var(--border); border-radius: 4px; }
+.release-editor input:not([type=checkbox]) { flex: 1; }
+.release-selects { display: flex; flex-wrap: wrap; gap: 12px; }
+.release-choices { display: grid; gap: 8px; min-width: 0; }
+.release-choices label { display: flex; gap: 6px; align-items: baseline; font-size: 12px; overflow-wrap: anywhere; }
+.release-choices input[type=checkbox] { flex-shrink: 0; accent-color: var(--foreground); }
+.release-editor button.link { display: inline-flex; align-items: center; gap: 5px; justify-self: start; }
+
+.manifest-inputs { padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; min-width: 0; }
+.manifest-inputs summary { cursor: pointer; font-weight: 500; }
+.manifest-inputs > p { margin: 10px 0; }
+.manifest-inputs section { margin: 10px 0; }
+.manifest-inputs h3 { margin: 0 0 6px; font-weight: 500; }
+.manifest-inputs dl > div { display: grid; grid-template-columns: 110px minmax(0, 1fr); padding: 8px 0; border-top: 1px solid var(--border); gap: 12px; }
+.manifest-inputs dt span, .manifest-inputs dd small { display: block; margin-top: 3px; }
+.manifest-inputs dd { overflow-wrap: anywhere; }
+@media (max-width: 760px) { .manifest-inputs dl > div { grid-template-columns: minmax(0, 1fr); gap: 4px; } }

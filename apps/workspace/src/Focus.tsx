@@ -644,6 +644,14 @@ export function FollowPage({
       issues,
       branches: chosenBranches.map((b) => b.name),
       jobs: existing?.jobs ?? [],
+      release_lines: existing?.release_lines?.map((line) => ({
+        ...line,
+        branches: line.branches.filter((b) =>
+          chosenBranches.some((c) => c.name === b),
+        ),
+      })),
+      ignored_jobs: existing?.ignored_jobs,
+      tracking: existing?.tracking,
       rules,
       ...(freeze ? { freeze } : {}),
       targets: existing?.targets ?? {

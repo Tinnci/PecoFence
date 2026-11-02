@@ -82,7 +82,8 @@ export type GateSummary = { gate_id: string, state: string, n: number, v: number
 export type Unmapped = { field: string, value: string, count: number, };
 export type ServiceHealth = { state: string, mode: string, project?: string, scope?: string, last_poll?: string, last_commit?: string, revision: number, error?: string, gates: Array<GateSummary>, unmapped: Array<Unmapped>, };
 export type FocusTargets = { severe_pct: number, overall_pct: number, fatal_max: number, };
-export type FocusModel = { tracking?: TrackingConfig, code: string, issues: Array<ScopeQuery>, branches: Array<string>, 
+export type ReleaseLine = { id: string, label: string, lifecycle: string, phase: string, branches: Array<string>, jobs: Array<string>, };
+export type FocusModel = { release_lines?: Array<ReleaseLine>, ignored_jobs?: Array<string>, tracking?: TrackingConfig, code: string, issues: Array<ScopeQuery>, branches: Array<string>,
 /**
  * Jenkins jobs by full name; empty reads the model's Project_Daily_Build folder.
  */

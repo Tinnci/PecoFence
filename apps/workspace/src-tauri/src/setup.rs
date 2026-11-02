@@ -585,10 +585,25 @@ pub struct FocusTargets {
     pub overall_pct: u32,
     pub fatal_max: u32,
 }
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct ReleaseLine {
+    pub id: String,
+    pub label: String,
+    pub lifecycle: String,
+    pub phase: String,
+    pub branches: Vec<String>,
+    pub jobs: Vec<String>,
+}
 /// A followed model as `spm focus` stores it; SPM validates every value.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(deny_unknown_fields)]
 pub struct FocusModel {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub release_lines: Option<Vec<ReleaseLine>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub ignored_jobs: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub tracking: Option<TrackingConfig>,
@@ -1356,6 +1371,7 @@ pub fn types() -> String {
             Unmapped::decl(&config),
             ServiceHealth::decl(&config),
             FocusTargets::decl(&config),
+            ReleaseLine::decl(&config),
             FocusModel::decl(&config),
             Candidate::decl(&config),
             Suggestions::decl(&config),

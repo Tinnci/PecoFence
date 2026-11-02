@@ -51,3 +51,18 @@ export function gerritSearchUrl(
 export function gerritTerm(field: string, value: string): string {
   return `${field}:"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
 }
+
+/** The existing engineer tool on the same Jenkins origin/context path. */
+export function branchQueryBrowserUrl(run?: { url?: string }) {
+  const url = browserUrl(run?.url);
+  if (!url) return undefined;
+  const parsed = new URL(url);
+  const start = parsed.pathname.indexOf("/job/");
+  if (start < 0) return undefined;
+  parsed.pathname =
+    parsed.pathname.slice(0, start) +
+    "/job/SCM-Server/job/Engineer-tools/job/Branch_query_tool/";
+  parsed.search = "";
+  parsed.hash = "";
+  return parsed.href;
+}
