@@ -3668,6 +3668,10 @@ a.external-link.bar { text-decoration: none; }
   grid-template-columns: 96px minmax(0, 1fr);
   gap: 8px;
 }
+.local-history {
+  max-height: 220px;
+  overflow-y: auto;
+}
 
 /* Jenkins events share a clock with Gerrit creation events. */
 .branch-detail .change { grid-template-columns: 88px minmax(0, 1fr); }

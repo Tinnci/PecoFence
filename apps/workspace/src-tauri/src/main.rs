@@ -67,6 +67,8 @@ fn desktop() {
         discover_gate: tokio::sync::Semaphore,
         /// Focus reads and writes; a summary can take minutes, so it has its own gate.
         focus_gate: tokio::sync::Semaphore,
+        /// Issue and requirement reads: mostly incremental and short, two at a time.
+        items_gate: tokio::sync::Semaphore,
         /// Health reads run beside an activation so the page can show its progress.
         service_gate: tokio::sync::Semaphore,
         /// The private template copy and the sha256 of its last plan.
@@ -308,36 +310,38 @@ fn desktop() {
             _ => None,
         };
         let args: Vec<&str> = args.iter().map(String::as_str).collect();
-        // Cached and offline reads, and Jenkins reads, never wait behind a running summary.
-        let _permit = if [
-            "cached",
-            "list",
-            "preview",
-            "changes",
-            "builds",
-            "builds_cached",
-            "build_evidence",
-            "issues_cached",
-            "requirements_cached",
-            "annotate",
-        ]
-        .contains(&action.as_str())
-        {
-            None
-        } else {
-            Some(
-                state
-                    .focus_gate
-                    .acquire()
+        // Cached and offline reads, and Jenkins reads, never wait behind a running summary;
+        // issue and requirement reads have a gate of their own.
+        let gate = match action.as_str() {
+            "cached"
+            | "list"
+            | "preview"
+            | "changes"
+            | "builds"
+            | "builds_cached"
+            | "build_evidence"
+            | "issues_cached"
+            | "requirements_cached"
+            | "annotate"
+            | "history" => None,
+            "issues" | "requirements" | "issues_full" | "requirements_full" => {
+                Some(&state.items_gate)
+            }
+            _ => Some(&state.focus_gate),
+        };
+        let _permit = match gate {
+            Some(gate) => Some(
+                gate.acquire()
                     .await
                     .map_err(|_| setup::SetupFailure::new("setup_busy"))?,
-            )
+            ),
+            None => None,
         };
         let deadline = std::time::Duration::from_secs(match action.as_str() {
             "summary" | "refresh" => 600,
             "suggest" => 180,
             "builds" | "build_evidence" => 120,
-            "issues" | "requirements" => 300,
+            "issues" | "requirements" | "issues_full" | "requirements_full" => 300,
             _ => 30,
         });
         let output = process::spm_with(&spm_exe()?, &args, input.as_deref(), deadline).await?;
@@ -458,6 +462,7 @@ fn desktop() {
             discover_gate: tokio::sync::Semaphore::new(1),
             service_gate: tokio::sync::Semaphore::new(1),
             focus_gate: tokio::sync::Semaphore::new(1),
+            items_gate: tokio::sync::Semaphore::new(2),
             pending: std::sync::Mutex::new(None),
         })
         .setup(move |app| {

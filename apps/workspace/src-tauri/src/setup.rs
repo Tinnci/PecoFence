@@ -907,6 +907,34 @@ pub struct Comment {
     pub by: String,
     pub text: String,
 }
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct AnnotatedItem {
+    /// issues or requirements
+    pub kind: String,
+    pub item: WorkItem,
+}
+/// One item's local history: each change to its layer and each status change seen here.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct ItemHistory {
+    pub local: Option<LocalLayer>,
+    pub events: Vec<LocalEvent>,
+    pub transitions: Vec<Transition>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct LocalEvent {
+    pub at: String,
+    /// tags, correct, uncorrect, note, next_check or import
+    pub kind: String,
+    #[ts(type = "Record<string, unknown>")]
+    pub payload: serde_json::Value,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct Transition {
+    /// None when the item was first seen.
+    pub from: Option<String>,
+    pub to: String,
+    pub at: String,
+}
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
 pub struct LocalLayer {
     pub tags: Vec<String>,
@@ -981,6 +1009,13 @@ pub struct FocusData {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub local: Option<LocalLayer>,
+    /// After an annotation: the item as the last read shows it, with the new layer.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub work_item: Option<AnnotatedItem>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub history: Option<ItemHistory>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub models: Option<Vec<FocusModel>>,
@@ -1090,26 +1125,39 @@ pub fn focus_args(
     let code = || code.filter(|c| valid_code(c)).map(str::to_owned);
     let mut args: Vec<String> = vec!["focus".into()];
     match action {
-        "annotate" => {
+        "annotate" | "history" => {
             let (source, item) = annotation.filter(|(s, i)| valid_item(s, i))?;
             args.extend([
-                "annotate".into(),
+                action.into(),
                 "--source".into(),
                 source.into(),
                 "--item".into(),
                 item.into(),
             ]);
+            if action == "annotate" {
+                if let Some(code) = code() {
+                    args.extend(["--code".into(), code]);
+                }
+            }
         }
-        "issues" | "issues_cached" | "requirements" | "requirements_cached" => {
+        "issues"
+        | "issues_cached"
+        | "issues_full"
+        | "requirements"
+        | "requirements_cached"
+        | "requirements_full" => {
+            let (kind, mode) = action.split_once('_').unwrap_or((action, ""));
             args.extend([
                 "work-items".into(),
                 "--code".into(),
                 code()?,
                 "--kind".into(),
-                action.trim_end_matches("_cached").into(),
+                kind.into(),
             ]);
-            if action.ends_with("_cached") {
-                args.push("--cached".into());
+            match mode {
+                "cached" => args.push("--cached".into()),
+                "full" => args.push("--full".into()),
+                _ => {}
             }
         }
         "list" => args.push("list".into()),
@@ -1424,6 +1472,10 @@ pub fn types() -> String {
             ItemActivity::decl(&config),
             Comment::decl(&config),
             LocalLayer::decl(&config),
+            AnnotatedItem::decl(&config),
+            ItemHistory::decl(&config),
+            LocalEvent::decl(&config),
+            Transition::decl(&config),
             Correction::decl(&config),
             Note::decl(&config),
             Classification::decl(&config),
@@ -1624,6 +1676,45 @@ mod tests {
                 "focus", "annotate", "--source", "jira", "--item", "PLV-1509"
             ]
         );
+        assert_eq!(
+            focus_args(
+                "annotate",
+                Some("P6700LV"),
+                None,
+                None,
+                None,
+                Some(("jira", "PLV-1509"))
+            )
+            .unwrap()[6..],
+            ["--code", "P6700LV"]
+        );
+        assert_eq!(
+            focus_args(
+                "history",
+                None,
+                None,
+                None,
+                None,
+                Some(("meegle", "7146988888"))
+            )
+            .unwrap(),
+            [
+                "focus",
+                "history",
+                "--source",
+                "meegle",
+                "--item",
+                "7146988888"
+            ]
+        );
+        assert_eq!(
+            focus_args("requirements_full", Some("P6700LV"), None, None, None, None)
+                .unwrap()
+                .last()
+                .map(String::as_str),
+            Some("--full")
+        );
+        assert!(focus_args("issues_fast", Some("P6700LV"), None, None, None, None).is_none());
         assert!(focus_args("annotate", None, None, None, None, Some(("svn", "1"))).is_none());
         assert!(focus_args("annotate", None, None, None, None, Some(("jira", "--x"))).is_none());
         assert_eq!(

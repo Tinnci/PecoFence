@@ -35,6 +35,7 @@ import { ExternalLink } from "@/components/external-link";
 import type {
   Correction,
   FocusModel,
+  ItemHistory,
   SetupFailure,
   TrackingSource,
   WorkItem,
@@ -151,6 +152,139 @@ export function useWorkItems(code: string, kind: WorkKind, enabled = true) {
       ? query.data.items.filter((i) => !closed.has(i.group)).length
       : null,
   };
+}
+
+/** After a local change: the item SPM returned replaces its old copy; without one, the
+ * cached read again, with the layer laid over it. */
+async function applyAnnotation(
+  code: string,
+  kind: WorkKind,
+  item: WorkItem,
+  op: Record<string, unknown>,
+) {
+  const data = await focus("annotate", {
+    source: item.source,
+    item: item.id,
+    op,
+    code,
+  });
+  const next = data.work_item;
+  if (next?.kind !== kind) return reloadLocal(code, kind);
+  queryClient.setQueryData<WorkItems>(
+    workItemsOptions(code, kind).queryKey,
+    (old) =>
+      old && {
+        ...old,
+        items: old.items.map((i) =>
+          i.source === next.item.source && i.id === next.item.id
+            ? next.item
+            : i,
+        ),
+      },
+  );
+}
+
+const historyKey = (item: WorkItem) =>
+  ["work-item-history", item.source, item.id] as const;
+
+const clock: Intl.DateTimeFormatOptions = {
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+};
+function when(value: string) {
+  const at = updatedAt(value);
+  return at === null ? value : new Date(at).toLocaleString(undefined, clock);
+}
+
+type Entry = { at: number; text: string; quiet?: string };
+/** Remote creation and last comment, status changes seen here and every local edit, newest
+ * first. */
+function entries(item: WorkItem, history: ItemHistory | undefined): Entry[] {
+  const out: Entry[] = [];
+  const push = (at: string, text: string, quiet?: string) => {
+    const time = updatedAt(at);
+    if (time !== null) out.push({ at: time, text, quiet });
+  };
+  push(item.activity.created, t("work.history.created"));
+  const comment = item.activity.last_comment;
+  if (comment) push(comment.at, comment.by, comment.text);
+  for (const m of history?.transitions ?? [])
+    push(
+      m.at,
+      m.from
+        ? t("work.history.moved", { from: m.from, to: m.to })
+        : t("work.history.seen", { status: m.to }),
+    );
+  for (const e of history?.events ?? []) {
+    const p = e.payload as Record<string, unknown>;
+    const field = typeof p.field === "string" ? t(`work.field.${p.field}`) : "";
+    switch (e.kind) {
+      case "tags": {
+        const tags = Array.isArray(p.tags) ? p.tags.join("、") : "";
+        push(
+          e.at,
+          tags ? t("work.history.tags", { tags }) : t("work.history.untagged"),
+        );
+        break;
+      }
+      case "correct":
+        push(
+          e.at,
+          t("work.history.corrected", { field, value: String(p.value ?? "") }),
+          String(p.reason ?? ""),
+        );
+        break;
+      case "uncorrect":
+        push(e.at, t("work.history.uncorrected", { field }));
+        break;
+      case "next_check":
+        push(
+          e.at,
+          p.date
+            ? t("work.history.check", { date: String(p.date) })
+            : t("work.history.unchecked"),
+        );
+        break;
+      case "import":
+        push(e.at, t("work.history.imported"));
+        break;
+    }
+  }
+  return out.sort((a, b) => b.at - a.at);
+}
+
+/** What happened to the item, remote and local, on one clock. */
+function History({ item }: { item: WorkItem }) {
+  const query = useQuery(
+    {
+      queryKey: historyKey(item),
+      queryFn: async () =>
+        (await focus("history", { source: item.source, item: item.id }))
+          .history ?? null,
+    },
+    queryClient,
+  );
+  const list = entries(item, query.data ?? undefined);
+  return (
+    <section aria-label={t("work.history")}>
+      <h3>{t("work.history")}</h3>
+      <ol className="local-notes local-history">
+        {list.slice(0, 30).map((e, i) => (
+          <li key={i}>
+            <span className="quiet">
+              {new Date(e.at).toLocaleString(undefined, clock)}
+            </span>
+            <span>
+              {e.text}
+              {e.quiet ? <span className="quiet"> · {e.quiet}</span> : null}
+            </span>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
 }
 
 /** After a local change: the cached read again, with the layer laid over it. */
@@ -588,8 +722,8 @@ function LocalDialog({
     setBusy(true);
     setFailure(null);
     try {
-      await focus("annotate", { source: item.source, item: item.id, op });
-      await reloadLocal(code, kind);
+      await applyAnnotation(code, kind, item, op);
+      void queryClient.invalidateQueries({ queryKey: historyKey(item) });
       return true;
     } catch (error) {
       setFailure(failureOf(error));
@@ -799,14 +933,7 @@ function LocalDialog({
           <ol className="local-notes">
             {local?.notes.map((n, i) => (
               <li key={i}>
-                <span className="quiet">
-                  {new Date(n.at).toLocaleString(undefined, {
-                    month: "2-digit",
-                    day: "2-digit",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </span>
+                <span className="quiet">{when(n.at)}</span>
                 <span>{n.text}</span>
               </li>
             ))}
@@ -832,6 +959,7 @@ function LocalDialog({
             </Button>
           </form>
         </section>
+        <History item={item} />
         {busy ? <Spinner aria-hidden="true" /> : null}
       </DialogContent>
     </Dialog>

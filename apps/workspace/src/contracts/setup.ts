@@ -85,7 +85,7 @@ export type FocusTargets = { severe_pct: number, overall_pct: number, fatal_max:
 export type ReleaseLine = { id: string, label: string, lifecycle: string, phase: string, branches: Array<string>, jobs: Array<string>, };
 export type JobSource = { history?: Array<SourceSegment>, branch: string, previous: Array<string>, since_build?: number, note: string, };
 export type SourceSegment = { branch: string, first_build: number, last_build: number, note: string, };
-export type FocusModel = { job_sources?: { [key in string]: JobSource }, branch_jobs?: { [key in string]: Array<string> }, release_lines?: Array<ReleaseLine>, ignored_jobs?: Array<string>, tracking?: TrackingConfig, code: string, issues: Array<ScopeQuery>, branches: Array<string>,
+export type FocusModel = { job_sources?: { [key in string]: JobSource }, branch_jobs?: { [key in string]: Array<string> }, release_lines?: Array<ReleaseLine>, ignored_jobs?: Array<string>, tracking?: TrackingConfig, code: string, issues: Array<ScopeQuery>, branches: Array<string>, 
 /**
  * Jenkins jobs by full name; empty reads the model's Project_Daily_Build folder.
  */
@@ -108,7 +108,7 @@ phase: string, total: number, days: Array<number>,
 flagged: number, };
 export type PreviewSide = { flagged: number, alerts: number, rule_counts: { [key in string]: number }, };
 export type Preview = { before: PreviewSide, after: PreviewSide, entering: Array<Flagged>, leaving: Array<Flagged>, changes: number, };
-export type Listed = { number: number, subject: string, project: string, branch: string, owner: string, status: string, created: string, created_at?: number, url?: string, rules: Array<string>, issues: Array<string>,
+export type Listed = { number: number, subject: string, project: string, branch: string, owner: string, status: string, created: string, created_at?: number, url?: string, rules: Array<string>, issues: Array<string>, 
 /**
  * flagged, earlier, tracked, accepted, logged, ignored or clean.
  */
@@ -157,10 +157,30 @@ export type ItemActivity = { created: string, status_since: string,
 status_since_source: string, last_comment: Comment | null, comment_count: number, progress: string, found_versions: Array<string>, target_versions: Array<string>, reopened: number, last_activity: string, };
 export type Comment = { at: string, by: string, text: string, };
 export type LocalLayer = { tags: Array<string>, corrections: Array<Correction>, notes: Array<Note>, next_check: string | null, };
+export type AnnotatedItem = { 
+/**
+ * issues or requirements
+ */
+kind: string, item: WorkItem, };
+export type ItemHistory = { local: LocalLayer | null, events: Array<LocalEvent>, transitions: Array<Transition>, };
+export type LocalEvent = { at: string, 
+/**
+ * tags, correct, uncorrect, note, next_check or import
+ */
+kind: string, payload: Record<string, unknown>, };
+export type Transition = { 
+/**
+ * None when the item was first seen.
+ */
+from: string | null, to: string, at: string, };
 export type Correction = { field: string, value: string, remote: string, reason: string, at: string, state: string, remote_now: string, };
 export type Note = { at: string, text: string, };
 export type Classification = { field: string, field_name: string, configured: boolean, values: Array<DomainValue>, };
 export type TrackingSource = { id: string, source: string, label: string, filter: string, software_filter: string, total: number, matched: number, excluded: number, unclassified: number, updated_at: string | null, stale: boolean, error: string | null, classification?: Classification, };
 export type WorkItems = { code: string, kind: string, checked_at: string, sources: Array<TrackingSource>, items: Array<WorkItem>, };
-export type FocusData = { build_evidence?: BuildEvidence, work_items?: WorkItems, local?: LocalLayer, models?: Array<FocusModel>, suggestions?: Suggestions, summary?: FocusSummary, preview?: Preview, changes?: Array<Listed>, builds?: Builds, };
+export type FocusData = { build_evidence?: BuildEvidence, work_items?: WorkItems, local?: LocalLayer, 
+/**
+ * After an annotation: the item as the last read shows it, with the new layer.
+ */
+work_item?: AnnotatedItem, history?: ItemHistory, models?: Array<FocusModel>, suggestions?: Suggestions, summary?: FocusSummary, preview?: Preview, changes?: Array<Listed>, builds?: Builds, };
 export type Activation = { health?: ServiceHealth, waited_secs?: number, };

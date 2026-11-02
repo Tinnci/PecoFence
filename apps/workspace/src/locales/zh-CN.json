@@ -820,5 +820,16 @@
   "association.manageTargets": "关联构建目标",
   "association.sharedHelp": "同一源码分支可以关联多个构建任务。按任务完整路径保存，各目标分别显示构建记录；取消全部勾选可隐藏此分支的构建标记。",
   "association.targets": "构建任务",
-  "association.sourceManaged": "来源记录关联，请在设置中修改"
+  "association.sourceManaged": "来源记录关联，请在设置中修改",
+  "work.history": "动态",
+  "work.history.created": "创建",
+  "work.history.moved": "{{from}} → {{to}}",
+  "work.history.seen": "首次读到 {{status}}",
+  "work.history.tags": "标签 {{tags}}",
+  "work.history.untagged": "清空标签",
+  "work.history.corrected": "更正{{field}}为 {{value}}",
+  "work.history.uncorrected": "撤销{{field}}更正",
+  "work.history.check": "{{date}} 复查",
+  "work.history.unchecked": "取消复查",
+  "work.history.imported": "导入本地标记"
 }

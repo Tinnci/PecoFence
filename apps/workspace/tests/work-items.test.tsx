@@ -149,6 +149,14 @@ beforeEach(() => {
   save.mockClear();
   mocks.focus.mockReset().mockImplementation(async (action: string) => {
     if (action === "annotate") return { local: {} };
+    if (action === "history")
+      return {
+        history: {
+          local: null,
+          events: [],
+          transitions: [{ from: "OPEN", to: "回归测试", at: iso(1) }],
+        },
+      };
     if (action.startsWith("issues")) return issues();
     return {
       work_items: {
@@ -266,6 +274,7 @@ describe("software issues and requirements", () => {
       expect(mocks.focus).toHaveBeenCalledWith("annotate", {
         source: "jira",
         item: "PLV-1",
+        code: "P6700LV",
         op: { op: "tags", tags: ["MP必解", "客户关注"] },
       }),
     );
@@ -283,6 +292,7 @@ describe("software issues and requirements", () => {
       expect(mocks.focus).toHaveBeenCalledWith("annotate", {
         source: "jira",
         item: "PLV-1",
+        code: "P6700LV",
         op: {
           op: "correct",
           field: "found_version",
@@ -303,6 +313,7 @@ describe("software issues and requirements", () => {
       expect(mocks.focus).toHaveBeenCalledWith("annotate", {
         source: "jira",
         item: "PLV-1",
+        code: "P6700LV",
         op: { op: "note", text: "周四复测" },
       }),
     );
@@ -316,12 +327,14 @@ describe("software issues and requirements", () => {
       expect(mocks.focus).toHaveBeenCalledWith("annotate", {
         source: "jira",
         item: "PLV-1",
+        code: "P6700LV",
         op: { op: "next_check", date: "2026-11-09" },
       }),
     );
     expect(mocks.focus).toHaveBeenCalledWith("issues_cached", {
       code: "P6700LV",
     });
+    expect(await within(dialog).findByText("OPEN → 回归测试")).toBeTruthy();
   });
 
   it("splits requirements into customer and internal, and corrects the origin locally", async () => {
@@ -350,11 +363,27 @@ describe("software issues and requirements", () => {
     expect(within(dialog).getByText("远端现在：内部需求")).toBeTruthy();
     await user.click(within(dialog).getByRole("combobox", { name: "修正为" }));
     await user.click(await screen.findByRole("option", { name: "客户需求" }));
+    // SPM returns the item with its new layer; it replaces the old copy without a reread.
+    const base = mocks.focus.getMockImplementation()!;
+    const read = await base("requirements", { code: "P6700LV" });
+    const shown = read.work_items.items.find(
+      (i: { id: string }) => i.id === "PLV-1495",
+    );
+    mocks.focus.mockImplementation(async (action: string, args: unknown) =>
+      action === "annotate"
+        ? { local: {}, work_item: { kind: "requirements", item: shown } }
+        : base(action, args),
+    );
+    const rereads = () =>
+      mocks.focus.mock.calls.filter((c) => c[0] === "requirements_cached")
+        .length;
+    const before = rereads();
     await user.click(within(dialog).getByRole("button", { name: "保存修正" }));
     await waitFor(() =>
       expect(mocks.focus).toHaveBeenCalledWith("annotate", {
         source: "jira",
         item: "PLV-1495",
+        code: "P6700LV",
         op: {
           op: "correct",
           field: "origin",
@@ -364,6 +393,7 @@ describe("software issues and requirements", () => {
         },
       }),
     );
+    expect(rereads()).toBe(before);
     expect(save).not.toHaveBeenCalled();
   });
 

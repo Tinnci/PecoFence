@@ -820,5 +820,16 @@
   "association.manageTargets": "Manage build targets",
   "association.sharedHelp": "A shared source branch can link to multiple jobs. Full job paths identify targets independently. Clear all to hide build markers on this branch.",
   "association.targets": "Build jobs",
-  "association.sourceManaged": "Managed by source routing in Settings"
+  "association.sourceManaged": "Managed by source routing in Settings",
+  "work.history": "Activity",
+  "work.history.created": "Created",
+  "work.history.moved": "{{from}} → {{to}}",
+  "work.history.seen": "First read as {{status}}",
+  "work.history.tags": "Tags {{tags}}",
+  "work.history.untagged": "Tags cleared",
+  "work.history.corrected": "{{field}} corrected to {{value}}",
+  "work.history.uncorrected": "{{field}} correction undone",
+  "work.history.check": "Check on {{date}}",
+  "work.history.unchecked": "Check cleared",
+  "work.history.imported": "Local layer imported"
 }

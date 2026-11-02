@@ -184,9 +184,12 @@ export async function focus(
     | "build_evidence"
     | "issues"
     | "issues_cached"
+    | "issues_full"
     | "requirements"
     | "requirements_cached"
-    | "annotate",
+    | "requirements_full"
+    | "annotate"
+    | "history",
   args: {
     code?: string;
     job?: string;
