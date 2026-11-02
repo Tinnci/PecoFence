@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import {
@@ -95,7 +96,7 @@ it("keeps unassigned and shared source branches reachable", () => {
   ).toHaveLength(2);
   expect(releaseBranchGroups(summary).map((g) => g.id)).toEqual(["phase:main"]);
 });
-it("edits lifecycle separately from phase and can exclude a task without deleting branches", () => {
+it("edits lifecycle separately from phase and can exclude a task without deleting branches", async () => {
   const onChange = vi.fn();
   render(
     <ReleaseLinesEditor
@@ -106,9 +107,9 @@ it("edits lifecycle separately from phase and can exclude a task without deletin
       onChange={onChange}
     />,
   );
-  fireEvent.change(screen.getAllByLabelText("生命周期")[1], {
-    target: { value: "maintenance" },
-  });
+  const user = userEvent.setup();
+  await user.click(screen.getAllByRole("combobox", { name: "生命周期" })[1]);
+  await user.click(screen.getByRole("option", { name: "OTA 维护" }));
   expect(onChange.mock.lastCall![0][1]).toMatchObject({
     phase: "mp",
     lifecycle: "maintenance",
@@ -135,7 +136,7 @@ it("links the engineer tool on the existing Jenkins context without accepting ex
   expect(branchQueryBrowserUrl({ url: "javascript:alert(1)" })).toBeUndefined();
 });
 
-import { manifestInputs } from "../src/ManifestInputs";
+import { ManifestInputs, manifestInputs } from "../src/ManifestInputs";
 it("keeps T/V manifest refs distinct without guessing SYS/VND roles or source revisions", () => {
   const inputs = manifestInputs({
     ...jobs[0],
@@ -159,4 +160,21 @@ it("keeps T/V manifest refs distinct without guessing SYS/VND roles or source re
     },
   ]);
   expect(manifestInputs(jobs[0])).toEqual([]);
+});
+
+it("reveals manifest inputs with an accessible keyboard disclosure", async () => {
+  const user = userEvent.setup();
+  const job = {
+    ...jobs[0],
+    parameters: { REPO_URL_T: "ssh://git/manifest", BRANCH_T: "MODEL_SYS" },
+  };
+  render(<ManifestInputs jobs={[job]} />);
+  const trigger = screen.getByRole("button", { expanded: false });
+  expect(screen.queryByText("MODEL_SYS")).toBeNull();
+  trigger.focus();
+  await user.keyboard("{Enter}");
+  expect(trigger.getAttribute("aria-expanded")).toBe("true");
+  expect(screen.getByText("MODEL_SYS")).toBeTruthy();
+  await user.keyboard("{Enter}");
+  expect(trigger.getAttribute("aria-expanded")).toBe("false");
 });

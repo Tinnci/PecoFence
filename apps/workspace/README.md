@@ -594,3 +594,18 @@ can save/reset a `branch_jobs` mapping without rereading source systems or runni
 Jenkins tasks. Configured jobs missing from the current cache are named as a read
 gap instead of being replaced by heuristic matches. Settings can remove these
 local overrides; changing followed branches or excluded jobs preserves valid scope.
+
+### UI stack and component choices
+
+The workspace uses React 19 with Base UI 1.9 for accessible interaction primitives.
+Local shadcn-style wrappers in `src/components/ui` apply Tailwind 4 styles; page
+chips use Base UI directly where the page already owns their appearance. Release
+line lifecycle/phase pickers use the shared Select; manifest inputs use Collapsible.
+Use these existing primitives for keyboard, focus and popup behavior instead of
+adding another component framework. Native text, date and checkbox controls remain
+appropriate where their built-in behavior is sufficient.
+
+Lucide supplies icons, Motion and tw-animate-css handle animation, Number Flow
+animates figures, and Geist supplies typography. TanStack Query owns request caching;
+i18next/react-i18next provide translations. `shadcn` is component tooling, not a
+second runtime UI framework.

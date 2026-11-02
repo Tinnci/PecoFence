@@ -1,3 +1,10 @@
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./components/ui/select";
 import { Plus, Trash2, GitBranch } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { t } from "./i18n";
@@ -74,31 +81,53 @@ export function ReleaseLinesEditor({
           <div className="release-selects">
             <label>
               {t("release.lifecycle")}
-              <select
+              <Select
                 value={line.lifecycle}
-                onChange={(e) => update(i, { lifecycle: e.target.value })}
+                items={[
+                  "development",
+                  "maintenance",
+                  "upgrade",
+                  "archived",
+                ].map((value) => ({ value, label: lifecycleName(value) }))}
+                onValueChange={(value) =>
+                  value && update(i, { lifecycle: value })
+                }
               >
-                {["development", "maintenance", "upgrade", "archived"].map(
-                  (value) => (
-                    <option key={value} value={value}>
-                      {lifecycleName(value)}
-                    </option>
-                  ),
-                )}
-              </select>
+                <SelectTrigger size="sm" aria-label={t("release.lifecycle")}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {["development", "maintenance", "upgrade", "archived"].map(
+                    (value) => (
+                      <SelectItem key={value} value={value}>
+                        {lifecycleName(value)}
+                      </SelectItem>
+                    ),
+                  )}
+                </SelectContent>
+              </Select>
             </label>
             <label>
               {t("release.phase")}
-              <select
+              <Select
                 value={line.phase}
-                onChange={(e) => update(i, { phase: e.target.value })}
+                items={["main", "ir", "pb", "mp", "old"].map((value) => ({
+                  value,
+                  label: value.toUpperCase(),
+                }))}
+                onValueChange={(value) => value && update(i, { phase: value })}
               >
-                {["main", "ir", "pb", "mp", "old"].map((value) => (
-                  <option key={value} value={value}>
-                    {value.toUpperCase()}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger size="sm" aria-label={t("release.phase")}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {["main", "ir", "pb", "mp", "old"].map((value) => (
+                    <SelectItem key={value} value={value}>
+                      {value.toUpperCase()}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </label>
           </div>
           <fieldset className="release-choices">

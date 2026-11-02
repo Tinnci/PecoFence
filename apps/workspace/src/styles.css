@@ -3712,8 +3712,10 @@ a.external-link.bar { text-decoration: none; }
 .release-editor button.link { display: inline-flex; align-items: center; gap: 5px; justify-self: start; }
 
 .manifest-inputs { padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; min-width: 0; }
-.manifest-inputs summary { cursor: pointer; font-weight: 500; }
-.manifest-inputs > p { margin: 10px 0; }
+.manifest-inputs-trigger { display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 500; }
+.manifest-inputs-trigger[data-panel-open] svg { transform: rotate(180deg); }
+.manifest-inputs-trigger:focus-visible { outline: 2px solid var(--ring); outline-offset: 4px; }
+.manifest-inputs [data-slot="collapsible-content"] > p { margin: 10px 0; }
 .manifest-inputs section { margin: 10px 0; }
 .manifest-inputs h3 { margin: 0 0 6px; font-weight: 500; }
 .manifest-inputs dl > div { display: grid; grid-template-columns: 110px minmax(0, 1fr); padding: 8px 0; border-top: 1px solid var(--border); gap: 12px; }

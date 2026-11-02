@@ -1,3 +1,9 @@
+import { ChevronDown } from "lucide-react";
+import {
+  Collapsible,
+  CollapsibleTrigger,
+  CollapsibleContent,
+} from "./components/ui/collapsible";
 import { useTranslation } from "react-i18next";
 import { t } from "./i18n";
 import { ExternalLink } from "./components/external-link";
@@ -30,37 +36,44 @@ export function ManifestInputs({ jobs }: { jobs: JobView[] }) {
     .filter((e) => e.inputs.length);
   if (!entries.length) return null;
   return (
-    <details className="manifest-inputs">
-      <summary>{t("release.manifestInputs")}</summary>
-      <p className="quiet">{t("release.manifestExplanation")}</p>
-      {entries.map(({ job, inputs }) => (
-        <section key={job.job}>
-          <h3>
-            <ExternalLink href={jobBrowserUrl(job)}>{job.name}</ExternalLink>
-          </h3>
-          <dl>
-            {inputs.map((input) => (
-              <div key={input.slot}>
-                <dt>
-                  {input.slot}
-                  <span className="quiet">{t("release.layerUnverified")}</span>
-                </dt>
-                <dd>
-                  <code>{input.ref}</code>
-                  <small>{input.repository}</small>
-                </dd>
-              </div>
-            ))}
-          </dl>
-        </section>
-      ))}
-      <ExternalLink
-        href={branchQueryBrowserUrl(
-          jobs.flatMap((j) => j.builds).find((r) => r.url),
-        )}
-      >
-        {t("release.branchTool")}
-      </ExternalLink>
-    </details>
+    <Collapsible className="manifest-inputs">
+      <CollapsibleTrigger className="manifest-inputs-trigger">
+        {t("release.manifestInputs")}
+        <ChevronDown size={14} aria-hidden="true" />
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <p className="quiet">{t("release.manifestExplanation")}</p>
+        {entries.map(({ job, inputs }) => (
+          <section key={job.job}>
+            <h3>
+              <ExternalLink href={jobBrowserUrl(job)}>{job.name}</ExternalLink>
+            </h3>
+            <dl>
+              {inputs.map((input) => (
+                <div key={input.slot}>
+                  <dt>
+                    {input.slot}
+                    <span className="quiet">
+                      {t("release.layerUnverified")}
+                    </span>
+                  </dt>
+                  <dd>
+                    <code>{input.ref}</code>
+                    <small>{input.repository}</small>
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+        ))}
+        <ExternalLink
+          href={branchQueryBrowserUrl(
+            jobs.flatMap((j) => j.builds).find((r) => r.url),
+          )}
+        >
+          {t("release.branchTool")}
+        </ExternalLink>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
