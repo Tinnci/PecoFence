@@ -2,6 +2,8 @@
 mod hub;
 mod process;
 mod setup;
+#[cfg(any(windows, test))]
+mod snap;
 
 #[cfg(any(windows, test))]
 fn target(args: &[String]) -> Result<String, String> {
@@ -9,7 +11,8 @@ fn target(args: &[String]) -> Result<String, String> {
         [] => Ok("home".into()),
         [flag, page]
             if flag == "--open"
-                && (["home", "setup", "health", "project", "activity"].contains(&page.as_str())
+                && (["home", "setup", "health", "project", "activity"]
+                    .contains(&page.as_str())
                     || page.strip_prefix("model:").is_some_and(|rest| {
                         let (code, tab) = rest.split_once(':').unwrap_or((rest, "overview"));
                         setup::valid_code(code)
@@ -426,6 +429,10 @@ fn desktop() {
             pending: std::sync::Mutex::new(None),
         })
         .setup(move |app| {
+            #[cfg(windows)]
+            if let Err(error) = snap::install(app.handle()) {
+                eprintln!("{{\"event\":\"snap_overlay_unavailable\",\"error\":{error:?}}}");
+            }
             if let Some(ms) = smoke_ms {
                 let handle = app.handle().clone();
                 tauri::async_runtime::spawn(async move {

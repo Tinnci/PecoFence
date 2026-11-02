@@ -1246,10 +1246,33 @@ mod tests {
             ["focus", "summary", "--cached"]
         );
         assert_eq!(
-            focus_args("changes", Some("E6767SM"), None, None, Some("E6767SM_SYS_A16_MP")).unwrap(),
-            ["focus", "changes", "--code", "E6767SM", "--branch", "E6767SM_SYS_A16_MP"]
+            focus_args(
+                "changes",
+                Some("E6767SM"),
+                None,
+                None,
+                Some("E6767SM_SYS_A16_MP")
+            )
+            .unwrap(),
+            [
+                "focus",
+                "changes",
+                "--code",
+                "E6767SM",
+                "--branch",
+                "E6767SM_SYS_A16_MP"
+            ]
         );
-        assert!(focus_args("changes", Some("E6767SM"), None, None, Some("--config-root")).is_none());
+        assert!(
+            focus_args(
+                "changes",
+                Some("E6767SM"),
+                None,
+                None,
+                Some("--config-root")
+            )
+            .is_none()
+        );
         assert!(focus_args("changes", Some("E6767SM"), None, None, None).is_none());
         assert_eq!(
             focus_args("builds_cached", Some("E6767SM"), None, None, None).unwrap(),

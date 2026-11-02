@@ -3119,10 +3119,12 @@ number-flow-react {
   stroke-width: 1;
   shape-rendering: crispEdges;
 }
-.window-controls button:hover {
+.window-controls button:hover,
+.window-controls button.hover {
   background: rgb(27 36 32 / 0.07);
 }
-.window-controls button:active {
+.window-controls button:active,
+.window-controls button.pressed {
   background: rgb(27 36 32 / 0.12);
 }
 .window-controls .close:hover {

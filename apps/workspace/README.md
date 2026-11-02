@@ -285,8 +285,12 @@ The window has no Windows title bar (`decorations: false`, `shadow: true`): the 
 the caption. Its empty space and the tab strip's gaps are a drag region (`data-tauri-drag-region`;
 double-click maximises), and `WindowControls` draws minimise, maximise/restore and close at
 Windows 11's 46 px, close red on hover, all dimmed while the window is inactive. Windows keeps
-the shadow, rounded corners, edge resizing, drag-to-edge snapping and Win+arrow keys; the
-Snap Layouts flyout on hovering maximise needs a native hit-test overlay and is not provided.
+the shadow, rounded corners, edge resizing, drag-to-edge snapping and Win+arrow keys.
+For the Windows 11 Snap Layouts flyout, `src-tauri/src/snap.rs` puts a native child window
+over the maximise button that answers WM_NCHITTEST with HTMAXBUTTON. The button is fixed
+(second from the right, 46 × 48 CSS px), so the overlay's rectangle follows from the client
+width and DPI and moves on WM_SIZE and WM_DPICHANGED; clicks maximise or restore natively, and
+hover and press reach the page as `caption-max` events that style the web button.
 Only the content below the bar scrolls. The caption permissions are in `capabilities/main.json`.
 
 ## 机型子页 (0.10)

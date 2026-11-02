@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 // Caption buttons for the undecorated window, sized like Windows 11's (46 px wide, the
@@ -6,6 +7,18 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 // the tab order, as native caption buttons do; Alt+F4 and Win+arrows still work.
 export function WindowControls() {
   const [maximized, setMaximized] = useState(false);
+  // The native Snap Layouts overlay covers the maximise button, so the page learns its hover
+  // and press from `caption-max` events instead of the pointer.
+  const [maxState, setMaxState] = useState<"" | "hover" | "pressed">("");
+  useEffect(() => {
+    let stop: (() => void) | undefined;
+    void listen<string>("caption-max", ({ payload }) =>
+      setMaxState(
+        payload === "down" ? "pressed" : payload === "leave" ? "" : "hover",
+      ),
+    ).then((fn) => (stop = fn));
+    return () => stop?.();
+  }, []);
   useEffect(() => {
     const win = getCurrentWindow();
     let stop: (() => void) | undefined;
@@ -45,6 +58,7 @@ export function WindowControls() {
         type="button"
         tabIndex={-1}
         aria-label={maximized ? "向下还原" : "最大化"}
+        className={maxState}
         onClick={() => void win().toggleMaximize()}
       >
         <svg viewBox="0 0 10 10" aria-hidden="true">
