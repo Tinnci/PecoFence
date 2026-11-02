@@ -86,3 +86,16 @@ it("preserves other branch mappings and never changes source scope when associat
     model.branch_jobs,
   );
 });
+
+it("tracks A and B variants independently in the same model", () => {
+  const jobs = [job("E6751SM-A"), job("E6751SM-B")];
+  for (const variant of ["A", "B"]) {
+    for (const layer of ["SYS_A16", "VND_A13"]) {
+      const branch = `E6751SM-${variant}_${layer}_MP`;
+      const candidate = buildAssociation(branch, "mp", jobs);
+      expect(candidate.candidates.map((j) => j.name)).toEqual([`E6751SM-${variant}`]);
+      const model = { branch_jobs: { [branch]: [`folder/E6751SM-${variant}`] } } as FocusModel;
+      expect(buildAssociation(branch, "mp", jobs, model).jobs.map((j) => j.name)).toEqual([`E6751SM-${variant}`]);
+    }
+  }
+});

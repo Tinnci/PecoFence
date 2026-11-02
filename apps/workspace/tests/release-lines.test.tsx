@@ -109,7 +109,7 @@ it("edits lifecycle separately from phase and can exclude a task without deletin
   );
   const user = userEvent.setup();
   await user.click(screen.getAllByRole("combobox", { name: "生命周期" })[1]);
-  await user.click(screen.getByRole("option", { name: "OTA 维护" }));
+  await user.click(await screen.findByRole("option", { name: "OTA 维护" }));
   expect(onChange.mock.lastCall![0][1]).toMatchObject({
     phase: "mp",
     lifecycle: "maintenance",

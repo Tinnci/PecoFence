@@ -952,7 +952,9 @@ function BranchesTab({
               }
             >
               <SelectTrigger size="sm" aria-label={t("timeline.builds")}>
-                <SelectValue />
+                <SelectValue>
+                  {(value) => timelineOptions.find((option) => option.value === value)?.label ?? value}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {timelineOptions.map((o) => (

@@ -469,6 +469,7 @@ describe("followed models", () => {
     );
     await screen.findByText("本地配置关联", { exact: false });
     expect(saved.branch_jobs).toEqual({ [branch]: ["folder/E6751SM-A"] });
+    expect(screen.getByRole("combobox", { name: "构建标记" }).textContent).not.toContain("suggested");
     expect(mocks.focus.mock.calls.map((c) => c[0])).toEqual(["save"]);
     expect(screen.getByText(/Jenkins #57/)).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: "恢复自动识别" }));
