@@ -42,7 +42,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { FocusHome, FollowPage, shortfall, useFocus } from "./Focus";
-import { ModelPage } from "./Model";
+import { ModelPage, TabLine } from "./Model";
 import {
   desktop,
   loadConnections as fetchConnections,
@@ -286,6 +286,7 @@ export default function App() {
               onClick={() => setPage("home")}
             >
               关注
+              {page === "home" ? <TabLine id="appbar" /> : null}
             </button>
             {tabs.map((t) => (
               <button
@@ -303,6 +304,9 @@ export default function App() {
                   }
                 />
                 {t.code}
+                {page === "model" && modelCode === t.code ? (
+                  <TabLine id="appbar" />
+                ) : null}
               </button>
             ))}
           </nav>

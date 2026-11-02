@@ -103,6 +103,12 @@ const followed = (code: string, freeze?: string) => ({
 });
 
 const hour = 3600000;
+/** Visible text: NumberFlow carries its stylesheet inside the element. */
+const text = (el: Element) => {
+  const copy = el.cloneNode(true) as Element;
+  copy.querySelectorAll("style").forEach((s) => s.remove());
+  return copy.textContent ?? "";
+};
 const started = Date.now() - hour;
 const run = (number: number, extra = {}) => ({
   number,
@@ -371,15 +377,15 @@ describe("followed models", () => {
     const panel = await screen.findByRole("complementary", {
       name: "保存前后",
     });
-    await waitFor(() => expect(panel.textContent).toContain("需要留意2"));
+    await waitFor(() => expect(text(panel)).toContain("需要留意2"));
     fireEvent.change(screen.getByLabelText("MP 冻结日期"), {
       target: { value: "2026-10-01" },
     });
-    await waitFor(() => expect(panel.textContent).toContain("保存后"));
-    await waitFor(() => expect(panel.textContent).toMatch(/需要留意2 → 3\+1/));
-    expect(panel.textContent).toMatch(/冻结后进入 MP 的新功能0 → 12\+12/);
-    expect(panel.textContent).toContain("新出现 1");
-    expect(panel.textContent).toContain("按上次读取的 214 个变更试算");
+    await waitFor(() => expect(text(panel)).toContain("保存后"));
+    await waitFor(() => expect(text(panel)).toMatch(/需要留意2 → 3\+1/));
+    expect(text(panel)).toMatch(/冻结后进入 MP 的新功能0 → 12\+12/);
+    expect(text(panel)).toContain("新出现 1");
+    expect(text(panel)).toContain("按上次读取的 214 个变更试算");
     await waitFor(() =>
       expect(
         mocks.focus.mock.calls.some(

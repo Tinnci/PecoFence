@@ -343,8 +343,14 @@ column by column), `icons/card.svg` (1200×630 for sharing and about pages) and
 `icons/workspace-animated.svg`, whose upright fills cell by cell, holds and clears on a
 4.8 s loop. In the window, the mark builds in once when it appears — beam down, base up,
 the green block grows, the flag pops — and the green block pulses while a summary read
-runs, in the top bar and beside 正在读取关注的机型…. Every animation stops under
-`prefers-reduced-motion`.
+runs, in the top bar and beside 正在读取关注的机型….
+
+Interface motion uses Motion (`motion/react`, `LazyMotion` with `m`; the layout features
+load as a separate chunk after first paint) and NumberFlow. The current-tab underline slides
+between tabs in the top bar and between 概览, 分支, 构建 and 设置; an accepted change
+collapses out of 需要留意; ledger rows glide to their new place when a refresh reorders them;
+gate percentages, 本周 and the 设置 preview's before → after figures roll to new values.
+Every animation stops under `prefers-reduced-motion`.
 
 Following Windows guidance, the paper tile stays on Windows surfaces. Inside the
 app, the top bar's `BrandMark` draws the small variant's 工 without its tile, beam and

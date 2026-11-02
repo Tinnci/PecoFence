@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, RefreshCw } from "lucide-react";
 import { BrandMark } from "@/components/brand-mark";
+import { Num } from "@/components/motion";
+import { m as motion } from "motion/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -152,7 +154,9 @@ function GateCell({ v, n, target }: { v: number; n: number; target: number }) {
   const g = gate(v, n, target);
   return (
     <div className="gate-cell">
-      <strong className={g.ok ? "" : "short"}>{g.pct}%</strong>
+      <strong className={g.ok ? "" : "short"}>
+        <Num value={g.pct} suffix="%" />
+      </strong>
       <span className="gate-track">
         <span
           className={g.ok ? "ok" : "short"}
@@ -312,7 +316,8 @@ export function FocusHome({
         </div>
         {ordered.length
           ? ordered.map((m) => (
-              <button
+              <motion.button
+                layout="position"
                 type="button"
                 className="ledger-row"
                 key={m.code}
@@ -367,7 +372,7 @@ export function FocusHome({
                     <span className="short">{m.flagged.length} 个需要留意</span>
                   ) : null}
                 </span>
-              </button>
+              </motion.button>
             ))
           : (state.models ?? []).map((m) => (
               <div className="ledger-row" key={m.code} aria-hidden="true">

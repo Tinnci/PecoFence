@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { RefreshCw } from "lucide-react";
+import { AnimatePresence, m as motion } from "motion/react";
+import { Num } from "@/components/motion";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -45,6 +47,17 @@ import {
   type FocusState,
 } from "./Focus";
 import { FailureNote, failureOf } from "./TemplateImport";
+
+/** The current-tab underline; one per `id`, it slides to whichever tab renders it. */
+export function TabLine({ id }: { id: string }) {
+  return (
+    <motion.span
+      className="tab-line"
+      layoutId={`tab-line-${id}`}
+      aria-hidden="true"
+    />
+  );
+}
 
 export const phaseOrder = ["main", "ir", "pb", "mp", "old"] as const;
 export const phaseNames: Record<string, string> = {
@@ -174,7 +187,18 @@ function FlaggedRow({
   onReview: (action: string) => void;
 }) {
   return (
-    <article className="flagged">
+    <motion.article
+      className="flagged"
+      layout="position"
+      initial={false}
+      exit={{
+        opacity: 0,
+        height: 0,
+        paddingTop: 0,
+        paddingBottom: 0,
+        overflow: "hidden",
+      }}
+    >
       <div className="flagged-tags">
         {item.rules.map((r) => (
           <span key={r} className={`tag tag-${r}`}>
@@ -212,7 +236,7 @@ function FlaggedRow({
             : "没有关联问题"}
         </span>
       </div>
-    </article>
+    </motion.article>
   );
 }
 
@@ -667,15 +691,16 @@ function Overview({
           <h2>需要留意</h2>
           <span className="quiet">规则命中 · 近两周与正在跟踪的</span>
         </div>
-        {m.flagged.length ? (
-          m.flagged.map((f) => (
+        <AnimatePresence initial={false}>
+          {m.flagged.map((f) => (
             <FlaggedRow
               key={f.number}
               item={f}
               onReview={(a) => void state.review(m.code, f.number, a)}
             />
-          ))
-        ) : (
+          ))}
+        </AnimatePresence>
+        {m.flagged.length ? null : (
           <p className="quiet empty-line">近两周没有需要留意的变更。</p>
         )}
       </section>
@@ -778,9 +803,14 @@ function Delta({ before, after }: { before: number; after: number }) {
   const d = after - before;
   return (
     <span className="delta">
-      <span className="quiet">{before}</span> → <strong>{after}</strong>
+      <span className="quiet">{before}</span> →{" "}
+      <strong>
+        <Num value={after} />
+      </strong>
       {d ? (
-        <span className={d > 0 ? "up" : "down"}>{d > 0 ? `+${d}` : d}</span>
+        <span className={d > 0 ? "up" : "down"}>
+          <Num value={d} sign />
+        </span>
       ) : null}
     </span>
   );
@@ -896,7 +926,9 @@ function PreviewPanel({
                 after={preview.after.flagged}
               />
             ) : (
-              <strong>{preview.before.flagged}</strong>
+              <strong>
+                <Num value={preview.before.flagged} />
+              </strong>
             )}
           </div>
           <div className="preview-line">
@@ -1245,7 +1277,9 @@ export function ModelPage({
           {sev ? (
             <div>
               <span>严重问题解决率</span>
-              <strong className={sev.ok ? "" : "short"}>{sev.pct}%</strong>
+              <strong className={sev.ok ? "" : "short"}>
+                <Num value={sev.pct} suffix="%" />
+              </strong>
               <small className={sev.ok ? "" : "short"}>
                 {sev.v} / {sev.n} · {sev.ok ? "达标" : `还差 ${sev.gap} 个`}
               </small>
@@ -1254,7 +1288,9 @@ export function ModelPage({
           {all ? (
             <div>
               <span>整体解决率</span>
-              <strong className={all.ok ? "" : "short"}>{all.pct}%</strong>
+              <strong className={all.ok ? "" : "short"}>
+                <Num value={all.pct} suffix="%" />
+              </strong>
               <small className={all.ok ? "" : "short"}>
                 {all.v} / {all.n} · {all.ok ? "达标" : `还差 ${all.gap} 个`}
               </small>
@@ -1262,7 +1298,9 @@ export function ModelPage({
           ) : null}
           <div>
             <span>本周</span>
-            <strong>+{m.new_issues}</strong>
+            <strong>
+              <Num value={m.new_issues} prefix="+" />
+            </strong>
             <small>
               新问题 · {m.week_changes} 变更 · 合入 {m.week_merged}
             </small>
@@ -1278,6 +1316,7 @@ export function ModelPage({
             onClick={() => onTab(t)}
           >
             {tabNames[t]}
+            {tab === t ? <TabLine id="subnav" /> : null}
             {t === "overview" && m.flagged.length ? (
               <span className="tab-count short">{m.flagged.length}</span>
             ) : null}
