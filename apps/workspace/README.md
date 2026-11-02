@@ -296,6 +296,23 @@ Each model has 问题 and 需求 beside 概览 (`--open model:<CODE>:issues|requ
   analytics) inside internal. Each row says why (标题含“客户需求”, 标签, 没有客户标记); a
   local correction of 需求来源 changes it.
 
+### 需要关注 and the 概览 card
+
+- On every page but 概览 the model head folds into one line: code, sources and the three gate
+  figures in small type. 严重问题解决率 and 整体解决率 open the gate drill-down (the issue
+  browser, whole scope) when clicked; right-clicking the code offers all four drill-downs.
+- 概览 carries 问题与需求: open issues with 阻塞, 14 天无动态 and 到期复查 shortcuts, and open
+  requirements by 客户/内部. Each opens its tab with that filter set; 问题 and 需求 keep their
+  stage, 需要关注 and origin per model.
+- In 问题 and 需求 the stage bar shares out open work only; 已完成, 已取消 and 全部 sit on the
+  right. One 需要关注 row holds 阻塞, 14 天无动态, 到期复查, 本地修正, 与远端冲突 and tags.
+  Build names shorten to version and date (V14 · 09-23), full name on hover.
+- Chip groups use Base UI ToggleGroup (arrow keys, one Tab stop, aria-pressed); the sort and
+  correction choices use Select; 领域 classification uses Collapsible; hover hints use Tooltip.
+- A branch's recorded source is one line (current or historical, old → new branch, 查看当前分支)
+  with 依据与历史 for cutover, manual build ranges and the note; the timeline's reading note
+  sits behind ⓘ.
+
 ### Activity and local marks
 
 Rows say whether an item is moving, not just when it was last edited (`updated` moves on any

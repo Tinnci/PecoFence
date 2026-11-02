@@ -5,6 +5,11 @@ import type { FocusModel, JobSource, JobView } from "./contracts/setup";
 import { sourceRoutes } from "./job-sources";
 import { ExternalLink } from "./components/external-link";
 import { gerritSearchUrl, gerritTerm } from "./browser-links";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "./components/ui/collapsible";
 export function SourceRoutingNote({
   model,
   branch,
@@ -20,65 +25,71 @@ export function SourceRoutingNote({
   const routes = sourceRoutes(model, branch);
   const entries = [...routes.current, ...routes.historical];
   if (!entries.length) return null;
+  const current = new Set(routes.current.map((r) => r.job));
   return (
     <section className="source-routing" aria-label={t("source.routing")}>
-      <h3>
-        {routes.current.length
-          ? t("source.currentLocal")
-          : t("source.historical")}
-      </h3>
       {entries.map(({ job, source }) => (
-        <div key={job}>
-          <p>
-            <strong>{job.split("/").pop()}</strong> · {t("source.local")}
-          </p>
-          <p className="source-route-path">
-            {source.previous.map((old) => (
-              <span key={old}>
-                <code>{old}</code> →{" "}
-              </span>
-            ))}
-            <ExternalLink
-              href={gerritSearchUrl(
-                sampleUrl,
-                gerritTerm("branch", source.branch),
-              )}
-            >
-              {source.branch}
-            </ExternalLink>
-          </p>
-          {source.branch !== branch ? (
-            <button
-              type="button"
-              className="link"
-              onClick={() => onSelect(source.branch)}
-            >
-              {t("source.viewCurrent")}
-            </button>
-          ) : null}
-          <p className="quiet">
-            {source.since_build
-              ? t("source.fromBuild", { number: source.since_build })
-              : source.history?.length
-                ? t("source.onlyAssigned")
-                : t("source.cutoverUnknown")}
-          </p>
-          {source.history?.length ? (
-            <ul className="source-history-summary">
-              {source.history
-                .slice()
-                .sort((a, b) => a.first_build - b.first_build)
-                .map((range, i) => (
-                  <li key={i}>
-                    #{range.first_build}–#{range.last_build} ·{" "}
-                    <code>{range.branch}</code> · {t("source.manual")}
-                    {range.note ? ` · ${range.note}` : ""}
-                  </li>
-                ))}
-            </ul>
-          ) : null}
-          {source.note ? <p className="quiet">{source.note}</p> : null}
-        </div>
+        <Collapsible key={job} className="source-route">
+          <div className="source-route-line">
+            <span className="source-route-kind">
+              {current.has(job)
+                ? t("source.currentLocal")
+                : t("source.historical")}
+            </span>
+            <strong>{job.split("/").pop()}</strong>
+            <span className="source-route-path">
+              {source.previous.map((old) => (
+                <span key={old}>
+                  <code>{old}</code> →{" "}
+                </span>
+              ))}
+              <ExternalLink
+                href={gerritSearchUrl(
+                  sampleUrl,
+                  gerritTerm("branch", source.branch),
+                )}
+              >
+                {source.branch}
+              </ExternalLink>
+            </span>
+            {source.branch !== branch ? (
+              <button
+                type="button"
+                className="link"
+                onClick={() => onSelect(source.branch)}
+              >
+                {t("source.viewCurrent")}
+              </button>
+            ) : null}
+            <CollapsibleTrigger className="link source-route-more">
+              {t("source.details")}
+            </CollapsibleTrigger>
+          </div>
+          <CollapsibleContent className="source-route-details">
+            <p className="quiet">
+              {source.since_build
+                ? t("source.fromBuild", { number: source.since_build })
+                : source.history?.length
+                  ? t("source.onlyAssigned")
+                  : t("source.cutoverUnknown")}
+            </p>
+            {source.history?.length ? (
+              <ul className="source-history-summary">
+                {source.history
+                  .slice()
+                  .sort((a, b) => a.first_build - b.first_build)
+                  .map((range, i) => (
+                    <li key={i}>
+                      #{range.first_build}–#{range.last_build} ·{" "}
+                      <code>{range.branch}</code> · {t("source.manual")}
+                      {range.note ? ` · ${range.note}` : ""}
+                    </li>
+                  ))}
+              </ul>
+            ) : null}
+            {source.note ? <p className="quiet">{source.note}</p> : null}
+          </CollapsibleContent>
+        </Collapsible>
       ))}
     </section>
   );

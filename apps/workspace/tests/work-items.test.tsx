@@ -14,7 +14,14 @@ vi.mock("../src/api", async (original) => ({
   ...(await original<typeof import("../src/api")>()),
   focus: mocks.focus,
 }));
-import { WorkItemsTab, ageDays, isStale, remoteOf } from "../src/WorkItems";
+import {
+  WorkItemsTab,
+  WorkSummary,
+  ageDays,
+  isStale,
+  remoteOf,
+  shortVersion,
+} from "../src/WorkItems";
 import { queryClient } from "../src/focus-cache";
 
 const day = 86_400_000;
@@ -202,13 +209,26 @@ describe("software issues and requirements", () => {
     expect(text).toContain("01-01 复查");
     expect(text).toContain("2 个提交");
     // Stale follows the last human activity, not the field edit from yesterday.
-    await user.click(screen.getByRole("switch", { name: /14 天没更新 1/ }));
+    const look = screen.getByRole("group", { name: "需要关注" });
+    expect(
+      within(look)
+        .getAllByRole("button")
+        .map((b) => b.textContent),
+    ).toEqual([
+      "阻塞 1",
+      "14 天无动态 1",
+      "到期复查 1",
+      "本地修正 1",
+      "# MP必解 1",
+    ]);
+    const stale = within(look).getByRole("button", { name: "14 天无动态 1" });
+    await user.click(stale);
+    expect(stale.getAttribute("aria-pressed")).toBe("true");
     expect(screen.queryByText("title PLV-2")).toBeNull();
-    await user.click(screen.getByRole("switch", { name: /14 天没更新/ }));
-    await user.click(screen.getByRole("radio", { name: "# MP必解" }));
+    await user.click(stale);
+    expect(screen.getByText("title PLV-2")).toBeTruthy();
+    await user.click(within(look).getByRole("button", { name: "# MP必解 1" }));
     expect(screen.queryByText("title PLV-2")).toBeNull();
-    await user.click(screen.getByRole("radio", { name: "到期复查 1" }));
-    expect(screen.getByText("title PLV-1")).toBeTruthy();
     await user.click(screen.getByText(/领域 怎样算软件/));
     await user.click(screen.getByRole("switch", { name: /硬件/ }));
     await user.click(
@@ -315,20 +335,21 @@ describe("software issues and requirements", () => {
       />,
     );
     expect(await screen.findByText("title PLV-1507")).toBeTruthy();
+    const origins = screen.getByRole("group", { name: "需求来源" });
     expect(
-      screen.getByRole("radio", { name: /客户需求/ }).textContent,
+      within(origins).getByRole("button", { name: /客户需求/ }).textContent,
     ).toContain("1共 1");
-    await user.click(screen.getByRole("radio", { name: /其中互联网\/运营/ }));
+    await user.click(
+      within(origins).getByRole("button", { name: /其中互联网\/运营/ }),
+    );
     expect(screen.queryByText("title PLV-1507")).toBeNull();
     expect(document.body.textContent).toContain("内部需求 · 互联网/运营");
     expect(document.body.textContent).toContain("进展等待 UI 稿");
     await user.click(screen.getByRole("button", { name: "本地标记" }));
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByText("远端现在：内部需求")).toBeTruthy();
-    await user.selectOptions(
-      within(dialog).getByRole("combobox", { name: "修正为" }),
-      "customer",
-    );
+    await user.click(within(dialog).getByRole("combobox", { name: "修正为" }));
+    await user.click(await screen.findByRole("option", { name: "客户需求" }));
     await user.click(within(dialog).getByRole("button", { name: "保存修正" }));
     await waitFor(() =>
       expect(mocks.focus).toHaveBeenCalledWith("annotate", {
@@ -366,5 +387,44 @@ describe("software issues and requirements", () => {
     const corrected = issues().work_items.items[0];
     expect(remoteOf(corrected as never, "found_version")).toBe("V10");
     expect(remoteOf(corrected as never, "owner")).toBe("沈霞");
+  });
+
+  it("opens 问题 from 概览 on what needs a look, and shortens build names", async () => {
+    const user = userEvent.setup();
+    const opened: string[] = [];
+    render(
+      <>
+        <WorkSummary
+          code="P6700LV"
+          issues={issues().work_items as never}
+          requirements={null}
+          onOpen={(kind) => opened.push(kind)}
+        />
+      </>,
+    );
+    const card = screen.getByRole("region", { name: "问题与需求" });
+    expect(card.textContent).toContain("问题2未完成");
+    await user.click(
+      within(card).getByRole("button", { name: "1 14 天无动态" }),
+    );
+    expect(opened).toEqual(["issues"]);
+    cleanup();
+    render(
+      <WorkItemsTab
+        code="P6700LV"
+        kind="issues"
+        saved={saved as never}
+        state={state}
+      />,
+    );
+    const stale = await screen.findByRole("button", { name: "14 天无动态 1" });
+    expect(stale.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.queryByText("title PLV-2")).toBeNull();
+    expect(shortVersion("LAVA_LXX516_SW_V_V14_HW_V1.0_20260923_user")).toBe(
+      "V14 · 09-23",
+    );
+    expect(shortVersion("MAX_100_HW1_V4_2026101316_user")).toBe("V4 · 10-13");
+    expect(shortVersion("helio_26_HW1_V5_20261022")).toBe("V5 · 10-22");
+    expect(shortVersion("V09")).toBe("V09");
   });
 });

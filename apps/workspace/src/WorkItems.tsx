@@ -1,7 +1,19 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { RefreshCw, Tag } from "lucide-react";
+import { Toggle } from "@base-ui/react/toggle";
+import { ToggleGroup } from "@base-ui/react/toggle-group";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -10,6 +22,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { ExternalLink } from "@/components/external-link";
@@ -30,6 +49,7 @@ import {
 } from "./focus-cache";
 import { since, type FocusState } from "./Focus";
 import { FailureNote, failureOf } from "./TemplateImport";
+import { useModelPreference } from "./model-navigation";
 import { t } from "./i18n";
 
 /** Stages in the order work moves; done and cancelled close the item. */
@@ -59,7 +79,9 @@ type Field = (typeof fields)[number];
  * reads kept its zoneless China time ("2026-11-02 13:51:04", "2026-10-30"). */
 export function updatedAt(value: string) {
   if (/^\d{10,}$/.test(value)) return Number(value);
-  const china = /^(\d{4}-\d\d-\d\d)(?:[ T](\d\d:\d\d(?::\d\d)?))?$/.exec(value.trim());
+  const china = /^(\d{4}-\d\d-\d\d)(?:[ T](\d\d:\d\d(?::\d\d)?))?$/.exec(
+    value.trim(),
+  );
   const text = china
     ? `${china[1]}T${china[2] ?? "00:00:00"}+08:00`
     : value.replace(/([+-]\d\d)(\d\d)$/, "$1:$2");
@@ -80,6 +102,16 @@ const today = () => new Date().toLocaleDateString("sv-SE");
 export const isDue = (item: WorkItem, day = today()) =>
   !!item.local?.next_check && item.local.next_check <= day;
 
+/** A build name's version and date: LAVA_LXX516_SW_V_V14_HW_V1.0_20260923_user → V14 · 09-23. */
+export function shortVersion(name: string) {
+  const version = /(?:^|_)(V\d+(?:\.\d+)?)(?=_|$)/i.exec(name)?.[1];
+  const date = /_(20\d{2})(\d{2})(\d{2})(?:\d{2})?(?=_|$)/.exec(name);
+  if (!version && !date)
+    return name.length > 28 ? `${name.slice(0, 26)}…` : name;
+  return [version, date ? `${date[2]}-${date[3]}` : ""]
+    .filter(Boolean)
+    .join(" · ");
+}
 /** What a field shows now, and what the source says. */
 function shown(item: WorkItem, field: Field) {
   switch (field) {
@@ -131,7 +163,56 @@ async function reloadLocal(code: string, kind: WorkKind) {
     );
 }
 
-/** One bar for the scope: each stage's share, clickable to filter. */
+/** A single-choice chip group (Base UI ToggleGroup: arrow keys, one Tab stop, aria-pressed).
+ * Pressing the chosen chip again falls back to `empty`. */
+function Choices({
+  label,
+  value,
+  empty,
+  onChange,
+  className,
+  children,
+}: {
+  label: string;
+  value: string;
+  empty: string;
+  onChange: (value: string) => void;
+  className: string;
+  children: ReactNode;
+}) {
+  return (
+    <ToggleGroup
+      aria-label={label}
+      className={className}
+      value={[value]}
+      onValueChange={(next: string[]) => onChange(next[0] ?? empty)}
+    >
+      {children}
+    </ToggleGroup>
+  );
+}
+/** A hover and focus hint over inline text. */
+function Hint({
+  text,
+  children,
+  className,
+}: {
+  text: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  if (!text) return <span className={className}>{children}</span>;
+  return (
+    <Tooltip>
+      <TooltipTrigger render={<span className={className} tabIndex={0} />}>
+        {children}
+      </TooltipTrigger>
+      <TooltipContent>{text}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+/** Open work by stage: the bar shares out only what is still open; closed counts sit apart. */
 function StageBar({
   items,
   stage,
@@ -144,11 +225,17 @@ function StageBar({
   const counts = new Map<string, number>();
   for (const i of items) counts.set(i.group, (counts.get(i.group) ?? 0) + 1);
   const open = items.filter((i) => !closed.has(i.group)).length;
+  const openStages = stages.filter((s) => !closed.has(s) && counts.get(s));
+  const radio = (key: string, label: ReactNode) => (
+    <Toggle key={key} value={key}>
+      {label}
+    </Toggle>
+  );
   return (
     <div className="stage-bar">
-      <div className="stage-track" aria-hidden="true">
-        {stages.map((s) =>
-          counts.get(s) ? (
+      {open ? (
+        <div className="stage-track" aria-hidden="true">
+          {openStages.map((s) => (
             <span
               key={s}
               className={`stage-${s}`}
@@ -156,45 +243,50 @@ function StageBar({
               title={`${t(`work.stage.${s}`)} ${counts.get(s)}`}
               data-dim={stage !== "open" && stage !== s ? "" : undefined}
             />
-          ) : null,
-        )}
-      </div>
-      <div
+          ))}
+        </div>
+      ) : null}
+      <Choices
         className="stage-legend"
-        role="radiogroup"
-        aria-label={t("work.stage")}
+        label={t("work.stage")}
+        value={stage}
+        empty="open"
+        onChange={onStage}
       >
-        <button
-          type="button"
-          role="radio"
-          aria-checked={stage === "open"}
-          onClick={() => onStage("open")}
-        >
-          {t("work.open")} <strong>{open}</strong>
-        </button>
-        {stages.map((s) =>
-          counts.get(s) ? (
-            <button
-              type="button"
-              role="radio"
-              key={s}
-              aria-checked={stage === s}
-              onClick={() => onStage(s)}
-            >
+        {radio(
+          "open",
+          <>
+            {t("work.open")} <strong>{open}</strong>
+          </>,
+        )}
+        {openStages.map((s) =>
+          radio(
+            s,
+            <>
               <i className={`stage-dot stage-${s}`} />
               {t(`work.stage.${s}`)} <strong>{counts.get(s)}</strong>
-            </button>
-          ) : null,
+            </>,
+          ),
         )}
-        <button
-          type="button"
-          role="radio"
-          aria-checked={stage === "all"}
-          onClick={() => onStage("all")}
-        >
-          {t("work.all")} <strong>{items.length}</strong>
-        </button>
-      </div>
+        <span className="stage-closed">
+          {stages
+            .filter((s) => closed.has(s) && counts.get(s))
+            .map((s) =>
+              radio(
+                s,
+                <>
+                  {t(`work.stage.${s}`)} {counts.get(s)}
+                </>,
+              ),
+            )}
+          {radio(
+            "all",
+            <>
+              {t("work.all")} {items.length}
+            </>,
+          )}
+        </span>
+      </Choices>
     </div>
   );
 }
@@ -269,44 +361,48 @@ function Classify({
     }
   }
   return (
-    <details className="classify">
-      <summary>
+    <Collapsible className="classify">
+      <CollapsibleTrigger className="classify-trigger">
         {t("work.classify", { field: c.field_name })}
         <span className="quiet">
           {c.configured ? t("work.classifySaved") : t("work.classifySuggested")}
         </span>
-      </summary>
-      <div className="classify-values">
-        {c.values.map((v) => (
-          <button
-            type="button"
-            key={v.value}
-            role="switch"
-            aria-checked={picked.has(v.value)}
-            onClick={() => {
-              const next = new Set(picked);
-              if (next.has(v.value)) next.delete(v.value);
-              else next.add(v.value);
-              setPicked(next);
-            }}
-          >
-            <span>{v.value}</span>
-            <span className="quiet">{v.count}</span>
-            <span
-              className={picked.has(v.value) ? "is-software" : "not-software"}
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <div className="classify-values">
+          {c.values.map((v) => (
+            <button
+              type="button"
+              key={v.value}
+              role="switch"
+              aria-checked={picked.has(v.value)}
+              onClick={() => {
+                const next = new Set(picked);
+                if (next.has(v.value)) next.delete(v.value);
+                else next.add(v.value);
+                setPicked(next);
+              }}
             >
-              {picked.has(v.value) ? t("work.software") : t("work.notSoftware")}
-            </span>
-          </button>
-        ))}
-      </div>
-      {dirty ? (
-        <Button size="sm" disabled={saving} onClick={() => void save()}>
-          {saving ? <Spinner aria-hidden="true" /> : null}
-          {t("work.saveClassification")}
-        </Button>
-      ) : null}
-    </details>
+              <span>{v.value}</span>
+              <span className="quiet">{v.count}</span>
+              <span
+                className={picked.has(v.value) ? "is-software" : "not-software"}
+              >
+                {picked.has(v.value)
+                  ? t("work.software")
+                  : t("work.notSoftware")}
+              </span>
+            </button>
+          ))}
+        </div>
+        {dirty ? (
+          <Button size="sm" disabled={saving} onClick={() => void save()}>
+            {saving ? <Spinner aria-hidden="true" /> : null}
+            {t("work.saveClassification")}
+          </Button>
+        ) : null}
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
 
@@ -361,12 +457,12 @@ function Row({
             {item.status}
           </span>
           {held !== null ? (
-            <span
+            <Hint
               className={stale ? "short" : undefined}
-              title={t(`work.since.${a.status_since_source || "unknown"}`)}
+              text={t(`work.since.${a.status_since_source || "unknown"}`)}
             >
               {t("work.held", { count: held })}
-            </span>
+            </Hint>
           ) : null}
           {item.owner ? <span>{item.owner}</span> : null}
           {item.severity ? (
@@ -378,12 +474,17 @@ function Row({
             </span>
           ) : null}
           {a.found_versions.length || a.target_versions.length ? (
-            <span className="work-versions">
-              {a.found_versions.join(", ") || "—"}
+            <Hint
+              className="work-versions"
+              text={[a.found_versions.join(", "), a.target_versions.join(", ")]
+                .filter(Boolean)
+                .join(" → ")}
+            >
+              {a.found_versions.map(shortVersion).join(", ") || "—"}
               {a.target_versions.length
-                ? ` → ${a.target_versions.join(", ")}`
+                ? ` → ${a.target_versions.map(shortVersion).join(", ")}`
                 : ""}
-            </span>
+            </Hint>
           ) : null}
           {a.reopened ? (
             <span className="short">
@@ -596,38 +697,54 @@ function LocalDialog({
               });
             }}
           >
-            <select
-              aria-label={t("work.field")}
+            <Select
               value={field}
-              onChange={(e) => {
-                setField(e.target.value as Field);
+              items={fields.map((f) => ({
+                value: f,
+                label: t(`work.field.${f}`),
+              }))}
+              onValueChange={(f) => {
+                if (!f) return;
+                setField(f as Field);
                 setValue("");
               }}
             >
-              {fields.map((f) => (
-                <option key={f} value={f}>
-                  {t(`work.field.${f}`)}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger size="sm" aria-label={t("work.field")}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {fields.map((f) => (
+                  <SelectItem key={f} value={f}>
+                    {t(`work.field.${f}`)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <span className="quiet">
               {t("work.remoteNow", {
                 value: remote ? fieldValue(field, remote) : "—",
               })}
             </span>
             {choices[field] ? (
-              <select
-                aria-label={t("work.value")}
-                value={value}
-                onChange={(e) => setValue(e.target.value)}
+              <Select
+                value={value || null}
+                items={choices[field].map((v) => ({
+                  value: v,
+                  label: fieldValue(field, v),
+                }))}
+                onValueChange={(v) => setValue((v as string) ?? "")}
               >
-                <option value="">{t("work.pick")}</option>
-                {choices[field].map((v) => (
-                  <option key={v} value={v}>
-                    {fieldValue(field, v)}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger size="sm" aria-label={t("work.value")}>
+                  <SelectValue placeholder={t("work.pick")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {choices[field].map((v) => (
+                    <SelectItem key={v} value={v}>
+                      {fieldValue(field, v)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             ) : (
               <Input
                 value={value}
@@ -723,6 +840,44 @@ function LocalDialog({
 
 const PAGE = 150;
 const sorts = ["activity", "held", "created"] as const;
+type Sort = (typeof sorts)[number];
+
+/** What needs a look: one filter at a time, kept per model so 概览 can open the tab on it. */
+export type Attention =
+  "" | "blocked" | "stale" | "due" | "corrected" | "conflict" | `tag:${string}`;
+export function attends(
+  item: WorkItem,
+  attention: Attention,
+  now = Date.now(),
+) {
+  switch (attention) {
+    case "":
+      return true;
+    case "blocked":
+      return item.group === "blocked";
+    case "stale":
+      return isStale(item, now);
+    case "due":
+      return isDue(item);
+    case "corrected":
+      return !!item.local?.corrections.some((c) => c.state !== "resolved");
+    case "conflict":
+      return !!item.local?.corrections.some((c) => c.state === "conflict");
+    default:
+      return !!item.local?.tags.includes(attention.slice(4));
+  }
+}
+/** The per-model view state of 问题 and 需求, shared with 概览's shortcuts. */
+export function useWorkView(code: string, kind: WorkKind) {
+  const [stage, setStage] = useModelPreference(code, `${kind}-stage`, "open");
+  const [attention, setAttention] = useModelPreference<Attention>(
+    code,
+    `${kind}-attention`,
+    "",
+  );
+  const [origin, setOrigin] = useModelPreference(code, `${kind}-origin`, "all");
+  return { stage, setStage, attention, setAttention, origin, setOrigin };
+}
 
 /** 问题 and 需求: software items in the model's scope, by stage, with what decided each. */
 export function WorkItemsTab({
@@ -738,12 +893,10 @@ export function WorkItemsTab({
 }) {
   useTranslation();
   const work = useWorkItems(code, kind);
-  const [stage, setStage] = useState("open");
-  const [origin, setOrigin] = useState("all");
+  const view = useWorkView(code, kind);
+  const { stage, setStage, attention, setAttention, origin, setOrigin } = view;
   const [search, setSearch] = useState("");
-  const [staleOnly, setStaleOnly] = useState(false);
-  const [localFilter, setLocalFilter] = useState("");
-  const [sort, setSort] = useState<(typeof sorts)[number]>("activity");
+  const [sort, setSort] = useState<Sort>("activity");
   const [shown, setShown] = useState(PAGE);
   const [editing, setEditing] = useState<string | null>(null);
   const [now] = useState(() => Date.now());
@@ -766,15 +919,20 @@ export function WorkItemsTab({
       ].sort(),
     [data],
   );
-  const localCounts = useMemo(() => {
-    const items = data?.items ?? [];
-    const corrections = items.flatMap((i) => i.local?.corrections ?? []);
-    return {
-      corrected: corrections.filter((c) => c.state !== "resolved").length,
-      conflict: corrections.filter((c) => c.state === "conflict").length,
-      due: items.filter((i) => isDue(i)).length,
-    };
-  }, [data]);
+  const attentionCounts = useMemo(() => {
+    const open = scoped.filter((i) => !closed.has(i.group));
+    const count = (a: Attention) =>
+      (a === "corrected" || a === "conflict" || a.startsWith("tag:")
+        ? scoped
+        : open
+      ).filter((i) => attends(i, a, now)).length;
+    return [
+      ...(["blocked", "stale", "due", "corrected", "conflict"] as const),
+      ...tags.map((tag) => `tag:${tag}` as const),
+    ]
+      .map((a) => [a, count(a)] as const)
+      .filter(([, n]) => n > 0);
+  }, [scoped, tags, now]);
   const list = useMemo(() => {
     const q = search.trim().toLowerCase();
     const time = (v: string) => updatedAt(v) ?? 0;
@@ -786,16 +944,7 @@ export function WorkItemsTab({
             ? !closed.has(i.group)
             : i.group === stage,
       )
-      .filter((i) => !staleOnly || isStale(i, now))
-      .filter((i) => {
-        if (!localFilter) return true;
-        if (localFilter === "corrected")
-          return i.local?.corrections.some((c) => c.state !== "resolved");
-        if (localFilter === "conflict")
-          return i.local?.corrections.some((c) => c.state === "conflict");
-        if (localFilter === "due") return isDue(i);
-        return i.local?.tags.includes(localFilter.slice(4));
-      })
+      .filter((i) => attends(i, attention, now))
       .filter(
         (i) =>
           !q ||
@@ -811,7 +960,7 @@ export function WorkItemsTab({
               time(b.activity.status_since || b.updated)
             : time(a.activity.created) - time(b.activity.created),
       );
-  }, [scoped, stage, staleOnly, localFilter, search, sort, now]);
+  }, [scoped, stage, attention, search, sort, now]);
   const origins = useMemo(() => {
     const items = data?.items ?? [];
     const count = (f: (i: WorkItem) => boolean) => [
@@ -825,42 +974,16 @@ export function WorkItemsTab({
       internet: count((i) => i.origin_kind === "internet"),
     } as Record<string, number[]>;
   }, [data]);
-  const staleCount = scoped.filter((i) => isStale(i, now)).length;
   const editingItem = data?.items.find(
     (i) => `${i.source}:${i.id}` === editing,
   );
-  const localChip = (key: string, label: string) => (
-    <button
-      type="button"
-      role="radio"
-      key={key}
-      aria-checked={localFilter === key}
-      onClick={() => setLocalFilter(localFilter === key ? "" : key)}
-    >
-      {label}
-    </button>
-  );
+  const attentionLabel = (a: Attention, n: number) =>
+    a.startsWith("tag:")
+      ? `# ${a.slice(4)} ${n}`
+      : t(`work.attention.${a}`, { count: n, days: STALE_DAYS });
 
   return (
     <div className="work-tab">
-      <div className="tab-head">
-        <span className="quiet">
-          {data
-            ? t("work.checked", { time: since(data.checked_at) })
-            : work.loading
-              ? t("work.reading")
-              : ""}
-        </span>
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={work.loading}
-          onClick={() => void work.refresh()}
-        >
-          {work.loading ? <Spinner aria-hidden="true" /> : <RefreshCw />}
-          {t("work.refresh")}
-        </Button>
-      </div>
       {work.failure ? <FailureNote failure={work.failure} /> : null}
       {!data ? (
         <div className="job-skeletons" aria-hidden="true">
@@ -871,7 +994,7 @@ export function WorkItemsTab({
         <>
           <section className="work-sources" aria-label={t("work.scope")}>
             {data.sources.map((s) => (
-              <div key={s.id}>
+              <div key={s.id} className="work-source-line">
                 <SourceLine source={s} />
                 {s.classification && saved && kind === "issues" ? (
                   <Classify
@@ -883,34 +1006,69 @@ export function WorkItemsTab({
                 ) : null}
               </div>
             ))}
+            <span className="work-read">
+              <span className="quiet">
+                {t("work.checked", { time: since(data.checked_at) })}
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={work.loading}
+                onClick={() => void work.refresh()}
+              >
+                {work.loading ? <Spinner aria-hidden="true" /> : <RefreshCw />}
+                {t("work.refresh")}
+              </Button>
+            </span>
           </section>
           {kind === "requirements" ? (
-            <div
+            <Choices
               className="origin-split"
-              role="radiogroup"
-              aria-label={t("work.originGroup")}
+              label={t("work.originGroup")}
+              value={origin}
+              empty="all"
+              onChange={setOrigin}
             >
               {(["all", "customer", "internal", "internet"] as const).map(
                 (o) => (
-                  <button
-                    type="button"
-                    role="radio"
+                  <Toggle
                     key={o}
-                    aria-checked={origin === o}
+                    value={o}
                     className={o === "internet" ? "origin-sub" : undefined}
-                    onClick={() => setOrigin(o)}
                   >
                     <span>{t(`work.split.${o}`)}</span>
                     <strong>{origins[o][1]}</strong>
                     <span className="quiet">
                       {t("work.ofTotal", { count: origins[o][0] })}
                     </span>
-                  </button>
+                  </Toggle>
                 ),
               )}
-            </div>
+            </Choices>
           ) : null}
           <StageBar items={scoped} stage={stage} onStage={setStage} />
+          {attentionCounts.length ? (
+            <div className="attention-row">
+              <span className="attention-title">{t("work.needsLook")}</span>
+              <Choices
+                className="attention-chips"
+                label={t("work.needsLook")}
+                value={attention}
+                empty=""
+                onChange={(a) => setAttention(a as Attention)}
+              >
+                {attentionCounts.map(([a, n]) => (
+                  <Toggle
+                    key={a}
+                    value={a}
+                    className={`attention-${a.startsWith("tag:") ? "tag" : a}`}
+                  >
+                    {attentionLabel(a, n)}
+                  </Toggle>
+                ))}
+              </Choices>
+            </div>
+          ) : null}
           <div className="work-filters">
             <Input
               value={search}
@@ -918,56 +1076,29 @@ export function WorkItemsTab({
               aria-label={t("work.search")}
               onChange={(e) => setSearch(e.target.value)}
             />
-            <button
-              type="button"
-              role="switch"
-              aria-checked={staleOnly}
-              className={staleOnly ? "stale-toggle on" : "stale-toggle"}
-              onClick={() => setStaleOnly(!staleOnly)}
-            >
-              {t("work.staleOnly", { days: STALE_DAYS, count: staleCount })}
-            </button>
-            <select
-              aria-label={t("work.sort")}
+            <Select
               value={sort}
-              onChange={(e) =>
-                setSort(e.target.value as (typeof sorts)[number])
-              }
+              items={sorts.map((s) => ({
+                value: s,
+                label: t(`work.sort.${s}`),
+              }))}
+              onValueChange={(v) => v && setSort(v as Sort)}
             >
-              {sorts.map((s) => (
-                <option key={s} value={s}>
-                  {t(`work.sort.${s}`)}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger size="sm" aria-label={t("work.sort")}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {sorts.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {t(`work.sort.${s}`)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <span className="quiet work-count">
+              {t("work.showing", { count: list.length })}
+            </span>
           </div>
-          {tags.length || localCounts.corrected || localCounts.due ? (
-            <div
-              className="local-filters"
-              role="radiogroup"
-              aria-label={t("work.localFilters")}
-            >
-              {localCounts.corrected
-                ? localChip(
-                    "corrected",
-                    t("work.correctedCount", { count: localCounts.corrected }),
-                  )
-                : null}
-              {localCounts.conflict
-                ? localChip(
-                    "conflict",
-                    t("work.conflictCount", { count: localCounts.conflict }),
-                  )
-                : null}
-              {localCounts.due
-                ? localChip(
-                    "due",
-                    t("work.dueCount", { count: localCounts.due }),
-                  )
-                : null}
-              {tags.map((tag) => localChip(`tag:${tag}`, `# ${tag}`))}
-            </div>
-          ) : null}
           {list.length ? (
             <ol className="work-list">
               {list.slice(0, shown).map((i) => (
@@ -1003,5 +1134,110 @@ export function WorkItemsTab({
         </>
       )}
     </div>
+  );
+}
+
+/** 概览's card: open issues and requirements, and the shortcuts into what needs a look. */
+export function WorkSummary({
+  code,
+  issues,
+  requirements,
+  onOpen,
+}: {
+  code: string;
+  issues: WorkItems | null;
+  requirements: WorkItems | null;
+  onOpen: (kind: WorkKind) => void;
+}) {
+  useTranslation();
+  const issueView = useWorkView(code, "issues");
+  const requirementView = useWorkView(code, "requirements");
+  const [now] = useState(() => Date.now());
+  const open = (w: WorkItems | null) =>
+    w?.items.filter((i) => !closed.has(i.group)) ?? [];
+  const go = (
+    kind: WorkKind,
+    view: ReturnType<typeof useWorkView>,
+    attention: Attention,
+    origin = "all",
+  ) => {
+    view.setStage("open");
+    view.setAttention(attention);
+    view.setOrigin(origin);
+    onOpen(kind);
+  };
+  const shortcut = (label: string, n: number, run: () => void, tone = "") =>
+    n ? (
+      <button type="button" className={`work-shortcut ${tone}`} onClick={run}>
+        <strong>{n}</strong> {label}
+      </button>
+    ) : null;
+  const openIssues = open(issues);
+  const openRequirements = open(requirements);
+  return (
+    <section aria-label={t("work.summary")} className="work-summary">
+      <div className="column-head">
+        <h2>{t("work.summary")}</h2>
+      </div>
+      <div className="work-summary-line">
+        <button
+          type="button"
+          className="work-summary-total"
+          onClick={() => go("issues", issueView, "")}
+        >
+          <span>{t("model.issues")}</span>
+          <strong>{issues ? openIssues.length : "—"}</strong>
+          <span className="quiet">{t("work.open")}</span>
+        </button>
+        <span className="work-shortcuts">
+          {shortcut(
+            t("work.stage.blocked"),
+            openIssues.filter((i) => i.group === "blocked").length,
+            () => go("issues", issueView, "blocked"),
+            "short",
+          )}
+          {shortcut(
+            t("work.noActivity", { days: STALE_DAYS }),
+            openIssues.filter((i) => isStale(i, now)).length,
+            () => go("issues", issueView, "stale"),
+          )}
+          {shortcut(
+            t("work.checkDue"),
+            openIssues.filter((i) => isDue(i)).length,
+            () => go("issues", issueView, "due"),
+            "short",
+          )}
+        </span>
+      </div>
+      <div className="work-summary-line">
+        <button
+          type="button"
+          className="work-summary-total"
+          onClick={() => go("requirements", requirementView, "")}
+        >
+          <span>{t("model.requirements")}</span>
+          <strong>{requirements ? openRequirements.length : "—"}</strong>
+          <span className="quiet">{t("work.open")}</span>
+        </button>
+        <span className="work-shortcuts">
+          {shortcut(
+            t("work.origin.customer"),
+            openRequirements.filter((i) => i.origin === "customer").length,
+            () => go("requirements", requirementView, "", "customer"),
+          )}
+          {shortcut(
+            t("work.origin.internal"),
+            openRequirements.filter((i) => i.origin === "internal").length,
+            () => go("requirements", requirementView, "", "internal"),
+          )}
+          {shortcut(
+            t("work.checkDue"),
+            openRequirements.filter((i) => isDue(i)).length,
+            () => go("requirements", requirementView, "due"),
+            "short",
+          )}
+        </span>
+      </div>
+    </section>
   );
 }

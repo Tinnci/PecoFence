@@ -3328,12 +3328,12 @@ a.external-link.bar { text-decoration: none; }
   font-size: 30px;
   line-height: 1.1;
 }
-.origin-split button[aria-checked="true"] {
+.origin-split button[data-pressed] {
   background: var(--foreground);
   border-color: var(--foreground);
   color: var(--background);
 }
-.origin-split button[aria-checked="true"] .quiet {
+.origin-split button[data-pressed] .quiet {
   color: #b8c0b9;
 }
 .origin-split .origin-sub {
@@ -3390,7 +3390,7 @@ a.external-link.bar { text-decoration: none; }
   color: var(--foreground);
   font-variant-numeric: tabular-nums;
 }
-.stage-legend button[aria-checked="true"] {
+.stage-legend button[data-pressed] {
   background: #e6e2d7;
   color: var(--foreground);
 }
@@ -3572,7 +3572,7 @@ a.external-link.bar { text-decoration: none; }
   align-items: center;
   gap: 4px;
   font-size: 12px;
-  opacity: 0;
+  opacity: 0.45;
 }
 .work-row:hover .local-edit,
 .work-row:focus-within .local-edit,
@@ -3750,3 +3750,252 @@ a.external-link.bar { text-decoration: none; }
 .source-history-row { display: grid; grid-template-columns: repeat(2, minmax(5rem, .5fr)) minmax(10rem, 2fr) minmax(8rem, 1fr) auto; gap: .5rem; align-items: end; margin-block: .5rem; }
 .source-history-row input { min-width: 0; width: 100%; }
 @media (max-width: 900px) { .source-history-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* 机型子页：只有概览显示大号标题和门槛数字 */
+.model-figure {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.model-figure:disabled {
+  cursor: default;
+}
+.model-figure:not(:disabled):hover strong {
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 6px;
+}
+.model-head.compact {
+  align-items: center;
+  padding-bottom: 16px;
+}
+.model-head.compact .model-code {
+  margin: 0;
+  font-size: 34px;
+}
+.model-head.compact > div:first-child {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 18px;
+}
+.model-head.compact .model-figures {
+  gap: 28px;
+}
+.model-head.compact .model-figures strong {
+  font-size: 20px;
+}
+.model-head.compact .model-figures span,
+.model-head.compact .model-figures small {
+  font-size: 11px;
+}
+.model-head.compact + .model-subnav {
+  margin-top: -20px;
+}
+
+/* 问题与需求：范围一行，需要关注一行 */
+.work-sources {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 6px 20px;
+}
+.work-source-line {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.work-read {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+.classify {
+  margin-top: 2px;
+}
+.classify-trigger {
+  display: inline-flex;
+  gap: 10px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #24552b;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.stage-closed {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  margin-left: auto;
+}
+.stage-closed button {
+  font-size: 12px !important;
+}
+.attention-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.attention-title {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: var(--muted-foreground);
+}
+.attention-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.attention-chips button {
+  padding: 4px 12px;
+  border: 1px solid #e6e2d7;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--foreground);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.attention-chips .attention-blocked,
+.attention-chips .attention-due,
+.attention-chips .attention-conflict {
+  border-color: #e2c3b0;
+  color: #8a3a19;
+}
+.attention-chips .attention-tag {
+  border-color: #c6d8bd;
+  color: #24552b;
+}
+.attention-chips button[data-pressed] {
+  background: var(--foreground);
+  border-color: var(--foreground);
+  color: var(--background);
+}
+.work-count {
+  margin-left: auto;
+  font-size: 13px;
+}
+.work-filters [data-slot="select-trigger"] {
+  min-width: 168px;
+}
+
+/* 概览：问题与需求 */
+.work-summary {
+  gap: 10px;
+}
+.work-summary-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  padding: 8px 0;
+  border-bottom: 1px solid #e6e2d7;
+}
+.work-summary-total {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.work-summary-total strong {
+  font-family: var(--font-serif, Georgia, serif);
+  font-size: 28px;
+  line-height: 1;
+}
+.work-summary-total:hover strong {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.work-shortcuts {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.work-shortcut {
+  padding: 3px 10px;
+  border: 1px solid #e6e2d7;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--foreground);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.work-shortcut.short {
+  border-color: #e2c3b0;
+  color: #8a3a19;
+}
+.work-shortcut:hover {
+  background: #ece9e0;
+}
+
+/* 分支来源：一行，依据与历史可展开 */
+.source-routing {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.source-route {
+  padding: 8px 12px;
+  border-left: 3px solid #34406a;
+  border-radius: 0 6px 6px 0;
+  background: #eef0f5;
+  font-size: 13px;
+}
+.source-route-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+}
+.source-route-kind {
+  font-size: 12px;
+  font-weight: 600;
+  color: #34406a;
+}
+.source-route-path code {
+  font-size: 12px;
+}
+.source-route-more {
+  margin-left: auto;
+  font-size: 12px;
+}
+.source-route-details {
+  padding-top: 6px;
+}
+.source-route-details p {
+  margin: 2px 0;
+}
+.info-hint {
+  display: inline-grid;
+  place-items: center;
+  padding: 4px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: help;
+}
+.info-hint:hover {
+  background: #ece9e0;
+}

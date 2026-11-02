@@ -34,7 +34,12 @@ import {
 } from "./browser-links";
 import { useTranslation } from "react-i18next";
 import { t, locale } from "./i18n";
-import { WorkItemsTab, useWorkItems } from "./WorkItems";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { WorkItemsTab, WorkSummary, useWorkItems } from "./WorkItems";
 import { useModelPreference } from "./model-navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -44,7 +49,7 @@ import {
   changesOptions,
 } from "./focus-cache";
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { RefreshCw } from "lucide-react";
+import { Info, RefreshCw } from "lucide-react";
 import { AnimatePresence, m as motion } from "motion/react";
 import { Num } from "@/components/motion";
 import { Button } from "@/components/ui/button";
@@ -78,6 +83,7 @@ import type {
   ModelSummary,
   Preview,
   SetupFailure,
+  WorkItems,
 } from "./contracts/setup";
 import { focus, type ModelTab } from "./api";
 import {
@@ -951,10 +957,22 @@ function BranchesTab({
               <RefreshCw size={14} aria-hidden="true" />
               {t("timeline.refreshBuilds")}
             </button>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <button
+                    type="button"
+                    className="info-hint"
+                    aria-label={t("timeline.explanation")}
+                  />
+                }
+              >
+                <Info size={14} aria-hidden="true" />
+              </TooltipTrigger>
+              <TooltipContent>{t("timeline.explanation")}</TooltipContent>
+            </Tooltip>
           </div>
-          <p className="quiet timeline-explanation">
-            {t("timeline.explanation")}
-          </p>
+
           {builds.failure ? <FailureNote failure={builds.failure} /> : null}
           <div
             className="segmented"
@@ -1078,6 +1096,9 @@ function Overview({
   saved,
   state,
   builds,
+  issues,
+  requirements,
+  onWork,
   onBranch,
   onBuilds,
 }: {
@@ -1085,6 +1106,9 @@ function Overview({
   saved?: FocusModel;
   state: FocusState;
   builds: BuildsState;
+  issues: WorkItems | null;
+  requirements: WorkItems | null;
+  onWork: (kind: "issues" | "requirements") => void;
   onBranch: (branch: string) => void;
   onBuilds: () => void;
 }) {
@@ -1117,6 +1141,12 @@ function Overview({
         )}
       </section>
       <aside className="model-side">
+        <WorkSummary
+          code={m.code}
+          issues={issues}
+          requirements={requirements}
+          onOpen={onWork}
+        />
         <section aria-label={t("model.builds")}>
           <div className="column-head">
             <h2>{t("model.builds")}</h2>
@@ -1786,7 +1816,7 @@ export function ModelPage({
   const requirementWork = useWorkItems(
     code,
     "requirements",
-    tab === "requirements",
+    tab === "requirements" || tab === "overview",
   );
   const [branch, setBranch] = useModelPreference<string | null>(
     code,
@@ -1841,30 +1871,26 @@ export function ModelPage({
         open={issueFilter}
         onClose={() => setIssueFilter(null)}
       />
-      <section className="model-head">
+      <section
+        className={tab === "overview" ? "model-head" : "model-head compact"}
+      >
         <div>
-          <h1 className="model-code">{m.code}</h1>
-          {m.issue_links?.length ? (
-            <ContextTarget
-              title={m.code}
-              actions={(["all", "unresolved", "severe", "fatal"] as const).map(
-                (filter) => ({
-                  id: filter,
-                  label: t(`context.issues.${filter}`),
-                  run: () => setIssueFilter(filter),
-                }),
-              )}
-            >
-              <button
-                className="link"
-                type="button"
-                onClick={() => setIssueFilter("all")}
-              >
-                <ActionIcon name="issues" />
-                {t("context.browseIssues", { count: m.issues })}
-              </button>
-            </ContextTarget>
-          ) : null}
+          <ContextTarget
+            title={m.code}
+            actions={
+              m.issue_links?.length
+                ? (["all", "unresolved", "severe", "fatal"] as const).map(
+                    (filter) => ({
+                      id: filter,
+                      label: t(`context.issues.${filter}`),
+                      run: () => setIssueFilter(filter),
+                    }),
+                  )
+                : []
+            }
+          >
+            <h1 className="model-code">{m.code}</h1>
+          </ContextTarget>
           <p className="quiet">
             {t("model.gerritBranches", {
               v0: sourceText(m.sources),
@@ -1887,7 +1913,12 @@ export function ModelPage({
                 },
               ]}
             >
-              <div>
+              <button
+                type="button"
+                className="model-figure"
+                disabled={!m.issue_links?.length}
+                onClick={() => setIssueFilter("severe")}
+              >
                 <span>{t("focus.severeIssueResolution")}</span>
                 <strong className={sev.ok ? "" : "short"}>
                   <Num value={sev.pct} suffix="%" />
@@ -1898,7 +1929,7 @@ export function ModelPage({
                     ? t("focus.targetMet")
                     : t("focus.moreToResolve", { v0: sev.gap })}
                 </small>
-              </div>
+              </button>
             </ContextTarget>
           ) : null}
           {all ? (
@@ -1912,7 +1943,12 @@ export function ModelPage({
                 },
               ]}
             >
-              <div>
+              <button
+                type="button"
+                className="model-figure"
+                disabled={!m.issue_links?.length}
+                onClick={() => setIssueFilter("unresolved")}
+              >
                 <span>{t("focus.overallResolution")}</span>
                 <strong className={all.ok ? "" : "short"}>
                   <Num value={all.pct} suffix="%" />
@@ -1923,7 +1959,7 @@ export function ModelPage({
                     ? t("focus.targetMet")
                     : t("focus.moreToResolve", { v0: all.gap })}
                 </small>
-              </div>
+              </button>
             </ContextTarget>
           ) : null}
           <div>
@@ -1988,6 +2024,9 @@ export function ModelPage({
           saved={saved}
           state={state}
           builds={builds}
+          issues={issueWork.data}
+          requirements={requirementWork.data}
+          onWork={onTab}
           onBranch={(b) => {
             setBranch(b);
             onTab("branches");
