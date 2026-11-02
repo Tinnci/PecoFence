@@ -41,19 +41,15 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  FocusHome,
-  FollowPage,
-  ModelPage,
-  shortfall,
-  useFocus,
-} from "./Focus";
+import { FocusHome, FollowPage, shortfall, useFocus } from "./Focus";
+import { ModelPage } from "./Model";
 import {
   desktop,
   loadConnections as fetchConnections,
   loadHub,
   navigation,
   projectStatus,
+  type ModelTab,
   type Page,
 } from "./api";
 import type {
@@ -119,8 +115,10 @@ export default function App() {
   const [modelCode, setModelCode] = useState<string | null>(null);
   const [followCode, setFollowCode] = useState<string | undefined>(undefined);
   const focusState = useFocus(desktop());
+  const [modelTab, setModelTab] = useState<ModelTab>("overview");
   function openModel(code: string) {
     setModelCode(code);
+    setModelTab("overview");
     setPage("model");
   }
   const [hub, setHub] = useState<HubReport | null>(null);
@@ -196,8 +194,11 @@ export default function App() {
       void loadConnections();
     }
     let cleanup: (() => void) | undefined;
-    void navigation((next) => {
-      if (mounted.current) setPage(next);
+    void navigation((next, code, tab) => {
+      if (!mounted.current) return;
+      if (code) setModelCode(code);
+      if (tab) setModelTab(tab);
+      setPage(next);
     })
       .then((fn) => {
         if (mounted.current) cleanup = fn;
@@ -343,10 +344,13 @@ export default function App() {
             <ModelPage
               state={focusState}
               code={modelCode}
+              tab={modelTab}
+              onTab={setModelTab}
               onEdit={() => {
                 setFollowCode(modelCode);
                 setPage("follow");
               }}
+              onRemoved={() => setPage("home")}
             />
           ) : page === "follow" ? (
             <FollowPage

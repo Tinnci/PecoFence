@@ -15,13 +15,7 @@ import type {
   ServiceHealth,
 } from "./contracts/setup";
 export type Page =
-  | "home"
-  | "setup"
-  | "health"
-  | "project"
-  | "activity"
-  | "model"
-  | "follow";
+  "home" | "setup" | "health" | "project" | "activity" | "model" | "follow";
 export function isPage(value: unknown): value is Page {
   return (
     value === "home" ||
@@ -52,18 +46,33 @@ export async function loadHub(
   }
   throw new Error("desktop_required");
 }
-export async function navigation(onPage: (page: Page) => void) {
+export type ModelTab = "overview" | "branches" | "builds" | "settings";
+const modelTabs: ModelTab[] = ["overview", "branches", "builds", "settings"];
+/** A launch target: a page, or `model:<CODE>[:<tab>]` for a followed model. */
+function route(target: string): [Page, string?, ModelTab?] | null {
+  if (target.startsWith("model:")) {
+    const [code, tab = "overview"] = target.slice(6).split(":");
+    return code && modelTabs.includes(tab as ModelTab)
+      ? ["model", code, tab as ModelTab]
+      : null;
+  }
+  return isPage(target) ? [target] : null;
+}
+export async function navigation(
+  onPage: (page: Page, code?: string, tab?: ModelTab) => void,
+) {
   if (!isTauri()) return () => {};
   let updated = false;
   const cleanup = await listen<string>("workspace-target", (event) => {
-    if (isPage(event.payload)) {
+    const r = route(event.payload);
+    if (r) {
       updated = true;
-      onPage(event.payload);
+      onPage(...r);
     }
   });
   try {
-    const initial = await invoke<string>("launch_target");
-    if (!updated && isPage(initial)) onPage(initial);
+    const r = route(await invoke<string>("launch_target"));
+    if (!updated && r) onPage(...r);
   } catch {
     /* Home remains usable if launch arguments cannot be read. */
   }
@@ -159,11 +168,16 @@ export async function focus(
     | "summary"
     | "cached"
     | "refresh"
-    | "review",
+    | "review"
+    | "preview"
+    | "changes"
+    | "builds"
+    | "builds_cached",
   args: {
     code?: string;
     change?: number;
     review?: string;
+    branch?: string;
     model?: FocusModel;
   } = {},
 ): Promise<FocusData> {
@@ -173,6 +187,7 @@ export async function focus(
         code: args.code ?? null,
         change: args.change ?? null,
         review: args.review ?? null,
+        branch: args.branch ?? null,
         model: args.model ?? null,
       })
     : desktopOnly();

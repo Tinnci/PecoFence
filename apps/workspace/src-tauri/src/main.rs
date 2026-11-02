@@ -9,7 +9,12 @@ fn target(args: &[String]) -> Result<String, String> {
         [] => Ok("home".into()),
         [flag, page]
             if flag == "--open"
-                && ["home", "setup", "health", "project", "activity"].contains(&page.as_str()) =>
+                && (["home", "setup", "health", "project", "activity"].contains(&page.as_str())
+                    || page.strip_prefix("model:").is_some_and(|rest| {
+                        let (code, tab) = rest.split_once(':').unwrap_or((rest, "overview"));
+                        setup::valid_code(code)
+                            && ["overview", "branches", "builds", "settings"].contains(&tab)
+                    })) =>
         {
             Ok(page.clone())
         }
@@ -255,21 +260,37 @@ fn desktop() {
         code: Option<String>,
         change: Option<u32>,
         review: Option<String>,
+        branch: Option<String>,
         model: Option<setup::FocusModel>,
         state: tauri::State<'_, State>,
     ) -> Result<setup::FocusData, setup::SetupFailure> {
-        let args = setup::focus_args(&action, code.as_deref(), change, review.as_deref())
-            .ok_or_else(|| setup::SetupFailure::new("invalid_input"))?;
+        let args = setup::focus_args(
+            &action,
+            code.as_deref(),
+            change,
+            review.as_deref(),
+            branch.as_deref(),
+        )
+        .ok_or_else(|| setup::SetupFailure::new("invalid_input"))?;
         let input = match (action.as_str(), &model) {
-            ("save", Some(model)) => Some(
+            ("save" | "preview", Some(model)) => Some(
                 serde_json::to_vec(model).map_err(|_| setup::SetupFailure::new("invalid_input"))?,
             ),
-            ("save", None) => return Err(setup::SetupFailure::new("invalid_input")),
+            ("save" | "preview", None) => return Err(setup::SetupFailure::new("invalid_input")),
             _ => None,
         };
         let args: Vec<&str> = args.iter().map(String::as_str).collect();
-        // Cached reads never wait behind a running summary.
-        let _permit = if action == "cached" || action == "list" {
+        // Cached and offline reads, and Jenkins reads, never wait behind a running summary.
+        let _permit = if [
+            "cached",
+            "list",
+            "preview",
+            "changes",
+            "builds",
+            "builds_cached",
+        ]
+        .contains(&action.as_str())
+        {
             None
         } else {
             Some(
@@ -283,6 +304,7 @@ fn desktop() {
         let deadline = std::time::Duration::from_secs(match action.as_str() {
             "summary" | "refresh" => 600,
             "suggest" => 180,
+            "builds" => 120,
             _ => 30,
         });
         let output = process::spm_with(&spm_exe()?, &args, input.as_deref(), deadline).await?;
@@ -502,6 +524,13 @@ mod tests {
         assert_eq!(target(&[]).unwrap(), "home");
         assert_eq!(target(&["--open".into(), "setup".into()]).unwrap(), "setup");
         assert!(target(&["--open".into(), "board;calc".into()]).is_err());
+        assert_eq!(
+            target(&["--open".into(), "model:E6751SM".into()]).unwrap(),
+            "model:E6751SM"
+        );
+        assert!(target(&["--open".into(), "model:E6751SM&calc".into()]).is_err());
+        assert!(target(&["--open".into(), "model:E6751SM:builds".into()]).is_ok());
+        assert!(target(&["--open".into(), "model:E6751SM:shell".into()]).is_err());
         assert!(target(&["--shell".into()]).is_err());
     }
 }

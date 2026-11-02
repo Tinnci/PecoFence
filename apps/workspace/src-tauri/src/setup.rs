@@ -590,6 +590,9 @@ pub struct FocusModel {
     pub issues: Vec<ScopeQuery>,
     #[serde(default)]
     pub branches: Vec<String>,
+    /// Jenkins jobs by full name; empty reads the model's Project_Daily_Build folder.
+    #[serde(default)]
+    pub jobs: Vec<String>,
     /// Rule → action: revert, feature_after_freeze, customer_feedback, other_model,
     /// no_issue_id, automation → alert, track, log, ignore.
     #[serde(default)]
@@ -624,8 +627,100 @@ pub struct Suggestions {
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct BranchStrip {
     pub branch: String,
+    /// main, ir, pb, mp or old, from the name.
+    pub phase: String,
     pub total: u32,
     pub days: Vec<u32>,
+    /// Changes on the branch in 需要留意.
+    pub flagged: u32,
+}
+/// What a model's settings surface over the last summary's changes.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct PreviewSide {
+    pub flagged: u32,
+    pub alerts: u32,
+    pub rule_counts: std::collections::BTreeMap<String, u32>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct Preview {
+    pub before: PreviewSide,
+    pub after: PreviewSide,
+    pub entering: Vec<Flagged>,
+    pub leaving: Vec<Flagged>,
+    pub changes: u32,
+}
+/// A change on one branch with what the rules made of it.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct Listed {
+    pub number: u32,
+    pub subject: String,
+    pub project: String,
+    pub branch: String,
+    pub owner: String,
+    pub status: String,
+    pub created: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub url: Option<String>,
+    pub rules: Vec<String>,
+    pub issues: Vec<String>,
+    /// flagged, earlier, tracked, accepted, logged, ignored or clean.
+    pub state: String,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct BuildRun {
+    pub number: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub result: Option<String>,
+    pub building: bool,
+    /// Start, epoch milliseconds.
+    #[ts(type = "number")]
+    pub timestamp: i64,
+    #[ts(type = "number")]
+    pub duration: u64,
+    #[ts(type = "number")]
+    pub estimated: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub cause: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub node: Option<String>,
+}
+/// A build parameter that differs from the build before.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct ParamChange {
+    pub build: u32,
+    pub name: String,
+    #[ts(type = "unknown")]
+    pub before: serde_json::Value,
+    #[ts(type = "unknown")]
+    pub after: serde_json::Value,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct JobView {
+    pub job: String,
+    pub name: String,
+    pub phase: String,
+    pub disabled: bool,
+    pub builds: Vec<BuildRun>,
+    #[ts(type = "Record<string, unknown>")]
+    pub parameters: std::collections::BTreeMap<String, serde_json::Value>,
+    pub changes: Vec<ParamChange>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub error: Option<String>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct Builds {
+    pub code: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub folder: Option<String>,
+    pub jobs: Vec<JobView>,
+    pub computed_at: String,
+    pub errors: Vec<String>,
 }
 /// A change the model's rules surfaced.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -685,6 +780,24 @@ pub struct FocusData {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub summary: Option<FocusSummary>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub preview: Option<Preview>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub changes: Option<Vec<Listed>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub builds: Option<Builds>,
+}
+
+/// A Gerrit branch name as the frontend may pass it.
+pub fn valid_branch(branch: &str) -> bool {
+    (1..=200).contains(&branch.len())
+        && branch.starts_with(|c: char| c.is_ascii_alphanumeric())
+        && branch
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b"-_./+".contains(&b))
 }
 
 /// A model code: letters, digits, `-` and `_`.
@@ -701,6 +814,7 @@ pub fn focus_args(
     code: Option<&str>,
     change: Option<u32>,
     review: Option<&str>,
+    branch: Option<&str>,
 ) -> Option<Vec<String>> {
     let code = || code.filter(|c| valid_code(c)).map(str::to_owned);
     let mut args: Vec<String> = vec!["focus".into()];
@@ -712,6 +826,18 @@ pub fn focus_args(
         "suggest" => args.extend(["suggest".into(), "--code".into(), code()?]),
         "remove" => args.extend(["remove".into(), "--code".into(), code()?]),
         "refresh" => args.extend(["summary".into(), "--code".into(), code()?]),
+        "preview" => args.push("preview".into()),
+        "changes" => args.extend([
+            "changes".into(),
+            "--code".into(),
+            code()?,
+            "--branch".into(),
+            branch.filter(|b| valid_branch(b))?.into(),
+        ]),
+        "builds" => args.extend(["builds".into(), "--code".into(), code()?]),
+        "builds_cached" => {
+            args.extend(["builds".into(), "--code".into(), code()?, "--cached".into()])
+        }
         "review" => {
             let review = review.filter(|r| ["accept", "track", "untrack"].contains(r))?;
             args.extend([
@@ -983,6 +1109,13 @@ pub fn types() -> String {
             Candidate::decl(&config),
             Suggestions::decl(&config),
             BranchStrip::decl(&config),
+            PreviewSide::decl(&config),
+            Preview::decl(&config),
+            Listed::decl(&config),
+            BuildRun::decl(&config),
+            ParamChange::decl(&config),
+            JobView::decl(&config),
+            Builds::decl(&config),
             Flagged::decl(&config),
             ModelSummary::decl(&config),
             FocusSummary::decl(&config),
@@ -1103,28 +1236,46 @@ mod tests {
     #[test]
     fn focus_arguments_and_data() {
         assert_eq!(
-            focus_args("review", Some("E6767SM"), Some(80153), Some("accept")).unwrap(),
+            focus_args("review", Some("E6767SM"), Some(80153), Some("accept"), None).unwrap(),
             [
                 "focus", "review", "--code", "E6767SM", "--change", "80153", "--action", "accept"
             ]
         );
         assert_eq!(
-            focus_args("cached", None, None, None).unwrap(),
+            focus_args("cached", None, None, None, None).unwrap(),
             ["focus", "summary", "--cached"]
         );
-        assert!(focus_args("suggest", Some("E6751 SM"), None, None).is_none());
-        assert!(focus_args("review", Some("E6767SM"), Some(1), Some("delete")).is_none());
-        assert!(focus_args("rm", None, None, None).is_none());
+        assert_eq!(
+            focus_args("changes", Some("E6767SM"), None, None, Some("E6767SM_SYS_A16_MP")).unwrap(),
+            ["focus", "changes", "--code", "E6767SM", "--branch", "E6767SM_SYS_A16_MP"]
+        );
+        assert!(focus_args("changes", Some("E6767SM"), None, None, Some("--config-root")).is_none());
+        assert!(focus_args("changes", Some("E6767SM"), None, None, None).is_none());
+        assert_eq!(
+            focus_args("builds_cached", Some("E6767SM"), None, None, None).unwrap(),
+            ["focus", "builds", "--code", "E6767SM", "--cached"]
+        );
+        assert!(focus_args("suggest", Some("E6751 SM"), None, None, None).is_none());
+        assert!(focus_args("review", Some("E6767SM"), Some(1), Some("delete"), None).is_none());
+        assert!(focus_args("rm", None, None, None, None).is_none());
         let summary = br#"{"ok":true,"data":{"summary":{"computed_at":"2026-11-01T11:00:00Z","models":[{"code":"E6767SM",
             "targets":{"severe_pct":95,"overall_pct":85,"fatal_max":0},"issues":342,"sources":["x"],
             "measures":{"severe_total":100,"severe_resolved":96,"overall_total":342,"overall_resolved":281,"fatal_open":0},
             "new_issues":24,"days":[0,1],"days_from":"2026-08-10","week_changes":13,"week_merged":12,
-            "branches":[{"branch":"E6767SM_SYS_A16_MP","total":314,"days":[0,1]}],
+            "branches":[{"branch":"E6767SM_SYS_A16_MP","phase":"mp","total":314,"days":[0,1],"flagged":2}],
             "flagged":[{"number":80020,"subject":"s","project":"p","branch":"b","owner":"o","status":"NEW","created":"2026-10-30","rules":["feature_after_freeze"],"issues":[],"tracked":false}],
             "rule_counts":{"revert":17},"rules":{"revert":"alert"},"freeze":"2026-10-12","errors":[]}]}}}"#;
         let data = decode_focus(Some(0), summary).unwrap();
         let model = &data.summary.unwrap().models[0];
         assert_eq!((model.new_issues, model.flagged[0].number), (24, 80020));
+        let builds = br#"{"ok":true,"data":{"builds":{"code":"E6767SM","folder":"Project_Daily_Build/Project_E6767SM",
+            "computed_at":"2026-11-02T01:00:00Z","errors":[],"jobs":[{"job":"Project_Daily_Build/Project_E6767SM/E6767SM_IR",
+            "name":"E6767SM_IR","phase":"ir","disabled":false,"builds":[{"number":17,"result":"SUCCESS","building":false,
+            "timestamp":1790602588731,"duration":12330139,"estimated":9786231,"cause":"Started by user luyushan","node":"fast_build_server-97"}],
+            "parameters":{"BRANCH":"E6767SM_SYS_A16_IR","CLEAN":true},"changes":[{"build":17,"name":"BRANCH","before":"a","after":"b"}]}]}}}"#;
+        let builds = decode_focus(Some(0), builds).unwrap().builds.unwrap();
+        assert_eq!(builds.jobs[0].builds[0].timestamp, 1790602588731);
+        assert_eq!(builds.jobs[0].parameters["CLEAN"], serde_json::json!(true));
         let model: Result<FocusModel, _> = serde_json::from_value(serde_json::json!({
             "code":"E6751SM","targets":{"severe_pct":95,"overall_pct":85,"fatal_max":0},"token":"x"}));
         assert!(model.is_err());

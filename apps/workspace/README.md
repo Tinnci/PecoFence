@@ -3,7 +3,7 @@
 # Tinnci Workspace · 工作台
 
 An independent Windows window for discovering the local tool ecosystem and
-understanding first-time setup. Version 0.3 added first-launch prerequisite diagnosis and recovery; 0.4 imports SPM project templates; 0.5 connects sources; 0.6 creates an SPM project from discovery; 0.7 makes it one page that ends with collection running; 0.8 adds 代码活动; 0.9 centres the window on followed models. PecoFence and spmd keep their own lifetimes.
+understanding first-time setup. Version 0.3 added first-launch prerequisite diagnosis and recovery; 0.4 imports SPM project templates; 0.5 connects sources; 0.6 creates an SPM project from discovery; 0.7 makes it one page that ends with collection running; 0.8 adds 代码活动; 0.9 centres the window on followed models; 0.10 gives each model 概览, 分支, 构建 and 设置. PecoFence and spmd keep their own lifetimes.
 Closing Workspace leaves both running.
 
 This first increment provides Home, a per-component setup checklist and Health.
@@ -278,6 +278,27 @@ Reads go through `spm focus summary`: the cached read shows at once, a fresh one
 four models) replaces it. Review actions apply optimistically and persist with `spm focus review`.
 SPM owns the model file and the rules; `docs/CONFIGURATION.md` in SPM describes them. The
 `feature_after_freeze` rule stays silent until a freeze date is set.
+
+## 机型子页 (0.10)
+
+Each followed model has four subpages under its head (`--open model:<CODE>[:overview|branches|builds|settings]`):
+
+- **概览**: 需要留意 with 接受/继续跟踪, beside each Jenkins job's newest build (a progress bar
+  while it runs) and the branches grouped by phase.
+- **分支**: branches grouped as 主线, IR, PB and MP (read from `_IR`, `_PB`, `_MP` in the name).
+  A branch lists its changes from the last summary with what the rules made of each, filtered
+  by 需要留意, 全部, 只记录 or 已忽略, and the jobs whose current parameters name it.
+- **构建**: jobs from `spm focus builds`, grouped by phase. A running build shows elapsed time
+  against Jenkins' estimate and when it should end, and the page rereads every minute while
+  one runs. Ten bars give the recent durations and results. 当前配置 is the newest build's
+  parameters; ones that build changed show the old value struck through, and older changes
+  are listed below. Retired `_old` and disabled jobs fold away.
+- **设置**: rule actions, the MP freeze date and targets edited in place. Each edit runs
+  `spm focus preview` over the last summary's changes and shows 需要留意, alerts and moved
+  rule counts before and after, the changes that would enter or leave, and gates against the
+  new targets; nothing is saved until 保存.
+
+Jenkins reads need jenkins-bridge 0.5 and the Windows cdp-forwarder reachable from WSL.
 
 ## SPM project template (0.4)
 

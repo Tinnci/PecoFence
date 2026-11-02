@@ -84,15 +84,42 @@ export type ServiceHealth = { state: string, mode: string, project?: string, sco
 export type FocusTargets = { severe_pct: number, overall_pct: number, fatal_max: number, };
 export type FocusModel = { code: string, issues: Array<ScopeQuery>, branches: Array<string>, 
 /**
+ * Jenkins jobs by full name; empty reads the model's Project_Daily_Build folder.
+ */
+jobs: Array<string>, 
+/**
  * Rule → action: revert, feature_after_freeze, customer_feedback, other_model,
  * no_issue_id, automation → alert, track, log, ignore.
  */
 rules: { [key in string]: string }, freeze?: string, targets: FocusTargets, accepted: Array<number>, tracked: Array<number>, };
 export type Candidate = { name: string, count: number, picked: boolean, scope?: ScopeQuery, };
 export type Suggestions = { code: string, stem: string, meegle: Array<Candidate>, jira: Array<Candidate>, branches: Array<Candidate>, rule_counts: { [key in string]: number }, };
-export type BranchStrip = { branch: string, total: number, days: Array<number>, };
+export type BranchStrip = { branch: string, 
+/**
+ * main, ir, pb, mp or old, from the name.
+ */
+phase: string, total: number, days: Array<number>, 
+/**
+ * Changes on the branch in 需要留意.
+ */
+flagged: number, };
+export type PreviewSide = { flagged: number, alerts: number, rule_counts: { [key in string]: number }, };
+export type Preview = { before: PreviewSide, after: PreviewSide, entering: Array<Flagged>, leaving: Array<Flagged>, changes: number, };
+export type Listed = { number: number, subject: string, project: string, branch: string, owner: string, status: string, created: string, url?: string, rules: Array<string>, issues: Array<string>, 
+/**
+ * flagged, earlier, tracked, accepted, logged, ignored or clean.
+ */
+state: string, };
+export type BuildRun = { number: number, result?: string, building: boolean, 
+/**
+ * Start, epoch milliseconds.
+ */
+timestamp: number, duration: number, estimated: number, cause?: string, node?: string, };
+export type ParamChange = { build: number, name: string, before: unknown, after: unknown, };
+export type JobView = { job: string, name: string, phase: string, disabled: boolean, builds: Array<BuildRun>, parameters: Record<string, unknown>, changes: Array<ParamChange>, error?: string, };
+export type Builds = { code: string, folder?: string, jobs: Array<JobView>, computed_at: string, errors: Array<string>, };
 export type Flagged = { number: number, subject: string, project: string, branch: string, owner: string, status: string, created: string, url?: string, rules: Array<string>, issues: Array<string>, tracked: boolean, };
 export type ModelSummary = { code: string, targets: FocusTargets, issues: number, sources: Array<string>, measures?: Measures, new_issues: number, days: Array<number>, days_from: string, week_changes: number, week_merged: number, branches: Array<BranchStrip>, flagged: Array<Flagged>, rule_counts: { [key in string]: number }, rules: { [key in string]: string }, freeze?: string, errors: Array<string>, };
 export type FocusSummary = { computed_at?: string, models: Array<ModelSummary>, };
-export type FocusData = { models?: Array<FocusModel>, suggestions?: Suggestions, summary?: FocusSummary, };
+export type FocusData = { models?: Array<FocusModel>, suggestions?: Suggestions, summary?: FocusSummary, preview?: Preview, changes?: Array<Listed>, builds?: Builds, };
 export type Activation = { health?: ServiceHealth, waited_secs?: number, };

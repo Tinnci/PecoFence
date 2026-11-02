@@ -6,7 +6,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import type {
   Candidate,
-  Flagged,
   FocusModel,
   FocusSummary,
   ModelSummary,
@@ -32,7 +31,7 @@ export const ruleNames: Record<string, string> = {
   no_issue_id: "没有问题单号",
   automation: "自动化改动（gerrit）",
 };
-const ruleHow: Record<string, string> = {
+export const ruleHow: Record<string, string> = {
   revert: "提交以 Revert 开头",
   feature_after_freeze: "标注 [Feature]，冻结日期之后进入以 _MP 结尾的分支",
   customer_feedback: "提交含“客户反馈”",
@@ -46,7 +45,7 @@ export const actionNames: Record<string, string> = {
   log: "只记录",
   ignore: "忽略",
 };
-const defaultRules: Record<string, string> = {
+export const defaultRules: Record<string, string> = {
   revert: "alert",
   feature_after_freeze: "alert",
   customer_feedback: "track",
@@ -55,10 +54,11 @@ const defaultRules: Record<string, string> = {
   automation: "ignore",
 };
 
-/** One gate against its target: percent, the gap in issues, and whether it holds. */
 // Scope descriptions end in "的" or "全部", ready for the noun.
-const sourceText = (sources: string[]) => sources.map((s) => `${s}问题`).join(" · ");
+export const sourceText = (sources: string[]) =>
+  sources.map((s) => `${s}问题`).join(" · ");
 
+/** One gate against its target: percent, the gap in issues, and whether it holds. */
 export function gate(v: number, n: number, target: number) {
   const pct = n ? Math.round((v / n) * 1000) / 10 : 0;
   const gap = Math.max(0, Math.ceil((target / 100) * n) - v);
@@ -67,7 +67,11 @@ export function gate(v: number, n: number, target: number) {
 /** A model falls short when any gate does; that orders the ledger and colours its tab. */
 export function shortfall(m: ModelSummary) {
   if (!m.measures) return 0;
-  const s = gate(m.measures.severe_resolved, m.measures.severe_total, m.targets.severe_pct);
+  const s = gate(
+    m.measures.severe_resolved,
+    m.measures.severe_total,
+    m.targets.severe_pct,
+  );
   const o = gate(
     m.measures.overall_resolved,
     m.measures.overall_total,
@@ -84,8 +88,7 @@ export function lede(models: ModelSummary[]) {
   if (!models.length) return "";
   const behind = [...models].sort((a, b) => shortfall(b) - shortfall(a))[0];
   const busiest = [...models].sort(
-    (a, b) =>
-      b.new_issues + b.week_changes - (a.new_issues + a.week_changes),
+    (a, b) => b.new_issues + b.week_changes - (a.new_issues + a.week_changes),
   )[0];
   const parts: string[] = [];
   if (behind.measures && shortfall(behind) > 0) {
@@ -94,7 +97,10 @@ export function lede(models: ModelSummary[]) {
       behind.measures.severe_total,
       behind.targets.severe_pct,
     );
-    const fatal = Math.max(0, behind.measures.fatal_open - behind.targets.fatal_max);
+    const fatal = Math.max(
+      0,
+      behind.measures.fatal_open - behind.targets.fatal_max,
+    );
     const bits = [];
     if (s.gap) bits.push(`严重问题还差 ${s.gap} 个`);
     if (fatal) bits.push(`${behind.measures.fatal_open} 个致命问题未解决`);
@@ -117,8 +123,8 @@ export function lede(models: ModelSummary[]) {
   return parts.join("");
 }
 
-const greens = ["#e2ded2", "#c6d8bd", "#8fb784", "#4f8a4a", "#24552b"];
-const level = (n: number) =>
+export const greens = ["#e2ded2", "#c6d8bd", "#8fb784", "#4f8a4a", "#24552b"];
+export const level = (n: number) =>
   n === 0 ? 0 : n <= 2 ? 1 : n <= 5 ? 2 : n <= 15 ? 3 : 4;
 
 /** Twelve Monday-first weeks, one cell per day. */
@@ -131,7 +137,7 @@ function WeekGrid({ days }: { days: number[] }) {
     </div>
   );
 }
-function Strip({ days }: { days: number[] }) {
+export function Strip({ days }: { days: number[] }) {
   return (
     <div className="day-strip" aria-hidden="true">
       {days.map((n, i) => (
@@ -141,15 +147,7 @@ function Strip({ days }: { days: number[] }) {
   );
 }
 
-function GateCell({
-  v,
-  n,
-  target,
-}: {
-  v: number;
-  n: number;
-  target: number;
-}) {
+function GateCell({ v, n, target }: { v: number; n: number; target: number }) {
   const g = gate(v, n, target);
   return (
     <div className="gate-cell">
@@ -263,7 +261,7 @@ export function useFocus(enabled: boolean) {
 }
 export type FocusState = ReturnType<typeof useFocus>;
 
-function since(at?: string) {
+export function since(at?: string) {
   if (!at) return "";
   return new Date(at).toLocaleTimeString("zh-CN", {
     hour: "2-digit",
@@ -355,7 +353,8 @@ export function FocusHome({
                     新问题
                   </span>
                   <span>
-                    <strong>{m.week_changes}</strong> 变更 · 合入 {m.week_merged}
+                    <strong>{m.week_changes}</strong> 变更 · 合入{" "}
+                    {m.week_merged}
                   </span>
                   {m.flagged.length ? (
                     <span className="short">{m.flagged.length} 个需要留意</span>
@@ -376,191 +375,6 @@ export function FocusHome({
               </div>
             ))}
       </section>
-    </div>
-  );
-}
-
-function FlaggedRow({
-  item,
-  onReview,
-}: {
-  item: Flagged;
-  onReview: (action: string) => void;
-}) {
-  return (
-    <article className="flagged">
-      <div className="flagged-tags">
-        {item.rules.map((r) => (
-          <span key={r} className={`tag tag-${r}`}>
-            {ruleNames[r] ?? r}
-          </span>
-        ))}
-      </div>
-      <span className="flagged-when">
-        {item.created.slice(5)} ·{" "}
-        {item.status === "MERGED"
-          ? "已合入"
-          : item.status === "ABANDONED"
-            ? "已放弃"
-            : "待评审"}
-      </span>
-      <p className="flagged-subject">{item.subject}</p>
-      <span className="flagged-meta">
-        {item.project} · {item.branch} · {item.owner} · {item.number}
-      </span>
-      <div className="flagged-actions">
-        <Button size="sm" onClick={() => onReview("accept")}>
-          接受
-        </Button>
-        <Button
-          size="sm"
-          variant={item.tracked ? "secondary" : "outline"}
-          aria-pressed={item.tracked}
-          onClick={() => onReview(item.tracked ? "untrack" : "track")}
-        >
-          {item.tracked ? "正在跟踪" : "继续跟踪"}
-        </Button>
-        <span className="flagged-meta">
-          {item.issues.length ? `关联 ${item.issues.join("、")}` : "没有关联问题"}
-        </span>
-      </div>
-    </article>
-  );
-}
-
-/** 机型: gates, the changes the rules caught, branches and rules. */
-export function ModelPage({
-  state,
-  code,
-  onEdit,
-}: {
-  state: FocusState;
-  code: string;
-  onEdit: () => void;
-}) {
-  const m = state.summary?.models.find((x) => x.code === code);
-  if (!m)
-    return (
-      <div className="model-page">
-        <h1 className="model-code">{code}</h1>
-        <p className="quiet">正在读取…</p>
-      </div>
-    );
-  const sev = m.measures
-    ? gate(m.measures.severe_resolved, m.measures.severe_total, m.targets.severe_pct)
-    : null;
-  const all = m.measures
-    ? gate(
-        m.measures.overall_resolved,
-        m.measures.overall_total,
-        m.targets.overall_pct,
-      )
-    : null;
-  return (
-    <div className="model-page">
-      <section className="model-head">
-        <div>
-          <h1 className="model-code">{m.code}</h1>
-          <p className="quiet">
-            {sourceText(m.sources)} · Gerrit {m.branches.length} 个分支 ·{" "}
-            <button type="button" className="link" onClick={onEdit}>
-              {Object.keys(m.rules).length} 条规则
-            </button>
-          </p>
-        </div>
-        <div className="model-figures">
-          {sev ? (
-            <div>
-              <span>严重问题解决率</span>
-              <strong className={sev.ok ? "" : "short"}>{sev.pct}%</strong>
-              <small className={sev.ok ? "" : "short"}>
-                {sev.v} / {sev.n} · {sev.ok ? "达标" : `还差 ${sev.gap} 个`}
-              </small>
-            </div>
-          ) : null}
-          {all ? (
-            <div>
-              <span>整体解决率</span>
-              <strong className={all.ok ? "" : "short"}>{all.pct}%</strong>
-              <small className={all.ok ? "" : "short"}>
-                {all.v} / {all.n} · {all.ok ? "达标" : `还差 ${all.gap} 个`}
-              </small>
-            </div>
-          ) : null}
-          <div>
-            <span>本周</span>
-            <strong>+{m.new_issues}</strong>
-            <small>
-              新问题 · {m.week_changes} 变更 · 合入 {m.week_merged}
-            </small>
-          </div>
-        </div>
-      </section>
-      {m.errors.length ? (
-        <FailureNote
-          failure={{ code: "source_failed", message: m.errors.join("；") }}
-        />
-      ) : null}
-      <div className="model-columns">
-        <section className="flagged-list" aria-label="需要留意">
-          <div className="column-head">
-            <h2>需要留意</h2>
-            <span className="quiet">规则命中 · 近两周与正在跟踪的</span>
-          </div>
-          {m.flagged.length ? (
-            m.flagged.map((f) => (
-              <FlaggedRow
-                key={f.number}
-                item={f}
-                onReview={(a) => void state.review(m.code, f.number, a)}
-              />
-            ))
-          ) : (
-            <p className="quiet empty-line">近两周没有需要留意的变更。</p>
-          )}
-        </section>
-        <aside className="model-side">
-          <section aria-label="分支">
-            <div className="column-head">
-              <h2>分支</h2>
-              <span className="quiet">近 12 周</span>
-            </div>
-            {m.branches.map((b) => (
-              <div className="branch-strip" key={b.branch}>
-                <div>
-                  <span>{b.branch}</span>
-                  <span className="quiet">{b.total}</span>
-                </div>
-                <Strip days={b.days} />
-              </div>
-            ))}
-            <span className="quiet">{m.days_from} 起，每格一天</span>
-          </section>
-          <section aria-label="规则">
-            <div className="column-head">
-              <h2>规则</h2>
-              <button type="button" className="link" onClick={onEdit}>
-                编辑
-              </button>
-            </div>
-            {ruleOrder.map((r) => (
-              <div className="rule-line" key={r}>
-                <span>
-                  {ruleNames[r]}
-                  {r === "feature_after_freeze" && m.freeze
-                    ? `（${m.freeze.slice(5)}）`
-                    : ""}
-                </span>
-                <span className={`action action-${m.rules[r]}`}>
-                  {actionNames[m.rules[r]] ?? ""}
-                </span>
-                <span className="quiet">{m.rule_counts[r] ?? 0}</span>
-              </div>
-            ))}
-            <span className="quiet">右侧为近 13 周命中次数</span>
-          </section>
-        </aside>
-      </div>
     </div>
   );
 }
@@ -634,7 +448,11 @@ export function FollowPage({
                 : name.startsWith(`${q.project} `),
             )
           : null;
-      for (const cand of [...(s?.meegle ?? []), ...(s?.jira ?? []), ...(s?.branches ?? [])])
+      for (const cand of [
+        ...(s?.meegle ?? []),
+        ...(s?.jira ?? []),
+        ...(s?.branches ?? []),
+      ])
         chosen[cand.name] = known(cand.name) ?? cand.picked;
       setPicked(chosen);
     } catch (error) {
@@ -685,9 +503,14 @@ export function FollowPage({
       code: suggestions.code,
       issues,
       branches: chosenBranches.map((b) => b.name),
+      jobs: existing?.jobs ?? [],
       rules,
       ...(freeze ? { freeze } : {}),
-      targets: existing?.targets ?? { severe_pct: 95, overall_pct: 85, fatal_max: 0 },
+      targets: existing?.targets ?? {
+        severe_pct: 95,
+        overall_pct: 85,
+        fatal_max: 0,
+      },
       accepted: existing?.accepted ?? [],
       tracked: existing?.tracked ?? [],
     };
@@ -727,7 +550,8 @@ export function FollowPage({
         </label>
         <div className="follow-intro">
           <p className="quiet">
-            按代号在飞书项目、Jira 和 Gerrit 里找候选。勾选属于这个机型的，规则决定哪些开发提交值得你看。
+            按代号在飞书项目、Jira 和 Gerrit
+            里找候选。勾选属于这个机型的，规则决定哪些开发提交值得你看。
           </p>
           <Button
             variant="outline"
@@ -748,7 +572,12 @@ export function FollowPage({
               <span className="quiet column-note">飞书项目 · 关联项目</span>
               {suggestions.meegle.length ? (
                 suggestions.meegle.map((c) => (
-                  <Pick key={c.name} candidate={c} on={on(c)} toggle={() => toggle(c)} />
+                  <Pick
+                    key={c.name}
+                    candidate={c}
+                    on={on(c)}
+                    toggle={() => toggle(c)}
+                  />
                 ))
               ) : (
                 <p className="quiet empty-line">没有找到</p>
@@ -756,7 +585,12 @@ export function FollowPage({
               <span className="quiet column-note">Jira</span>
               {suggestions.jira.length ? (
                 suggestions.jira.map((c) => (
-                  <Pick key={c.name} candidate={c} on={on(c)} toggle={() => toggle(c)} />
+                  <Pick
+                    key={c.name}
+                    candidate={c}
+                    on={on(c)}
+                    toggle={() => toggle(c)}
+                  />
                 ))
               ) : (
                 <p className="quiet empty-line">没有找到</p>
@@ -768,20 +602,33 @@ export function FollowPage({
                 Gerrit 分支 · 名称含 {suggestions.stem} · 近一年变更
               </span>
               {suggestions.branches.map((c) => (
-                <Pick key={c.name} candidate={c} on={on(c)} toggle={() => toggle(c)} />
+                <Pick
+                  key={c.name}
+                  candidate={c}
+                  on={on(c)}
+                  toggle={() => toggle(c)}
+                />
               ))}
             </section>
             <section aria-label="规则">
               <h2>规则</h2>
-              <span className="quiet column-note">右侧为预选分支近 13 周会命中的次数</span>
+              <span className="quiet column-note">
+                右侧为预选分支近 13 周会命中的次数
+              </span>
               {ruleOrder.map((r) => (
                 <div className="rule-edit" key={r}>
                   <div>
                     <span>{ruleNames[r]}</span>
-                    <span className="quiet">{suggestions.rule_counts[r] ?? 0} 次</span>
+                    <span className="quiet">
+                      {suggestions.rule_counts[r] ?? 0} 次
+                    </span>
                   </div>
                   <span className="quiet">{ruleHow[r]}</span>
-                  <div className="segmented" role="radiogroup" aria-label={ruleNames[r]}>
+                  <div
+                    className="segmented"
+                    role="radiogroup"
+                    aria-label={ruleNames[r]}
+                  >
                     {Object.entries(actionNames).map(([a, label]) => (
                       <button
                         type="button"
@@ -809,8 +656,8 @@ export function FollowPage({
           <footer className="follow-foot">
             <span>
               关注 {suggestions.code}：{chosenMeegle.length + chosenJira.length}{" "}
-              个问题来源，共 {issueCount} 个问题 · {chosenBranches.length} 个分支 ·{" "}
-              {alerts} 条规则会提醒你
+              个问题来源，共 {issueCount} 个问题 · {chosenBranches.length}{" "}
+              个分支 · {alerts} 条规则会提醒你
             </span>
             <div>
               <Button variant="ghost" onClick={onCancel}>
