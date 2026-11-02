@@ -49,6 +49,8 @@ fn desktop() {
         connection_gate: tokio::sync::Semaphore,
         /// One discovery or draft at a time; later requests wait their turn.
         discover_gate: tokio::sync::Semaphore,
+        /// Focus reads and writes; a summary can take minutes, so it has its own gate.
+        focus_gate: tokio::sync::Semaphore,
         /// Health reads run beside an activation so the page can show its progress.
         service_gate: tokio::sync::Semaphore,
         /// The private template copy and the sha256 of its last plan.
@@ -245,6 +247,47 @@ fn desktop() {
         .await?;
         setup::decode_service(output.code, &output.stdout)
     }
+    /// `spm focus`: list, suggest, save, remove, summary (fresh or cached), refresh one model,
+    /// review a change. `model` is written to stdin for save.
+    #[tauri::command]
+    async fn focus(
+        action: String,
+        code: Option<String>,
+        change: Option<u32>,
+        review: Option<String>,
+        model: Option<setup::FocusModel>,
+        state: tauri::State<'_, State>,
+    ) -> Result<setup::FocusData, setup::SetupFailure> {
+        let args = setup::focus_args(&action, code.as_deref(), change, review.as_deref())
+            .ok_or_else(|| setup::SetupFailure::new("invalid_input"))?;
+        let input = match (action.as_str(), &model) {
+            ("save", Some(model)) => Some(
+                serde_json::to_vec(model).map_err(|_| setup::SetupFailure::new("invalid_input"))?,
+            ),
+            ("save", None) => return Err(setup::SetupFailure::new("invalid_input")),
+            _ => None,
+        };
+        let args: Vec<&str> = args.iter().map(String::as_str).collect();
+        // Cached reads never wait behind a running summary.
+        let _permit = if action == "cached" || action == "list" {
+            None
+        } else {
+            Some(
+                state
+                    .focus_gate
+                    .acquire()
+                    .await
+                    .map_err(|_| setup::SetupFailure::new("setup_busy"))?,
+            )
+        };
+        let deadline = std::time::Duration::from_secs(match action.as_str() {
+            "summary" | "refresh" => 600,
+            "suggest" => 180,
+            _ => 30,
+        });
+        let output = process::spm_with(&spm_exe()?, &args, input.as_deref(), deadline).await?;
+        setup::decode_focus(output.code, &output.stdout)
+    }
     /// Adds stage mappings for values that appeared after creation.
     #[tauri::command]
     async fn remap(
@@ -357,6 +400,7 @@ fn desktop() {
             connection_gate: tokio::sync::Semaphore::new(1),
             discover_gate: tokio::sync::Semaphore::new(1),
             service_gate: tokio::sync::Semaphore::new(1),
+            focus_gate: tokio::sync::Semaphore::new(1),
             pending: std::sync::Mutex::new(None),
         })
         .setup(move |app| {
@@ -382,7 +426,8 @@ fn desktop() {
             draft,
             activate,
             service_status,
-            remap
+            remap,
+            focus
         ])
         .run(tauri::generate_context!())
         .expect("workspace runtime");

@@ -3,7 +3,7 @@
 # Tinnci Workspace · 工作台
 
 An independent Windows window for discovering the local tool ecosystem and
-understanding first-time setup. Version 0.3 added first-launch prerequisite diagnosis and recovery; 0.4 imports SPM project templates; 0.5 connects sources; 0.6 creates an SPM project from discovery; 0.7 makes it one page that ends with collection running; 0.8 adds 代码活动. PecoFence and spmd keep their own lifetimes.
+understanding first-time setup. Version 0.3 added first-launch prerequisite diagnosis and recovery; 0.4 imports SPM project templates; 0.5 connects sources; 0.6 creates an SPM project from discovery; 0.7 makes it one page that ends with collection running; 0.8 adds 代码活动; 0.9 centres the window on followed models. PecoFence and spmd keep their own lifetimes.
 Closing Workspace leaves both running.
 
 This first increment provides Home, a per-component setup checklist and Health.
@@ -257,6 +257,28 @@ The big number is the year's total with merged/open/abandoned beside it; hoverin
 reserved line with its count and how many merged; the repository's branches are listed with
 counts and pick the branch view. Selections over 10000 changes ask for a branch.
 
+## 关注 (0.9)
+
+The window opens on what the user follows: phone models (机型), each with its issue scopes,
+Gerrit branches and rules for developer changes. A top bar replaces the sidebar; it holds 关注,
+one tab per followed model with a status dot, 关注机型, and a 更多 menu for 设置清单, 运行状况,
+代码活动 and 新建 SPM 项目.
+
+- **关注** is a ledger ordered by shortfall: one sentence naming the model furthest behind and the
+  busiest one this week, then a row per model with severe and overall resolution against targets,
+  open fatal issues, a 12-week strip of Gerrit changes, and this week's new issues, changes merged
+  and changes 需要留意.
+- **A model page** lists flagged changes with 接受 and 继续跟踪, a change strip per branch, and the
+  rules with counts over 91 days.
+- **关注机型** takes a model code, asks `spm focus suggest` for 飞书项目 groups, Jira projects and
+  branches named after it, and saves the picks, the action per rule (提醒, 跟踪, 只记录, 忽略), the MP
+  freeze date and targets with `spm focus save`.
+
+Reads go through `spm focus summary`: the cached read shows at once, a fresh one (about 35 s for
+four models) replaces it. Review actions apply optimistically and persist with `spm focus review`.
+SPM owns the model file and the rules; `docs/CONFIGURATION.md` in SPM describes them. The
+`feature_after_freeze` rule stays silent until a freeze date is set.
+
 ## SPM project template (0.4)
 
 The SPM checklist's template step lists imported projects and imports one more:
@@ -292,6 +314,6 @@ sunburst inside a double gold frame on deep emerald. Frames and rays blur below
 `scripts/icons.sh` regenerates `src-tauri/icons` from both.
 
 Following Windows guidance, the plated icon stays on Windows surfaces. Inside the
-app, the sidebar `BrandMark` draws the same stepped 工 as a single-colour glyph in
+app, the top bar's `BrandMark` draws the same stepped 工 as a single-colour glyph in
 the interface's text colour; the browser favicon uses the small variant.
 

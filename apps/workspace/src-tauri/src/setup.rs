@@ -61,6 +61,7 @@ impl SetupFailure {
             "ACTIVATE_NOT_READY" => "activate_not_ready",
             "ACTIVATE_FAILED" => "activate_failed",
             "ACTIVATE_TIMEOUT" => "activate_timeout",
+            "NOT_FOLLOWED" => "not_followed",
             _ => return Self::new("spm_invalid_response"),
         };
         Self {
@@ -573,6 +574,164 @@ pub fn remap_args(
     Some(args)
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+pub struct FocusTargets {
+    pub severe_pct: u32,
+    pub overall_pct: u32,
+    pub fatal_max: u32,
+}
+/// A followed model as `spm focus` stores it; SPM validates every value.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+pub struct FocusModel {
+    pub code: String,
+    #[serde(default)]
+    pub issues: Vec<ScopeQuery>,
+    #[serde(default)]
+    pub branches: Vec<String>,
+    /// Rule → action: revert, feature_after_freeze, customer_feedback, other_model,
+    /// no_issue_id, automation → alert, track, log, ignore.
+    #[serde(default)]
+    pub rules: std::collections::BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub freeze: Option<String>,
+    pub targets: FocusTargets,
+    #[serde(default)]
+    pub accepted: Vec<u32>,
+    #[serde(default)]
+    pub tracked: Vec<u32>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct Candidate {
+    pub name: String,
+    pub count: u32,
+    pub picked: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub scope: Option<ScopeQuery>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct Suggestions {
+    pub code: String,
+    pub stem: String,
+    pub meegle: Vec<Candidate>,
+    pub jira: Vec<Candidate>,
+    pub branches: Vec<Candidate>,
+    pub rule_counts: std::collections::BTreeMap<String, u32>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct BranchStrip {
+    pub branch: String,
+    pub total: u32,
+    pub days: Vec<u32>,
+}
+/// A change the model's rules surfaced.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct Flagged {
+    pub number: u32,
+    pub subject: String,
+    pub project: String,
+    pub branch: String,
+    pub owner: String,
+    pub status: String,
+    pub created: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub url: Option<String>,
+    pub rules: Vec<String>,
+    pub issues: Vec<String>,
+    pub tracked: bool,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct ModelSummary {
+    pub code: String,
+    pub targets: FocusTargets,
+    pub issues: u32,
+    pub sources: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub measures: Option<Measures>,
+    pub new_issues: u32,
+    pub days: Vec<u32>,
+    pub days_from: String,
+    pub week_changes: u32,
+    pub week_merged: u32,
+    pub branches: Vec<BranchStrip>,
+    pub flagged: Vec<Flagged>,
+    pub rule_counts: std::collections::BTreeMap<String, u32>,
+    pub rules: std::collections::BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub freeze: Option<String>,
+    pub errors: Vec<String>,
+}
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+pub struct FocusSummary {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub computed_at: Option<String>,
+    pub models: Vec<ModelSummary>,
+}
+#[derive(Debug, Default, Serialize, Deserialize, TS)]
+pub struct FocusData {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub models: Option<Vec<FocusModel>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub suggestions: Option<Suggestions>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub summary: Option<FocusSummary>,
+}
+
+/// A model code: letters, digits, `-` and `_`.
+pub fn valid_code(code: &str) -> bool {
+    (2..=32).contains(&code.len())
+        && code.starts_with(|c: char| c.is_ascii_alphanumeric())
+        && code
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
+}
+/// Arguments for `spm focus`; `None` when a value is malformed.
+pub fn focus_args(
+    action: &str,
+    code: Option<&str>,
+    change: Option<u32>,
+    review: Option<&str>,
+) -> Option<Vec<String>> {
+    let code = || code.filter(|c| valid_code(c)).map(str::to_owned);
+    let mut args: Vec<String> = vec!["focus".into()];
+    match action {
+        "list" => args.push("list".into()),
+        "save" => args.push("save".into()),
+        "summary" => args.push("summary".into()),
+        "cached" => args.extend(["summary".into(), "--cached".into()]),
+        "suggest" => args.extend(["suggest".into(), "--code".into(), code()?]),
+        "remove" => args.extend(["remove".into(), "--code".into(), code()?]),
+        "refresh" => args.extend(["summary".into(), "--code".into(), code()?]),
+        "review" => {
+            let review = review.filter(|r| ["accept", "track", "untrack"].contains(r))?;
+            args.extend([
+                "review".into(),
+                "--code".into(),
+                code()?,
+                "--change".into(),
+                change?.to_string(),
+                "--action".into(),
+                review.into(),
+            ]);
+        }
+        _ => return None,
+    }
+    Some(args)
+}
+pub fn decode_focus(code: Option<i32>, stdout: &[u8]) -> Result<FocusData, SetupFailure> {
+    owner_data(code, stdout)
+}
+
 /// Keys the frontend may pass to `spm discover`: Meegle space, type and field keys.
 pub fn valid_key(key: &str) -> bool {
     (1..=64).contains(&key.len())
@@ -819,6 +978,15 @@ pub fn types() -> String {
             GateSummary::decl(&config),
             Unmapped::decl(&config),
             ServiceHealth::decl(&config),
+            FocusTargets::decl(&config),
+            FocusModel::decl(&config),
+            Candidate::decl(&config),
+            Suggestions::decl(&config),
+            BranchStrip::decl(&config),
+            Flagged::decl(&config),
+            ModelSummary::decl(&config),
+            FocusSummary::decl(&config),
+            FocusData::decl(&config),
             Activation::decl(&config),
         ]
         .map(|decl| format!("export {decl}\n"))
@@ -931,6 +1099,35 @@ mod tests {
         );
         assert!(draft_args(true, None).is_none());
         assert!(draft_args(true, Some("--config-root")).is_none());
+    }
+    #[test]
+    fn focus_arguments_and_data() {
+        assert_eq!(
+            focus_args("review", Some("E6767SM"), Some(80153), Some("accept")).unwrap(),
+            [
+                "focus", "review", "--code", "E6767SM", "--change", "80153", "--action", "accept"
+            ]
+        );
+        assert_eq!(
+            focus_args("cached", None, None, None).unwrap(),
+            ["focus", "summary", "--cached"]
+        );
+        assert!(focus_args("suggest", Some("E6751 SM"), None, None).is_none());
+        assert!(focus_args("review", Some("E6767SM"), Some(1), Some("delete")).is_none());
+        assert!(focus_args("rm", None, None, None).is_none());
+        let summary = br#"{"ok":true,"data":{"summary":{"computed_at":"2026-11-01T11:00:00Z","models":[{"code":"E6767SM",
+            "targets":{"severe_pct":95,"overall_pct":85,"fatal_max":0},"issues":342,"sources":["x"],
+            "measures":{"severe_total":100,"severe_resolved":96,"overall_total":342,"overall_resolved":281,"fatal_open":0},
+            "new_issues":24,"days":[0,1],"days_from":"2026-08-10","week_changes":13,"week_merged":12,
+            "branches":[{"branch":"E6767SM_SYS_A16_MP","total":314,"days":[0,1]}],
+            "flagged":[{"number":80020,"subject":"s","project":"p","branch":"b","owner":"o","status":"NEW","created":"2026-10-30","rules":["feature_after_freeze"],"issues":[],"tracked":false}],
+            "rule_counts":{"revert":17},"rules":{"revert":"alert"},"freeze":"2026-10-12","errors":[]}]}}}"#;
+        let data = decode_focus(Some(0), summary).unwrap();
+        let model = &data.summary.unwrap().models[0];
+        assert_eq!((model.new_issues, model.flagged[0].number), (24, 80020));
+        let model: Result<FocusModel, _> = serde_json::from_value(serde_json::json!({
+            "code":"E6751SM","targets":{"severe_pct":95,"overall_pct":85,"fatal_max":0},"token":"x"}));
+        assert!(model.is_err());
     }
     #[test]
     fn remap_arguments_and_service_health() {

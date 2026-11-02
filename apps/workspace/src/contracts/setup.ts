@@ -81,4 +81,18 @@ export type Draft = { template: TemplateInfo, project: string, scope: string, di
 export type GateSummary = { gate_id: string, state: string, n: number, v: number, gap: number, };
 export type Unmapped = { field: string, value: string, count: number, };
 export type ServiceHealth = { state: string, mode: string, project?: string, scope?: string, last_poll?: string, last_commit?: string, revision: number, error?: string, gates: Array<GateSummary>, unmapped: Array<Unmapped>, };
+export type FocusTargets = { severe_pct: number, overall_pct: number, fatal_max: number, };
+export type FocusModel = { code: string, issues: Array<ScopeQuery>, branches: Array<string>, 
+/**
+ * Rule → action: revert, feature_after_freeze, customer_feedback, other_model,
+ * no_issue_id, automation → alert, track, log, ignore.
+ */
+rules: { [key in string]: string }, freeze?: string, targets: FocusTargets, accepted: Array<number>, tracked: Array<number>, };
+export type Candidate = { name: string, count: number, picked: boolean, scope?: ScopeQuery, };
+export type Suggestions = { code: string, stem: string, meegle: Array<Candidate>, jira: Array<Candidate>, branches: Array<Candidate>, rule_counts: { [key in string]: number }, };
+export type BranchStrip = { branch: string, total: number, days: Array<number>, };
+export type Flagged = { number: number, subject: string, project: string, branch: string, owner: string, status: string, created: string, url?: string, rules: Array<string>, issues: Array<string>, tracked: boolean, };
+export type ModelSummary = { code: string, targets: FocusTargets, issues: number, sources: Array<string>, measures?: Measures, new_issues: number, days: Array<number>, days_from: string, week_changes: number, week_merged: number, branches: Array<BranchStrip>, flagged: Array<Flagged>, rule_counts: { [key in string]: number }, rules: { [key in string]: string }, freeze?: string, errors: Array<string>, };
+export type FocusSummary = { computed_at?: string, models: Array<ModelSummary>, };
+export type FocusData = { models?: Array<FocusModel>, suggestions?: Suggestions, summary?: FocusSummary, };
 export type Activation = { health?: ServiceHealth, waited_secs?: number, };

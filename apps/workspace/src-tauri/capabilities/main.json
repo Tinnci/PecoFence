@@ -18,6 +18,7 @@
     "allow-draft",
     "allow-activate",
     "allow-service-status",
-    "allow-remap"
+    "allow-remap",
+    "allow-focus"
   ]
 }

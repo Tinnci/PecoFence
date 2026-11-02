@@ -9,10 +9,19 @@ import type {
   Draft,
   DraftChoices,
   ImportPlan,
+  FocusData,
+  FocusModel,
   ProjectStatus,
   ServiceHealth,
 } from "./contracts/setup";
-export type Page = "home" | "setup" | "health" | "project" | "activity";
+export type Page =
+  | "home"
+  | "setup"
+  | "health"
+  | "project"
+  | "activity"
+  | "model"
+  | "follow";
 export function isPage(value: unknown): value is Page {
   return (
     value === "home" ||
@@ -138,5 +147,33 @@ export async function remap(
 ): Promise<ImportPlan> {
   return isTauri()
     ? invoke<ImportPlan>("remap", { project, scope, stages })
+    : desktopOnly();
+}
+/** `spm focus`: the followed models, suggestions, summaries and change reviews. */
+export async function focus(
+  action:
+    | "list"
+    | "suggest"
+    | "save"
+    | "remove"
+    | "summary"
+    | "cached"
+    | "refresh"
+    | "review",
+  args: {
+    code?: string;
+    change?: number;
+    review?: string;
+    model?: FocusModel;
+  } = {},
+): Promise<FocusData> {
+  return isTauri()
+    ? invoke<FocusData>("focus", {
+        action,
+        code: args.code ?? null,
+        change: args.change ?? null,
+        review: args.review ?? null,
+        model: args.model ?? null,
+      })
     : desktopOnly();
 }

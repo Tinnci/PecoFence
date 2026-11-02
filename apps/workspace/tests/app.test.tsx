@@ -213,7 +213,8 @@ describe("component diagnosis and retry", () => {
     const user = userEvent.setup();
     render(<App />);
     await screen.findByRole("button", { name: /查看项目配置/ });
-    await user.click(screen.getByRole("button", { name: "运行状况" }));
+    await user.click(screen.getByRole("button", { name: "更多" }));
+    await user.click(await screen.findByRole("menuitem", { name: "运行状况" }));
     expect(screen.getByText(/网页转发服务无法连接/)).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "检查Jenkins" }));
     await screen.findByText("检查已通过。");
@@ -247,7 +248,8 @@ describe("component diagnosis and retry", () => {
     const user = userEvent.setup();
     render(<App />);
     await screen.findByRole("button", { name: /查看项目配置/ });
-    await user.click(screen.getByRole("button", { name: "运行状况" }));
+    await user.click(screen.getByRole("button", { name: "更多" }));
+    await user.click(await screen.findByRole("menuitem", { name: "运行状况" }));
     expect(screen.getByText("确认连接")).toBeTruthy();
     expect(screen.getByText(/网页转发服务无法连接/)).toBeTruthy();
   });
@@ -256,7 +258,8 @@ describe("component diagnosis and retry", () => {
     const user = userEvent.setup();
     render(<App />);
     await screen.findByRole("button", { name: /查看项目配置/ });
-    await user.click(screen.getByRole("button", { name: "运行状况" }));
+    await user.click(screen.getByRole("button", { name: "更多" }));
+    await user.click(await screen.findByRole("menuitem", { name: "运行状况" }));
     await user.click(screen.getByRole("button", { name: "配置网页数据转发" }));
     expect(
       screen.getByRole("region", { name: "组件设置" }).textContent,
@@ -270,7 +273,8 @@ describe("component diagnosis and retry", () => {
     const user = userEvent.setup();
     render(<App />);
     await screen.findByRole("button", { name: /查看项目配置/ });
-    await user.click(screen.getByRole("button", { name: "运行状况" }));
+    await user.click(screen.getByRole("button", { name: "更多" }));
+    await user.click(await screen.findByRole("menuitem", { name: "运行状况" }));
     await user.click(screen.getByRole("button", { name: "检查Jenkins" }));
     await screen.findByRole("alert");
     expect(screen.getByText(/网页转发服务无法连接/)).toBeTruthy();

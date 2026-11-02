@@ -1,14 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Progress } from "@/components/ui/progress";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Collapsible,
@@ -32,28 +24,30 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { Spinner } from "@/components/ui/spinner";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { BrandMark } from "@/components/brand-mark";
 import {
   ArrowRight,
   Blocks,
   ChevronDown,
-  Home,
   LayoutDashboard,
-  ListChecks,
+  Menu,
+  Plus,
   RefreshCw,
-  ShieldCheck,
-  Activity,
-  CalendarDays,
-  Clock3,
-  GitBranch,
-  UserRound,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  FocusHome,
+  FollowPage,
+  ModelPage,
+  shortfall,
+  useFocus,
+} from "./Focus";
 import {
   desktop,
   loadConnections as fetchConnections,
@@ -122,6 +116,13 @@ function ComponentCard({
 }
 export default function App() {
   const [page, setPage] = useState<Page>("home");
+  const [modelCode, setModelCode] = useState<string | null>(null);
+  const [followCode, setFollowCode] = useState<string | undefined>(undefined);
+  const focusState = useFocus(desktop());
+  function openModel(code: string) {
+    setModelCode(code);
+    setPage("model");
+  }
   const [hub, setHub] = useState<HubReport | null>(null);
   const [busy, setBusy] = useState(false);
   const [busyComponent, setBusyComponent] = useState<string | null>(null);
@@ -245,299 +246,356 @@ export default function App() {
     health: ["运行状况", "检查本机工具与连接的当前状态。"],
     project: ["新建 SPM 项目", "从选择范围到第一批数据。"],
     activity: ["代码活动", "Gerrit 变更，按天。"],
+    model: ["机型", ""],
+    follow: ["关注机型", ""],
   };
+  const followed = focusState.summary?.models.length
+    ? focusState.ordered
+    : null;
+  const tabs = (focusState.models ?? []).map((m) => {
+    const summary = focusState.summary?.models.find((x) => x.code === m.code);
+    return { code: m.code, short: summary ? shortfall(summary) > 0 : null };
+  });
+  const more = [
+    { id: "setup", title: "设置清单" },
+    { id: "health", title: "运行状况" },
+    { id: "activity", title: "代码活动" },
+    { id: "project", title: "新建 SPM 项目" },
+  ] as const;
   return (
     <TooltipProvider>
       <div className="app-shell">
-        <aside className="sidebar">
-          <div className="brand">
-            <span className="brand-mark">
-              <BrandMark />
-            </span>
-            <div>
-              工作台<small>TINNCI WORKSPACE</small>
-            </div>
-          </div>
-          <nav aria-label="主导航">
-            {(
-              [
-                { id: "home", title: "首页", icon: Home },
-                { id: "setup", title: "设置清单", icon: ListChecks },
-                { id: "health", title: "运行状况", icon: Activity },
-                { id: "activity", title: "代码活动", icon: CalendarDays },
-              ] as const
-            ).map((item) => (
-              <Button
-                variant="ghost"
-                className="nav-item"
-                aria-current={page === item.id ? "page" : undefined}
-                key={item.id}
-                onClick={() => {
-                  setSelected(null);
-                  setPage(item.id);
-                }}
+        <header className="appbar">
+          <button
+            type="button"
+            className="wordmark"
+            onClick={() => {
+              setSelected(null);
+              setPage("home");
+            }}
+          >
+            <BrandMark />
+            工作台
+          </button>
+          <nav aria-label="主导航" className="model-tabs">
+            <button
+              type="button"
+              className="tab"
+              aria-current={page === "home" ? "page" : undefined}
+              onClick={() => setPage("home")}
+            >
+              关注
+            </button>
+            {tabs.map((t) => (
+              <button
+                type="button"
+                className="tab"
+                key={t.code}
+                aria-current={
+                  page === "model" && modelCode === t.code ? "page" : undefined
+                }
+                onClick={() => openModel(t.code)}
               >
-                <item.icon />
-                {item.title}
-              </Button>
-            ))}
-            <span className="nav-caption">交付空间</span>
-            {[
-              { title: "看板", icon: LayoutDashboard },
-              { title: "时间线", icon: Clock3 },
-              { title: "问题与 CI/CD", icon: GitBranch },
-              { title: "账户与来源", icon: UserRound },
-            ].map((item) => (
-              <Tooltip key={item.title}>
-                <TooltipTrigger
-                  render={<span className="nav-planned" tabIndex={0} />}
-                >
-                  <item.icon size={18} />
-                  {item.title}
-                  <Badge variant="secondary" className="nav-badge">
-                    待支持
-                  </Badge>
-                </TooltipTrigger>
-                <TooltipContent side="right">将在后续版本提供</TooltipContent>
-              </Tooltip>
-            ))}
-          </nav>
-          <div className="sidebar-footer">
-            <ShieldCheck size={15} />
-            <span>工具各自运行，工作在此汇聚</span>
-          </div>
-        </aside>
-        <main id="main">
-          <header className="topbar">
-            <Breadcrumb>
-              <BreadcrumbList>
-                <BreadcrumbItem>工作台</BreadcrumbItem>
-                <BreadcrumbSeparator />
-                <BreadcrumbItem>
-                  <BreadcrumbPage>
-                    {page === "home"
-                      ? "首页"
-                      : page === "setup"
-                        ? "设置清单"
-                        : page === "project"
-                          ? "新建 SPM 项目"
-                          : page === "activity"
-                            ? "代码活动"
-                            : "运行状况"}
-                  </BreadcrumbPage>
-                </BreadcrumbItem>
-              </BreadcrumbList>
-            </Breadcrumb>
-            <span className="local-indicator">
-              <i />
-              本机工作空间
-            </span>
-          </header>
-          <div className="page-content">
-            <div className="page-heading" hidden={page === "project"}>
-              <div>
-                <span className="eyebrow">YOUR WORK, CONNECTED</span>
-                <h1>{headings[page][0]}</h1>
-                <p>{headings[page][1]}</p>
-              </div>
-              <Button
-                variant="outline"
-                size="lg"
-                hidden={page === "activity"}
-                disabled={busy}
-                onClick={() => void refresh(true)}
-              >
-                {busy ? <Spinner aria-hidden="true" /> : <RefreshCw />}
-                {busy
-                  ? lastRequest.current.check
-                    ? "正在检查…"
-                    : "正在读取…"
-                  : "检查状态"}
-              </Button>
-            </div>
-            <div aria-live="polite">
-              {error ? (
-                <LoadFailurePanel
-                  failure={error}
-                  busy={busy}
-                  retained={!!report}
-                  onRetry={() =>
-                    void refresh(
-                      lastRequest.current.check,
-                      lastRequest.current.component,
-                    )
+                <i
+                  className={
+                    t.short === null ? "dot" : t.short ? "dot short" : "dot ok"
                   }
                 />
-              ) : null}
-            </div>
-            {!report && !error ? (
-              <div className="loading" role="status">
-                <Spinner aria-hidden="true" /> 正在发现本机组件…
+                {t.code}
+              </button>
+            ))}
+          </nav>
+          <Button
+            variant="outline"
+            className="follow-button"
+            onClick={() => {
+              setFollowCode(undefined);
+              setPage("follow");
+            }}
+          >
+            <Plus /> 关注机型
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button variant="ghost" aria-label="更多">
+                  <Menu />
+                </Button>
+              }
+            />
+            <DropdownMenuContent align="end">
+              {more.map((item) => (
+                <DropdownMenuItem
+                  key={item.id}
+                  onClick={() => {
+                    setSelected(null);
+                    setPage(item.id);
+                  }}
+                >
+                  {item.title}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </header>
+        <main id="main" className="page-content">
+          {page === "model" && modelCode ? (
+            <ModelPage
+              state={focusState}
+              code={modelCode}
+              onEdit={() => {
+                setFollowCode(modelCode);
+                setPage("follow");
+              }}
+            />
+          ) : page === "follow" ? (
+            <FollowPage
+              key={followCode ?? "new"}
+              state={focusState}
+              initial={followCode}
+              onDone={openModel}
+              onCancel={() => setPage(followCode ? "model" : "home")}
+            />
+          ) : page === "home" && followed ? (
+            <FocusHome state={focusState} onModel={openModel} />
+          ) : (
+            <>
+              <div className="page-heading" hidden={page === "project"}>
+                <h1>{headings[page][0]}</h1>
+                <p>{headings[page][1]}</p>
+                <Button
+                  variant="outline"
+                  hidden={page === "activity"}
+                  disabled={busy}
+                  onClick={() => void refresh(true)}
+                >
+                  {busy ? <Spinner aria-hidden="true" /> : <RefreshCw />}
+                  {busy
+                    ? lastRequest.current.check
+                      ? "正在检查…"
+                      : "正在读取…"
+                    : "检查状态"}
+                </Button>
               </div>
-            ) : null}
-            {report ? (
-              <>
-                {page === "home" ? (
-                  <>
-                    <Card className="welcome-panel">
-                      <CardContent className="welcome-body">
-                        <div className="welcome-main">
-                          <span className="eyebrow">准备好你的工作空间</span>
-                          <h2>
-                            {totals.total > 0 && totals.done === totals.total
-                              ? "配置已完成"
-                              : "连接工具，开始协作"}
-                          </h2>
-                          <p>
-                            {next
-                              ? `下一步：${next.name} · ${next.setup.find((s) => s.state !== "done")?.title ?? "查看配置"}`
-                              : "查看设置清单，了解本机工具的配置要求。"}
-                          </p>
-                          <Button size="lg" onClick={() => openSetup(next?.id)}>
-                            查看设置清单 <ArrowRight />
-                          </Button>
-                        </div>
-                        <div className="progress-box">
-                          <strong>
-                            {totals.done}
-                            <span> / {totals.total}</span>
-                          </strong>
-                          <p>配置步骤已完成</p>
-                          <Progress
-                            className="setup-progress"
-                            value={
-                              totals.total
-                                ? (totals.done / totals.total) * 100
-                                : 0
-                            }
-                            aria-label="配置完成进度"
-                          />
-                          <small>
-                            {checkedCount
-                              ? `${checkedCount} 个组件已检查`
-                              : "状态尚未检查"}
-                          </small>
-                        </div>
-                      </CardContent>
-                    </Card>
-                    <section className="projects">
-                      <div className="section-heading">
-                        <h2>你的项目</h2>
-                        <span className="quiet-label">SPM</span>
-                      </div>
-                      <Empty className="project-empty">
-                        <EmptyHeader>
-                          <EmptyMedia variant="icon">
-                            <LayoutDashboard />
-                          </EmptyMedia>
-                          <EmptyTitle>从项目配置开始</EmptyTitle>
-                          <EmptyDescription>
-                            导入 SPM 负责人提供的项目模板，再连接来源。
-                          </EmptyDescription>
-                        </EmptyHeader>
-                        <EmptyContent>
-                          <Button
-                            variant="outline"
-                            onClick={() => openSetup("spm")}
-                          >
-                            查看项目配置 <ArrowRight />
-                          </Button>
-                        </EmptyContent>
-                      </Empty>
-                    </section>
-                    {groups.map(([group, title]) => {
-                      const rows = active
-                        .filter((c) => c.group === group)
-                        .sort(
-                          (a, b) =>
-                            Number(b.id === "spm") - Number(a.id === "spm"),
-                        );
-                      return rows.length ? (
-                        <section className="tool-group" key={group}>
-                          <div className="section-heading">
-                            <h2>{title}</h2>
-                            <span className="count">{rows.length}</span>
-                          </div>
-                          <div className="component-grid">
-                            {rows.map((c) => (
-                              <ComponentCard
-                                key={c.id}
-                                component={c}
-                                onOpen={() => openSetup(c.id)}
-                              />
-                            ))}
-                          </div>
-                        </section>
-                      ) : null;
-                    })}
-                    {report.components.some((c) => c.lifecycle === "paused") ? (
-                      <Collapsible className="paused">
-                        <CollapsibleTrigger className="details-trigger">
-                          已暂停的组件 <ChevronDown size={12} />
-                        </CollapsibleTrigger>
-                        <CollapsibleContent>
-                          {report.components
-                            .filter((c) => c.lifecycle === "paused")
-                            .map((c) => (
-                              <p key={c.id}>
-                                {c.name} · {c.summary}
-                              </p>
-                            ))}
-                        </CollapsibleContent>
-                      </Collapsible>
-                    ) : null}
-                  </>
-                ) : page === "setup" ? (
-                  <Checklist
-                    key={selected}
-                    report={report}
-                    selected={selected}
+              {page === "home" ? (
+                <section className="follow-invite">
+                  <div>
+                    <h2>从关注一个机型开始</h2>
+                    <p>
+                      选择你负责的机型，工作台会把它在飞书项目、Jira 和 Gerrit
+                      里的问题和代码变更放在一起，并按你的规则提醒。
+                    </p>
+                  </div>
+                  <Button
+                    onClick={() => {
+                      setFollowCode(undefined);
+                      setPage("follow");
+                    }}
+                  >
+                    关注机型 <ArrowRight />
+                  </Button>
+                </section>
+              ) : null}
+              <div aria-live="polite">
+                {error ? (
+                  <LoadFailurePanel
+                    failure={error}
                     busy={busy}
-                    busyComponent={busyComponent}
-                    onCheck={(id) => void refresh(true, id)}
-                    onOpen={openSetup}
-                    projects={projects}
-                    projectsFailure={projectsFailure}
-                    onProjects={loadProjects}
-                    connections={connections}
-                    connectionsFailure={connectionsFailure}
-                    onConnections={loadConnections}
-                    onConnectionReport={setConnections}
-                    projectSetup={projectSetup}
-                    onOpenProject={() => setPage("project")}
+                    retained={!!report}
+                    onRetry={() =>
+                      void refresh(
+                        lastRequest.current.check,
+                        lastRequest.current.component,
+                      )
+                    }
                   />
-                ) : page === "activity" ? (
-                  <ActivityPage />
-                ) : page === "project" ? (
-                  <ProjectWizard
-                    setup={projectSetup}
-                    onExit={() => openSetup("spm")}
-                  />
-                ) : (
-                  <Health
-                    report={report}
-                    busy={busy}
-                    busyComponent={busyComponent}
-                    onCheck={(id) => void refresh(true, id)}
-                    onOpen={openSetup}
-                  />
-                )}
-                <footer className="page-footer" hidden={page === "activity"}>
-                  <span>
-                    {report.checked ? "最近全量检查" : "最近读取"} ·{" "}
-                    {new Date(report.observed_at).toLocaleString("zh-CN")}
-                  </span>
-                  {report.unmanifested.length ? (
+                ) : null}
+              </div>
+              {!report && !error ? (
+                <div className="loading" role="status">
+                  <Spinner aria-hidden="true" /> 正在发现本机组件…
+                </div>
+              ) : null}
+              {report ? (
+                <>
+                  {page === "home" ? (
+                    <HomeOverview
+                      report={report}
+                      totals={totals}
+                      next={next}
+                      checkedCount={checkedCount}
+                      active={active}
+                      openSetup={openSetup}
+                    />
+                  ) : page === "setup" ? (
+                    <Checklist
+                      key={selected}
+                      report={report}
+                      selected={selected}
+                      busy={busy}
+                      busyComponent={busyComponent}
+                      onCheck={(id) => void refresh(true, id)}
+                      onOpen={openSetup}
+                      projects={projects}
+                      projectsFailure={projectsFailure}
+                      onProjects={loadProjects}
+                      connections={connections}
+                      connectionsFailure={connectionsFailure}
+                      onConnections={loadConnections}
+                      onConnectionReport={setConnections}
+                      projectSetup={projectSetup}
+                      onOpenProject={() => setPage("project")}
+                    />
+                  ) : page === "activity" ? (
+                    <ActivityPage />
+                  ) : page === "project" ? (
+                    <ProjectWizard
+                      setup={projectSetup}
+                      onExit={() => openSetup("spm")}
+                    />
+                  ) : (
+                    <Health
+                      report={report}
+                      busy={busy}
+                      busyComponent={busyComponent}
+                      onCheck={(id) => void refresh(true, id)}
+                      onOpen={openSetup}
+                    />
+                  )}
+                  <footer className="page-footer" hidden={page === "activity"}>
                     <span>
-                      {report.unmanifested.length} 个组件尚未提供配置说明
+                      {report.checked ? "最近全量检查" : "最近读取"} ·{" "}
+                      {new Date(report.observed_at).toLocaleString("zh-CN")}
                     </span>
-                  ) : null}
-                </footer>
-              </>
-            ) : null}
-          </div>
+                    {report.unmanifested.length ? (
+                      <span>
+                        {report.unmanifested.length} 个组件尚未提供配置说明
+                      </span>
+                    ) : null}
+                  </footer>
+                </>
+              ) : null}
+            </>
+          )}
         </main>
       </div>
     </TooltipProvider>
+  );
+}
+
+/** The setup overview: progress, the next step and every component by group. */
+function HomeOverview({
+  report,
+  totals,
+  next,
+  checkedCount,
+  active,
+  openSetup,
+}: {
+  report: HubReport;
+  totals: { done: number; total: number };
+  next: Component | undefined;
+  checkedCount: number;
+  active: Component[];
+  openSetup: (id?: string) => void;
+}) {
+  return (
+    <>
+      <Card className="welcome-panel">
+        <CardContent className="welcome-body">
+          <div className="welcome-main">
+            <span className="eyebrow">准备好你的工作空间</span>
+            <h2>
+              {totals.total > 0 && totals.done === totals.total
+                ? "配置已完成"
+                : "连接工具，开始协作"}
+            </h2>
+            <p>
+              {next
+                ? `下一步：${next.name} · ${next.setup.find((s) => s.state !== "done")?.title ?? "查看配置"}`
+                : "查看设置清单，了解本机工具的配置要求。"}
+            </p>
+            <Button size="lg" onClick={() => openSetup(next?.id)}>
+              查看设置清单 <ArrowRight />
+            </Button>
+          </div>
+          <div className="progress-box">
+            <strong>
+              {totals.done}
+              <span> / {totals.total}</span>
+            </strong>
+            <p>配置步骤已完成</p>
+            <Progress
+              className="setup-progress"
+              value={totals.total ? (totals.done / totals.total) * 100 : 0}
+              aria-label="配置完成进度"
+            />
+            <small>
+              {checkedCount ? `${checkedCount} 个组件已检查` : "状态尚未检查"}
+            </small>
+          </div>
+        </CardContent>
+      </Card>
+      <section className="projects">
+        <div className="section-heading">
+          <h2>你的项目</h2>
+          <span className="quiet-label">SPM</span>
+        </div>
+        <Empty className="project-empty">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <LayoutDashboard />
+            </EmptyMedia>
+            <EmptyTitle>从项目配置开始</EmptyTitle>
+            <EmptyDescription>
+              导入 SPM 负责人提供的项目模板，再连接来源。
+            </EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>
+            <Button variant="outline" onClick={() => openSetup("spm")}>
+              查看项目配置 <ArrowRight />
+            </Button>
+          </EmptyContent>
+        </Empty>
+      </section>
+      {groups.map(([group, title]) => {
+        const rows = active
+          .filter((c) => c.group === group)
+          .sort((a, b) => Number(b.id === "spm") - Number(a.id === "spm"));
+        return rows.length ? (
+          <section className="tool-group" key={group}>
+            <div className="section-heading">
+              <h2>{title}</h2>
+              <span className="count">{rows.length}</span>
+            </div>
+            <div className="component-grid">
+              {rows.map((c) => (
+                <ComponentCard
+                  key={c.id}
+                  component={c}
+                  onOpen={() => openSetup(c.id)}
+                />
+              ))}
+            </div>
+          </section>
+        ) : null;
+      })}
+      {report.components.some((c) => c.lifecycle === "paused") ? (
+        <Collapsible className="paused">
+          <CollapsibleTrigger className="details-trigger">
+            已暂停的组件 <ChevronDown size={12} />
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            {report.components
+              .filter((c) => c.lifecycle === "paused")
+              .map((c) => (
+                <p key={c.id}>
+                  {c.name} · {c.summary}
+                </p>
+              ))}
+          </CollapsibleContent>
+        </Collapsible>
+      ) : null}
+    </>
   );
 }
