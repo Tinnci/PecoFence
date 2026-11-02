@@ -3154,3 +3154,48 @@ a.external-link:focus-visible { outline: 2px solid currentColor; outline-offset:
 a.external-link.bar { text-decoration: none; }
 .external-link-error { display: inline-block; margin-inline-start: 0.5em; color: #a64b2a; font-size: 0.85em; }
 .build-console-link { align-self: start; font-size: 0.8rem; }
+
+/* One shared, pointer-anchored menu for workspace objects. */
+.context-menu-surface { display: contents; }
+.context-menu-positioner { z-index: 100; outline: none; }
+.context-menu-popup {
+  width: max-content;
+  min-width: 208px;
+  max-width: min(320px, var(--available-width));
+  max-height: var(--available-height);
+  overflow: auto;
+  padding: 5px;
+  border-radius: 10px;
+  background: var(--popover);
+  color: var(--popover-foreground);
+  box-shadow: 0 5px 24px #17201b24, 0 0 0 1px #17201b1a;
+  outline: none;
+  font-size: 13px;
+}
+.context-menu-label {
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 6px 9px 7px;
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+.context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+  padding: 6px 9px;
+  border-radius: 5px;
+  outline: none;
+  cursor: default;
+  user-select: none;
+}
+.context-menu-item[data-highlighted] { background: var(--accent); color: var(--accent-foreground); }
+.context-menu-item[data-disabled] { opacity: 0.45; pointer-events: none; }
+.context-menu-icon { width: 15px; }
+.context-menu-separator { height: 1px; margin: 4px 3px; background: var(--border); }
+.context-menu-status { display: block; max-width: 260px; padding: 7px 9px; font-size: 12px; }
+.context-menu-error { color: #a64b2a; }
+[data-context-target]:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }

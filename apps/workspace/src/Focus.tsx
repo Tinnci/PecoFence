@@ -1,3 +1,5 @@
+import { ContextTarget } from "./components/context-menu";
+import { modelContextActions } from "./context-actions";
 import { useTranslation } from "react-i18next";
 import { t, locale } from "./i18n";
 import { useQuery } from "@tanstack/react-query";
@@ -427,70 +429,75 @@ export function FocusHome({
         </div>
         {ordered.length
           ? ordered.map((m) => (
-              <motion.button
-                layout="position"
-                type="button"
-                className="ledger-row"
+              <ContextTarget
                 key={m.code}
-                aria-label={m.code}
-                onClick={() => onModel(m.code)}
+                title={m.code}
+                actions={modelContextActions(m.code, onModel, state.refresh)}
               >
-                <span className="ledger-model">
-                  <strong>{m.code}</strong>
-                  <small>
-                    {sourceText(m.sources) ||
-                      t("focus.noIssueSourcesConfigured")}
-                  </small>
-                </span>
-                {m.measures ? (
-                  <>
-                    <GateCell
-                      v={m.measures.severe_resolved}
-                      n={m.measures.severe_total}
-                      target={m.targets.severe_pct}
-                    />
-                    <GateCell
-                      v={m.measures.overall_resolved}
-                      n={m.measures.overall_total}
-                      target={m.targets.overall_pct}
-                    />
-                    <span className="gate-cell">
-                      <strong
-                        className={
-                          m.measures.fatal_open > m.targets.fatal_max
-                            ? "short"
-                            : ""
-                        }
-                      >
-                        {m.measures.fatal_open}
-                      </strong>
-                      <small>
-                        {t("focus.limit", { v0: m.targets.fatal_max })}
-                      </small>
+                <motion.button
+                  layout="position"
+                  type="button"
+                  className="ledger-row"
+                  aria-label={m.code}
+                  onClick={() => onModel(m.code)}
+                >
+                  <span className="ledger-model">
+                    <strong>{m.code}</strong>
+                    <small>
+                      {sourceText(m.sources) ||
+                        t("focus.noIssueSourcesConfigured")}
+                    </small>
+                  </span>
+                  {m.measures ? (
+                    <>
+                      <GateCell
+                        v={m.measures.severe_resolved}
+                        n={m.measures.severe_total}
+                        target={m.targets.severe_pct}
+                      />
+                      <GateCell
+                        v={m.measures.overall_resolved}
+                        n={m.measures.overall_total}
+                        target={m.targets.overall_pct}
+                      />
+                      <span className="gate-cell">
+                        <strong
+                          className={
+                            m.measures.fatal_open > m.targets.fatal_max
+                              ? "short"
+                              : ""
+                          }
+                        >
+                          {m.measures.fatal_open}
+                        </strong>
+                        <small>
+                          {t("focus.limit", { v0: m.targets.fatal_max })}
+                        </small>
+                      </span>
+                    </>
+                  ) : (
+                    <span className="ledger-missing">
+                      {m.errors[0] ?? t("focus.noIssueSources")}
                     </span>
-                  </>
-                ) : (
-                  <span className="ledger-missing">
-                    {m.errors[0] ?? t("focus.noIssueSources")}
-                  </span>
-                )}
-                <WeekGrid days={m.days} />
-                <span className="ledger-week">
-                  <span>
-                    <strong>{m.new_issues ? `+${m.new_issues}` : "0"}</strong>
-                    {t("focus.newIssues")}
-                  </span>
-                  <span>
-                    <strong>{m.week_changes}</strong>{" "}
-                    {t("focus.changesMerged", { v0: m.week_merged })}
-                  </span>
-                  {m.flagged.length ? (
-                    <span className="short">
-                      {t("focus.needAttention", { v0: m.flagged.length })}
+                  )}
+                  <WeekGrid days={m.days} />
+                  <span className="ledger-week">
+                    <span>
+                      <strong>{m.new_issues ? `+${m.new_issues}` : "0"}</strong>
+                      {t("focus.newIssues")}
                     </span>
-                  ) : null}
-                </span>
-              </motion.button>
+                    <span>
+                      <strong>{m.week_changes}</strong>{" "}
+                      {t("focus.changesMerged", { v0: m.week_merged })}
+                    </span>
+                    {m.flagged.length ? (
+                      <span className="short">
+                        {t("focus.needAttention", { v0: m.flagged.length })}
+                      </span>
+                    ) : null}
+                  </span>
+                </motion.button>
+              </ContextTarget>
             ))
           : (state.models ?? []).map((m) => (
               <div className="ledger-row" key={m.code} aria-hidden="true">

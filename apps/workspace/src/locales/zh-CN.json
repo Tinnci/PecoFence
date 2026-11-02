@@ -538,5 +538,20 @@
   "links.openInBrowser": "在浏览器中打开",
   "links.openFailed": "无法打开链接，请重试。",
   "links.console": "构建日志",
-  "links.buildHistory": "构建历史"
+  "links.buildHistory": "构建历史",
+  "context.actions": "操作",
+  "context.copyLink": "复制链接地址",
+  "context.copyText": "复制文本",
+  "context.copyModelCode": "复制机型代号",
+  "context.copyBranch": "复制分支名",
+  "context.copyCommitTitle": "复制提交标题",
+  "context.copyCommitNumber": "复制变更编号",
+  "context.copyJobName": "复制任务名称",
+  "context.openBranch": "查看分支",
+  "context.openJob": "打开 Jenkins 任务",
+  "context.openBuild": "打开最新构建",
+  "context.working": "正在处理…",
+  "context.failed": "操作失败，请重试。",
+  "context.stopTracking": "停止跟踪",
+  "context.copySelection": "复制选中文本"
 }

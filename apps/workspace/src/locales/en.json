@@ -538,5 +538,20 @@
   "links.openInBrowser": "Open in browser",
   "links.openFailed": "Could not open the link. Try again.",
   "links.console": "Console log",
-  "links.buildHistory": "Build history"
+  "links.buildHistory": "Build history",
+  "context.actions": "Actions",
+  "context.copyLink": "Copy link address",
+  "context.copyText": "Copy text",
+  "context.copyModelCode": "Copy model code",
+  "context.copyBranch": "Copy branch name",
+  "context.copyCommitTitle": "Copy commit title",
+  "context.copyCommitNumber": "Copy change number",
+  "context.copyJobName": "Copy job name",
+  "context.openBranch": "View branch",
+  "context.openJob": "Open Jenkins job",
+  "context.openBuild": "Open latest build",
+  "context.working": "Working…",
+  "context.failed": "Action failed. Try again.",
+  "context.stopTracking": "Stop tracking",
+  "context.copySelection": "Copy selection"
 }

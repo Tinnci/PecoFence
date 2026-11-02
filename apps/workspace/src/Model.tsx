@@ -1,3 +1,9 @@
+import { ContextTarget } from "./components/context-menu";
+import {
+  commitContextActions,
+  copyContextAction,
+  openContextAction,
+} from "./context-actions";
 import { ExternalLink } from "./components/external-link";
 import { jobBrowserUrl, consoleBrowserUrl } from "./browser-links";
 import { useTranslation } from "react-i18next";
@@ -201,62 +207,69 @@ function FlaggedRow({
   onReview,
 }: {
   item: Flagged;
-  onReview: (action: string) => void;
+  onReview: (action: string) => void | Promise<unknown>;
 }) {
   useTranslation();
   return (
-    <motion.article
-      className="flagged"
-      layout="position"
-      initial={false}
-      exit={{
-        opacity: 0,
-        height: 0,
-        paddingTop: 0,
-        paddingBottom: 0,
-        overflow: "hidden",
-      }}
+    <ContextTarget
+      title={`Gerrit #${item.number}`}
+      actions={commitContextActions(item, onReview)}
     >
-      <div className="flagged-tags">
-        {item.rules.map((r) => (
-          <span key={r} className={`tag tag-${r}`}>
-            {ruleNames[r] ?? r}
-          </span>
-        ))}
-      </div>
-      <span className="flagged-when">
-        {item.created.slice(5)} ·{" "}
-        {item.status === "MERGED"
-          ? t("model.merged")
-          : item.status === "ABANDONED"
-            ? t("model.abandoned")
-            : t("model.awaitingReview")}
-      </span>
-      <p className="flagged-subject">
-        <ExternalLink href={item.url}>{item.subject}</ExternalLink>
-      </p>
-      <span className="flagged-meta">
-        {item.project} · {item.branch} · {item.owner} · {item.number}
-      </span>
-      <div className="flagged-actions">
-        <Button size="sm" onClick={() => onReview("accept")}>
-          {t("model.accept")}
-        </Button>
-        <Button
-          size="sm"
-          variant={item.tracked ? "secondary" : "outline"}
-          aria-pressed={item.tracked}
-          onClick={() => onReview(item.tracked ? "untrack" : "track")}
-        >
-          {item.tracked ? t("model.tracking") : t("model.keepTracking")}
-        </Button>
-        <span className="flagged-meta">
-          {item.issues.length
-            ? t("model.linked", { v0: item.issues.join("、") })
-            : t("model.noLinkedIssues")}
+      <motion.article
+        className="flagged"
+        layout="position"
+        initial={false}
+        exit={{
+          opacity: 0,
+          height: 0,
+          paddingTop: 0,
+          paddingBottom: 0,
+          overflow: "hidden",
+        }}
+      >
+        <div className="flagged-tags">
+          {item.rules.map((r) => (
+            <span key={r} className={`tag tag-${r}`}>
+              {ruleNames[r] ?? r}
+            </span>
+          ))}
+        </div>
+        <span className="flagged-when">
+          {item.created.slice(5)} ·{" "}
+          {item.status === "MERGED"
+            ? t("model.merged")
+            : item.status === "ABANDONED"
+              ? t("model.abandoned")
+              : t("model.awaitingReview")}
         </span>
-      </div>
-    </motion.article>
+        <p className="flagged-subject">
+          <ExternalLink href={item.url} contextMenu={false}>
+            {item.subject}
+          </ExternalLink>
+        </p>
+        <span className="flagged-meta">
+          {item.project} · {item.branch} · {item.owner} · {item.number}
+        </span>
+        <div className="flagged-actions">
+          <Button size="sm" onClick={() => onReview("accept")}>
+            {t("model.accept")}
+          </Button>
+          <Button
+            size="sm"
+            variant={item.tracked ? "secondary" : "outline"}
+            aria-pressed={item.tracked}
+            onClick={() => onReview(item.tracked ? "untrack" : "track")}
+          >
+            {item.tracked ? t("model.tracking") : t("model.keepTracking")}
+          </Button>
+          <span className="flagged-meta">
+            {item.issues.length
+              ? t("model.linked", { v0: item.issues.join("、") })
+              : t("model.noLinkedIssues")}
+          </span>
+        </div>
+      </motion.article>
+    </ContextTarget>
   );
 }
 
@@ -412,47 +425,63 @@ function Config({ job }: { job: JobView }) {
 function JobRow({ job, now }: { job: JobView; now: number }) {
   useTranslation();
   return (
-    <article
-      className={`job job-${runState(job.builds[0])}`}
-      aria-label={job.name}
+    <ContextTarget
+      title={job.name}
+      actions={[
+        openContextAction("job", t("context.openJob"), jobBrowserUrl(job)),
+        openContextAction("build", t("context.openBuild"), job.builds[0]?.url),
+        openContextAction(
+          "console",
+          t("links.console"),
+          consoleBrowserUrl(job.builds[0]),
+        ),
+        copyContextAction("copy-job", t("context.copyJobName"), job.job, true),
+      ].filter((action) => action !== null)}
     >
-      <div className="job-main">
-        <div className="job-title">
-          <strong>
-            <ExternalLink href={jobBrowserUrl(job)}>{job.name}</ExternalLink>
-          </strong>
-          <span className={`phase phase-${job.phase}`}>
-            {phaseNames[job.phase]}
-          </span>
-          {job.disabled ? (
-            <span className="quiet">{t("model.disabled")}</span>
+      <article
+        className={`job job-${runState(job.builds[0])}`}
+        aria-label={job.name}
+      >
+        <div className="job-main">
+          <div className="job-title">
+            <strong>
+              <ExternalLink href={jobBrowserUrl(job)} contextMenu={false}>
+                {job.name}
+              </ExternalLink>
+            </strong>
+            <span className={`phase phase-${job.phase}`}>
+              {phaseNames[job.phase]}
+            </span>
+            {job.disabled ? (
+              <span className="quiet">{t("model.disabled")}</span>
+            ) : null}
+          </div>
+          {job.error ? (
+            <span className="short">{job.error}</span>
+          ) : (
+            <>
+              <RunLine job={job} now={now} />
+              <div className="job-meta">
+                <History builds={job.builds} now={now} />
+                <span className="quiet">
+                  {job.builds[0]?.cause ?? ""}
+                  {job.builds[0]?.node ? ` · ${job.builds[0].node}` : ""}
+                </span>
+              </div>
+            </>
+          )}
+          {consoleBrowserUrl(job.builds[0]) ? (
+            <ExternalLink
+              href={consoleBrowserUrl(job.builds[0])}
+              className="build-console-link"
+            >
+              {t("links.console")}
+            </ExternalLink>
           ) : null}
         </div>
-        {job.error ? (
-          <span className="short">{job.error}</span>
-        ) : (
-          <>
-            <RunLine job={job} now={now} />
-            <div className="job-meta">
-              <History builds={job.builds} now={now} />
-              <span className="quiet">
-                {job.builds[0]?.cause ?? ""}
-                {job.builds[0]?.node ? ` · ${job.builds[0].node}` : ""}
-              </span>
-            </div>
-          </>
-        )}
-        {consoleBrowserUrl(job.builds[0]) ? (
-          <ExternalLink
-            href={consoleBrowserUrl(job.builds[0])}
-            className="build-console-link"
-          >
-            {t("links.console")}
-          </ExternalLink>
-        ) : null}
-      </div>
-      {job.error ? null : <Config job={job} />}
-    </article>
+        {job.error ? null : <Config job={job} />}
+      </article>
+    </ContextTarget>
   );
 }
 
@@ -661,21 +690,37 @@ function BranchesTab({
           <section key={g.phase}>
             <h2>{phaseNames[g.phase]}</h2>
             {g.branches.map((b) => (
-              <button
-                type="button"
+              <ContextTarget
                 key={b.branch}
-                className="branch-pick"
-                aria-current={b.branch === branch ? "true" : undefined}
-                onClick={() => onSelect(b.branch)}
+                title={b.branch}
+                actions={[
+                  {
+                    id: "view",
+                    label: t("context.openBranch"),
+                    run: () => onSelect(b.branch),
+                  },
+                  copyContextAction(
+                    "copy-branch",
+                    t("context.copyBranch"),
+                    b.branch,
+                  ),
+                ]}
               >
-                <span className="branch-pick-name">
-                  <span>{b.branch}</span>
-                  {b.flagged ? (
-                    <span className="short">{b.flagged}</span>
-                  ) : null}
-                </span>
-                <Strip days={b.days} />
-              </button>
+                <button
+                  type="button"
+                  className="branch-pick"
+                  aria-current={b.branch === branch ? "true" : undefined}
+                  onClick={() => onSelect(b.branch)}
+                >
+                  <span className="branch-pick-name">
+                    <span>{b.branch}</span>
+                    {b.flagged ? (
+                      <span className="short">{b.flagged}</span>
+                    ) : null}
+                  </span>
+                  <Strip days={b.days} />
+                </button>
+              </ContextTarget>
             ))}
           </section>
         ))}
@@ -737,21 +782,29 @@ function BranchesTab({
           ) : (
             <ol className="change-list">
               {shown.map((l) => (
-                <li key={l.number} className={`change state-${l.state}`}>
-                  <span className="change-when">{l.created.slice(5)}</span>
-                  <div>
-                    <p>
-                      <ExternalLink href={l.url}>{l.subject}</ExternalLink>
-                    </p>
-                    <span className="flagged-meta">
-                      {stateNames[l.state]}
-                      {l.rules.length
-                        ? ` · ${l.rules.map((r) => ruleNames[r] ?? r).join("、")}`
-                        : ""}{" "}
-                      · {l.project} · {l.owner} · {l.number}
-                    </span>
-                  </div>
-                </li>
+                <ContextTarget
+                  key={l.number}
+                  title={`Gerrit #${l.number}`}
+                  actions={commitContextActions(l)}
+                >
+                  <li className={`change state-${l.state}`}>
+                    <span className="change-when">{l.created.slice(5)}</span>
+                    <div>
+                      <p>
+                        <ExternalLink href={l.url} contextMenu={false}>
+                          {l.subject}
+                        </ExternalLink>
+                      </p>
+                      <span className="flagged-meta">
+                        {stateNames[l.state]}
+                        {l.rules.length
+                          ? ` · ${l.rules.map((r) => ruleNames[r] ?? r).join("、")}`
+                          : ""}{" "}
+                        · {l.project} · {l.owner} · {l.number}
+                      </span>
+                    </div>
+                  </li>
+                </ContextTarget>
               ))}
             </ol>
           )}
@@ -795,7 +848,7 @@ function Overview({
             <FlaggedRow
               key={f.number}
               item={f}
-              onReview={(a) => void state.review(m.code, f.number, a)}
+              onReview={(a) => state.review(m.code, f.number, a)}
             />
           ))}
         </AnimatePresence>

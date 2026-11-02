@@ -406,6 +406,7 @@ fn desktop() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::Builder::new().build())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_single_instance::init(|app, args, _| {
             if let Ok(page) = target(&args.into_iter().skip(1).collect::<Vec<_>>()) {
                 *app.state::<State>().target.lock().unwrap() = page.clone();

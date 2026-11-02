@@ -38,6 +38,7 @@
           "url": "https://*"
         }
       ]
-    }
+    },
+    "clipboard-manager:allow-write-text"
   ]
 }

@@ -1,4 +1,4 @@
-import { browserUrl } from "./components/external-link";
+import { browserUrl } from "./browser-urls";
 import type { BuildRun, JobView } from "./contracts/setup";
 
 function runUrl(run?: BuildRun) {

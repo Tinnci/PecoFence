@@ -424,3 +424,23 @@ populate their URLs. Job and console paths are derived from those build URLs,
 preserving the configured Jenkins host and context path. Records without a usable
 HTTP(S) URL stay as plain text. If opening the system browser fails, the app shows
 a retryable error beside the link.
+
+## Context menu
+
+The workspace uses Base UI's Context Menu with one shared popup for all targets.
+Right-click a commit, Jenkins job or source link to open its source or copy text,
+URLs and identifiers. Commit cards also offer Accept and Track/Stop tracking.
+Model tabs and ledger rows offer Overview, Branches, Builds, Settings and Refresh;
+branch buttons offer View branch and Copy branch name.
+
+Shift+F10 or the context-menu key opens actions for the focused target. Arrow keys,
+Home/End, typeahead, Enter and Escape are provided by Base UI; focus returns to the
+target when the menu closes. Copy selection appears for text selected within the
+current target. Inputs, editable content and unregistered page text keep their
+native menus. Labels follow the selected Chinese/English language.
+
+Clipboard writes use Tauri's clipboard-manager plugin in the desktop app and the
+browser clipboard API in previews. Failed copy/open actions stay retryable in the
+menu. Navigation and background refresh actions dismiss promptly; a slow action
+cannot overwrite another target's menu. Popup positioning stays within the
+viewport, including the app's 760px minimum width.

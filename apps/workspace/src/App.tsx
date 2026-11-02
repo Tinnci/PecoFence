@@ -1,3 +1,5 @@
+import { ContextMenuProvider, ContextTarget } from "./components/context-menu";
+import { modelContextActions } from "./context-actions";
 import { useTranslation } from "react-i18next";
 import {
   languagePreference,
@@ -128,7 +130,7 @@ function ComponentCard({
     </Item>
   );
 }
-export default function App() {
+function Workspace() {
   useTranslation();
   const [page, setPage] = useState<Page>("home");
   const [modelCode, setModelCode] = useState<string | null>(null);
@@ -346,28 +348,43 @@ export default function App() {
               {page === "home" ? <TabLine id="appbar" /> : null}
             </button>
             {tabs.map((t) => (
-              <button
-                type="button"
-                className="tab"
+              <ContextTarget
                 key={t.code}
-                aria-current={
-                  page === "model" && modelCode === t.code ? "page" : undefined
-                }
-                onClick={() => openModel(t.code)}
-                onMouseEnter={() => warmModel(t.code)}
-                onMouseLeave={cancelPrefetch}
-                onFocus={() => void prefetchBuilds(t.code)}
+                title={t.code}
+                actions={modelContextActions(
+                  t.code,
+                  openModel,
+                  focusState.refresh,
+                )}
               >
-                <i
-                  className={
-                    t.short === null ? "dot" : t.short ? "dot short" : "dot ok"
+                <button
+                  type="button"
+                  className="tab"
+                  aria-current={
+                    page === "model" && modelCode === t.code
+                      ? "page"
+                      : undefined
                   }
-                />
-                {t.code}
-                {page === "model" && modelCode === t.code ? (
-                  <TabLine id="appbar" />
-                ) : null}
-              </button>
+                  onClick={() => openModel(t.code)}
+                  onMouseEnter={() => warmModel(t.code)}
+                  onMouseLeave={cancelPrefetch}
+                  onFocus={() => void prefetchBuilds(t.code)}
+                >
+                  <i
+                    className={
+                      t.short === null
+                        ? "dot"
+                        : t.short
+                          ? "dot short"
+                          : "dot ok"
+                    }
+                  />
+                  {t.code}
+                  {page === "model" && modelCode === t.code ? (
+                    <TabLine id="appbar" />
+                  ) : null}
+                </button>
+              </ContextTarget>
             ))}
           </nav>
           <Button
@@ -708,5 +725,13 @@ function HomeOverview({
         </Collapsible>
       ) : null}
     </>
+  );
+}
+
+export default function App() {
+  return (
+    <ContextMenuProvider>
+      <Workspace />
+    </ContextMenuProvider>
   );
 }
