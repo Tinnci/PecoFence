@@ -279,6 +279,16 @@ four models) replaces it. Review actions apply optimistically and persist with `
 SPM owns the model file and the rules; `docs/CONFIGURATION.md` in SPM describes them. The
 `feature_after_freeze` rule stays silent until a freeze date is set.
 
+## 标题栏
+
+The window has no Windows title bar (`decorations: false`, `shadow: true`): the 48 px top bar is
+the caption. Its empty space and the tab strip's gaps are a drag region (`data-tauri-drag-region`;
+double-click maximises), and `WindowControls` draws minimise, maximise/restore and close at
+Windows 11's 46 px, close red on hover, all dimmed while the window is inactive. Windows keeps
+the shadow, rounded corners, edge resizing, drag-to-edge snapping and Win+arrow keys; the
+Snap Layouts flyout on hovering maximise needs a native hit-test overlay and is not provided.
+Only the content below the bar scrolls. The caption permissions are in `capabilities/main.json`.
+
 ## 机型子页 (0.10)
 
 Each followed model has four subpages under its head (`--open model:<CODE>[:overview|branches|builds|settings]`):

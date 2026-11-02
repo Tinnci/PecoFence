@@ -396,6 +396,12 @@ describe("followed models", () => {
     expect(mocks.focus).not.toHaveBeenCalledWith("save", expect.anything());
   });
 
+  it("says when the opened model is not followed", async () => {
+    render(<Harness view="model" code="E6765SM" />);
+    expect(await screen.findByText(/没有关注 E6765SM/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "关注 E6765SM" })).toBeTruthy();
+  });
+
   it("reads phases and progress the way SPM does", () => {
     expect(phaseOf("E6751SM-A_SYS_A16_IR")).toBe("ir");
     expect(phaseOf("P6700LV_MP_VND_A16")).toBe("mp");

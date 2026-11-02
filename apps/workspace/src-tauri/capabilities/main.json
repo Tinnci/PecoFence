@@ -1,8 +1,10 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main",
-  "description": "Local welcome hub reads, validated navigation and owner-run SPM discovery, drafts and template import",
-  "windows": ["main"],
+  "description": "Local welcome hub reads, validated navigation and owner-run SPM discovery, drafts and template import; caption buttons and dragging for the undecorated window",
+  "windows": [
+    "main"
+  ],
   "permissions": [
     "core:event:allow-listen",
     "core:event:allow-unlisten",
@@ -19,6 +21,12 @@
     "allow-activate",
     "allow-service-status",
     "allow-remap",
-    "allow-focus"
+    "allow-focus",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-internal-toggle-maximize",
+    "core:window:allow-close",
+    "core:window:allow-start-dragging",
+    "core:window:allow-is-maximized"
   ]
 }

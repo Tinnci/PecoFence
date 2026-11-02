@@ -89,7 +89,9 @@ svg {
   flex-shrink: 0;
 }
 .app-shell {
-  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
   background: var(--background);
 }
 .sidebar {
@@ -1704,14 +1706,15 @@ button.pick-row[aria-selected="true"] .pick-bar span {
 
 /* Shell: the followed models are the navigation; ink on paper, serif for model codes. */
 .appbar {
-  position: sticky;
-  top: 0;
+  position: relative;
   z-index: 20;
+  flex: none;
   display: flex;
   align-items: center;
   gap: 24px;
-  height: 64px;
-  padding: 0 48px;
+  height: 48px;
+  padding: 0 0 0 24px;
+  user-select: none;
   background: var(--background);
   border-bottom: 1px solid var(--border);
 }
@@ -1735,7 +1738,7 @@ button.pick-row[aria-selected="true"] .pick-bar span {
   display: flex;
   align-items: stretch;
   gap: 22px;
-  height: 64px;
+  height: 48px;
   flex: 1;
   min-width: 0;
   overflow-x: auto;
@@ -3083,4 +3086,55 @@ button.ledger-row:hover {
 }
 number-flow-react {
   font-variant-numeric: tabular-nums;
+}
+
+/* 无边框窗口：顶栏即标题栏，页面在其下滚动 */
+.window-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.appbar > :last-child:not(.window-controls) {
+  margin-right: 24px;
+}
+.window-controls {
+  display: flex;
+  align-self: stretch;
+  margin-left: -8px;
+}
+.window-controls button {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  border: 0;
+  background: transparent;
+  color: var(--foreground);
+  cursor: default;
+}
+.window-controls svg {
+  width: 10px;
+  height: 10px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1;
+  shape-rendering: crispEdges;
+}
+.window-controls button:hover {
+  background: rgb(27 36 32 / 0.07);
+}
+.window-controls button:active {
+  background: rgb(27 36 32 / 0.12);
+}
+.window-controls .close:hover {
+  background: #c42b1c;
+  color: #fff;
+}
+.window-controls .close:active {
+  background: #a52619;
+  color: #fff;
+}
+:root[data-inactive] .window-controls svg,
+:root[data-inactive] .wordmark,
+:root[data-inactive] .model-tabs {
+  opacity: 0.55;
 }

@@ -1246,7 +1246,18 @@ export function ModelPage({
     return (
       <div className="model-page">
         <h1 className="model-code">{code}</h1>
-        <p className="quiet">正在读取…</p>
+        {state.models && !saved ? (
+          <p className="quiet">
+            没有关注 {code}。{" "}
+            <button type="button" className="link" onClick={onEdit}>
+              关注 {code}
+            </button>
+          </p>
+        ) : (
+          <p className="quiet loading-line">
+            <Spinner aria-hidden="true" /> 正在读取…
+          </p>
+        )}
       </div>
     );
   const sev = m.measures

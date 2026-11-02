@@ -43,6 +43,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { FocusHome, FollowPage, shortfall, useFocus } from "./Focus";
 import { ModelPage, TabLine } from "./Model";
+import { WindowControls } from "@/components/window-controls";
+import { isTauri } from "@tauri-apps/api/core";
 import {
   desktop,
   loadConnections as fetchConnections,
@@ -266,7 +268,7 @@ export default function App() {
   return (
     <TooltipProvider>
       <div className="app-shell">
-        <header className="appbar">
+        <header className="appbar" data-tauri-drag-region>
           <button
             type="button"
             className="wordmark"
@@ -278,7 +280,11 @@ export default function App() {
             <BrandMark busy={focusState.refreshing} />
             工作台
           </button>
-          <nav aria-label="主导航" className="model-tabs">
+          <nav
+            aria-label="主导航"
+            className="model-tabs"
+            data-tauri-drag-region
+          >
             <button
               type="button"
               className="tab"
@@ -342,150 +348,156 @@ export default function App() {
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
+          {isTauri() ? <WindowControls /> : null}
         </header>
-        <main id="main" className="page-content">
-          {page === "model" && modelCode ? (
-            <ModelPage
-              state={focusState}
-              code={modelCode}
-              tab={modelTab}
-              onTab={setModelTab}
-              onEdit={() => {
-                setFollowCode(modelCode);
-                setPage("follow");
-              }}
-              onRemoved={() => setPage("home")}
-            />
-          ) : page === "follow" ? (
-            <FollowPage
-              key={followCode ?? "new"}
-              state={focusState}
-              initial={followCode}
-              onDone={openModel}
-              onCancel={() => setPage(followCode ? "model" : "home")}
-            />
-          ) : page === "home" && followed ? (
-            <FocusHome state={focusState} onModel={openModel} />
-          ) : (
-            <>
-              <div className="page-heading" hidden={page === "project"}>
-                <h1>{headings[page][0]}</h1>
-                <p>{headings[page][1]}</p>
-                <Button
-                  variant="outline"
-                  hidden={page === "activity"}
-                  disabled={busy}
-                  onClick={() => void refresh(true)}
-                >
-                  {busy ? <Spinner aria-hidden="true" /> : <RefreshCw />}
-                  {busy
-                    ? lastRequest.current.check
-                      ? "正在检查…"
-                      : "正在读取…"
-                    : "检查状态"}
-                </Button>
-              </div>
-              {page === "home" ? (
-                <section className="follow-invite">
-                  <div>
-                    <h2>从关注一个机型开始</h2>
-                    <p>
-                      选择你负责的机型，工作台会把它在飞书项目、Jira 和 Gerrit
-                      里的问题和代码变更放在一起，并按你的规则提醒。
-                    </p>
-                  </div>
+        <div className="window-scroll">
+          <main id="main" className="page-content">
+            {page === "model" && modelCode ? (
+              <ModelPage
+                state={focusState}
+                code={modelCode}
+                tab={modelTab}
+                onTab={setModelTab}
+                onEdit={() => {
+                  setFollowCode(modelCode);
+                  setPage("follow");
+                }}
+                onRemoved={() => setPage("home")}
+              />
+            ) : page === "follow" ? (
+              <FollowPage
+                key={followCode ?? "new"}
+                state={focusState}
+                initial={followCode}
+                onDone={openModel}
+                onCancel={() => setPage(followCode ? "model" : "home")}
+              />
+            ) : page === "home" && followed ? (
+              <FocusHome state={focusState} onModel={openModel} />
+            ) : (
+              <>
+                <div className="page-heading" hidden={page === "project"}>
+                  <h1>{headings[page][0]}</h1>
+                  <p>{headings[page][1]}</p>
                   <Button
-                    onClick={() => {
-                      setFollowCode(undefined);
-                      setPage("follow");
-                    }}
+                    variant="outline"
+                    hidden={page === "activity"}
+                    disabled={busy}
+                    onClick={() => void refresh(true)}
                   >
-                    关注机型 <ArrowRight />
+                    {busy ? <Spinner aria-hidden="true" /> : <RefreshCw />}
+                    {busy
+                      ? lastRequest.current.check
+                        ? "正在检查…"
+                        : "正在读取…"
+                      : "检查状态"}
                   </Button>
-                </section>
-              ) : null}
-              <div aria-live="polite">
-                {error ? (
-                  <LoadFailurePanel
-                    failure={error}
-                    busy={busy}
-                    retained={!!report}
-                    onRetry={() =>
-                      void refresh(
-                        lastRequest.current.check,
-                        lastRequest.current.component,
-                      )
-                    }
-                  />
-                ) : null}
-              </div>
-              {!report && !error ? (
-                <div className="loading" role="status">
-                  <Spinner aria-hidden="true" /> 正在发现本机组件…
                 </div>
-              ) : null}
-              {report ? (
-                <>
-                  {page === "home" ? (
-                    <HomeOverview
-                      report={report}
-                      totals={totals}
-                      next={next}
-                      checkedCount={checkedCount}
-                      active={active}
-                      openSetup={openSetup}
-                    />
-                  ) : page === "setup" ? (
-                    <Checklist
-                      key={selected}
-                      report={report}
-                      selected={selected}
+                {page === "home" ? (
+                  <section className="follow-invite">
+                    <div>
+                      <h2>从关注一个机型开始</h2>
+                      <p>
+                        选择你负责的机型，工作台会把它在飞书项目、Jira 和 Gerrit
+                        里的问题和代码变更放在一起，并按你的规则提醒。
+                      </p>
+                    </div>
+                    <Button
+                      onClick={() => {
+                        setFollowCode(undefined);
+                        setPage("follow");
+                      }}
+                    >
+                      关注机型 <ArrowRight />
+                    </Button>
+                  </section>
+                ) : null}
+                <div aria-live="polite">
+                  {error ? (
+                    <LoadFailurePanel
+                      failure={error}
                       busy={busy}
-                      busyComponent={busyComponent}
-                      onCheck={(id) => void refresh(true, id)}
-                      onOpen={openSetup}
-                      projects={projects}
-                      projectsFailure={projectsFailure}
-                      onProjects={loadProjects}
-                      connections={connections}
-                      connectionsFailure={connectionsFailure}
-                      onConnections={loadConnections}
-                      onConnectionReport={setConnections}
-                      projectSetup={projectSetup}
-                      onOpenProject={() => setPage("project")}
+                      retained={!!report}
+                      onRetry={() =>
+                        void refresh(
+                          lastRequest.current.check,
+                          lastRequest.current.component,
+                        )
+                      }
                     />
-                  ) : page === "activity" ? (
-                    <ActivityPage />
-                  ) : page === "project" ? (
-                    <ProjectWizard
-                      setup={projectSetup}
-                      onExit={() => openSetup("spm")}
-                    />
-                  ) : (
-                    <Health
-                      report={report}
-                      busy={busy}
-                      busyComponent={busyComponent}
-                      onCheck={(id) => void refresh(true, id)}
-                      onOpen={openSetup}
-                    />
-                  )}
-                  <footer className="page-footer" hidden={page === "activity"}>
-                    <span>
-                      {report.checked ? "最近全量检查" : "最近读取"} ·{" "}
-                      {new Date(report.observed_at).toLocaleString("zh-CN")}
-                    </span>
-                    {report.unmanifested.length ? (
+                  ) : null}
+                </div>
+                {!report && !error ? (
+                  <div className="loading" role="status">
+                    <Spinner aria-hidden="true" /> 正在发现本机组件…
+                  </div>
+                ) : null}
+                {report ? (
+                  <>
+                    {page === "home" ? (
+                      <HomeOverview
+                        report={report}
+                        totals={totals}
+                        next={next}
+                        checkedCount={checkedCount}
+                        active={active}
+                        openSetup={openSetup}
+                      />
+                    ) : page === "setup" ? (
+                      <Checklist
+                        key={selected}
+                        report={report}
+                        selected={selected}
+                        busy={busy}
+                        busyComponent={busyComponent}
+                        onCheck={(id) => void refresh(true, id)}
+                        onOpen={openSetup}
+                        projects={projects}
+                        projectsFailure={projectsFailure}
+                        onProjects={loadProjects}
+                        connections={connections}
+                        connectionsFailure={connectionsFailure}
+                        onConnections={loadConnections}
+                        onConnectionReport={setConnections}
+                        projectSetup={projectSetup}
+                        onOpenProject={() => setPage("project")}
+                      />
+                    ) : page === "activity" ? (
+                      <ActivityPage />
+                    ) : page === "project" ? (
+                      <ProjectWizard
+                        setup={projectSetup}
+                        onExit={() => openSetup("spm")}
+                      />
+                    ) : (
+                      <Health
+                        report={report}
+                        busy={busy}
+                        busyComponent={busyComponent}
+                        onCheck={(id) => void refresh(true, id)}
+                        onOpen={openSetup}
+                      />
+                    )}
+                    <footer
+                      className="page-footer"
+                      hidden={page === "activity"}
+                    >
                       <span>
-                        {report.unmanifested.length} 个组件尚未提供配置说明
+                        {report.checked ? "最近全量检查" : "最近读取"} ·{" "}
+                        {new Date(report.observed_at).toLocaleString("zh-CN")}
                       </span>
-                    ) : null}
-                  </footer>
-                </>
-              ) : null}
-            </>
-          )}
-        </main>
+                      {report.unmanifested.length ? (
+                        <span>
+                          {report.unmanifested.length} 个组件尚未提供配置说明
+                        </span>
+                      ) : null}
+                    </footer>
+                  </>
+                ) : null}
+              </>
+            )}
+          </main>
+        </div>
       </div>
     </TooltipProvider>
   );
