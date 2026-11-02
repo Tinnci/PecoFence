@@ -93,7 +93,7 @@ beforeEach(() => {
         builds: {
           code: args.code,
           jobs: [],
-          computed_at: "2026-11-02T00:00:00Z",
+          computed_at: new Date().toISOString(),
           errors: [],
         },
       };

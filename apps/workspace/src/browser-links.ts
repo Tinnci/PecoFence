@@ -29,3 +29,25 @@ export function consoleBrowserUrl(run?: BuildRun): string | null {
   url.hash = "";
   return url.href;
 }
+
+/** Derive a Gerrit search only from a canonical change URL, retaining context paths. */
+export function gerritSearchUrl(
+  sample: string | undefined,
+  query: string,
+): string | null {
+  const safe = browserUrl(sample);
+  if (!safe) return null;
+  const url = new URL(safe);
+  const modern = url.pathname.indexOf("/c/");
+  if (modern >= 0) url.pathname = url.pathname.slice(0, modern + 1);
+  else if (!/^#\/(?:c\/)?\d+(?:\/|$)/.test(url.hash)) {
+    if (!/\/\d+\/?$/.test(url.pathname)) return null;
+    url.pathname = url.pathname.replace(/\d+\/?$/, "");
+  }
+  url.search = "";
+  url.hash = "";
+  return `${url.href}q/${encodeURIComponent(query)}`;
+}
+export function gerritTerm(field: string, value: string): string {
+  return `${field}:"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
+}

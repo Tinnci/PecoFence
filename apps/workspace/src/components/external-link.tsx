@@ -1,8 +1,14 @@
 import { browserUrl } from "../browser-urls";
 export { browserUrl } from "../browser-urls";
+import type { ContextAction } from "./context-menu";
 import { ContextTarget } from "./context-menu";
 import { linkContextActions } from "../context-actions";
-import { useState, type ReactNode, type CSSProperties } from "react";
+import {
+  useState,
+  type ReactNode,
+  type CSSProperties,
+  type MouseEventHandler,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { isTauri } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -17,6 +23,9 @@ export function ExternalLink({
   style,
   title,
   contextMenu = true,
+  actions,
+  onMouseEnter,
+  onMouseLeave,
 }: {
   href?: string | null;
   children?: ReactNode;
@@ -24,18 +33,29 @@ export function ExternalLink({
   style?: CSSProperties;
   title?: string;
   contextMenu?: boolean;
+  actions?: ContextAction[];
+  onMouseEnter?: MouseEventHandler<HTMLElement>;
+  onMouseLeave?: MouseEventHandler<HTMLElement>;
 }) {
   useTranslation();
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
   const url = browserUrl(href ?? undefined);
   if (!url)
     return (
-      <span className={className} style={style} title={title}>
+      <span
+        className={className}
+        style={style}
+        title={title}
+        onMouseEnter={onMouseEnter}
+        onMouseLeave={onMouseLeave}
+      >
         {children}
       </span>
     );
   const link = (
     <a
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
       className={["external-link", className].filter(Boolean).join(" ")}
       href={url}
       target="_blank"
@@ -60,10 +80,13 @@ export function ExternalLink({
     <>
       {contextMenu ? (
         <ContextTarget
-          actions={linkContextActions(
-            url,
-            typeof children === "string" ? children : undefined,
-          )}
+          actions={
+            actions ??
+            linkContextActions(
+              url,
+              typeof children === "string" ? children : undefined,
+            )
+          }
         >
           {link}
         </ContextTarget>

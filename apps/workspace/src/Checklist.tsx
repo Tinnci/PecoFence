@@ -144,7 +144,13 @@ export default function Checklist({
                   onCheck={onCheck}
                 />
               </div>
-              <CheckResult observation={component.status} />
+              <CheckResult
+                observation={component.status}
+                onCheck={
+                  component.checkable ? () => onCheck(component.id) : undefined
+                }
+                busy={busy}
+              />
               <Dependencies
                 ids={component.depends_on}
                 report={report}

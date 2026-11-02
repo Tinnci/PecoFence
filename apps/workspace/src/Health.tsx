@@ -1,3 +1,5 @@
+import { ContextTarget } from "./components/context-menu";
+import { copyContextAction } from "./context-actions";
 import { useTranslation } from "react-i18next";
 import { t } from "./i18n";
 import type { Component, HubReport } from "./contracts/hub";
@@ -53,55 +55,90 @@ export default function Health({
   return (
     <section className="health-list" aria-label={t("health.componentHealth")}>
       {report.components.map((c) => (
-        <Card
-          className="health-row"
+        <ContextTarget
           key={c.id}
-          role="article"
-          aria-label={c.name}
+          title={c.name}
+          actions={[
+            {
+              id: "configure",
+              label: t("app.viewConfiguration2"),
+              disabled: c.lifecycle === "paused",
+              run: () => onOpen(c.id),
+            },
+            ...(c.checkable
+              ? [
+                  {
+                    id: "recheck",
+                    label: t("checkResult.checkThisComponent"),
+                    disabled: busy,
+                    run: () => onCheck(c.id),
+                  },
+                ]
+              : []),
+            copyContextAction(
+              "copy-component",
+              t("context.copyComponent"),
+              c.id,
+            ),
+            copyContextAction(
+              "copy-diagnostic",
+              t("context.copyDiagnostic"),
+              [c.name, c.state, c.summary, ...c.issues].join("\n"),
+            ),
+          ]}
         >
-          <CardContent className="health-body">
-            <div className="health-content">
-              <div className="section-heading">
-                <h3>{c.name}</h3>
-                <Status state={c.state} />
+          <Card className="health-row" role="article" aria-label={c.name}>
+            <CardContent className="health-body">
+              <div className="health-content">
+                <div className="section-heading">
+                  <h3>{c.name}</h3>
+                  <Status state={c.state} />
+                </div>
+                <p>{c.summary}</p>
+                <CheckedAt component={c} />
+                <CheckResult
+                  observation={c.status}
+                  onCheck={c.checkable ? () => onCheck(c.id) : undefined}
+                  busy={busy}
+                  onConfigure={
+                    c.lifecycle !== "paused" ? () => onOpen(c.id) : undefined
+                  }
+                />
+                <StepFailures component={c} />
+                <Dependencies
+                  ids={c.depends_on}
+                  report={report}
+                  onOpen={onOpen}
+                />
+                {c.issues.map((issue, i) => (
+                  <p className="issue" key={i}>
+                    {issue}
+                  </p>
+                ))}
+                {c.lifecycle !== "paused" && !c.checkable ? (
+                  <small className="muted">
+                    {t("health.noAutomaticChecksYet")}
+                  </small>
+                ) : null}
               </div>
-              <p>{c.summary}</p>
-              <CheckedAt component={c} />
-              <CheckResult observation={c.status} />
-              <StepFailures component={c} />
-              <Dependencies
-                ids={c.depends_on}
-                report={report}
-                onOpen={onOpen}
-              />
-              {c.issues.map((issue, i) => (
-                <p className="issue" key={i}>
-                  {issue}
-                </p>
-              ))}
-              {c.lifecycle !== "paused" && !c.checkable ? (
-                <small className="muted">
-                  {t("health.noAutomaticChecksYet")}
-                </small>
-              ) : null}
-            </div>
-            <div className="health-actions">
-              <CheckButton
-                component={c}
-                busy={busy}
-                busyComponent={busyComponent}
-                onCheck={onCheck}
-              />
-              <Button
-                variant="ghost"
-                onClick={() => onOpen(c.id)}
-                disabled={c.lifecycle === "paused"}
-              >
-                {t("app.viewConfiguration2")}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+              <div className="health-actions">
+                <CheckButton
+                  component={c}
+                  busy={busy}
+                  busyComponent={busyComponent}
+                  onCheck={onCheck}
+                />
+                <Button
+                  variant="ghost"
+                  onClick={() => onOpen(c.id)}
+                  disabled={c.lifecycle === "paused"}
+                >
+                  {t("app.viewConfiguration2")}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </ContextTarget>
       ))}
     </section>
   );

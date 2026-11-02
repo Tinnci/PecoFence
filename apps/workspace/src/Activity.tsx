@@ -1,3 +1,7 @@
+import { ContextTarget } from "./components/context-menu";
+import { ExternalLink } from "./components/external-link";
+import { copyContextAction, linkContextActions } from "./context-actions";
+import { gerritSearchUrl, gerritTerm } from "./browser-links";
 import { useTranslation } from "react-i18next";
 import { t, locale } from "./i18n";
 import { useEffect, useMemo, useState } from "react";
@@ -93,6 +97,25 @@ export function monthLabels(columns: (DayActivity | null)[][]) {
   return labels;
 }
 
+export function activityBrowserUrl(
+  activity: Activity,
+  extra = "",
+  branch = activity.branch,
+) {
+  const terms = [
+    activity.project ? gerritTerm("project", activity.project) : "",
+    branch ? gerritTerm("branch", branch) : "",
+    extra,
+  ]
+    .filter(Boolean)
+    .join(" ");
+  return gerritSearchUrl(activity.sample_url, terms);
+}
+function nextDay(date: string) {
+  const day = new Date(`${date}T00:00:00Z`);
+  day.setUTCDate(day.getUTCDate() + 1);
+  return day.toISOString().slice(0, 10);
+}
 function Grid({ activity }: { activity: Activity }) {
   useTranslation();
   const [hover, setHover] = useState<DayActivity | null>(null);
@@ -103,7 +126,7 @@ function Grid({ activity }: { activity: Activity }) {
     <div className="activity-grid-wrap">
       <div
         className="activity-grid"
-        role="img"
+        role="group"
         aria-label={t("activity.dailyDistributionOfChanges", {
           v0: activity.total,
         })}
@@ -123,7 +146,11 @@ function Grid({ activity }: { activity: Activity }) {
             <div className="grid-week" key={i}>
               {week.map((day, j) =>
                 day ? (
-                  <span
+                  <ExternalLink
+                    href={activityBrowserUrl(
+                      activity,
+                      `after:${day.date} before:${nextDay(day.date)}`,
+                    )}
                     key={day.date}
                     className="grid-cell"
                     style={{ background: levels[level(day.created, cuts)] }}
@@ -286,26 +313,80 @@ export default function ActivityPage() {
           <div className="activity-summary">
             {activity && !loading ? (
               <>
-                <div className="big-count">
-                  <strong key={activity.total}>{activity.total}</strong>
-                  <span>
-                    {t("activity.changesPastYear", {
-                      v0: activity.branch ? ` · ${activity.branch}` : "",
-                    })}
-                  </span>
-                </div>
+                <ContextTarget
+                  title={repo}
+                  actions={[
+                    ...linkContextActions(
+                      activityBrowserUrl(
+                        activity,
+                        `after:${activity.from} before:${nextDay(activity.to)}`,
+                      ),
+                    ),
+                    copyContextAction(
+                      "copy-repo",
+                      t("context.copyField", { name: t("context.repository") }),
+                      repo,
+                    ),
+                  ]}
+                >
+                  <div className="big-count">
+                    <strong key={activity.total}>
+                      <ExternalLink
+                        href={activityBrowserUrl(
+                          activity,
+                          `after:${activity.from} before:${nextDay(activity.to)}`,
+                        )}
+                        contextMenu={false}
+                      >
+                        {activity.total}
+                      </ExternalLink>
+                    </strong>
+                    <span>
+                      {t("activity.changesPastYear", {
+                        v0: activity.branch ? ` · ${activity.branch}` : "",
+                      })}
+                    </span>
+                  </div>
+                </ContextTarget>
                 <dl className="activity-status">
                   <div>
                     <dt>{t("model.merged")}</dt>
-                    <dd>{activity.merged}</dd>
+                    <dd>
+                      <ExternalLink
+                        href={activityBrowserUrl(
+                          activity,
+                          `status:merged after:${activity.from} before:${nextDay(activity.to)}`,
+                        )}
+                      >
+                        {activity.merged}
+                      </ExternalLink>
+                    </dd>
                   </div>
                   <div>
                     <dt>{t("activity.inProgress")}</dt>
-                    <dd>{activity.open}</dd>
+                    <dd>
+                      <ExternalLink
+                        href={activityBrowserUrl(
+                          activity,
+                          `status:open after:${activity.from} before:${nextDay(activity.to)}`,
+                        )}
+                      >
+                        {activity.open}
+                      </ExternalLink>
+                    </dd>
                   </div>
                   <div>
                     <dt>{t("model.abandoned")}</dt>
-                    <dd>{activity.abandoned}</dd>
+                    <dd>
+                      <ExternalLink
+                        href={activityBrowserUrl(
+                          activity,
+                          `status:abandoned after:${activity.from} before:${nextDay(activity.to)}`,
+                        )}
+                      >
+                        {activity.abandoned}
+                      </ExternalLink>
+                    </dd>
                   </div>
                 </dl>
               </>
@@ -338,26 +419,48 @@ export default function ActivityPage() {
                 aria-label={t("model.branches")}
               >
                 {branches.slice(0, 8).map((b) => (
-                  <button
-                    type="button"
-                    role="option"
-                    aria-selected={b.branch === branch}
-                    className="pick-row"
+                  <ContextTarget
                     key={b.branch}
-                    onClick={() =>
-                      setBranch(b.branch === branch ? null : b.branch)
-                    }
+                    title={b.branch}
+                    actions={[
+                      ...(activity
+                        ? linkContextActions(
+                            activityBrowserUrl(activity, "", b.branch),
+                          )
+                        : []),
+                      copyContextAction(
+                        "copy-branch",
+                        t("context.copyBranchName"),
+                        b.branch,
+                      ),
+                      {
+                        id: "view",
+                        label: t("context.viewBranch"),
+                        run: () => setBranch(b.branch),
+                      },
+                    ]}
                   >
-                    <span className="pick-name">{b.branch}</span>
-                    <span className="pick-count">{b.count}</span>
-                    <span className="pick-bar" aria-hidden="true">
-                      <span
-                        style={{
-                          width: `${Math.max(2, Math.round((b.count / max) * 100))}%`,
-                        }}
-                      />
-                    </span>
-                  </button>
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={b.branch === branch}
+                      className="pick-row"
+                      key={b.branch}
+                      onClick={() =>
+                        setBranch(b.branch === branch ? null : b.branch)
+                      }
+                    >
+                      <span className="pick-name">{b.branch}</span>
+                      <span className="pick-count">{b.count}</span>
+                      <span className="pick-bar" aria-hidden="true">
+                        <span
+                          style={{
+                            width: `${Math.max(2, Math.round((b.count / max) * 100))}%`,
+                          }}
+                        />
+                      </span>
+                    </button>
+                  </ContextTarget>
                 ))}
               </div>
             </div>

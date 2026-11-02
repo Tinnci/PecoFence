@@ -36,7 +36,7 @@ export type JiraProject = { key: string, name: string, count: number, };
 export type JiraGroup = { name: string, jql: string, count: number, released?: boolean, };
 export type DayActivity = { date: string, created: number, merged: number, };
 export type BranchCount = { branch: string, count: number, };
-export type Activity = { project?: string, branch?: string, from: string, to: string, days: Array<DayActivity>, total: number, merged: number, open: number, abandoned: number, branches: Array<BranchCount>, };
+export type Activity = { sample_url?: string, project?: string, branch?: string, from: string, to: string, days: Array<DayActivity>, total: number, merged: number, open: number, abandoned: number, branches: Array<BranchCount>, };
 export type Discovery = { spaces?: Array<Space>, types?: Array<WorkItemType>, groups?: Array<Group>, items?: Array<Item>, projects?: Array<JiraProject>, jira_groups?: Array<JiraGroup>, gerrit_projects?: Array<string>, activity?: Activity, 
 /**
  * Items of the group type holding no issue, when items were counted.
@@ -119,7 +119,8 @@ export type ParamChange = { build: number, name: string, before: unknown, after:
 export type JobView = { job: string, name: string, phase: string, disabled: boolean, builds: Array<BuildRun>, parameters: Record<string, unknown>, changes: Array<ParamChange>, error?: string, };
 export type Builds = { code: string, folder?: string, jobs: Array<JobView>, computed_at: string, errors: Array<string>, };
 export type Flagged = { number: number, subject: string, project: string, branch: string, owner: string, status: string, created: string, url?: string, rules: Array<string>, issues: Array<string>, tracked: boolean, };
-export type ModelSummary = { code: string, targets: FocusTargets, issues: number, sources: Array<string>, measures?: Measures, new_issues: number, days: Array<number>, days_from: string, week_changes: number, week_merged: number, branches: Array<BranchStrip>, flagged: Array<Flagged>, rule_counts: { [key in string]: number }, rules: { [key in string]: string }, freeze?: string, errors: Array<string>, };
+export type IssueLink = { id: string, url: string, resolved: boolean, severe: boolean, fatal: boolean, };
+export type ModelSummary = { code: string, targets: FocusTargets, issues: number, sources: Array<string>, issue_links?: Array<IssueLink>, measures?: Measures, new_issues: number, days: Array<number>, days_from: string, week_changes: number, week_merged: number, branches: Array<BranchStrip>, flagged: Array<Flagged>, rule_counts: { [key in string]: number }, rules: { [key in string]: string }, freeze?: string, errors: Array<string>, };
 export type FocusSummary = { computed_at?: string, models: Array<ModelSummary>, };
 export type FocusData = { models?: Array<FocusModel>, suggestions?: Suggestions, summary?: FocusSummary, preview?: Preview, changes?: Array<Listed>, builds?: Builds, };
 export type Activation = { health?: ServiceHealth, waited_secs?: number, };

@@ -278,6 +278,9 @@ pub struct BranchCount {
 pub struct Activity {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
+    pub sample_url: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub project: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
@@ -743,11 +746,22 @@ pub struct Flagged {
     pub tracked: bool,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct IssueLink {
+    pub id: String,
+    pub url: String,
+    pub resolved: bool,
+    pub severe: bool,
+    pub fatal: bool,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct ModelSummary {
     pub code: String,
     pub targets: FocusTargets,
     pub issues: u32,
     pub sources: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub issue_links: Option<Vec<IssueLink>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub measures: Option<Measures>,
@@ -1120,6 +1134,7 @@ pub fn types() -> String {
             JobView::decl(&config),
             Builds::decl(&config),
             Flagged::decl(&config),
+            IssueLink::decl(&config),
             ModelSummary::decl(&config),
             FocusSummary::decl(&config),
             FocusData::decl(&config),

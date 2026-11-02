@@ -3199,3 +3199,27 @@ a.external-link.bar { text-decoration: none; }
 .context-menu-status { display: block; max-width: 260px; padding: 7px 9px; font-size: 12px; }
 .context-menu-error { color: #a64b2a; }
 [data-context-target]:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
+
+.issue-browser {
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+}
+.issue-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.issue-destinations {
+  overflow-y: auto;
+  min-height: 0;
+  padding: 0;
+  list-style: none;
+}
+.issue-destinations li {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}

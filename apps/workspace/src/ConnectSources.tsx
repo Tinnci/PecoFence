@@ -1,3 +1,6 @@
+import { ContextTarget } from "./components/context-menu";
+import { ExternalLink } from "./components/external-link";
+import { copyContextAction, linkContextActions } from "./context-actions";
 import { useTranslation } from "react-i18next";
 import { t } from "./i18n";
 import { useState } from "react";
@@ -87,12 +90,14 @@ function SourceRow({
   signingIn,
   busy,
   onSignIn,
+  onRecheck,
   onOpen,
 }: {
   connection: Connection;
   signingIn: boolean;
   busy: boolean;
   onSignIn: () => void;
+  onRecheck: () => Promise<void>;
   onOpen: (id: string) => void;
 }) {
   useTranslation();
@@ -101,43 +106,83 @@ function SourceRow({
     .filter(Boolean)
     .join(" · ");
   return (
-    <Item
-      variant="outline"
-      size="sm"
-      role="listitem"
-      aria-label={names[connection.source]}
+    <ContextTarget
+      title={names[connection.source] ?? connection.source}
+      actions={[
+        ...linkContextActions(connection.host),
+        ...(connection.host
+          ? [
+              copyContextAction(
+                "copy-host",
+                t("context.copyServer"),
+                connection.host,
+              ),
+            ]
+          : []),
+        ...(connection.account
+          ? [
+              copyContextAction(
+                "copy-account",
+                t("context.copyAccount"),
+                connection.account,
+              ),
+            ]
+          : []),
+        {
+          id: "recheck",
+          label: t("templateImport.checkAgain"),
+          disabled: busy,
+          run: onRecheck,
+        },
+        copyContextAction(
+          "copy-diagnostic",
+          t("context.copyDiagnostic"),
+          [connection.source, connection.state, connection.code]
+            .filter(Boolean)
+            .join(" · "),
+        ),
+      ]}
     >
-      <ItemContent>
-        <ItemTitle>
-          {names[connection.source] ?? connection.source}
-          <Status state={connection.state} />
-        </ItemTitle>
-        <ItemDescription>
-          {signingIn
-            ? t("connectSources.finishSigningInInYourBrowser")
-            : (fix ?? identity)}
-        </ItemDescription>
-      </ItemContent>
-      <ItemActions>
-        {connection.sign_in && connection.state !== "connected" ? (
-          <Button size="sm" disabled={busy} onClick={onSignIn}>
-            {signingIn ? <Spinner aria-hidden="true" /> : <LogIn />}
-            {t("connectSources.signIn")}
-          </Button>
-        ) : null}
-        {connection.source === "jenkins" &&
-        connection.state === "unreachable" ? (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => onOpen("cdp-forwarder")}
-          >
-            {t("connectSources.browserForwarder")}
-            <ArrowRight />
-          </Button>
-        ) : null}
-      </ItemActions>
-    </Item>
+      <Item
+        variant="outline"
+        size="sm"
+        role="listitem"
+        aria-label={names[connection.source]}
+      >
+        <ItemContent>
+          <ItemTitle>
+            <ExternalLink href={connection.host} contextMenu={false}>
+              {names[connection.source] ?? connection.source}
+            </ExternalLink>
+            <Status state={connection.state} />
+          </ItemTitle>
+          <ItemDescription>
+            {signingIn
+              ? t("connectSources.finishSigningInInYourBrowser")
+              : (fix ?? identity)}
+          </ItemDescription>
+        </ItemContent>
+        <ItemActions>
+          {connection.sign_in && connection.state !== "connected" ? (
+            <Button size="sm" disabled={busy} onClick={onSignIn}>
+              {signingIn ? <Spinner aria-hidden="true" /> : <LogIn />}
+              {t("connectSources.signIn")}
+            </Button>
+          ) : null}
+          {connection.source === "jenkins" &&
+          connection.state === "unreachable" ? (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => onOpen("cdp-forwarder")}
+            >
+              {t("connectSources.browserForwarder")}
+              <ArrowRight />
+            </Button>
+          ) : null}
+        </ItemActions>
+      </Item>
+    </ContextTarget>
   );
 }
 
@@ -197,6 +242,7 @@ export default function ConnectSources({
           busy={busy}
           signingIn={signingIn === c.source}
           onSignIn={() => void login(c.source)}
+          onRecheck={recheck}
           onOpen={onOpen}
         />
       ));

@@ -104,3 +104,25 @@ describe("browser links", () => {
     ).toBeNull();
   });
 });
+
+describe("Gerrit search links", () => {
+  it("retains HTTP servers, context prefixes and quoted query values", async () => {
+    const { gerritSearchUrl, gerritTerm } =
+      await import("../src/browser-links");
+    const query = `${gerritTerm("project", "mobile/apps")} ${gerritTerm("owner", 'Dev "A"')}`;
+    const link = gerritSearchUrl(
+      "http://review.internal:8080/review/c/mobile/apps/+/12?x=1",
+      query,
+    )!;
+    expect(link.startsWith("http://review.internal:8080/review/q/")).toBe(true);
+    expect(decodeURIComponent(link.split("/q/")[1])).toBe(
+      'project:"mobile/apps" owner:"Dev \\"A\\""',
+    );
+    expect(gerritSearchUrl(undefined, query)).toBeNull();
+    expect(gerritSearchUrl("https://review.test/unrelated", query)).toBeNull();
+    expect(gerritSearchUrl("javascript:alert(1)", query)).toBeNull();
+    expect(
+      gerritSearchUrl("https://review.test/review/#/c/12/", "status:open"),
+    ).toBe("https://review.test/review/q/status%3Aopen");
+  });
+});

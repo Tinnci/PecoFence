@@ -1,3 +1,5 @@
+import { ContextTarget } from "./components/context-menu";
+import { copyContextAction, revealContextAction } from "./context-actions";
 import { useTranslation } from "react-i18next";
 import { t } from "./i18n";
 import { useState } from "react";
@@ -210,20 +212,55 @@ export default function TemplateImport({
       {status?.projects.length ? (
         <ItemGroup aria-label={t("templateImport.importedProjects")}>
           {status.projects.map((p) => (
-            <Item key={p.directory} variant="outline" size="sm">
-              <ItemContent>
-                <ItemTitle>
-                  {p.project ?? "?"} / {p.scope ?? "?"}
-                  <Badge variant={p.check.valid ? "secondary" : "destructive"}>
-                    {!p.check.valid
-                      ? t("templateImport.couldNotLoadConfiguration")
-                      : p.check.ready
-                        ? t("templateImport.readyToCollect")
-                        : t("templateImport.imported")}
-                  </Badge>
-                </ItemTitle>
-              </ItemContent>
-            </Item>
+            <ContextTarget
+              key={p.directory}
+              title={p.project ?? p.directory}
+              actions={[
+                ...[revealContextAction(p.directory)].filter(
+                  (action) => action !== null,
+                ),
+                copyContextAction(
+                  "copy-path",
+                  t("context.copyPath"),
+                  p.directory,
+                ),
+                ...(p.project
+                  ? [
+                      copyContextAction(
+                        "copy-project",
+                        t("context.copyProject"),
+                        p.project,
+                      ),
+                    ]
+                  : []),
+                ...(p.scope
+                  ? [
+                      copyContextAction(
+                        "copy-scope",
+                        t("context.copyScope"),
+                        p.scope,
+                      ),
+                    ]
+                  : []),
+              ]}
+            >
+              <Item variant="outline" size="sm">
+                <ItemContent>
+                  <ItemTitle>
+                    {p.project ?? "?"} / {p.scope ?? "?"}
+                    <Badge
+                      variant={p.check.valid ? "secondary" : "destructive"}
+                    >
+                      {!p.check.valid
+                        ? t("templateImport.couldNotLoadConfiguration")
+                        : p.check.ready
+                          ? t("templateImport.readyToCollect")
+                          : t("templateImport.imported")}
+                    </Badge>
+                  </ItemTitle>
+                </ItemContent>
+              </Item>
+            </ContextTarget>
           ))}
         </ItemGroup>
       ) : null}
@@ -250,75 +287,96 @@ export default function TemplateImport({
         </Alert>
       ) : null}
       {plan ? (
-        <Card
-          className="import-plan"
-          role="region"
-          aria-label={t("templateImport.importPlan")}
+        <ContextTarget
+          title={plan.project}
+          actions={[
+            ...[revealContextAction(plan.directory)].filter(
+              (action) => action !== null,
+            ),
+            copyContextAction(
+              "copy-path",
+              t("context.copyPath"),
+              plan.directory,
+            ),
+            copyContextAction(
+              "copy-project",
+              t("context.copyProject"),
+              plan.project,
+            ),
+            copyContextAction("copy-scope", t("context.copyScope"), plan.scope),
+          ]}
         >
-          <CardHeader>
-            <CardTitle>{plan.template.title}</CardTitle>
-            <CardDescription>
-              {t("templateImport.project")}
-              <strong>{plan.project}</strong> {t("templateImport.scope")}
-              <strong>{plan.scope}</strong> {t("templateImport.liveCollection")}
-            </CardDescription>
-            <CardAction>
-              <Badge variant="outline">
-                {plan.template.id} · {plan.template.version}
-              </Badge>
-            </CardAction>
-          </CardHeader>
-          <CardContent>
-            <ul>
-              {plan.files.map((f) => (
-                <li key={f.role} className={`plan-${f.action}`}>
-                  <span>{roles[f.role] ?? f.role}</span>
-                  <Tooltip>
-                    <TooltipTrigger render={<code tabIndex={0} />}>
-                      {f.path}
-                    </TooltipTrigger>
-                    <TooltipContent>{f.path}</TooltipContent>
-                  </Tooltip>
-                  <Badge
-                    variant={
-                      f.action === "conflict"
-                        ? "destructive"
-                        : f.action === "unchanged"
-                          ? "ghost"
-                          : "secondary"
-                    }
-                  >
-                    {actions[f.action] ?? f.action}
-                  </Badge>
-                </li>
-              ))}
-            </ul>
-            {conflict ? (
-              <p className="plan-note">{failures.import_conflict}</p>
-            ) : null}
-          </CardContent>
-          <CardFooter className="import-actions">
-            {unchanged ? (
-              <span className="muted">
-                {t("templateImport.configurationAlreadyMatchesTheTemplate")}
-              </span>
-            ) : (
-              <Button disabled={busy} onClick={() => void apply(!!conflict)}>
-                {busy ? <Spinner aria-hidden="true" /> : null}
-                {conflict
-                  ? t("templateImport.backUpAndReplace2")
-                  : t("templateImport.import")}
+          <Card
+            className="import-plan"
+            role="region"
+            aria-label={t("templateImport.importPlan")}
+          >
+            <CardHeader>
+              <CardTitle>{plan.template.title}</CardTitle>
+              <CardDescription>
+                {t("templateImport.project")}
+                <strong>{plan.project}</strong> {t("templateImport.scope")}
+                <strong>{plan.scope}</strong>{" "}
+                {t("templateImport.liveCollection")}
+              </CardDescription>
+              <CardAction>
+                <Badge variant="outline">
+                  {plan.template.id} · {plan.template.version}
+                </Badge>
+              </CardAction>
+            </CardHeader>
+            <CardContent>
+              <ul>
+                {plan.files.map((f) => (
+                  <li key={f.role} className={`plan-${f.action}`}>
+                    <span>{roles[f.role] ?? f.role}</span>
+                    <Tooltip>
+                      <TooltipTrigger render={<code tabIndex={0} />}>
+                        {f.path}
+                      </TooltipTrigger>
+                      <TooltipContent>{f.path}</TooltipContent>
+                    </Tooltip>
+                    <Badge
+                      variant={
+                        f.action === "conflict"
+                          ? "destructive"
+                          : f.action === "unchanged"
+                            ? "ghost"
+                            : "secondary"
+                      }
+                    >
+                      {actions[f.action] ?? f.action}
+                    </Badge>
+                  </li>
+                ))}
+              </ul>
+              {conflict ? (
+                <p className="plan-note">{failures.import_conflict}</p>
+              ) : null}
+            </CardContent>
+            <CardFooter className="import-actions">
+              {unchanged ? (
+                <span className="muted">
+                  {t("templateImport.configurationAlreadyMatchesTheTemplate")}
+                </span>
+              ) : (
+                <Button disabled={busy} onClick={() => void apply(!!conflict)}>
+                  {busy ? <Spinner aria-hidden="true" /> : null}
+                  {conflict
+                    ? t("templateImport.backUpAndReplace2")
+                    : t("templateImport.import")}
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                disabled={busy}
+                onClick={() => setPlan(null)}
+              >
+                {unchanged ? t("templateImport.done") : t("model.cancel")}
               </Button>
-            )}
-            <Button
-              variant="outline"
-              disabled={busy}
-              onClick={() => setPlan(null)}
-            >
-              {unchanged ? t("templateImport.done") : t("model.cancel")}
-            </Button>
-          </CardFooter>
-        </Card>
+            </CardFooter>
+          </Card>
+        </ContextTarget>
       ) : (
         <div className="import-actions">
           <Button disabled={busy} onClick={() => void choose()}>

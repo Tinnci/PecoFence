@@ -9,9 +9,16 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-const mocks = vi.hoisted(() => ({ openUrl: vi.fn(), writeText: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  openUrl: vi.fn(),
+  revealItemInDir: vi.fn(),
+  writeText: vi.fn(),
+}));
 vi.mock("@tauri-apps/api/core", () => ({ isTauri: () => true }));
-vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: mocks.openUrl }));
+vi.mock("@tauri-apps/plugin-opener", () => ({
+  openUrl: mocks.openUrl,
+  revealItemInDir: mocks.revealItemInDir,
+}));
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({
   writeText: mocks.writeText,
 }));
@@ -20,7 +27,12 @@ import {
   ContextTarget,
 } from "../src/components/context-menu";
 import { ExternalLink } from "../src/components/external-link";
-import { commitContextActions } from "../src/context-actions";
+import {
+  commitContextActions,
+  buildContextActions,
+  revealContextAction,
+} from "../src/context-actions";
+import ConnectSources from "../src/ConnectSources";
 import { setLanguage } from "../src/i18n";
 
 afterEach(() => {
@@ -258,4 +270,108 @@ describe("shared context menu", () => {
     await user.click(screen.getByRole("menuitem", { name: "Second" }));
     expect(second).toHaveBeenCalledOnce();
   });
+});
+
+it("opens the selected historical build console and copies its number", async () => {
+  const user = userEvent.setup();
+  render(
+    <ContextMenuProvider>
+      <ContextTarget
+        actions={buildContextActions({
+          number: 42,
+          url: "http://ci.test/jenkins/job/mobile/42/",
+          building: false,
+          timestamp: 0,
+          duration: 100,
+          estimated: 100,
+        })}
+      >
+        <span>Build 42</span>
+      </ContextTarget>
+    </ContextMenuProvider>,
+  );
+  open(screen.getByText("Build 42"));
+  await user.click(await screen.findByRole("menuitem", { name: "构建日志" }));
+  expect(mocks.openUrl).toHaveBeenCalledWith(
+    "http://ci.test/jenkins/job/mobile/42/console",
+  );
+  open(screen.getByText("Build 42"));
+  await user.click(
+    await screen.findByRole("menuitem", { name: "复制构建编号" }),
+  );
+  expect(mocks.writeText).toHaveBeenCalledWith("42");
+});
+it("keeps branch searches scoped to the commit repository", async () => {
+  const user = userEvent.setup();
+  render(
+    <ContextMenuProvider>
+      <ContextTarget
+        actions={commitContextActions({
+          number: 12,
+          subject: "Fix",
+          url: "http://review.test/review/c/mobile/+/12",
+          project: "mobile/apps",
+          branch: "release",
+          owner: "Dev",
+        })}
+      >
+        <span>Change 12</span>
+      </ContextTarget>
+    </ContextMenuProvider>,
+  );
+  open(screen.getByText("Change 12"));
+  await user.click(
+    await screen.findByRole("menuitem", { name: "查看分支的提交" }),
+  );
+  const url = mocks.openUrl.mock.calls[0][0];
+  expect(url.startsWith("http://review.test/review/q/")).toBe(true);
+  expect(decodeURIComponent(url.split("/q/")[1])).toBe(
+    'project:"mobile/apps" branch:"release"',
+  );
+});
+
+it("opens a connected server, copies its address and rechecks from its menu", async () => {
+  const user = userEvent.setup(),
+    recheck = vi.fn().mockResolvedValue(undefined);
+  render(
+    <ContextMenuProvider>
+      <ConnectSources
+        report={{
+          checked_at: "2026-11-02T00:00:00Z",
+          connections: [
+            {
+              source: "jenkins",
+              tool: "jenkins-bridge",
+              state: "connected",
+              host: "http://ci.test/jenkins/",
+              sign_in: false,
+            },
+          ],
+        }}
+        failure={null}
+        onRefresh={recheck}
+        onReport={() => {}}
+        onOpen={() => {}}
+      />
+    </ContextMenuProvider>,
+  );
+  const row = screen.getByRole("listitem", { name: "Jenkins" });
+  open(row);
+  await user.click(
+    await screen.findByRole("menuitem", { name: "复制服务器地址" }),
+  );
+  expect(mocks.writeText).toHaveBeenCalledWith("http://ci.test/jenkins/");
+  open(row);
+  await user.click(await screen.findByRole("menuitem", { name: "重新检查" }));
+  expect(recheck).toHaveBeenCalledOnce();
+  await user.click(screen.getByRole("link", { name: "Jenkins" }));
+  expect(mocks.openUrl).toHaveBeenCalledWith("http://ci.test/jenkins/");
+});
+it("reveals an imported configuration folder through the native opener", async () => {
+  const action = revealContextAction("C:\\Users\\User\\AppData\\Local\\SPM");
+  expect(action).not.toBeNull();
+  await action!.run();
+  expect(mocks.revealItemInDir).toHaveBeenCalledWith(
+    "C:\\Users\\User\\AppData\\Local\\SPM",
+  );
 });

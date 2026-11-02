@@ -1,11 +1,18 @@
+import { IssueBrowser, LinkedIssues, type IssueFilter } from "./IssueBrowser";
 import { ContextTarget } from "./components/context-menu";
 import {
+  buildContextActions,
   commitContextActions,
   copyContextAction,
   openContextAction,
 } from "./context-actions";
 import { ExternalLink } from "./components/external-link";
-import { jobBrowserUrl, consoleBrowserUrl } from "./browser-links";
+import {
+  jobBrowserUrl,
+  consoleBrowserUrl,
+  gerritSearchUrl,
+  gerritTerm,
+} from "./browser-links";
 import { useTranslation } from "react-i18next";
 import { t, locale } from "./i18n";
 import { useModelPreference } from "./model-navigation";
@@ -204,9 +211,11 @@ type BuildsState = ReturnType<typeof useBuilds>;
 
 function FlaggedRow({
   item,
+  issues,
   onReview,
 }: {
   item: Flagged;
+  issues: NonNullable<ModelSummary["issue_links"]>;
   onReview: (action: string) => void | Promise<unknown>;
 }) {
   useTranslation();
@@ -248,7 +257,30 @@ function FlaggedRow({
           </ExternalLink>
         </p>
         <span className="flagged-meta">
-          {item.project} · {item.branch} · {item.owner} · {item.number}
+          <ExternalLink
+            href={gerritSearchUrl(
+              item.url,
+              gerritTerm("project", item.project),
+            )}
+          >
+            {item.project}
+          </ExternalLink>{" "}
+          ·{" "}
+          <ExternalLink
+            href={gerritSearchUrl(
+              item.url,
+              `${gerritTerm("project", item.project)} ${gerritTerm("branch", item.branch)}`,
+            )}
+          >
+            {item.branch}
+          </ExternalLink>{" "}
+          ·{" "}
+          <ExternalLink
+            href={gerritSearchUrl(item.url, gerritTerm("owner", item.owner))}
+          >
+            {item.owner}
+          </ExternalLink>{" "}
+          · {item.number}
         </span>
         <div className="flagged-actions">
           <Button size="sm" onClick={() => onReview("accept")}>
@@ -263,9 +295,14 @@ function FlaggedRow({
             {item.tracked ? t("model.tracking") : t("model.keepTracking")}
           </Button>
           <span className="flagged-meta">
-            {item.issues.length
-              ? t("model.linked", { v0: item.issues.join("、") })
-              : t("model.noLinkedIssues")}
+            {item.issues.length ? (
+              <>
+                {t("context.linkedPrefix")}{" "}
+                <LinkedIssues ids={item.issues} issues={issues} />
+              </>
+            ) : (
+              t("model.noLinkedIssues")
+            )}
           </span>
         </div>
       </motion.article>
@@ -286,7 +323,7 @@ function RunLine({ job, now }: { job: JobView; now: number }) {
           value={p.pct}
           aria-label={t("model.progress", { v0: job.name, v1: run.number })}
         />
-        <ExternalLink href={run.url}>
+        <ExternalLink href={run.url} actions={buildContextActions(run)}>
           {t("model.runningFor", {
             v0: run.number,
             v1: span(p.elapsed),
@@ -302,7 +339,7 @@ function RunLine({ job, now }: { job: JobView; now: number }) {
   }
   return (
     <span className={`run-line run-${runState(run)}`}>
-      <ExternalLink href={run.url}>
+      <ExternalLink href={run.url} actions={buildContextActions(run)}>
         {t("model.duration", {
           v0: run.number,
           v1: resultNames[run.result ?? ""] ?? run.result ?? "",
@@ -335,6 +372,7 @@ function History({ builds, now }: { builds: BuildRun[]; now: number }) {
         return (
           <ExternalLink
             href={r.url}
+            actions={buildContextActions(r)}
             key={r.number}
             className={`bar run-${runState(r)}`}
             style={{ height: `${Math.max(8, (d / longest) * 100)}%` }}
@@ -800,7 +838,35 @@ function BranchesTab({
                         {l.rules.length
                           ? ` · ${l.rules.map((r) => ruleNames[r] ?? r).join("、")}`
                           : ""}{" "}
-                        · {l.project} · {l.owner} · {l.number}
+                        ·{" "}
+                        <ExternalLink
+                          href={gerritSearchUrl(
+                            l.url,
+                            gerritTerm("project", l.project),
+                          )}
+                        >
+                          {l.project}
+                        </ExternalLink>{" "}
+                        ·{" "}
+                        <ExternalLink
+                          href={gerritSearchUrl(
+                            l.url,
+                            gerritTerm("owner", l.owner),
+                          )}
+                        >
+                          {l.owner}
+                        </ExternalLink>{" "}
+                        · {l.number}
+                        {l.issues.length ? (
+                          <>
+                            {" "}
+                            ·{" "}
+                            <LinkedIssues
+                              ids={l.issues}
+                              issues={m.issue_links ?? []}
+                            />
+                          </>
+                        ) : null}
                       </span>
                     </div>
                   </li>
@@ -848,6 +914,7 @@ function Overview({
             <FlaggedRow
               key={f.number}
               item={f}
+              issues={m.issue_links ?? []}
               onReview={(a) => state.review(m.code, f.number, a)}
             />
           ))}
@@ -1431,6 +1498,11 @@ export function ModelPage({
     () => builds.data?.jobs.filter((j) => j.builds[0]?.building).length ?? 0,
     [builds.data],
   );
+  const [issueFilter, setIssueFilter] = useModelPreference<IssueFilter | null>(
+    code,
+    "issues-filter",
+    null,
+  );
   if (!m)
     return (
       <div className="model-page">
@@ -1465,9 +1537,34 @@ export function ModelPage({
     : null;
   return (
     <div className="model-page">
+      <IssueBrowser
+        issues={m.issue_links ?? []}
+        open={issueFilter}
+        onClose={() => setIssueFilter(null)}
+      />
       <section className="model-head">
         <div>
           <h1 className="model-code">{m.code}</h1>
+          {m.issue_links?.length ? (
+            <ContextTarget
+              title={m.code}
+              actions={(["all", "unresolved", "severe", "fatal"] as const).map(
+                (filter) => ({
+                  id: filter,
+                  label: t(`context.issues.${filter}`),
+                  run: () => setIssueFilter(filter),
+                }),
+              )}
+            >
+              <button
+                className="link"
+                type="button"
+                onClick={() => setIssueFilter("all")}
+              >
+                {t("context.browseIssues", { count: m.issues })}
+              </button>
+            </ContextTarget>
+          ) : null}
           <p className="quiet">
             {t("model.gerritBranches", {
               v0: sourceText(m.sources),
@@ -1480,32 +1577,54 @@ export function ModelPage({
         </div>
         <div className="model-figures">
           {sev ? (
-            <div>
-              <span>{t("focus.severeIssueResolution")}</span>
-              <strong className={sev.ok ? "" : "short"}>
-                <Num value={sev.pct} suffix="%" />
-              </strong>
-              <small className={sev.ok ? "" : "short"}>
-                {sev.v} / {sev.n} ·{" "}
-                {sev.ok
-                  ? t("focus.targetMet")
-                  : t("focus.moreToResolve", { v0: sev.gap })}
-              </small>
-            </div>
+            <ContextTarget
+              actions={[
+                {
+                  id: "severe",
+                  label: t("context.issues.severe"),
+                  disabled: !m.issue_links?.length,
+                  run: () => setIssueFilter("severe"),
+                },
+              ]}
+            >
+              <div>
+                <span>{t("focus.severeIssueResolution")}</span>
+                <strong className={sev.ok ? "" : "short"}>
+                  <Num value={sev.pct} suffix="%" />
+                </strong>
+                <small className={sev.ok ? "" : "short"}>
+                  {sev.v} / {sev.n} ·{" "}
+                  {sev.ok
+                    ? t("focus.targetMet")
+                    : t("focus.moreToResolve", { v0: sev.gap })}
+                </small>
+              </div>
+            </ContextTarget>
           ) : null}
           {all ? (
-            <div>
-              <span>{t("focus.overallResolution")}</span>
-              <strong className={all.ok ? "" : "short"}>
-                <Num value={all.pct} suffix="%" />
-              </strong>
-              <small className={all.ok ? "" : "short"}>
-                {all.v} / {all.n} ·{" "}
-                {all.ok
-                  ? t("focus.targetMet")
-                  : t("focus.moreToResolve", { v0: all.gap })}
-              </small>
-            </div>
+            <ContextTarget
+              actions={[
+                {
+                  id: "unresolved",
+                  label: t("context.issues.unresolved"),
+                  disabled: !m.issue_links?.length,
+                  run: () => setIssueFilter("unresolved"),
+                },
+              ]}
+            >
+              <div>
+                <span>{t("focus.overallResolution")}</span>
+                <strong className={all.ok ? "" : "short"}>
+                  <Num value={all.pct} suffix="%" />
+                </strong>
+                <small className={all.ok ? "" : "short"}>
+                  {all.v} / {all.n} ·{" "}
+                  {all.ok
+                    ? t("focus.targetMet")
+                    : t("focus.moreToResolve", { v0: all.gap })}
+                </small>
+              </div>
+            </ContextTarget>
           ) : null}
           <div>
             <span>{t("focus.thisWeek")}</span>

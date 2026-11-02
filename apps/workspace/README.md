@@ -444,3 +444,28 @@ browser clipboard API in previews. Failed copy/open actions stay retryable in th
 menu. Navigation and background refresh actions dismiss promptly; a slow action
 cannot overwrite another target's menu. Popup positioning stays within the
 viewport, including the app's 760px minimum width.
+
+
+### Issue and activity navigation
+
+Refresh models with the updated SPM CLI to populate source-owned issue destinations.
+**Browse issues** opens a searchable snapshot with all, unresolved, unresolved severe
+and unresolved fatal filters. These filters use the same gate classifications as
+the summary; severe includes fatal. Model menus and gate figures jump to those
+filters. The list renders 100 rows at a time and offers Show more for larger scopes.
+Linked commit issue IDs open a source record when the snapshot provides a unique
+matching native ID, including numeric `#12345` references. Other IDs remain copyable.
+
+Commit metadata links and menus open Gerrit searches for a repository, its branch,
+or an author. Activity counts open searches for the displayed period and state;
+heatmap cells open that day's changes, and branch menus open branch searches.
+Search values are quoted and URL-encoded, with the original HTTP(S) server and
+context path retained. Activity responses from the updated CLI include a canonical
+sample change URL for this purpose.
+
+Each build's menu opens its own console and copies its own build number. Connected
+source cards open supplied HTTP(S) server addresses, copy host/account details and
+recheck connections. Health results offer configuration, recheck and diagnostic
+copy actions. Imported projects and import plans offer folder, project and scope
+copy actions, plus Show folder in Explorer in the desktop app. Native folder reveal
+uses the opener plugin's reveal permission; opening arbitrary files is not enabled.

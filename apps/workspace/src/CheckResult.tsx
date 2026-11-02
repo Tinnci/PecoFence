@@ -1,3 +1,5 @@
+import { ContextTarget } from "./components/context-menu";
+import { copyContextAction } from "./context-actions";
 import { useTranslation } from "react-i18next";
 import { t, locale } from "./i18n";
 import type { Component, HubReport, Observation } from "./contracts/hub";
@@ -13,39 +15,94 @@ import {
 } from "@/components/ui/collapsible";
 import { Spinner } from "@/components/ui/spinner";
 
-export function CheckResult({ observation }: { observation?: Observation }) {
+export function CheckResult({
+  observation,
+  onCheck,
+  onConfigure,
+  busy = false,
+}: {
+  observation?: Observation;
+  onCheck?: () => void;
+  onConfigure?: () => void;
+  busy?: boolean;
+}) {
   useTranslation();
   if (!observation || observation.state === "unchecked") return null;
   const attention = ["action_needed", "unknown"].includes(observation.state);
   return (
-    <Alert
-      role="status"
-      className={`check-result ${attention ? "alert-warning" : ""}`}
+    <ContextTarget
+      actions={[
+        ...(onConfigure
+          ? [
+              {
+                id: "configure",
+                label: t("app.viewConfiguration2"),
+                run: onConfigure,
+              },
+            ]
+          : []),
+        ...(onCheck
+          ? [
+              {
+                id: "recheck",
+                label: t("templateImport.checkAgain"),
+                icon: RefreshCw,
+                disabled: busy,
+                run: onCheck,
+              },
+            ]
+          : []),
+        copyContextAction(
+          "copy-diagnostic",
+          t("context.copyDiagnostic"),
+          [
+            checkExplanation(observation),
+            observation.code,
+            observation.exit_code,
+          ]
+            .filter((v) => v != null)
+            .join("\n"),
+        ),
+        ...(observation.code
+          ? [
+              copyContextAction(
+                "copy-code",
+                t("context.copyDiagnosticCode"),
+                observation.code,
+              ),
+            ]
+          : []),
+      ]}
     >
-      <AlertDescription>
-        <p>{checkExplanation(observation)}</p>
-        {observation.code || observation.exit_code != null ? (
-          <Collapsible>
-            <CollapsibleTrigger className="details-trigger">
-              {t("checkResult.checkDetails")}
-              <ChevronDown size={12} />
-            </CollapsibleTrigger>
-            <CollapsibleContent className="details-content">
-              {observation.code ? (
-                <span>
-                  {t("checkResult.checkCode", { v0: observation.code })}
-                </span>
-              ) : null}
-              {observation.exit_code != null ? (
-                <span>
-                  {t("checkResult.exitCode", { v0: observation.exit_code })}
-                </span>
-              ) : null}
-            </CollapsibleContent>
-          </Collapsible>
-        ) : null}
-      </AlertDescription>
-    </Alert>
+      <Alert
+        role="status"
+        className={`check-result ${attention ? "alert-warning" : ""}`}
+      >
+        <AlertDescription>
+          <p>{checkExplanation(observation)}</p>
+          {observation.code || observation.exit_code != null ? (
+            <Collapsible>
+              <CollapsibleTrigger className="details-trigger">
+                {t("checkResult.checkDetails")}
+                <ChevronDown size={12} />
+              </CollapsibleTrigger>
+              <CollapsibleContent className="details-content">
+                {observation.code ? (
+                  <span>
+                    {t("checkResult.checkCode", { v0: observation.code })}
+                  </span>
+                ) : null}
+                {observation.exit_code != null ? (
+                  <span>
+                    {t("checkResult.exitCode", { v0: observation.exit_code })}
+                  </span>
+                ) : null}
+              </CollapsibleContent>
+            </Collapsible>
+          ) : null}
+        </AlertDescription>
+      </Alert>
+    </ContextTarget>
   );
 }
 export function CheckedAt({ component }: { component: Component }) {
@@ -74,15 +131,31 @@ export function CheckButton({
   if (!component.checkable) return null;
   const checking = busy && busyComponent === component.id;
   return (
-    <Button
-      variant="outline"
-      aria-label={t("checkResult.check", { v0: component.name })}
-      disabled={busy}
-      onClick={() => onCheck(component.id)}
+    <ContextTarget
+      actions={[
+        {
+          id: "recheck",
+          label: t("checkResult.checkThisComponent"),
+          disabled: busy,
+          run: () => onCheck(component.id),
+        },
+        copyContextAction(
+          "copy-component",
+          t("context.copyComponent"),
+          component.id,
+        ),
+      ]}
     >
-      {checking ? <Spinner aria-hidden="true" /> : <RefreshCw />}
-      {checking ? t("app.checking") : t("checkResult.checkThisComponent")}
-    </Button>
+      <Button
+        variant="outline"
+        aria-label={t("checkResult.check", { v0: component.name })}
+        disabled={busy}
+        onClick={() => onCheck(component.id)}
+      >
+        {checking ? <Spinner aria-hidden="true" /> : <RefreshCw />}
+        {checking ? t("app.checking") : t("checkResult.checkThisComponent")}
+      </Button>
+    </ContextTarget>
   );
 }
 export function Dependencies({
