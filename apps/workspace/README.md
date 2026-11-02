@@ -329,14 +329,15 @@ writers. Imports use live mode; historical imports stay in the CLI.
 
 ## Icon
 
-`icons/workspace.svg` is the Windows app icon: an Art Deco 工, drawn as a
-stepped ziggurat workbench with pinstripes and an inlaid diamond, rising from a
-sunburst inside a double gold frame on deep emerald. Frames and rays blur below
-48 px, so `icons/workspace-small.svg` (tile and enlarged silhouette) supplies the
-16, 24 and 32 px sizes used by the title bar, tray and small taskbar.
+`icons/workspace.svg` is the Windows app icon: 工 on the window's paper, its beam and
+base in ink and its upright a column of change cells in the activity greens, one of them
+flagged in the shortfall orange — what the app is for, in its own colours. A faint ink edge
+keeps the tile on light taskbars. Cells blur below 48 px, so `icons/workspace-small.svg`
+(a fuller tile, heavier bars, one green and one flagged block) supplies the 16, 24 and
+32 px sizes used by the title bar, tray and small taskbar.
 `scripts/icons.sh` regenerates `src-tauri/icons` from both.
 
-Following Windows guidance, the plated icon stays on Windows surfaces. Inside the
-app, the top bar's `BrandMark` draws the same stepped 工 as a single-colour glyph in
-the interface's text colour; the browser favicon uses the small variant.
+Following Windows guidance, the paper tile stays on Windows surfaces. Inside the
+app, the top bar's `BrandMark` draws the small variant's 工 without its tile, beam and
+base in the text colour; the browser favicon uses the small variant.
 
