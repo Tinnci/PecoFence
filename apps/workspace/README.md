@@ -517,3 +517,26 @@ external links at window widths of 980px and above. Narrower windows retain text
 labels; menus keep their reserved icon column. Tool cards, setup entries and
 health views use component-specific icons. All supplementary icons are hidden
 from assistive technology, preserving the controls' translated accessible names.
+
+### Branch build timeline
+
+The branch list interleaves Gerrit **creation** timestamps and Jenkins **start**
+timestamps in China time. Date-only entries from older caches remain in a separate
+section until the model is refreshed. The job picker defaults to existing name
+matching and also offers every retained model job for legacy branch naming. A
+run's explicit BRANCH/BRANCH_T/BRANCH_V inputs are checked separately from job-name
+association. Each selected job contributes its latest ten retained builds.
+
+Build markers show Jenkins number, software-number input, result, console link
+and a context menu. “Inspect source evidence” lazily calls `spm focus build-evidence`
+for that cached job/build. It reads a 64 KiB head and a tail starting 128 KiB before
+the log end, with a 256 KiB response allowance for console newline expansion. Only
+structured findings stay in the window's query cache; raw console text is never
+written to disk. Failures can be retried without replacing the timeline.
+
+The evidence panel distinguishes SYSTEM and VENDOR archive filenames, an explicit
+vendor-save skip, and the manifest **archive repository** commit. Exact source
+inclusion/differences require reading the archived XML and resolving each source
+repository revision. BUILD_TAG is never treated as a Git ref, and Jenkins numbers
+are kept separate from effective software numbers found in the log. This feature
+requires the accompanying SPM CLI and jenkins-bridge `total_bytes` log metadata.

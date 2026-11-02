@@ -181,6 +181,7 @@ export async function focus(
     | "changes"
     | "builds"
     | "builds_cached"
+    | "build_evidence"
     | "issues"
     | "issues_cached"
     | "requirements"
@@ -188,6 +189,8 @@ export async function focus(
     | "annotate",
   args: {
     code?: string;
+    job?: string;
+    build?: number;
     change?: number;
     review?: string;
     branch?: string;
@@ -201,6 +204,8 @@ export async function focus(
     ? invoke<FocusData>("focus", {
         action,
         code: args.code ?? null,
+        job: args.job ?? null,
+        build: args.build ?? null,
         change: args.change ?? null,
         review: args.review ?? null,
         branch: args.branch ?? null,

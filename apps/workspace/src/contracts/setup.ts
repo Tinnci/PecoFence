@@ -105,7 +105,7 @@ phase: string, total: number, days: Array<number>,
 flagged: number, };
 export type PreviewSide = { flagged: number, alerts: number, rule_counts: { [key in string]: number }, };
 export type Preview = { before: PreviewSide, after: PreviewSide, entering: Array<Flagged>, leaving: Array<Flagged>, changes: number, };
-export type Listed = { number: number, subject: string, project: string, branch: string, owner: string, status: string, created: string, url?: string, rules: Array<string>, issues: Array<string>, 
+export type Listed = { number: number, subject: string, project: string, branch: string, owner: string, status: string, created: string, created_at?: number, url?: string, rules: Array<string>, issues: Array<string>,
 /**
  * flagged, earlier, tracked, accepted, logged, ignored or clean.
  */
@@ -114,10 +114,12 @@ export type BuildRun = { number: number, url?: string, result?: string, building
 /**
  * Start, epoch milliseconds.
  */
-timestamp: number, duration: number, estimated: number, cause?: string, node?: string, };
+timestamp: number, duration: number, estimated: number, cause?: string, node?: string, source_parameters?: { [key in string]: string }, };
 export type ParamChange = { build: number, name: string, before: unknown, after: unknown, };
 export type JobView = { job: string, name: string, phase: string, disabled: boolean, builds: Array<BuildRun>, parameters: Record<string, unknown>, changes: Array<ParamChange>, error?: string, };
 export type Builds = { code: string, folder?: string, jobs: Array<JobView>, computed_at: string, errors: Array<string>, };
+export type BuildEvidence = { job: string, number: number, inspected_at: string, windows: Array<LogWindow>, total_bytes: number | null, software_number: string | null, system_manifest: string | null, vendor_manifest: string | null, vendor_skipped: boolean, archive_commit: string | null, archive_repository: string | null, };
+export type LogWindow = { start: number, bytes: number, };
 export type Flagged = { number: number, subject: string, project: string, branch: string, owner: string, status: string, created: string, url?: string, rules: Array<string>, issues: Array<string>, tracked: boolean, };
 export type IssueLink = { id: string, url: string, resolved: boolean, severe: boolean, fatal: boolean, };
 export type ModelSummary = { code: string, targets: FocusTargets, issues: number, sources: Array<string>, issue_links?: Array<IssueLink>, measures?: Measures, new_issues: number, days: Array<number>, days_from: string, week_changes: number, week_merged: number, branches: Array<BranchStrip>, flagged: Array<Flagged>, rule_counts: { [key in string]: number }, rules: { [key in string]: string }, freeze?: string, errors: Array<string>, };
@@ -157,5 +159,5 @@ export type Note = { at: string, text: string, };
 export type Classification = { field: string, field_name: string, configured: boolean, values: Array<DomainValue>, };
 export type TrackingSource = { id: string, source: string, label: string, filter: string, software_filter: string, total: number, matched: number, excluded: number, unclassified: number, updated_at: string | null, stale: boolean, error: string | null, classification?: Classification, };
 export type WorkItems = { code: string, kind: string, checked_at: string, sources: Array<TrackingSource>, items: Array<WorkItem>, };
-export type FocusData = { work_items?: WorkItems, local?: LocalLayer, models?: Array<FocusModel>, suggestions?: Suggestions, summary?: FocusSummary, preview?: Preview, changes?: Array<Listed>, builds?: Builds, };
+export type FocusData = { build_evidence?: BuildEvidence, work_items?: WorkItems, local?: LocalLayer, models?: Array<FocusModel>, suggestions?: Suggestions, summary?: FocusSummary, preview?: Preview, changes?: Array<Listed>, builds?: Builds, };
 export type Activation = { health?: ServiceHealth, waited_secs?: number, };

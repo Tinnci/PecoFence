@@ -2,6 +2,7 @@
 //! `spm setup status`. Workspace never writes project configuration itself.
 #![cfg_attr(not(windows), allow(dead_code))]
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use ts_rs::TS;
 
@@ -666,6 +667,9 @@ pub struct Listed {
     pub status: String,
     pub created: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub created_at: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub url: Option<String>,
     pub rules: Vec<String>,
@@ -696,6 +700,9 @@ pub struct BuildRun {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub node: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub source_parameters: Option<BTreeMap<String, String>>,
 }
 /// A build parameter that differs from the build before.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -925,6 +932,9 @@ pub struct WorkItems {
 pub struct FocusData {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
+    pub build_evidence: Option<BuildEvidence>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub work_items: Option<WorkItems>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
@@ -947,6 +957,57 @@ pub struct FocusData {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub builds: Option<Builds>,
+}
+
+/// Structured evidence from at most 320 KiB of console output.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct BuildEvidence {
+    pub job: String,
+    pub number: u32,
+    pub inspected_at: String,
+    pub windows: Vec<LogWindow>,
+    #[ts(type = "number | null")]
+    pub total_bytes: Option<u64>,
+    pub software_number: Option<String>,
+    pub system_manifest: Option<String>,
+    pub vendor_manifest: Option<String>,
+    pub vendor_skipped: bool,
+    pub archive_commit: Option<String>,
+    pub archive_repository: Option<String>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct LogWindow {
+    #[ts(type = "number")]
+    pub start: u64,
+    #[ts(type = "number")]
+    pub bytes: u64,
+}
+pub fn build_evidence_args(code: &str, job: &str, build: u32) -> Option<Vec<String>> {
+    if !valid_code(code)
+        || build == 0
+        || job.len() > 300
+        || job.split('/').any(|p| {
+            p.is_empty()
+                || p == "."
+                || p == ".."
+                || !p.starts_with(|c: char| c.is_ascii_alphanumeric())
+                || !p
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b"_.-".contains(&b))
+        })
+    {
+        return None;
+    }
+    Some(vec![
+        "focus".into(),
+        "build-evidence".into(),
+        "--code".into(),
+        code.into(),
+        "--job".into(),
+        job.into(),
+        "--build".into(),
+        build.to_string(),
+    ])
 }
 
 /// A work item the local layer may address: its source and the source's ID.
@@ -1306,6 +1367,8 @@ pub fn types() -> String {
             ParamChange::decl(&config),
             JobView::decl(&config),
             Builds::decl(&config),
+            BuildEvidence::decl(&config),
+            LogWindow::decl(&config),
             Flagged::decl(&config),
             IssueLink::decl(&config),
             ModelSummary::decl(&config),
@@ -1344,6 +1407,22 @@ mod tests {
             }}))
         .unwrap()
     }
+    #[test]
+    fn evidence_arguments_are_numeric_and_literal() {
+        assert!(build_evidence_args("P6700LV", "folder/model_A16", 23).is_some());
+        for job in [
+            "--job",
+            "folder/../x",
+            "folder//x",
+            "https://ci/job",
+            "folder/%2f",
+            "x;whoami",
+        ] {
+            assert!(build_evidence_args("P6700LV", job, 23).is_none());
+        }
+        assert!(build_evidence_args("P6700LV", "folder/model", 0).is_none());
+    }
+
     #[test]
     fn discovery_and_draft_arguments_are_validated() {
         let with = |f: fn(&mut DiscoverArgs)| {

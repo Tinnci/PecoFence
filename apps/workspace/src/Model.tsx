@@ -1,3 +1,5 @@
+import { branchTimeline } from "./branch-timeline";
+import { BuildMarker, timelineTime } from "./BuildMarker";
 import { ActionIcon } from "./components/action-icon";
 import { IssueBrowser, LinkedIssues, type IssueFilter } from "./IssueBrowser";
 import { ContextTarget } from "./components/context-menu";
@@ -25,7 +27,7 @@ import {
   prefetchBuilds,
   changesOptions,
 } from "./focus-cache";
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { AnimatePresence, m as motion } from "motion/react";
 import { Num } from "@/components/motion";
@@ -732,6 +734,20 @@ function BranchesTab({
   const jobs =
     branch && strip ? jobsFor(branch, strip.phase, builds.data?.jobs) : [];
   const shown = list?.filter((l) => inFilter(l, filter)) ?? [];
+  const [timelineJob, setTimelineJob] = useModelPreference(
+    m.code,
+    "timeline-job",
+    "suggested",
+  );
+  const allJobs = builds.data?.jobs ?? [];
+  const selectedJobs =
+    timelineJob === "off"
+      ? []
+      : timelineJob === "suggested"
+        ? jobs
+        : allJobs.filter((job) => job.job === timelineJob);
+  const events = branchTimeline(shown, selectedJobs);
+
   return (
     <div className="branches-tab">
       <nav className="branch-rail" aria-label={t("model.branches")}>
@@ -807,6 +823,36 @@ function BranchesTab({
           ) : builds.data ? (
             <p className="quiet">{t("model.noBuildJobsMatchThisBranch")}</p>
           ) : null}
+          <div className="timeline-controls">
+            <label>
+              {t("timeline.builds")}{" "}
+              <select
+                value={timelineJob}
+                onChange={(event) => setTimelineJob(event.target.value)}
+              >
+                <option value="suggested">{t("timeline.suggested")}</option>
+                <option value="off">{t("timeline.hideBuilds")}</option>
+                {allJobs.map((job) => (
+                  <option key={job.job} value={job.job}>
+                    {job.name}
+                    {job.disabled ? ` · ${t("timeline.disabled")}` : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              disabled={builds.loading}
+              onClick={builds.refresh}
+            >
+              <RefreshCw size={14} aria-hidden="true" />
+              {t("timeline.refreshBuilds")}
+            </button>
+          </div>
+          <p className="quiet timeline-explanation">
+            {t("timeline.explanation")}
+          </p>
+          {builds.failure ? <FailureNote failure={builds.failure} /> : null}
           <div
             className="segmented"
             role="radiogroup"
@@ -830,59 +876,90 @@ function BranchesTab({
             <Skeleton className="change-skeleton" />
           ) : (
             <ol className="change-list">
-              {shown.map((l) => (
-                <ContextTarget
-                  key={l.number}
-                  title={`Gerrit #${l.number}`}
-                  actions={commitContextActions(l)}
-                >
-                  <li className={`change state-${l.state}`}>
-                    <span className="change-when">{l.created.slice(5)}</span>
-                    <div>
-                      <p>
-                        <ExternalLink href={l.url} contextMenu={false}>
-                          {l.subject}
-                        </ExternalLink>
-                      </p>
-                      <span className="flagged-meta">
-                        {stateNames[l.state]}
-                        {l.rules.length
-                          ? ` · ${l.rules.map((r) => ruleNames[r] ?? r).join("、")}`
-                          : ""}{" "}
-                        ·{" "}
-                        <ExternalLink
-                          href={gerritSearchUrl(
-                            l.url,
-                            gerritTerm("project", l.project),
-                          )}
-                        >
-                          {l.project}
-                        </ExternalLink>{" "}
-                        ·{" "}
-                        <ExternalLink
-                          href={gerritSearchUrl(
-                            l.url,
-                            gerritTerm("owner", l.owner),
-                          )}
-                        >
-                          {l.owner}
-                        </ExternalLink>{" "}
-                        · {l.number}
-                        {l.issues.length ? (
-                          <>
-                            {" "}
-                            ·{" "}
-                            <LinkedIssues
-                              ids={l.issues}
-                              issues={m.issue_links ?? []}
-                            />
-                          </>
+              {events.map((event, index) =>
+                event.kind === "build" ? (
+                  <BuildMarker
+                    key={event.key}
+                    code={m.code}
+                    branch={branch}
+                    job={event.job}
+                    run={event.run}
+                  />
+                ) : (
+                  (() => {
+                    const l = event.change;
+                    return (
+                      <Fragment key={event.key}>
+                        {event.time === null &&
+                        (index === 0 || events[index - 1].time !== null) ? (
+                          <li className="quiet timeline-undated">
+                            {t("timeline.dateOnly")}
+                          </li>
                         ) : null}
-                      </span>
-                    </div>
-                  </li>
-                </ContextTarget>
-              ))}
+
+                        <ContextTarget
+                          key={l.number}
+                          title={`Gerrit #${l.number}`}
+                          actions={commitContextActions(l)}
+                        >
+                          <li className={`change state-${l.state}`}>
+                            <span
+                              className="change-when"
+                              title={t("timeline.changeCreated")}
+                            >
+                              {event.time !== null
+                                ? timelineTime(event.time)
+                                : l.created.slice(5)}
+                            </span>
+                            <div>
+                              <p>
+                                <ExternalLink href={l.url} contextMenu={false}>
+                                  {l.subject}
+                                </ExternalLink>
+                              </p>
+                              <span className="flagged-meta">
+                                {stateNames[l.state]}
+                                {l.rules.length
+                                  ? ` · ${l.rules.map((r) => ruleNames[r] ?? r).join("、")}`
+                                  : ""}{" "}
+                                ·{" "}
+                                <ExternalLink
+                                  href={gerritSearchUrl(
+                                    l.url,
+                                    gerritTerm("project", l.project),
+                                  )}
+                                >
+                                  {l.project}
+                                </ExternalLink>{" "}
+                                ·{" "}
+                                <ExternalLink
+                                  href={gerritSearchUrl(
+                                    l.url,
+                                    gerritTerm("owner", l.owner),
+                                  )}
+                                >
+                                  {l.owner}
+                                </ExternalLink>{" "}
+                                · {l.number}
+                                {l.issues.length ? (
+                                  <>
+                                    {" "}
+                                    ·{" "}
+                                    <LinkedIssues
+                                      ids={l.issues}
+                                      issues={m.issue_links ?? []}
+                                    />
+                                  </>
+                                ) : null}
+                              </span>
+                            </div>
+                          </li>
+                        </ContextTarget>
+                      </Fragment>
+                    );
+                  })()
+                ),
+              )}
             </ol>
           )}
         </section>

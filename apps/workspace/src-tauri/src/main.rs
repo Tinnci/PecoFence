@@ -268,6 +268,8 @@ fn desktop() {
     #[tauri::command]
     async fn focus(
         action: String,
+        job: Option<String>,
+        build: Option<u32>,
         code: Option<String>,
         change: Option<u32>,
         review: Option<String>,
@@ -278,14 +280,21 @@ fn desktop() {
         op: Option<serde_json::Value>,
         state: tauri::State<'_, State>,
     ) -> Result<setup::FocusData, setup::SetupFailure> {
-        let args = setup::focus_args(
-            &action,
-            code.as_deref(),
-            change,
-            review.as_deref(),
-            branch.as_deref(),
-            source.as_deref().zip(item.as_deref()),
-        )
+        let args = if action == "build_evidence" {
+            code.as_deref()
+                .zip(job.as_deref())
+                .zip(build)
+                .and_then(|((code, job), build)| setup::build_evidence_args(code, job, build))
+        } else {
+            setup::focus_args(
+                &action,
+                code.as_deref(),
+                change,
+                review.as_deref(),
+                branch.as_deref(),
+                source.as_deref().zip(item.as_deref()),
+            )
+        }
         .ok_or_else(|| setup::SetupFailure::new("invalid_input"))?;
         let input = match (action.as_str(), &model, &op) {
             ("save" | "preview", Some(model), _) => Some(
@@ -307,6 +316,7 @@ fn desktop() {
             "changes",
             "builds",
             "builds_cached",
+            "build_evidence",
             "issues_cached",
             "requirements_cached",
             "annotate",
@@ -326,7 +336,7 @@ fn desktop() {
         let deadline = std::time::Duration::from_secs(match action.as_str() {
             "summary" | "refresh" => 600,
             "suggest" => 180,
-            "builds" => 120,
+            "builds" | "build_evidence" => 120,
             "issues" | "requirements" => 300,
             _ => 30,
         });
