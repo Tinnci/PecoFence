@@ -1,3 +1,5 @@
+import { useTranslation } from "react-i18next";
+import { t, locale } from "./i18n";
 import { useEffect, useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -8,7 +10,15 @@ import { FailureNote, failureOf } from "./TemplateImport";
 
 const REPO_KEY = "workspace.activity.repo";
 const levels = ["#edf0e8", "#c9dcc0", "#9cbd8f", "#6f9466", "#405b3e"];
-const weekdays = ["一", "", "三", "", "五", "", ""];
+const weekdays = () => [
+  t("activity.mon"),
+  "",
+  t("activity.wed"),
+  "",
+  t("activity.fri"),
+  "",
+  "",
+];
 
 function remember(): string {
   try {
@@ -68,7 +78,12 @@ export function monthLabels(columns: (DayActivity | null)[][]) {
       day &&
       (!previous || previous.date.slice(5, 7) !== day.date.slice(5, 7))
     )
-      starts.push([i, `${Number(day.date.slice(5, 7))}月`]);
+      starts.push([
+        i,
+        new Intl.DateTimeFormat(locale(), { month: "short" }).format(
+          new Date(`${day.date}T00:00:00`),
+        ),
+      ]);
   });
   const labels = columns.map(() => "");
   starts.forEach(([i, label], k) => {
@@ -79,6 +94,7 @@ export function monthLabels(columns: (DayActivity | null)[][]) {
 }
 
 function Grid({ activity }: { activity: Activity }) {
+  useTranslation();
   const [hover, setHover] = useState<DayActivity | null>(null);
   const columns = useMemo(() => weeks(activity.days), [activity]);
   const cuts = useMemo(() => thresholds(activity.days), [activity]);
@@ -88,7 +104,9 @@ function Grid({ activity }: { activity: Activity }) {
       <div
         className="activity-grid"
         role="img"
-        aria-label={`${activity.total} 个变更的每日分布`}
+        aria-label={t("activity.dailyDistributionOfChanges", {
+          v0: activity.total,
+        })}
       >
         <div className="grid-months" aria-hidden="true">
           {months.map((m, i) => (
@@ -96,7 +114,7 @@ function Grid({ activity }: { activity: Activity }) {
           ))}
         </div>
         <div className="grid-weekdays" aria-hidden="true">
-          {weekdays.map((d, i) => (
+          {weekdays().map((d, i) => (
             <span key={i}>{d}</span>
           ))}
         </div>
@@ -109,7 +127,10 @@ function Grid({ activity }: { activity: Activity }) {
                     key={day.date}
                     className="grid-cell"
                     style={{ background: levels[level(day.created, cuts)] }}
-                    title={`${day.date} · ${day.created} 个变更`}
+                    title={t("activity.changes", {
+                      v0: day.date,
+                      v1: day.created,
+                    })}
                     onMouseEnter={() => setHover(day)}
                     onMouseLeave={() => setHover(null)}
                   />
@@ -124,15 +145,21 @@ function Grid({ activity }: { activity: Activity }) {
       <div className="grid-foot">
         <span className="grid-hover" aria-live="polite">
           {hover
-            ? `${hover.date} · ${hover.created} 个变更${hover.created ? `，已合入 ${hover.merged} 个` : ""}`
+            ? t("activity.changes2", {
+                v0: hover.date,
+                v1: hover.created,
+                v2: hover.created
+                  ? t("activity.merged", { v0: hover.merged })
+                  : "",
+              })
             : ""}
         </span>
         <span className="grid-legend" aria-hidden="true">
-          少
+          {t("activity.less")}
           {levels.map((c) => (
             <i key={c} style={{ background: c }} />
           ))}
-          多
+          {t("activity.more")}
         </span>
       </div>
     </div>
@@ -141,6 +168,7 @@ function Grid({ activity }: { activity: Activity }) {
 
 /** 代码活动: Gerrit changes per day for a repository or branch, a year at a glance. */
 export default function ActivityPage() {
+  useTranslation();
   const [projects, setProjects] = useState<string[] | null>(null);
   const [repo, setRepo] = useState(remember);
   const [query, setQuery] = useState(remember);
@@ -206,9 +234,11 @@ export default function ActivityPage() {
             <Input
               value={query}
               placeholder={
-                projects ? `搜索 ${projects.length} 个仓库` : "正在读取仓库…"
+                projects
+                  ? t("activity.searchRepositories", { v0: projects.length })
+                  : t("activity.loadingRepositories")
               }
-              aria-label="仓库"
+              aria-label={t("activity.repository")}
               autoFocus={!repo}
               onChange={(e) => {
                 setQuery(e.target.value);
@@ -225,7 +255,7 @@ export default function ActivityPage() {
             <div
               className="repo-matches"
               role="listbox"
-              aria-label="匹配的仓库"
+              aria-label={t("activity.matchingRepositories")}
             >
               {matches.map((m) => (
                 <button
@@ -245,30 +275,36 @@ export default function ActivityPage() {
       </div>
       {failure ? <FailureNote failure={failure} /> : null}
       {!repo ? (
-        <p className="scope-hint">选择一个仓库，查看它过去一年每天的变更。</p>
+        <p className="scope-hint">
+          {t("activity.chooseARepositoryToSeeItsDailyChangesOver")}
+        </p>
       ) : (
-        <section className="activity-card" aria-label="变更分布">
+        <section
+          className="activity-card"
+          aria-label={t("activity.changeDistribution")}
+        >
           <div className="activity-summary">
             {activity && !loading ? (
               <>
                 <div className="big-count">
                   <strong key={activity.total}>{activity.total}</strong>
                   <span>
-                    个变更 · 过去一年
-                    {activity.branch ? ` · ${activity.branch}` : ""}
+                    {t("activity.changesPastYear", {
+                      v0: activity.branch ? ` · ${activity.branch}` : "",
+                    })}
                   </span>
                 </div>
                 <dl className="activity-status">
                   <div>
-                    <dt>已合入</dt>
+                    <dt>{t("model.merged")}</dt>
                     <dd>{activity.merged}</dd>
                   </div>
                   <div>
-                    <dt>进行中</dt>
+                    <dt>{t("activity.inProgress")}</dt>
                     <dd>{activity.open}</dd>
                   </div>
                   <div>
-                    <dt>已放弃</dt>
+                    <dt>{t("model.abandoned")}</dt>
                     <dd>{activity.abandoned}</dd>
                   </div>
                 </dl>
@@ -285,18 +321,22 @@ export default function ActivityPage() {
           {branches.length ? (
             <div className="activity-branches">
               <div className="branch-head">
-                <span className="preview-label">分支</span>
+                <span className="preview-label">{t("model.branches")}</span>
                 {branch ? (
                   <button
                     type="button"
                     className="link"
                     onClick={() => setBranch(null)}
                   >
-                    全部分支
+                    {t("activity.allBranches")}
                   </button>
                 ) : null}
               </div>
-              <div className="pick-list" role="listbox" aria-label="分支">
+              <div
+                className="pick-list"
+                role="listbox"
+                aria-label={t("model.branches")}
+              >
                 {branches.slice(0, 8).map((b) => (
                   <button
                     type="button"

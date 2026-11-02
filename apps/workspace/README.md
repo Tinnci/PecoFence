@@ -370,3 +370,43 @@ Following Windows guidance, the paper tile stays on Windows surfaces. Inside the
 app, the top bar's `BrandMark` draws the small variant's 工 without its tile, beam and
 base in the text colour; the browser favicon uses the small variant.
 
+
+## Model caching and language
+
+The window keeps SPM data in a shared TanStack Query cache (`focus-cache.ts`).
+Keys include the configuration scope, model code, section and branch. The current
+window uses the default SPM configuration root; a future profile selector must
+switch the scope in these keys rather than reuse another profile's data.
+
+- Startup reads the followed list and the disk summary independently. Existing
+  summary data stays visible while models refresh individually, with a two-minute
+  freshness window. Refreshes are serialized because the CLI rewrites a shared
+  disk cache; each completed model is merged into the screen immediately.
+- Jenkins reads first hydrate from SPM's disk cache, then fetch when older than
+  45 seconds. Pointer hover prefetches after 150 ms; keyboard focus prefetches
+  immediately. Overview, Branches and Builds show Jenkins data; Settings defers
+  these reads. Running builds refresh every minute while their model is visible.
+- Requests for the same model and section share a promise. Late responses update
+  their own model's cache. Settings/review changes invalidate pending summary
+  generations; failed optimistic reviews restore only the affected change.
+- Data is retained in memory for 30 minutes after the last observer. Tabs, selected
+  branches, filters and scroll positions are remembered for the window session.
+  The CLI remains responsible for persistent data caching across app restarts.
+
+The More menu offers System default, 简体中文 and English. The selected preference
+is stored as `spm.language.v1`; both catalogs are bundled for offline startup.
+The first supported system language is used, falling back to English. Chinese
+system variants currently use the Simplified Chinese catalog.
+
+Application messages use semantic keys in `src/locales/zh-CN.json` and `en.json`.
+Translate complete sentences with interpolation, and pass `count` for plural
+forms. Message tables resolve at render time so changing language updates open
+screens without resetting cached data or navigation. Dates, times and animated
+numbers use the active locale. Model codes, branches, issue titles, source field
+names and source diagnostics remain their original data.
+
+When adding a language, bundle its catalog in `i18n.ts`, add it to the supported
+language resolver and menu, and extend the catalog parity tests. Run `npm test`
+and `npm run build` before delivery; the tests cover out-of-order responses,
+incremental refresh, failed reads/reviews, navigation restoration, translations
+and language switching without refetching data.

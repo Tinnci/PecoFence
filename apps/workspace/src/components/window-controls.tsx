@@ -1,3 +1,5 @@
+import { useTranslation } from "react-i18next";
+import { t } from "../i18n";
 import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -6,6 +8,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 // band's full height). Glyphs are 10 px strokes; close turns red on hover. They stay out of
 // the tab order, as native caption buttons do; Alt+F4 and Win+arrows still work.
 export function WindowControls() {
+  useTranslation();
   const [maximized, setMaximized] = useState(false);
   // The native Snap Layouts overlay covers the maximise button, so the page learns its hover
   // and press from `caption-max` events instead of the pointer.
@@ -47,7 +50,7 @@ export function WindowControls() {
       <button
         type="button"
         tabIndex={-1}
-        aria-label="最小化"
+        aria-label={t("controls.minimize")}
         onClick={() => void win().minimize()}
       >
         <svg viewBox="0 0 10 10" aria-hidden="true">
@@ -57,7 +60,7 @@ export function WindowControls() {
       <button
         type="button"
         tabIndex={-1}
-        aria-label={maximized ? "向下还原" : "最大化"}
+        aria-label={maximized ? t("controls.restore") : t("controls.maximize")}
         className={maxState}
         onClick={() => void win().toggleMaximize()}
       >
@@ -73,7 +76,7 @@ export function WindowControls() {
         type="button"
         tabIndex={-1}
         className="close"
-        aria-label="关闭"
+        aria-label={t("controls.close")}
         onClick={() => void win().close()}
       >
         <svg viewBox="0 0 10 10" aria-hidden="true">

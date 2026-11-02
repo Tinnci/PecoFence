@@ -1,4 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { t, locale } from "./i18n";
+import { useModelPreference } from "./model-navigation";
+import { useQuery } from "@tanstack/react-query";
+import {
+  queryClient,
+  buildsOptions,
+  prefetchBuilds,
+  changesOptions,
+} from "./focus-cache";
+import { useEffect, useMemo, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { AnimatePresence, m as motion } from "motion/react";
 import { Num } from "@/components/motion";
@@ -50,6 +60,7 @@ import { FailureNote, failureOf } from "./TemplateImport";
 
 /** The current-tab underline; one per `id`, it slides to whichever tab renders it. */
 export function TabLine({ id }: { id: string }) {
+  useTranslation();
   return (
     <motion.span
       className="tab-line"
@@ -61,41 +72,65 @@ export function TabLine({ id }: { id: string }) {
 
 export const phaseOrder = ["main", "ir", "pb", "mp", "old"] as const;
 export const phaseNames: Record<string, string> = {
-  main: "主线",
+  get main() {
+    return t("model.mainline");
+  },
   ir: "IR",
   pb: "PB",
   mp: "MP",
-  old: "旧",
+  get old() {
+    return t("model.old");
+  },
 };
 const tabNames: Record<ModelTab, string> = {
-  overview: "概览",
-  branches: "分支",
-  builds: "构建",
-  settings: "设置",
+  get overview() {
+    return t("model.overview");
+  },
+  get branches() {
+    return t("model.branches");
+  },
+  get builds() {
+    return t("model.builds");
+  },
+  get settings() {
+    return t("model.settings");
+  },
 };
 const resultNames: Record<string, string> = {
-  SUCCESS: "成功",
-  FAILURE: "失败",
-  UNSTABLE: "不稳定",
-  ABORTED: "中止",
-  NOT_BUILT: "未构建",
+  get SUCCESS() {
+    return t("model.success");
+  },
+  get FAILURE() {
+    return t("model.failed");
+  },
+  get UNSTABLE() {
+    return t("model.unstable");
+  },
+  get ABORTED() {
+    return t("model.aborted");
+  },
+  get NOT_BUILT() {
+    return t("model.notBuilt");
+  },
 };
 
 /** 2 小时 43 分, 43 分, 不到 1 分. */
 export function span(ms: number) {
   const minutes = Math.round(ms / 60000);
-  if (minutes < 1) return "不到 1 分";
+  if (minutes < 1) return t("model.lessThan1Min");
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
-  return h ? `${h} 小时${m ? ` ${m} 分` : ""}` : `${m} 分`;
+  return h
+    ? t("model.hr", { v0: h, v1: m ? t("model.min", { v0: m }) : "" })
+    : t("model.min2", { v0: m });
 }
 const clock = (ms: number) =>
-  new Date(ms).toLocaleTimeString("zh-CN", {
+  new Date(ms).toLocaleTimeString(locale(), {
     hour: "2-digit",
     minute: "2-digit",
   });
 const day = (ms: number) =>
-  new Date(ms).toLocaleString("zh-CN", {
+  new Date(ms).toLocaleString(locale(), {
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
@@ -130,52 +165,32 @@ const show = (v: unknown) =>
 
 /** A model's Jenkins jobs: the cached read at once, then a fresh one; while any job builds,
  * it rereads every minute. */
-function useBuilds(code: string) {
-  const [data, setData] = useState<Builds | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [failure, setFailure] = useState<SetupFailure | null>(null);
+export function useBuilds(code: string, enabled = true) {
+  const query = useQuery(
+    { ...buildsOptions(code), enabled: false },
+    queryClient,
+  );
   const [now, setNow] = useState(() => Date.now());
-  const live = useRef(true);
-  async function refresh() {
-    setLoading(true);
-    setFailure(null);
-    try {
-      const fresh = await focus("builds", { code });
-      if (live.current && fresh.builds) setData(fresh.builds);
-    } catch (error) {
-      if (live.current) setFailure(failureOf(error));
-    } finally {
-      if (live.current) setLoading(false);
-    }
-  }
   useEffect(() => {
-    live.current = true;
-    setData(null);
-    void (async () => {
-      try {
-        const cached = await focus("builds_cached", { code });
-        if (live.current && cached.builds) setData(cached.builds);
-      } catch {
-        /* the fresh read reports */
-      }
-      await refresh();
-    })();
-    return () => {
-      live.current = false;
-    };
-  }, [code]);
-  const building = !!data?.jobs.some((j) => j.builds[0]?.building);
+    if (enabled) void prefetchBuilds(code);
+  }, [code, enabled]);
+  const building = !!query.data?.jobs.some((job) => job.builds[0]?.building);
   useEffect(() => {
-    const tick = setInterval(() => setNow(Date.now()), 30000);
-    const reread = building
-      ? setInterval(() => void refresh(), 60000)
-      : undefined;
+    if (!enabled || !building) return;
+    const tick = setInterval(() => setNow(Date.now()), 30_000);
+    const refresh = setInterval(() => void query.refetch(), 60_000);
     return () => {
       clearInterval(tick);
-      if (reread) clearInterval(reread);
+      clearInterval(refresh);
     };
-  }, [building, code]);
-  return { data, loading, failure, refresh, now };
+  }, [enabled, building, code, query.refetch]);
+  return {
+    data: query.data ?? null,
+    loading: query.isFetching,
+    failure: query.error ? failureOf(query.error) : null,
+    refresh: () => query.refetch(),
+    now,
+  };
 }
 type BuildsState = ReturnType<typeof useBuilds>;
 
@@ -186,6 +201,7 @@ function FlaggedRow({
   item: Flagged;
   onReview: (action: string) => void;
 }) {
+  useTranslation();
   return (
     <motion.article
       className="flagged"
@@ -209,10 +225,10 @@ function FlaggedRow({
       <span className="flagged-when">
         {item.created.slice(5)} ·{" "}
         {item.status === "MERGED"
-          ? "已合入"
+          ? t("model.merged")
           : item.status === "ABANDONED"
-            ? "已放弃"
-            : "待评审"}
+            ? t("model.abandoned")
+            : t("model.awaitingReview")}
       </span>
       <p className="flagged-subject">{item.subject}</p>
       <span className="flagged-meta">
@@ -220,7 +236,7 @@ function FlaggedRow({
       </span>
       <div className="flagged-actions">
         <Button size="sm" onClick={() => onReview("accept")}>
-          接受
+          {t("model.accept")}
         </Button>
         <Button
           size="sm"
@@ -228,12 +244,12 @@ function FlaggedRow({
           aria-pressed={item.tracked}
           onClick={() => onReview(item.tracked ? "untrack" : "track")}
         >
-          {item.tracked ? "正在跟踪" : "继续跟踪"}
+          {item.tracked ? t("model.tracking") : t("model.keepTracking")}
         </Button>
         <span className="flagged-meta">
           {item.issues.length
-            ? `关联 ${item.issues.join("、")}`
-            : "没有关联问题"}
+            ? t("model.linked", { v0: item.issues.join("、") })
+            : t("model.noLinkedIssues")}
         </span>
       </div>
     </motion.article>
@@ -242,35 +258,46 @@ function FlaggedRow({
 
 /** The newest build in one line: a progress bar while it runs, else how it ended. */
 function RunLine({ job, now }: { job: JobView; now: number }) {
+  useTranslation();
   const run = job.builds[0];
-  if (!run) return <span className="quiet">没有保留的构建</span>;
+  if (!run) return <span className="quiet">{t("model.noRetainedBuilds")}</span>;
   if (run.building) {
     const p = progress(run, now);
     return (
       <div className="run-line building">
         <Progress
           value={p.pct}
-          aria-label={`${job.name} #${run.number} 进度`}
+          aria-label={t("model.progress", { v0: job.name, v1: run.number })}
         />
         <span>
-          #{run.number} 已运行 {span(p.elapsed)} ·{" "}
-          {p.late
-            ? `比通常多 ${span(p.elapsed - run.estimated)}`
-            : `预计 ${clock(p.eta)} 完成`}
+          {t("model.runningFor", {
+            v0: run.number,
+            v1: span(p.elapsed),
+            v2: p.late
+              ? t("model.longerThanUsual", {
+                  v0: span(p.elapsed - run.estimated),
+                })
+              : t("model.expectedToFinishAt", { v0: clock(p.eta) }),
+          })}
         </span>
       </div>
     );
   }
   return (
     <span className={`run-line run-${runState(run)}`}>
-      #{run.number} {resultNames[run.result ?? ""] ?? run.result ?? ""} ·{" "}
-      {day(run.timestamp)} · 用时 {span(run.duration)}
+      {t("model.duration", {
+        v0: run.number,
+        v1: resultNames[run.result ?? ""] ?? run.result ?? "",
+        v2: day(run.timestamp),
+        v3: span(run.duration),
+      })}
     </span>
   );
 }
 
 /** Ten builds as bars: height is duration, colour is the result; the running one is striped. */
 function History({ builds, now }: { builds: BuildRun[]; now: number }) {
+  useTranslation();
   const runs = [...builds].reverse();
   const longest = Math.max(
     1,
@@ -287,7 +314,7 @@ function History({ builds, now }: { builds: BuildRun[]; now: number }) {
             key={r.number}
             className={`bar run-${runState(r)}`}
             style={{ height: `${Math.max(8, (d / longest) * 100)}%` }}
-            title={`#${r.number} ${resultNames[r.result ?? ""] ?? "构建中"} · ${span(d)}`}
+            title={`#${r.number} ${resultNames[r.result ?? ""] ?? t("model.building")} · ${span(d)}`}
           />
         );
       })}
@@ -297,6 +324,7 @@ function History({ builds, now }: { builds: BuildRun[]; now: number }) {
 
 /** The parameters the job builds with now; ones the newest build changed show before → after. */
 function Config({ job }: { job: JobView }) {
+  useTranslation();
   const [all, setAll] = useState(false);
   const newest = job.builds.find((b) =>
     job.changes.some((c) => c.build === b.number),
@@ -305,7 +333,11 @@ function Config({ job }: { job: JobView }) {
   const changed = new Set(latest.map((c) => c.name));
   const names = Object.keys(job.parameters);
   if (!names.length)
-    return <p className="quiet config-empty">这个任务的构建不带参数。</p>;
+    return (
+      <p className="quiet config-empty">
+        {t("model.thisJobHasNoBuildParameters")}
+      </p>
+    );
   const ordered = [...names].sort(
     (a, b) => Number(changed.has(b)) - Number(changed.has(a)),
   );
@@ -316,11 +348,14 @@ function Config({ job }: { job: JobView }) {
   return (
     <div className="config">
       <div className="config-head">
-        <span>当前配置</span>
+        <span>{t("model.currentConfiguration")}</span>
         <span className="quiet">
           {job.changes.length && newest
-            ? `#${newest.number} 改了 ${changed.size} 项`
-            : `最近 ${job.builds.length} 次构建没有改动`}
+            ? t("model.changedParameters", {
+                v0: newest.number,
+                count: changed.size,
+              })
+            : t("model.noChangesInTheLastBuilds", { v0: job.builds.length })}
         </span>
       </div>
       <dl className="config-grid">
@@ -339,7 +374,9 @@ function Config({ job }: { job: JobView }) {
       </dl>
       {ordered.length > shown.length || all ? (
         <button type="button" className="link" onClick={() => setAll(!all)}>
-          {all ? "收起" : `全部 ${ordered.length} 项`}
+          {all
+            ? t("model.collapse")
+            : t("model.allParameters", { v0: ordered.length })}
         </button>
       ) : null}
       {older.length ? (
@@ -357,6 +394,7 @@ function Config({ job }: { job: JobView }) {
 }
 
 function JobRow({ job, now }: { job: JobView; now: number }) {
+  useTranslation();
   return (
     <article
       className={`job job-${runState(job.builds[0])}`}
@@ -368,7 +406,9 @@ function JobRow({ job, now }: { job: JobView; now: number }) {
           <span className={`phase phase-${job.phase}`}>
             {phaseNames[job.phase]}
           </span>
-          {job.disabled ? <span className="quiet">已停用</span> : null}
+          {job.disabled ? (
+            <span className="quiet">{t("model.disabled")}</span>
+          ) : null}
         </div>
         {job.error ? (
           <span className="short">{job.error}</span>
@@ -391,6 +431,7 @@ function JobRow({ job, now }: { job: JobView; now: number }) {
 }
 
 function BuildsTab({ builds }: { builds: BuildsState }) {
+  useTranslation();
   const { data, now } = builds;
   const [retired, setRetired] = useState(false);
   const active =
@@ -401,7 +442,7 @@ function BuildsTab({ builds }: { builds: BuildsState }) {
       <div className="tab-head">
         <span className="quiet">
           Jenkins{data?.folder ? ` · ${data.folder}` : ""}
-          {data ? ` · ${since(data.computed_at)} 读取` : ""}
+          {data ? t("focus.loaded", { v0: since(data.computed_at) }) : ""}
         </span>
         <Button
           variant="outline"
@@ -410,7 +451,7 @@ function BuildsTab({ builds }: { builds: BuildsState }) {
           onClick={() => void builds.refresh()}
         >
           {builds.loading ? <Spinner aria-hidden="true" /> : <RefreshCw />}
-          刷新
+          {t("model.refresh")}
         </Button>
       </div>
       {builds.failure ? <FailureNote failure={builds.failure} /> : null}
@@ -447,7 +488,9 @@ function BuildsTab({ builds }: { builds: BuildsState }) {
             className="link"
             onClick={() => setRetired(!retired)}
           >
-            {retired ? "收起" : `旧的和已停用的任务 ${rest.length} 个`}
+            {retired
+              ? t("model.collapse")
+              : t("model.oldAndDisabledJobs", { v0: rest.length })}
           </button>
           {retired
             ? rest.map((j) => <JobRow key={j.job} job={j} now={now} />)
@@ -507,20 +550,35 @@ export function jobsFor(branch: string, phase: string, jobs: JobView[] = []) {
 }
 
 const stateNames: Record<string, string> = {
-  flagged: "需要留意",
-  earlier: "两周前命中",
-  tracked: "正在跟踪",
-  accepted: "已接受",
-  logged: "只记录",
-  ignored: "已忽略",
-  clean: "无规则命中",
+  get flagged() {
+    return t("model.needsAttention");
+  },
+  get earlier() {
+    return t("model.matchedOverTwoWeeksAgo");
+  },
+  get tracked() {
+    return t("model.tracking");
+  },
+  get accepted() {
+    return t("model.accepted");
+  },
+  get logged() {
+    return t("focus.logOnly");
+  },
+  get ignored() {
+    return t("model.ignored");
+  },
+  get clean() {
+    return t("model.noRulesMatched");
+  },
 };
-const filters = [
-  ["attention", "需要留意"],
-  ["all", "全部"],
-  ["logged", "只记录"],
-  ["ignored", "已忽略"],
-] as const;
+const filters = () =>
+  [
+    ["attention", t("model.needsAttention")],
+    ["all", t("model.all")],
+    ["logged", t("focus.logOnly")],
+    ["ignored", t("model.ignored")],
+  ] as const;
 const inFilter = (l: Listed, f: string) =>
   f === "all" ||
   (f === "attention"
@@ -540,26 +598,25 @@ function BranchesTab({
   selected: string | null;
   onSelect: (branch: string) => void;
 }) {
+  useTranslation();
   const groups = branchGroups(m, saved);
-  const branch = selected ?? groups[0]?.branches[0]?.branch ?? null;
+  const branch =
+    selected &&
+    groups.some((group) =>
+      group.branches.some((item) => item.branch === selected),
+    )
+      ? selected
+      : (groups[0]?.branches[0]?.branch ?? null);
   const strip = groups
     .flatMap((g) => g.branches)
     .find((b) => b.branch === branch);
-  const [list, setList] = useState<Listed[] | null>(null);
-  const [failure, setFailure] = useState<SetupFailure | null>(null);
-  const [filter, setFilter] = useState<string>("attention");
-  useEffect(() => {
-    if (!branch) return;
-    let live = true;
-    setList(null);
-    setFailure(null);
-    focus("changes", { code: m.code, branch })
-      .then((d) => live && setList(d.changes ?? []))
-      .catch((e) => live && setFailure(failureOf(e)));
-    return () => {
-      live = false;
-    };
-  }, [m.code, branch, m]);
+  const changes = useQuery(
+    { ...changesOptions(m.code, branch), enabled: !!branch },
+    queryClient,
+  );
+  const list = changes.data ?? null;
+  const failure = changes.error ? failureOf(changes.error) : null;
+  const [filter, setFilter] = useModelPreference(m.code, "filter", "attention");
   useEffect(() => {
     if (
       list &&
@@ -573,7 +630,7 @@ function BranchesTab({
   const shown = list?.filter((l) => inFilter(l, filter)) ?? [];
   return (
     <div className="branches-tab">
-      <nav className="branch-rail" aria-label="分支">
+      <nav className="branch-rail" aria-label={t("model.branches")}>
         {groups.map((g) => (
           <section key={g.phase}>
             <h2>{phaseNames[g.phase]}</h2>
@@ -605,7 +662,10 @@ function BranchesTab({
             </span>
             <h2 className="branch-name">{branch}</h2>
             <p className="quiet">
-              近 12 周 {strip.total} 个变更 · 需要留意 {strip.flagged}
+              {t("model.changesOver12WeeksNeedAttention", {
+                v0: strip.total,
+                v1: strip.flagged,
+              })}
             </p>
           </header>
           {jobs.length ? (
@@ -621,10 +681,14 @@ function BranchesTab({
               ))}
             </div>
           ) : builds.data ? (
-            <p className="quiet">没有对应这个分支的构建任务。</p>
+            <p className="quiet">{t("model.noBuildJobsMatchThisBranch")}</p>
           ) : null}
-          <div className="segmented" role="radiogroup" aria-label="筛选">
-            {filters.map(([key, label]) => (
+          <div
+            className="segmented"
+            role="radiogroup"
+            aria-label={t("model.filter")}
+          >
+            {filters().map(([key, label]) => (
               <button
                 type="button"
                 role="radio"
@@ -661,7 +725,7 @@ function BranchesTab({
           )}
         </section>
       ) : (
-        <p className="quiet">这个机型还没有关注的分支。</p>
+        <p className="quiet">{t("model.noBranchesFollowedForThisModelYet")}</p>
       )}
     </div>
   );
@@ -682,14 +746,17 @@ function Overview({
   onBranch: (branch: string) => void;
   onBuilds: () => void;
 }) {
+  useTranslation();
   const jobs =
     builds.data?.jobs.filter((j) => !j.disabled && j.phase !== "old") ?? [];
   return (
     <div className="model-columns">
-      <section className="flagged-list" aria-label="需要留意">
+      <section className="flagged-list" aria-label={t("model.needsAttention")}>
         <div className="column-head">
-          <h2>需要留意</h2>
-          <span className="quiet">规则命中 · 近两周与正在跟踪的</span>
+          <h2>{t("model.needsAttention")}</h2>
+          <span className="quiet">
+            {t("model.ruleMatchesLastTwoWeeksAndTrackedChanges")}
+          </span>
         </div>
         <AnimatePresence initial={false}>
           {m.flagged.map((f) => (
@@ -701,25 +768,27 @@ function Overview({
           ))}
         </AnimatePresence>
         {m.flagged.length ? null : (
-          <p className="quiet empty-line">近两周没有需要留意的变更。</p>
+          <p className="quiet empty-line">
+            {t("model.noChangesNeedAttentionFromTheLastTwoWeeks")}
+          </p>
         )}
       </section>
       <aside className="model-side">
-        <section aria-label="构建">
+        <section aria-label={t("model.builds")}>
           <div className="column-head">
-            <h2>构建</h2>
+            <h2>{t("model.builds")}</h2>
             <button type="button" className="link" onClick={onBuilds}>
-              全部
+              {t("model.all")}
             </button>
           </div>
           {!builds.data ? (
             builds.failure ? (
               <span className="short">
-                {builds.failure.message ?? "Jenkins 读取失败"}
+                {builds.failure.message ?? t("model.couldNotLoadJenkins")}
               </span>
             ) : (
               <span className="quiet loading-line">
-                <Spinner aria-hidden="true" /> 正在读取 Jenkins…
+                <Spinner aria-hidden="true" /> {t("model.loadingJenkins")}
               </span>
             )
           ) : jobs.length ? (
@@ -741,14 +810,14 @@ function Overview({
             ))
           ) : (
             <span className="quiet">
-              {builds.data.errors[0] ?? "没有找到构建任务"}
+              {builds.data.errors[0] ?? t("model.noBuildJobsFound")}
             </span>
           )}
         </section>
-        <section aria-label="分支">
+        <section aria-label={t("model.branches")}>
           <div className="column-head">
-            <h2>分支</h2>
-            <span className="quiet">近 12 周</span>
+            <h2>{t("model.branches")}</h2>
+            <span className="quiet">{t("model.last12Weeks")}</span>
           </div>
           {branchGroups(m, saved).map((g) => (
             <div key={g.phase} className="phase-group">
@@ -777,10 +846,11 @@ function Overview({
   );
 }
 
-const actionOptions = Object.entries(actionNames).map(([value, label]) => ({
-  value,
-  label,
-}));
+const actionOptions = () =>
+  Object.entries(actionNames).map(([value, label]) => ({
+    value,
+    label,
+  }));
 type Draft = Pick<FocusModel, "rules" | "freeze" | "targets">;
 const draftOf = (m: FocusModel): Draft => ({
   rules: { ...defaultRules, ...m.rules },
@@ -790,9 +860,15 @@ const draftOf = (m: FocusModel): Draft => ({
 const bounded = (v: string, max: number) =>
   Math.max(0, Math.min(max, Math.round(Number(v) || 0)));
 const targetNames = {
-  severe_pct: "严重问题解决率门槛",
-  overall_pct: "整体解决率门槛",
-  fatal_max: "致命问题上限",
+  get severe_pct() {
+    return t("model.severeIssueResolutionTarget");
+  },
+  get overall_pct() {
+    return t("model.overallResolutionTarget");
+  },
+  get fatal_max() {
+    return t("model.fatalIssueLimit");
+  },
 } as const;
 const modelOf = (saved: FocusModel, draft: Draft): FocusModel => {
   const { freeze, ...rest } = draft;
@@ -800,6 +876,7 @@ const modelOf = (saved: FocusModel, draft: Draft): FocusModel => {
 };
 
 function Delta({ before, after }: { before: number; after: number }) {
+  useTranslation();
   const d = after - before;
   return (
     <span className="delta">
@@ -829,15 +906,21 @@ function GateDelta({
   before: number;
   after: number;
 }) {
+  useTranslation();
   const b = gate(v, n, before);
   const a = gate(v, n, after);
   return (
     <div className="preview-line">
       <span>{label}</span>
       <span className="delta">
-        <span className="quiet">{b.ok ? "达标" : `还差 ${b.gap}`}</span> →{" "}
+        <span className="quiet">
+          {b.ok ? t("focus.targetMet") : t("model.short", { v0: b.gap })}
+        </span>{" "}
+        →{" "}
         <strong className={a.ok ? "" : "short"}>
-          {a.ok ? "达标" : `还差 ${a.gap} 个`}
+          {a.ok
+            ? t("focus.targetMet")
+            : t("focus.moreToResolve", { v0: a.gap })}
         </strong>
       </span>
     </div>
@@ -857,6 +940,7 @@ function PreviewPanel({
   draft: Draft;
   dirty: boolean;
 }) {
+  useTranslation();
   const [preview, setPreview] = useState<Preview | null>(null);
   const [failure, setFailure] = useState<SetupFailure | null>(null);
   const [busy, setBusy] = useState(false);
@@ -891,13 +975,13 @@ function PreviewPanel({
     ? (
         [
           [
-            "严重问题",
+            t("model.severeIssues"),
             m.measures.severe_resolved,
             m.measures.severe_total,
             "severe_pct",
           ],
           [
-            "整体",
+            t("model.overall"),
             m.measures.overall_resolved,
             m.measures.overall_total,
             "overall_pct",
@@ -909,17 +993,17 @@ function PreviewPanel({
   return (
     <aside
       className={dirty ? "preview-panel dirty" : "preview-panel"}
-      aria-label="保存前后"
+      aria-label={t("model.beforeAndAfterSaving")}
     >
       <div className="column-head">
-        <h2>{dirty ? "保存后" : "现在"}</h2>
+        <h2>{dirty ? t("model.afterSaving") : t("model.now")}</h2>
         {busy ? <Spinner aria-hidden="true" /> : null}
       </div>
       {failure ? <FailureNote failure={failure} /> : null}
       {preview ? (
         <>
           <div className="preview-big">
-            <span>需要留意</span>
+            <span>{t("model.needsAttention")}</span>
             {dirty ? (
               <Delta
                 before={preview.before.flagged}
@@ -932,7 +1016,7 @@ function PreviewPanel({
             )}
           </div>
           <div className="preview-line">
-            <span>其中提醒</span>
+            <span>{t("model.alerts")}</span>
             {dirty ? (
               <Delta
                 before={preview.before.alerts}
@@ -964,7 +1048,10 @@ function PreviewPanel({
           {fatalMoved && m.measures ? (
             <div className="preview-line">
               <span>
-                致命上限 {saved.targets.fatal_max} → {draft.targets.fatal_max}
+                {t("model.fatalLimit", {
+                  v0: saved.targets.fatal_max,
+                  v1: draft.targets.fatal_max,
+                })}
               </span>
               <strong
                 className={
@@ -972,8 +1059,8 @@ function PreviewPanel({
                 }
               >
                 {m.measures.fatal_open > draft.targets.fatal_max
-                  ? "超出"
-                  : "达标"}
+                  ? t("model.overLimit")
+                  : t("focus.targetMet")}
               </strong>
             </div>
           ) : null}
@@ -982,7 +1069,9 @@ function PreviewPanel({
               {preview.entering.length ? (
                 <>
                   <span className="kicker">
-                    新出现 {preview.entering.length}
+                    {t("model.newlyHighlighted", {
+                      v0: preview.entering.length,
+                    })}
                   </span>
                   {preview.entering.slice(0, 5).map((f) => (
                     <p key={f.number} className="move in">
@@ -994,7 +1083,9 @@ function PreviewPanel({
               {preview.leaving.length ? (
                 <>
                   <span className="kicker">
-                    不再出现 {preview.leaving.length}
+                    {t("model.noLongerHighlighted", {
+                      v0: preview.leaving.length,
+                    })}
                   </span>
                   {preview.leaving.slice(0, 5).map((f) => (
                     <p key={f.number} className="move out">
@@ -1006,7 +1097,9 @@ function PreviewPanel({
             </div>
           ) : null}
           <span className="quiet">
-            按上次读取的 {preview.changes} 个变更试算
+            {t("model.previewBasedOnTheLastChangesLoaded", {
+              v0: preview.changes,
+            })}
           </span>
         </>
       ) : !failure ? (
@@ -1030,6 +1123,7 @@ function SettingsTab({
   onEdit: () => void;
   onRemoved: () => void;
 }) {
+  useTranslation();
   const [draft, setDraft] = useState<Draft>(() => draftOf(saved));
   const [saving, setSaving] = useState(false);
   const [failure, setFailure] = useState<SetupFailure | null>(null);
@@ -1075,10 +1169,10 @@ function SettingsTab({
   return (
     <div className="settings-tab">
       <div className="settings-form">
-        <section aria-label="规则">
+        <section aria-label={t("focus.rules")}>
           <div className="column-head">
-            <h2>规则</h2>
-            <span className="quiet">近 13 周命中</span>
+            <h2>{t("focus.rules")}</h2>
+            <span className="quiet">{t("model.matchesOver13Weeks")}</span>
           </div>
           {ruleOrder.map((r) => (
             <div className="rule-block" key={r}>
@@ -1089,7 +1183,7 @@ function SettingsTab({
                 </span>
                 <Select
                   value={draft.rules[r]}
-                  items={actionOptions}
+                  items={actionOptions()}
                   onValueChange={(a) =>
                     a &&
                     setDraft({
@@ -1101,12 +1195,12 @@ function SettingsTab({
                   <SelectTrigger
                     size="sm"
                     className={`action-select action-${draft.rules[r]}`}
-                    aria-label={`${ruleNames[r]}的处理`}
+                    aria-label={t("model.actionFor", { v0: ruleNames[r] })}
                   >
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {actionOptions.map((o) => (
+                    {actionOptions().map((o) => (
                       <SelectItem key={o.value} value={o.value}>
                         {o.label}
                       </SelectItem>
@@ -1121,12 +1215,12 @@ function SettingsTab({
                 >
                   <span>
                     {draft.freeze
-                      ? "MP 冻结日期"
-                      : "设置 MP 冻结日期后才会命中"}
+                      ? t("focus.mpFreezeDate")
+                      : t("model.setAnMPFreezeDateToEnableThisRule")}
                   </span>
                   <Input
                     type="date"
-                    aria-label="MP 冻结日期"
+                    aria-label={t("focus.mpFreezeDate")}
                     value={draft.freeze}
                     onChange={(e) =>
                       setDraft({ ...draft, freeze: e.target.value })
@@ -1137,31 +1231,33 @@ function SettingsTab({
             </div>
           ))}
         </section>
-        <section aria-label="门槛">
+        <section aria-label={t("model.targets")}>
           <div className="column-head">
-            <h2>门槛</h2>
+            <h2>{t("model.targets")}</h2>
           </div>
           <div className="target-line">
-            <span>严重问题解决率不低于</span>
+            <span>{t("model.severeIssueResolutionAtLeast")}</span>
             {target("severe_pct", 100)}
             <span className="quiet">%</span>
           </div>
           <div className="target-line">
-            <span>整体解决率不低于</span>
+            <span>{t("model.overallResolutionAtLeast")}</span>
             {target("overall_pct", 100)}
             <span className="quiet">%</span>
           </div>
           <div className="target-line">
-            <span>致命问题未解决不超过</span>
+            <span>{t("model.unresolvedFatalIssuesAtMost")}</span>
             {target("fatal_max", 9999)}
-            <span className="quiet">个</span>
+            <span className="quiet">{t("model.issues")}</span>
           </div>
         </section>
         {failure ? <FailureNote failure={failure} /> : null}
         {dirty || saving ? (
           <div className="settings-bar" role="status">
             <span>
-              {saving ? "正在保存并按新设置重新读取…" : "有未保存的改动"}
+              {saving
+                ? t("model.savingAndRefreshingWithNewSettings")
+                : t("model.unsavedChanges")}
             </span>
             <div>
               <Button
@@ -1171,7 +1267,7 @@ function SettingsTab({
                 disabled={saving}
                 onClick={() => setDraft(draftOf(saved))}
               >
-                放弃
+                {t("model.discard")}
               </Button>
               <Button
                 size="sm"
@@ -1180,35 +1276,37 @@ function SettingsTab({
                 onClick={() => void save()}
               >
                 {saving ? <Spinner aria-hidden="true" /> : null}
-                保存
+                {t("focus.save")}
               </Button>
             </div>
           </div>
         ) : null}
-        <section className="model-manage" aria-label="管理">
+        <section className="model-manage" aria-label={t("model.manage")}>
           <button type="button" className="link" onClick={onEdit}>
-            更换问题来源和分支
+            {t("model.changeIssueSourcesAndBranches")}
           </button>
           <button
             type="button"
             className="link danger"
             onClick={() => setConfirm(true)}
           >
-            停止关注
+            {t("model.unfollow")}
           </button>
         </section>
       </div>
       <PreviewPanel m={m} saved={saved} draft={draft} dirty={dirty} />
       <Dialog open={confirm} onOpenChange={setConfirm}>
         <DialogContent>
-          <DialogTitle>停止关注 {saved.code}？</DialogTitle>
+          <DialogTitle>{t("model.unfollow2", { v0: saved.code })}</DialogTitle>
           <DialogDescription>
-            它的规则、接受和跟踪记录会一起删除。之后可以重新关注，但这些记录不会恢复。
+            {t("model.itsRulesAcceptedChangesAndTrackingRecordsWillBe")}
           </DialogDescription>
           <DialogFooter>
-            <DialogClose render={<Button variant="ghost" />}>取消</DialogClose>
+            <DialogClose render={<Button variant="ghost" />}>
+              {t("model.cancel")}
+            </DialogClose>
             <Button variant="destructive" onClick={() => void remove()}>
-              停止关注
+              {t("model.unfollow")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1233,11 +1331,15 @@ export function ModelPage({
   onEdit: () => void;
   onRemoved: () => void;
 }) {
+  useTranslation();
   const m = state.summary?.models.find((x) => x.code === code);
   const saved = state.models?.find((x) => x.code === code);
-  const builds = useBuilds(code);
-  const [branch, setBranch] = useState<string | null>(null);
-  useEffect(() => setBranch(null), [code]);
+  const builds = useBuilds(code, tab !== "settings");
+  const [branch, setBranch] = useModelPreference<string | null>(
+    code,
+    "branch",
+    null,
+  );
   const running = useMemo(
     () => builds.data?.jobs.filter((j) => j.builds[0]?.building).length ?? 0,
     [builds.data],
@@ -1248,14 +1350,14 @@ export function ModelPage({
         <h1 className="model-code">{code}</h1>
         {state.models && !saved ? (
           <p className="quiet">
-            没有关注 {code}。{" "}
+            {t("model.youAreNotFollowing", { v0: code })}
             <button type="button" className="link" onClick={onEdit}>
-              关注 {code}
+              {t("focus.follow", { v0: code })}
             </button>
           </p>
         ) : (
           <p className="quiet loading-line">
-            <Spinner aria-hidden="true" /> 正在读取…
+            <Spinner aria-hidden="true" /> {t("model.loading")}
           </p>
         )}
       </div>
@@ -1280,62 +1382,84 @@ export function ModelPage({
         <div>
           <h1 className="model-code">{m.code}</h1>
           <p className="quiet">
-            {sourceText(m.sources)} · Gerrit {m.branches.length} 个分支 ·{" "}
-            {saved?.freeze ? `MP 冻结于 ${saved.freeze}` : "未设 MP 冻结日期"}
+            {t("model.gerritBranches", {
+              v0: sourceText(m.sources),
+              v1: m.branches.length,
+              v2: saved?.freeze
+                ? t("model.mpFrozenOn", { v0: saved.freeze })
+                : t("model.noMPFreezeDateSet"),
+            })}
           </p>
         </div>
         <div className="model-figures">
           {sev ? (
             <div>
-              <span>严重问题解决率</span>
+              <span>{t("focus.severeIssueResolution")}</span>
               <strong className={sev.ok ? "" : "short"}>
                 <Num value={sev.pct} suffix="%" />
               </strong>
               <small className={sev.ok ? "" : "short"}>
-                {sev.v} / {sev.n} · {sev.ok ? "达标" : `还差 ${sev.gap} 个`}
+                {sev.v} / {sev.n} ·{" "}
+                {sev.ok
+                  ? t("focus.targetMet")
+                  : t("focus.moreToResolve", { v0: sev.gap })}
               </small>
             </div>
           ) : null}
           {all ? (
             <div>
-              <span>整体解决率</span>
+              <span>{t("focus.overallResolution")}</span>
               <strong className={all.ok ? "" : "short"}>
                 <Num value={all.pct} suffix="%" />
               </strong>
               <small className={all.ok ? "" : "short"}>
-                {all.v} / {all.n} · {all.ok ? "达标" : `还差 ${all.gap} 个`}
+                {all.v} / {all.n} ·{" "}
+                {all.ok
+                  ? t("focus.targetMet")
+                  : t("focus.moreToResolve", { v0: all.gap })}
               </small>
             </div>
           ) : null}
           <div>
-            <span>本周</span>
+            <span>{t("focus.thisWeek")}</span>
             <strong>
               <Num value={m.new_issues} prefix="+" />
             </strong>
             <small>
-              新问题 · {m.week_changes} 变更 · 合入 {m.week_merged}
+              {t("model.newIssuesChangesMerged", {
+                v0: m.week_changes,
+                v1: m.week_merged,
+              })}
             </small>
           </div>
         </div>
       </section>
-      <nav className="model-subnav" aria-label={`${m.code} 页面`}>
-        {(Object.keys(tabNames) as ModelTab[]).map((t) => (
+      <nav
+        className="model-subnav"
+        aria-label={t("model.pages", { v0: m.code })}
+      >
+        {(Object.keys(tabNames) as ModelTab[]).map((tabKey) => (
           <button
             type="button"
-            key={t}
-            aria-current={tab === t ? "page" : undefined}
-            onClick={() => onTab(t)}
+            key={tabKey}
+            aria-current={tab === tabKey ? "page" : undefined}
+            onClick={() => onTab(tabKey)}
           >
-            {tabNames[t]}
-            {tab === t ? <TabLine id="subnav" /> : null}
-            {t === "overview" && m.flagged.length ? (
+            {tabNames[tabKey]}
+            {tab === tabKey ? <TabLine id="subnav" /> : null}
+            {tabKey === "overview" && m.flagged.length ? (
               <span className="tab-count short">{m.flagged.length}</span>
             ) : null}
-            {t === "builds" && running ? (
-              <span className="tab-count building">{running} 个构建中</span>
+            {tabKey === "builds" && running ? (
+              <span className="tab-count building">
+                {t("model.building2", { count: running })}
+              </span>
             ) : null}
-            {t === "settings" && !saved?.freeze ? (
-              <span className="tab-dot" aria-label="未设冻结日期" />
+            {tabKey === "settings" && !saved?.freeze ? (
+              <span
+                className="tab-dot"
+                aria-label={t("model.noFreezeDateSet")}
+              />
             ) : null}
           </button>
         ))}

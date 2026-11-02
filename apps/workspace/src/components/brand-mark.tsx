@@ -1,3 +1,5 @@
+import { useTranslation } from "react-i18next";
+import { t } from "../i18n";
 // In-app mark: the 工 of icons/workspace-small.svg without its tile — beam and base in the
 // text colour, the upright one green and one flagged block.
 // The paper tile belongs to Windows surfaces (taskbar, Start, title bar).
@@ -9,6 +11,7 @@ export function BrandMark({
   size?: number;
   busy?: boolean;
 }) {
+  useTranslation();
   return (
     <svg
       className={busy ? "brand-mark busy" : "brand-mark"}
@@ -17,7 +20,7 @@ export function BrandMark({
       height={(size * 720) / 832}
       fill="currentColor"
       role={busy ? "img" : undefined}
-      aria-label={busy ? "正在读取" : undefined}
+      aria-label={busy ? t("controls.loading") : undefined}
       aria-hidden={busy ? undefined : true}
       focusable="false"
     >

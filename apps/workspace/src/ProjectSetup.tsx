@@ -1,3 +1,5 @@
+import { useTranslation } from "react-i18next";
+import { t, locale } from "./i18n";
 import { useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
@@ -42,7 +44,9 @@ import { FailureNote, failureOf } from "./TemplateImport";
 export type Source = "meegle" | "jira";
 export type Step = "project" | "gates" | "confirm" | "collect";
 export const sourceNames: Record<Source, string> = {
-  meegle: "飞书项目",
+  get meegle() {
+    return t("projectSetup.meegle");
+  },
   jira: "Jira",
 };
 export const phases = [
@@ -72,20 +76,44 @@ export const defaultGates: Gates = {
   milestone: "",
 };
 export const stageNames: Record<string, string> = {
-  Open: "待处理",
-  Implementing: "修改中",
-  Reviewing: "审核中",
-  Regression: "回归测试",
-  Closed: "已关闭",
-  WaitInfo: "等待信息",
-  Track: "跟踪",
-  Ccb: "CCB 评审",
+  get Open() {
+    return t("projectSetup.open");
+  },
+  get Implementing() {
+    return t("projectSetup.inProgress");
+  },
+  get Reviewing() {
+    return t("projectSetup.inReview");
+  },
+  get Regression() {
+    return t("projectSetup.regressionTesting");
+  },
+  get Closed() {
+    return t("projectSetup.closed");
+  },
+  get WaitInfo() {
+    return t("projectSetup.waitingForInformation");
+  },
+  get Track() {
+    return t("focus.track");
+  },
+  get Ccb() {
+    return t("projectSetup.ccbReview");
+  },
 };
 const severityNames: Record<string, string> = {
-  Fatal: "致命",
-  Severe: "严重",
-  Normal: "一般",
-  Hint: "提示",
+  get Fatal() {
+    return t("projectSetup.fatal");
+  },
+  get Severe() {
+    return t("projectSetup.severe");
+  },
+  get Normal() {
+    return t("projectSetup.normal");
+  },
+  get Hint() {
+    return t("projectSetup.hint");
+  },
 };
 const severityOrder = ["Fatal", "Severe", "Normal", "Hint"];
 const severityColors: Record<string, string> = {
@@ -125,22 +153,28 @@ export function commonName(names: string[]) {
 export function describe(scope: ScopeQuery) {
   if (scope.source === "meegle")
     return scope.filter
-      ? `飞书项目「${scope.type_name}」中${scope.filter.field_name}为 ${filterLabel(scope)} 的`
-      : `飞书项目「${scope.type_name}」中全部`;
-  if (scope.label) return `Jira ${scope.project} 中${scope.label}的`;
+      ? t("projectSetup.meegleWhereIs", {
+          v0: scope.type_name,
+          v1: scope.filter.field_name,
+          v2: filterLabel(scope),
+        })
+      : t("projectSetup.allOfMeegle", { v0: scope.type_name });
+  if (scope.label)
+    return t("projectSetup.jira", { v0: scope.project, v1: scope.label });
   return scope.jql
-    ? `Jira ${scope.project} 中符合 ${scope.jql} 的`
-    : `Jira ${scope.project} 中全部`;
+    ? t("projectSetup.jiraMatching", { v0: scope.project, v1: scope.jql })
+    : t("projectSetup.allOfJira", { v0: scope.project });
 }
 export function gateSentence(gates: Gates) {
   const parts = [
-    `严重问题解决率不低于 ${gates.severe}%`,
-    `整体不低于 ${gates.overall}%`,
-    `致命问题最多 ${gates.fatal} 个`,
-    `阶段 ${gates.phase}`,
+    t("projectSetup.severeIssueResolutionAtLeast", { v0: gates.severe }),
+    t("projectSetup.overallAtLeast", { v0: gates.overall }),
+    t("projectSetup.atMostFatalIssues", { v0: gates.fatal }),
+    t("projectSetup.phase", { v0: gates.phase }),
   ];
-  if (gates.milestone) parts.push(`里程碑 ${gates.milestone}`);
-  return parts.join("，");
+  if (gates.milestone)
+    parts.push(t("projectSetup.milestone", { v0: gates.milestone }));
+  return parts.join(t("format.listSeparator"));
 }
 export function validGates(gates: Gates) {
   const pct = (n: number) => Number.isInteger(n) && n >= 0 && n <= 100;
@@ -401,8 +435,10 @@ export function useProjectSetup(
                   jql: jiraGroup.jql,
                   label:
                     jiraMode === "versions"
-                      ? `影响版本为 ${jiraGroup.name} `
-                      : `筛选器「${jiraGroup.name}」中`,
+                      ? t("projectSetup.affectedVersion", {
+                          v0: jiraGroup.name,
+                        })
+                      : t("projectSetup.inFilter", { v0: jiraGroup.name }),
                 }
               : null
         : null;
@@ -575,6 +611,7 @@ export function useProjectSetup(
 export type ProjectSetup = ReturnType<typeof useProjectSetup>;
 
 function Stepper({ setup }: { setup: ProjectSetup }) {
+  useTranslation();
   const order: Step[] = ["project", "gates", "confirm", "collect"];
   const at = order.indexOf(setup.step);
   const preview = setup.preview;
@@ -585,22 +622,22 @@ function Stepper({ setup }: { setup: ProjectSetup }) {
   const steps: { id: Step; title: string; done?: string }[] = [
     {
       id: "project",
-      title: "选择项目",
+      title: t("projectSetup.chooseProject"),
       done: preview ? `${name} · ${preview.count}` : undefined,
     },
     {
       id: "gates",
-      title: "设置门槛",
+      title: t("projectSetup.setTargets"),
       done: `${setup.gates.phase} · ${setup.gates.severe}%`,
     },
-    { id: "confirm", title: "确认" },
-    { id: "collect", title: "开始采集" },
+    { id: "confirm", title: t("projectSetup.confirm") },
+    { id: "collect", title: t("projectSetup.startCollection") },
   ];
   return (
-    <ol className="wizard-steps" aria-label="新建项目步骤">
+    <ol className="wizard-steps" aria-label={t("projectSetup.newProjectSteps")}>
       <li className="wizard-step done">
         <Check aria-hidden="true" />
-        连接来源
+        {t("projectSetup.connectSources")}
       </li>
       {steps.map((s, i) => {
         const current = i === at;
@@ -631,6 +668,7 @@ function Stepper({ setup }: { setup: ProjectSetup }) {
 }
 
 function SkeletonRows({ count = 8 }: { count?: number }) {
+  useTranslation();
   const widths = [62, 45, 70, 52, 58, 40, 66, 48];
   return (
     <div className="pick-list" aria-hidden="true">
@@ -661,6 +699,7 @@ function CountList<T>({
   count: (row: T) => number | undefined;
   onPick: (row: T, add: boolean) => void;
 }) {
+  useTranslation();
   const max = Math.max(1, ...rows.map((r) => count(r) ?? 0));
   return (
     <div
@@ -710,6 +749,7 @@ function Chips<T extends string>({
   options: { value: T; title: string }[];
   onChange: (value: T) => void;
 }) {
+  useTranslation();
   return (
     <ToggleGroup
       variant="outline"
@@ -739,6 +779,7 @@ function SearchBox({
   label: string;
   onChange: (value: string) => void;
 }) {
+  useTranslation();
   return (
     <label className="pick-search">
       <Search aria-hidden="true" />
@@ -754,9 +795,12 @@ function SearchBox({
 }
 
 function MeeglePicker({ setup }: { setup: ProjectSetup }) {
+  useTranslation();
   const { lists, group } = setup;
   // 关联项目 → 项目; 影响版本 stays.
-  const target = group ? group.name.replace(/^关联/, "") || group.name : "项目";
+  const target = group
+    ? group.name.replace(/^关联/, "") || group.name
+    : t("projectSetup.project");
   const query = setup.search.trim().toLowerCase();
   const rows = (lists.items ?? []).filter((i) =>
     i.name.toLowerCase().includes(query),
@@ -766,7 +810,7 @@ function MeeglePicker({ setup }: { setup: ProjectSetup }) {
       <div className="picker-head">
         {lists.groups?.length ? (
           <Chips
-            label="分组"
+            label={t("projectSetup.group")}
             value={group?.field ?? null}
             options={lists.groups
               .slice(0, 4)
@@ -780,13 +824,13 @@ function MeeglePicker({ setup }: { setup: ProjectSetup }) {
         ) : null}
         <SearchBox
           value={setup.search}
-          label={`搜索${target}`}
+          label={t("projectSetup.search", { v0: target })}
           onChange={setup.setSearch}
         />
       </div>
       <div className="pick-columns" aria-hidden="true">
         <span>{target}</span>
-        <span>问题</span>
+        <span>{t("focus.issues")}</span>
         <span />
       </div>
       <div className="pick-scroll">
@@ -797,7 +841,7 @@ function MeeglePicker({ setup }: { setup: ProjectSetup }) {
             <SkeletonRows />
           ) : (
             <CountList
-              label={`没有问题的${target}`}
+              label={t("projectSetup.withNoIssues", { v0: target })}
               rows={lists.empty}
               multiple
               selected={(i) => setup.picked.some((p) => p.id === i.id)}
@@ -817,15 +861,22 @@ function MeeglePicker({ setup }: { setup: ProjectSetup }) {
             onPick={setup.pick}
           />
         ) : (
-          <p className="pick-empty">没有匹配的{target}</p>
+          <p className="pick-empty">
+            {t("projectSetup.noMatching", { v0: target })}
+          </p>
         )}
       </div>
       <div className="picker-foot">
         <span>
           {setup.picked.length > 1
-            ? `已选 ${setup.picked.length} 个，合并为一个范围`
+            ? t("projectSetup.selectedCombinedIntoOneScope", {
+                v0: setup.picked.length,
+              })
             : lists.items
-              ? `${lists.items.length} 个${target}有问题，按问题数排列 · 按住 Ctrl 点击可合并多个`
+              ? t("projectSetup.withIssuesOrderedByIssueCountCtrlClickTo", {
+                  v0: lists.items.length,
+                  v1: target,
+                })
               : ""}
         </span>
         {lists.withoutIssues ? (
@@ -835,8 +886,11 @@ function MeeglePicker({ setup }: { setup: ProjectSetup }) {
             onClick={() => setup.setShowEmpty(!setup.showEmpty)}
           >
             {setup.showEmpty
-              ? "只看有问题的"
-              : `显示没有问题的 ${lists.withoutIssues} 个${target}`}
+              ? t("projectSetup.onlyShowThoseWithIssues")
+              : t("projectSetup.showWithNoIssues", {
+                  v0: lists.withoutIssues,
+                  v1: target,
+                })}
           </Button>
         ) : null}
       </div>
@@ -845,6 +899,7 @@ function MeeglePicker({ setup }: { setup: ProjectSetup }) {
 }
 
 function JiraPicker({ setup }: { setup: ProjectSetup }) {
+  useTranslation();
   const { lists, project } = setup;
   const query = setup.search.trim().toLowerCase();
   if (!project) {
@@ -857,7 +912,7 @@ function JiraPicker({ setup }: { setup: ProjectSetup }) {
         <div className="picker-head">
           <SearchBox
             value={setup.search}
-            label="搜索 Jira 项目"
+            label={t("projectSetup.searchJiraProjects")}
             onChange={setup.setSearch}
           />
         </div>
@@ -866,7 +921,7 @@ function JiraPicker({ setup }: { setup: ProjectSetup }) {
             <SkeletonRows />
           ) : (
             <CountList
-              label="Jira 项目"
+              label={t("projectSetup.jiraProjects")}
               rows={rows}
               selected={() => false}
               name={(p) => `${p.key} · ${p.name}`}
@@ -900,12 +955,12 @@ function JiraPicker({ setup }: { setup: ProjectSetup }) {
           {project.key}
         </Button>
         <Chips<JiraMode>
-          label="范围"
+          label={t("projectSetup.scope")}
           value={setup.jiraMode}
           options={[
-            { value: "all", title: "整个项目" },
-            { value: "versions", title: "影响版本" },
-            { value: "filters", title: "我的筛选器" },
+            { value: "all", title: t("projectSetup.entireProject") },
+            { value: "versions", title: t("projectSetup.affectedVersion2") },
+            { value: "filters", title: t("projectSetup.myFilters") },
             { value: "jql", title: "JQL" },
           ]}
           onChange={(mode) => {
@@ -916,7 +971,11 @@ function JiraPicker({ setup }: { setup: ProjectSetup }) {
         {grouped ? (
           <SearchBox
             value={setup.search}
-            label={setup.jiraMode === "versions" ? "搜索版本" : "搜索筛选器"}
+            label={
+              setup.jiraMode === "versions"
+                ? t("projectSetup.searchVersions")
+                : t("projectSetup.searchFilters")
+            }
             onChange={setup.setSearch}
           />
         ) : null}
@@ -927,7 +986,11 @@ function JiraPicker({ setup }: { setup: ProjectSetup }) {
             <SkeletonRows />
           ) : groups.length ? (
             <CountList
-              label={setup.jiraMode === "versions" ? "影响版本" : "筛选器"}
+              label={
+                setup.jiraMode === "versions"
+                  ? t("projectSetup.affectedVersion2")
+                  : t("projectSetup.filters")
+              }
               rows={groups}
               selected={(g) => g.name === setup.jiraGroup?.name}
               name={(g) => g.name}
@@ -937,15 +1000,17 @@ function JiraPicker({ setup }: { setup: ProjectSetup }) {
           ) : (
             <p className="pick-empty">
               {setup.jiraMode === "filters"
-                ? "你还没有收藏筛选器。在 Jira 中收藏后，这里会列出来。"
-                : "这个项目没有版本。"}
+                ? t("projectSetup.youHaveNoFavoriteFiltersYetAddFavoritesIn")
+                : t("projectSetup.thisProjectHasNoVersions")}
             </p>
           )}
         </div>
       ) : setup.jiraMode === "jql" ? (
         <JqlField setup={setup} />
       ) : (
-        <p className="pick-empty">跟踪 {project.key} 的全部问题。</p>
+        <p className="pick-empty">
+          {t("projectSetup.trackAllIssuesIn", { v0: project.key })}
+        </p>
       )}
     </>
   );
@@ -953,14 +1018,15 @@ function JiraPicker({ setup }: { setup: ProjectSetup }) {
 
 /** JQL applies on Enter or blur, so typing does not re-read the scope per keystroke. */
 function JqlField({ setup }: { setup: ProjectSetup }) {
+  useTranslation();
   const [text, setText] = useState(setup.jql);
   const commit = () => setup.setJql(text.trim());
   return (
     <label className="jql-field">
-      <span>JQL，在项目内筛选</span>
+      <span>{t("projectSetup.jqlFilterWithinThisProject")}</span>
       <Input
         value={text}
-        placeholder="issuetype = 缺陷"
+        placeholder={t("projectSetup.issuetypeBug")}
         maxLength={500}
         onChange={(e) => setText(e.target.value)}
         onBlur={commit}
@@ -973,6 +1039,7 @@ function JqlField({ setup }: { setup: ProjectSetup }) {
 }
 
 function SeverityBar({ draft }: { draft: Draft }) {
+  useTranslation();
   const counts = Object.fromEntries(
     severityOrder.map((s) => [
       s,
@@ -983,7 +1050,7 @@ function SeverityBar({ draft }: { draft: Draft }) {
   );
   return (
     <div className="preview-block">
-      <span className="preview-label">严重度</span>
+      <span className="preview-label">{t("projectSetup.severity")}</span>
       <div className="severity-bar" aria-hidden="true">
         {severityOrder.map((s) =>
           counts[s] ? (
@@ -1010,6 +1077,7 @@ function SeverityBar({ draft }: { draft: Draft }) {
 }
 
 function StatusSummary({ draft }: { draft: Draft }) {
+  useTranslation();
   const m = draft.breakdown.measures;
   const top = draft.breakdown.statuses
     .slice(0, 6)
@@ -1017,13 +1085,13 @@ function StatusSummary({ draft }: { draft: Draft }) {
     .join(" · ");
   return (
     <div className="preview-block">
-      <span className="preview-label">状态</span>
+      <span className="preview-label">{t("projectSetup.status")}</span>
       <div className="status-line">
-        <span>已解决</span>
+        <span>{t("projectSetup.resolved")}</span>
         <strong>{m.overall_resolved}</strong>
       </div>
       <div className="status-line">
-        <span>未解决</span>
+        <span>{t("projectSetup.unresolved")}</span>
         <strong>{m.overall_total - m.overall_resolved}</strong>
       </div>
       <small>{top}</small>
@@ -1033,28 +1101,38 @@ function StatusSummary({ draft }: { draft: Draft }) {
 
 /** Before a pick: what the list holds, so the panel is never an empty card. */
 function Overview({ setup }: { setup: ProjectSetup }) {
+  useTranslation();
   const { lists, group, project } = setup;
-  const noun = group ? group.name.replace(/^关联/, "") || group.name : "项目";
+  const noun = group
+    ? group.name.replace(/^关联/, "") || group.name
+    : t("projectSetup.project");
   const [label, total, where, hint] =
     setup.source === "meegle"
       ? [
-          `飞书项目 · ${setup.space?.name ?? ""}`,
+          t("projectSetup.meegle2", { v0: setup.space?.name ?? "" }),
           lists.items?.reduce((n, i) => n + (i.count ?? 0), 0),
-          `个问题分布在 ${lists.items?.length ?? 0} 个${noun}`,
-          `选择一个${noun}，或按住 Ctrl 合并多个。`,
+          t("projectSetup.issuesAcross", {
+            v0: lists.items?.length ?? 0,
+            v1: noun,
+          }),
+          t("projectSetup.chooseOneOrHoldCtrlToCombineSelections", {
+            v0: noun,
+          }),
         ]
       : project
         ? [
             `Jira · ${project.key}`,
             project.count,
-            `个问题在 ${project.name}`,
-            "选择整个项目、一个版本或一个筛选器。",
+            t("projectSetup.issuesIn", { v0: project.name }),
+            t("projectSetup.chooseTheEntireProjectAVersionOrAFilter"),
           ]
         : [
             "Jira",
             lists.projects?.reduce((n, p) => n + p.count, 0),
-            `个问题分布在 ${lists.projects?.length ?? 0} 个项目`,
-            "选择一个项目。",
+            t("projectSetup.issuesAcrossProjects", {
+              v0: lists.projects?.length ?? 0,
+            }),
+            t("projectSetup.chooseAProject"),
           ];
   return (
     <div className="overview">
@@ -1073,21 +1151,26 @@ function Overview({ setup }: { setup: ProjectSetup }) {
 }
 
 function Preview({ setup }: { setup: ProjectSetup }) {
+  useTranslation();
   const { preview, scope } = setup;
   const heading =
     scope?.source === "meegle"
       ? setup.group?.name
       : setup.jiraMode === "versions"
-        ? "影响版本"
+        ? t("projectSetup.affectedVersion2")
         : setup.jiraMode === "filters"
-          ? "筛选器"
-          : "Jira 项目";
+          ? t("projectSetup.filters")
+          : t("projectSetup.jiraProjects");
   const name =
     scope?.source === "meegle"
       ? filterLabel(scope)
       : (setup.jiraGroup?.name ?? setup.project?.key);
   return (
-    <aside className="wizard-aside" aria-label="范围预览" aria-live="polite">
+    <aside
+      className="wizard-aside"
+      aria-label={t("projectSetup.scopePreview")}
+      aria-live="polite"
+    >
       {!scope ? (
         <Overview setup={setup} />
       ) : (
@@ -1101,7 +1184,9 @@ function Preview({ setup }: { setup: ProjectSetup }) {
           ) : !preview ? (
             <div className="preview-loading" aria-hidden="true">
               <Skeleton className="count-skeleton" />
-              <span className="preview-label">正在读取严重度和状态…</span>
+              <span className="preview-label">
+                {t("projectSetup.loadingSeveritiesAndStatuses")}
+              </span>
               <Skeleton className="bar-skeleton" />
               <Skeleton style={{ width: "70%" }} />
               <Skeleton style={{ width: "52%" }} />
@@ -1110,7 +1195,7 @@ function Preview({ setup }: { setup: ProjectSetup }) {
             <>
               <div className="big-count">
                 <strong key={preview.count}>{preview.count}</strong>
-                <span>个问题</span>
+                <span>{t("projectSetup.issues")}</span>
               </div>
               <SeverityBar draft={preview} />
               <StatusSummary draft={preview} />
@@ -1121,11 +1206,17 @@ function Preview({ setup }: { setup: ProjectSetup }) {
       <div className="aside-foot">
         <span>
           {setup.previewAt && preview
-            ? `读取于 ${setup.previewAt.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}`
+            ? t("projectSetup.loadedAt", {
+                v0: setup.previewAt.toLocaleTimeString(locale(), {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                }),
+              })
             : ""}
         </span>
         <Button disabled={!preview} onClick={() => setup.setStep("gates")}>
-          设置门槛 <ArrowRight />
+          {t("projectSetup.setTargets2")}
+          <ArrowRight />
         </Button>
       </div>
     </aside>
@@ -1133,22 +1224,23 @@ function Preview({ setup }: { setup: ProjectSetup }) {
 }
 
 function ProjectStep({ setup }: { setup: ProjectSetup }) {
+  useTranslation();
   return (
     <>
       <div className="wizard-title">
         <div>
-          <h2>选择项目</h2>
-          <p>选中的范围会冻结为具体的问题单，之后可以刷新。</p>
+          <h2>{t("projectSetup.chooseProject")}</h2>
+          <p>{t("projectSetup.theSelectedScopeIsSavedAsSpecificIssuesYou")}</p>
         </div>
         {setup.connected.length > 1 ? (
           <Chips<Source>
-            label="问题来源"
+            label={t("projectSetup.issueSources")}
             value={setup.source}
             options={setup.connected.map((s) => ({
               value: s,
               title:
                 s === "meegle" && setup.space
-                  ? `飞书项目 · ${setup.space.name}`
+                  ? t("projectSetup.meegle2", { v0: setup.space.name })
                   : s === "jira" && setup.project
                     ? `Jira · ${setup.project.key}`
                     : sourceNames[s],
@@ -1162,13 +1254,18 @@ function ProjectStep({ setup }: { setup: ProjectSetup }) {
       </div>
       {setup.failure ? <FailureNote failure={setup.failure} /> : null}
       <div className="wizard-columns">
-        <section className="wizard-main picker" aria-label="范围">
+        <section
+          className="wizard-main picker"
+          aria-label={t("projectSetup.scope")}
+        >
           {setup.source === "meegle" ? (
             <MeeglePicker setup={setup} />
           ) : setup.source === "jira" ? (
             <JiraPicker setup={setup} />
           ) : (
-            <p className="scope-hint">先连接飞书项目或 Jira。</p>
+            <p className="scope-hint">
+              {t("projectSetup.connectMeegleOrJiraFirst")}
+            </p>
           )}
         </section>
         <Preview setup={setup} />
@@ -1190,13 +1287,14 @@ function TargetStepper({
   max: number;
   onChange: (n: number) => void;
 }) {
+  useTranslation();
   const clamp = (n: number) => Math.min(max, Math.max(0, n));
   return (
     <div className="stepper" role="group" aria-label={label}>
       <Button
         variant="outline"
         size="icon-sm"
-        aria-label={`降低${label}`}
+        aria-label={t("projectSetup.decrease", { v0: label })}
         onClick={() => onChange(clamp(value - 1))}
       >
         <Minus />
@@ -1208,7 +1306,7 @@ function TargetStepper({
       <Button
         variant="outline"
         size="icon-sm"
-        aria-label={`提高${label}`}
+        aria-label={t("projectSetup.increase", { v0: label })}
         onClick={() => onChange(clamp(value + 1))}
       >
         <Plus />
@@ -1226,6 +1324,7 @@ function Meter({
   target: number;
   ok: boolean;
 }) {
+  useTranslation();
   return (
     <div className="meter" aria-hidden="true">
       <span
@@ -1238,10 +1337,12 @@ function Meter({
 }
 
 function Verdict({ ok, text }: { ok: boolean; text: string }) {
+  useTranslation();
   return <span className={ok ? "verdict ok" : "verdict short"}>{text}</span>;
 }
 
 function GatesStep({ setup }: { setup: ProjectSetup }) {
+  useTranslation();
   const { gates, setGates, preview } = setup;
   if (!preview) return null;
   const set = (patch: Partial<Gates>) => setGates({ ...gates, ...patch });
@@ -1252,22 +1353,31 @@ function GatesStep({ setup }: { setup: ProjectSetup }) {
     <>
       <div className="wizard-title">
         <div>
-          <h2>设置门槛</h2>
+          <h2>{t("projectSetup.setTargets")}</h2>
           <p>
-            按现在的 {preview.count}{" "}
-            个问题即时计算，研发交付（回归测试或关闭）即算解决。
+            {t(
+              "projectSetup.calculatedFromTheCurrentIssuesDeliveredIssuesRegressionTesting",
+              { v0: preview.count },
+            )}
           </p>
         </div>
       </div>
       <div className="wizard-columns">
-        <section className="wizard-main gates" aria-label="门槛">
-          <article className="gate-card" aria-label="严重问题解决率">
+        <section className="wizard-main gates" aria-label={t("model.targets")}>
+          <article
+            className="gate-card"
+            aria-label={t("focus.severeIssueResolution")}
+          >
             <div className="gate-head">
-              <strong>严重问题解决率</strong>
-              <span>严重 {m.severe_total} 个，致命计入严重</span>
+              <strong>{t("focus.severeIssueResolution")}</strong>
+              <span>
+                {t("projectSetup.severeIssuesIncludingFatalIssues", {
+                  v0: m.severe_total,
+                })}
+              </span>
             </div>
             <TargetStepper
-              label="严重问题解决率"
+              label={t("focus.severeIssueResolution")}
               value={gates.severe}
               unit="%"
               max={100}
@@ -1276,21 +1386,36 @@ function GatesStep({ setup }: { setup: ProjectSetup }) {
             <Meter now={j.severe.now} target={gates.severe} ok={j.severe.ok} />
             <div className="gate-now">
               <span>
-                现在 {j.severe.now}%（{j.severe.v} / {j.severe.n}）
+                {t("projectSetup.now", {
+                  v0: j.severe.now,
+                  v1: j.severe.v,
+                  v2: j.severe.n,
+                })}
               </span>
               <Verdict
                 ok={j.severe.ok}
-                text={j.severe.ok ? "达标" : `还差 ${j.severe.gap} 个`}
+                text={
+                  j.severe.ok
+                    ? t("focus.targetMet")
+                    : t("focus.moreToResolve", { v0: j.severe.gap })
+                }
               />
             </div>
           </article>
-          <article className="gate-card" aria-label="整体解决率">
+          <article
+            className="gate-card"
+            aria-label={t("focus.overallResolution")}
+          >
             <div className="gate-head">
-              <strong>整体解决率</strong>
-              <span>全部 {m.overall_total} 个，重复和不修改不算解决</span>
+              <strong>{t("focus.overallResolution")}</strong>
+              <span>
+                {t("projectSetup.totalIssuesDuplicateAndWonTFixIssuesDo", {
+                  v0: m.overall_total,
+                })}
+              </span>
             </div>
             <TargetStepper
-              label="整体解决率"
+              label={t("focus.overallResolution")}
               value={gates.overall}
               unit="%"
               max={100}
@@ -1303,32 +1428,49 @@ function GatesStep({ setup }: { setup: ProjectSetup }) {
             />
             <div className="gate-now">
               <span>
-                现在 {j.overall.now}%（{j.overall.v} / {j.overall.n}）
+                {t("projectSetup.now", {
+                  v0: j.overall.now,
+                  v1: j.overall.v,
+                  v2: j.overall.n,
+                })}
               </span>
               <Verdict
                 ok={j.overall.ok}
-                text={j.overall.ok ? "达标" : `还差 ${j.overall.gap} 个`}
+                text={
+                  j.overall.ok
+                    ? t("focus.targetMet")
+                    : t("focus.moreToResolve", { v0: j.overall.gap })
+                }
               />
             </div>
           </article>
-          <article className="gate-card" aria-label="致命问题上限">
+          <article
+            className="gate-card"
+            aria-label={t("model.fatalIssueLimit")}
+          >
             <div className="gate-head">
-              <strong>致命问题上限</strong>
-              <span>未解决的致命问题</span>
+              <strong>{t("model.fatalIssueLimit")}</strong>
+              <span>{t("projectSetup.unresolvedFatalIssues")}</span>
             </div>
             <TargetStepper
-              label="致命问题上限"
+              label={t("model.fatalIssueLimit")}
               value={gates.fatal}
-              unit=" 个"
+              unit={t("projectSetup.issues2")}
               max={999}
               onChange={(fatal) => set({ fatal })}
             />
             <div className="gate-now">
-              <span>现在 {j.fatal.open} 个未解决</span>
+              <span>
+                {t("projectSetup.nowUnresolved", { v0: j.fatal.open })}
+              </span>
               <Verdict
                 ok={j.fatal.ok}
                 text={
-                  j.fatal.ok ? "达标" : `超出 ${j.fatal.open - gates.fatal} 个`
+                  j.fatal.ok
+                    ? t("focus.targetMet")
+                    : t("projectSetup.overLimit", {
+                        v0: j.fatal.open - gates.fatal,
+                      })
                 }
               />
             </div>
@@ -1336,8 +1478,12 @@ function GatesStep({ setup }: { setup: ProjectSetup }) {
         </section>
         <aside className="wizard-aside">
           <div className="aside-block">
-            <span className="preview-label">阶段</span>
-            <div className="phase-grid" role="group" aria-label="阶段">
+            <span className="preview-label">{t("projectSetup.phase2")}</span>
+            <div
+              className="phase-grid"
+              role="group"
+              aria-label={t("projectSetup.phase2")}
+            >
               {phases.map((p) => (
                 <Button
                   key={p}
@@ -1352,7 +1498,9 @@ function GatesStep({ setup }: { setup: ProjectSetup }) {
             </div>
           </div>
           <label className="aside-block">
-            <span className="preview-label">里程碑日期</span>
+            <span className="preview-label">
+              {t("projectSetup.milestoneDate")}
+            </span>
             <Input
               type="date"
               value={gates.milestone}
@@ -1360,20 +1508,23 @@ function GatesStep({ setup }: { setup: ProjectSetup }) {
             />
             {days !== null ? (
               <small>
-                {days >= 0 ? `还有 ${days} 天` : `已过 ${-days} 天`}
+                {days >= 0
+                  ? t("projectSetup.daysRemaining", { v0: days })
+                  : t("projectSetup.daysOverdue", { v0: -days })}
               </small>
             ) : null}
           </label>
           <p className="gate-sentence">{gateSentence(gates)}。</p>
           <div className="aside-foot">
             <Button variant="ghost" onClick={() => setup.setStep("project")}>
-              <ArrowLeft /> 返回
+              <ArrowLeft /> {t("projectSetup.back")}
             </Button>
             <Button
               disabled={!validGates(gates)}
               onClick={() => setup.setStep("confirm")}
             >
-              确认 <ArrowRight />
+              {t("projectSetup.confirm2")}
+              <ArrowRight />
             </Button>
           </div>
         </aside>
@@ -1393,6 +1544,7 @@ function StageSelect({
   setup: ProjectSetup;
   optional?: boolean;
 }) {
+  useTranslation();
   const names = field === "severity" ? severityNames : stageNames;
   const options = Object.entries(names).map(([v, l]) => ({
     value: v,
@@ -1409,8 +1561,15 @@ function StageSelect({
         setup.setStages(next);
       }}
     >
-      <SelectTrigger size="sm" aria-label={`${value} 对应`}>
-        <SelectValue placeholder={optional ? "稍后再定" : "选择"} />
+      <SelectTrigger
+        size="sm"
+        aria-label={t("projectSetup.mappingFor", { v0: value })}
+      >
+        <SelectValue
+          placeholder={
+            optional ? t("projectSetup.decideLater") : t("projectSetup.choose")
+          }
+        />
       </SelectTrigger>
       <SelectContent>
         {options.map((o) => (
@@ -1424,6 +1583,7 @@ function StageSelect({
 }
 
 function ConfirmStep({ setup }: { setup: ProjectSetup }) {
+  useTranslation();
   const { preview, scope } = setup;
   if (!preview || !scope) return null;
   const blockingValues = new Set(setup.blocking.map((q) => q.value));
@@ -1433,28 +1593,41 @@ function ConfirmStep({ setup }: { setup: ProjectSetup }) {
     <>
       <div className="wizard-title">
         <div>
-          <h2>确认</h2>
+          <h2>{t("projectSetup.confirm")}</h2>
           <p className="confirm-sentence">
-            {identifier(setup.ids.project)} · {identifier(setup.ids.scope)} 跟踪
-            {describe(scope)} {preview.count} 个问题；
-            {gateSentence(setup.gates)}。
+            {t("projectSetup.trackIssuesIn", {
+              v0: identifier(setup.ids.project),
+              v1: identifier(setup.ids.scope),
+              v2: describe(scope),
+              v3: preview.count,
+              v4: gateSentence(setup.gates),
+            })}
           </p>
         </div>
       </div>
       <div className="wizard-columns">
-        <section className="wizard-main mapping" aria-label="状态对应">
+        <section
+          className="wizard-main mapping"
+          aria-label={t("projectSetup.statusMapping")}
+        >
           <div className="mapping-head">
-            <strong>状态对应</strong>
-            <span>严重度取「{preview.mapping.severity_from}」</span>
+            <strong>{t("projectSetup.statusMapping")}</strong>
+            <span>
+              {t("projectSetup.severityFrom", {
+                v0: preview.mapping.severity_from,
+              })}
+            </span>
           </div>
           <table>
             <thead>
               <tr>
                 <th>
-                  {scope.source === "meegle" ? "飞书项目状态" : "Jira 状态"}
+                  {scope.source === "meegle"
+                    ? t("projectSetup.meegleStatus")
+                    : t("projectSetup.jiraStatus")}
                 </th>
-                <th>问题</th>
-                <th>SPM 阶段</th>
+                <th>{t("focus.issues")}</th>
+                <th>{t("projectSetup.spmStage")}</th>
               </tr>
             </thead>
             <tbody>
@@ -1482,8 +1655,10 @@ function ConfirmStep({ setup }: { setup: ProjectSetup }) {
           {later.length ? (
             <div className="later-note">
               <p>
-                {later.map((q) => q.value).join(" 和 ")}{" "}
-                没有自动对应。本范围里没有这些状态的问题，可以先跳过；出现时，设置清单的“开始采集”会请你选择。
+                {t(
+                  "projectSetup.couldNotBeMappedAutomaticallyThereAreNoIssues",
+                  { v0: later.map((q) => q.value).join(t("projectSetup.and")) },
+                )}
               </p>
               <div className="later-selects">
                 {later.map((q) => (
@@ -1504,7 +1679,7 @@ function ConfirmStep({ setup }: { setup: ProjectSetup }) {
         <aside className="wizard-aside">
           <div className="id-fields">
             <label>
-              <span className="preview-label">项目</span>
+              <span className="preview-label">{t("projectSetup.project")}</span>
               <Input
                 value={setup.ids.project}
                 maxLength={64}
@@ -1514,7 +1689,7 @@ function ConfirmStep({ setup }: { setup: ProjectSetup }) {
               />
             </label>
             <label>
-              <span className="preview-label">范围</span>
+              <span className="preview-label">{t("projectSetup.scope")}</span>
               <Input
                 value={setup.ids.scope}
                 maxLength={64}
@@ -1532,28 +1707,38 @@ function ConfirmStep({ setup }: { setup: ProjectSetup }) {
               }
             />
             <span>
-              这是本次交付的全部问题
-              <small>不勾选时，看板会提示范围可能不完整。</small>
+              {t("projectSetup.theseAreAllTheIssuesForThisDelivery")}
+              <small>
+                {t("projectSetup.ifUncheckedTheBoardWillIndicateThatTheScope")}
+              </small>
             </span>
           </label>
           <div className="aside-note">
-            <span>写入 {preview.directory}</span>
-            <span>采集每 5 分钟一次，由后台服务 spmd 完成</span>
+            <span>{t("projectSetup.writeTo", { v0: preview.directory })}</span>
+            <span>
+              {t(
+                "projectSetup.theSpmdBackgroundServiceCollectsDataEvery5Minutes",
+              )}
+            </span>
           </div>
           <div className="confirm-lane" aria-live="polite">
             {setup.createFailure ? (
               <FailureNote failure={setup.createFailure} />
             ) : setup.changed ? (
-              <p>范围已更新为 {setup.changed.count} 个问题，请再次确认。</p>
+              <p>
+                {t("projectSetup.theScopeNowContainsIssuesPleaseConfirmAgain", {
+                  v0: setup.changed.count,
+                })}
+              </p>
             ) : null}
           </div>
           <div className="aside-foot">
             <Button variant="ghost" onClick={() => setup.setStep("gates")}>
-              <ArrowLeft /> 返回
+              <ArrowLeft /> {t("projectSetup.back")}
             </Button>
             <Button disabled={!ready} onClick={() => void setup.create()}>
               {setup.creating ? <Spinner aria-hidden="true" /> : null}
-              创建并开始采集
+              {t("projectSetup.createAndStartCollection")}
             </Button>
           </div>
         </aside>
@@ -1570,6 +1755,7 @@ function GateResults({
   gates: GateSummary[];
   targets: Gates;
 }) {
+  useTranslation();
   const find = (id: string) => gates.find((g) => g.gate_id === id);
   const rate = (id: string, title: string, target: number) => {
     const g = find(id);
@@ -1580,12 +1766,19 @@ function GateResults({
       <article className="gate-card" aria-label={title}>
         <div className="gate-head row">
           <strong>{title}</strong>
-          <Verdict ok={ok} text={ok ? "达标" : `还差 ${g.gap} 个`} />
+          <Verdict
+            ok={ok}
+            text={
+              ok
+                ? t("focus.targetMet")
+                : t("focus.moreToResolve", { v0: g.gap })
+            }
+          />
         </div>
         <span className="result-number">{now}%</span>
         <Meter now={now} target={target} ok={ok} />
         <small>
-          {g.v} / {g.n} · 目标 {target}%
+          {t("projectSetup.target", { v0: g.v, v1: g.n, v2: target })}
         </small>
       </article>
     );
@@ -1593,19 +1786,30 @@ function GateResults({
   const fatal = find("fatal");
   return (
     <div className="gate-results">
-      {rate("severe", "严重问题解决率", targets.severe)}
-      {rate("overall", "整体解决率", targets.overall)}
+      {rate("severe", t("focus.severeIssueResolution"), targets.severe)}
+      {rate("overall", t("focus.overallResolution"), targets.overall)}
       {fatal ? (
-        <article className="gate-card" aria-label="致命问题">
+        <article
+          className="gate-card"
+          aria-label={t("projectSetup.fatalIssues")}
+        >
           <div className="gate-head row">
-            <strong>致命问题</strong>
+            <strong>{t("projectSetup.fatalIssues")}</strong>
             <Verdict
               ok={fatal.gap === 0}
-              text={fatal.gap === 0 ? "达标" : `超出 ${fatal.gap} 个`}
+              text={
+                fatal.gap === 0
+                  ? t("focus.targetMet")
+                  : t("projectSetup.overLimit", { v0: fatal.gap })
+              }
             />
           </div>
           <span className="result-number">{fatal.gap + targets.fatal}</span>
-          <small>未解决的致命问题 · 上限 {targets.fatal} 个</small>
+          <small>
+            {t("projectSetup.unresolvedFatalIssuesLimit", {
+              v0: targets.fatal,
+            })}
+          </small>
         </article>
       ) : null}
     </div>
@@ -1614,6 +1818,7 @@ function GateResults({
 
 /** Statuses that issues took after creation; answering restarts collection. */
 export function UnmappedAlert({ setup }: { setup: ProjectSetup }) {
+  useTranslation();
   const values = (setup.service?.unmapped ?? []).filter(
     (u) => u.field === "stage" && u.count > 0,
   );
@@ -1627,14 +1832,15 @@ export function UnmappedAlert({ setup }: { setup: ProjectSetup }) {
   return (
     <div className="unmapped-alert" role="alert">
       <p>
-        {setup.service.project} 有 {total}{" "}
-        个问题处于没有对应的状态，暂按“未知”计算。选择对应的 SPM
-        阶段后会重新开始采集。
+        {t(
+          "projectSetup.hasIssuesWithUnmappedStatusesCurrentlyCountedAsUnknown",
+          { v0: setup.service.project, v1: total },
+        )}
       </p>
       <div className="later-selects">
         {values.map((u) => (
           <label key={u.value}>
-            {u.value} · {u.count} 个
+            {t("projectSetup.message", { v0: u.value, v1: u.count })}
             <Select
               value={answers[u.value] ?? null}
               items={options}
@@ -1642,8 +1848,11 @@ export function UnmappedAlert({ setup }: { setup: ProjectSetup }) {
                 stage && setAnswers({ ...answers, [u.value]: stage as string })
               }
             >
-              <SelectTrigger size="sm" aria-label={`${u.value} 对应`}>
-                <SelectValue placeholder="选择" />
+              <SelectTrigger
+                size="sm"
+                aria-label={t("projectSetup.mappingFor", { v0: u.value })}
+              >
+                <SelectValue placeholder={t("projectSetup.choose")} />
               </SelectTrigger>
               <SelectContent>
                 {options.map((o) => (
@@ -1670,7 +1879,7 @@ export function UnmappedAlert({ setup }: { setup: ProjectSetup }) {
           {setup.remapping || setup.activating ? (
             <Spinner aria-hidden="true" />
           ) : null}
-          保存并重新开始采集
+          {t("projectSetup.saveAndRestartCollection")}
         </Button>
       </div>
     </div>
@@ -1684,6 +1893,7 @@ function CollectStep({
   setup: ProjectSetup;
   onDone: () => void;
 }) {
+  useTranslation();
   const { created, service } = setup;
   if (!created) return null;
   const ours =
@@ -1708,23 +1918,41 @@ function CollectStep({
     <>
       <div className="wizard-title">
         <div>
-          <h2>{read ? "第一批数据已到" : "正在开始采集"}</h2>
+          <h2>
+            {read
+              ? t("projectSetup.firstDataReceived")
+              : t("projectSetup.startingCollection")}
+          </h2>
           <p>
             {read
-              ? `${created.count} 个问题已读取，门槛按 ${setup.gates.phase} 计算。`
+              ? t("projectSetup.issuesLoadedTargetsAreCalculatedUsing", {
+                  v0: created.count,
+                  v1: setup.gates.phase,
+                })
               : switched
-                ? `后台服务正在读取 ${created.count} 个问题。`
-                : "正在停止原来的后台服务，换成新项目。"}
+                ? t("projectSetup.theBackgroundServiceIsLoadingIssues", {
+                    v0: created.count,
+                  })
+                : t(
+                    "projectSetup.stoppingThePreviousBackgroundServiceAndSwitchingToThe",
+                  )}
           </p>
         </div>
       </div>
-      <ol className="collect-steps" aria-label="开始采集">
-        {line(true, false, "写入项目配置")}
-        {line(switched, setup.activating, `后台服务切换到 ${created.project}`)}
+      <ol
+        className="collect-steps"
+        aria-label={t("projectSetup.startCollection")}
+      >
+        {line(true, false, t("projectSetup.writeProjectConfiguration"))}
+        {line(
+          switched,
+          setup.activating,
+          t("projectSetup.switchBackgroundServiceTo", { v0: created.project }),
+        )}
         {line(
           read,
           setup.activating && switched,
-          `读取 ${created.count} 个问题`,
+          t("projectSetup.loadIssues", { v0: created.count }),
         )}
       </ol>
       {setup.activateFailure ? (
@@ -1735,7 +1963,7 @@ function CollectStep({
             disabled={setup.activating}
             onClick={() => void setup.start(created.project, created.scope)}
           >
-            重新开始采集
+            {t("projectSetup.restartCollection")}
           </Button>
         </div>
       ) : null}
@@ -1745,7 +1973,7 @@ function CollectStep({
       {ours ? <UnmappedAlert setup={setup} /> : null}
       <div className="collect-actions">
         <Button variant={read ? "default" : "outline"} onClick={onDone}>
-          返回设置清单
+          {t("projectSetup.backToSetupChecklist")}
         </Button>
       </div>
     </>
@@ -1760,6 +1988,7 @@ export function ProjectWizard({
   setup: ProjectSetup;
   onExit: () => void;
 }) {
+  useTranslation();
   return (
     <div className="wizard">
       <Stepper setup={setup} />
@@ -1786,12 +2015,13 @@ export function ProjectStepSummary({
   step: "project" | "gates" | "confirm" | "start";
   onOpen: () => void;
 }) {
+  useTranslation();
   const { preview, created, scope, service } = setup;
   const live = service?.mode === "live" && service.project;
   const text =
     step === "project"
       ? preview && scope
-        ? `${describe(scope)} ${preview.count} 个问题`
+        ? t("projectSetup.issues3", { v0: describe(scope), v1: preview.count })
         : null
       : step === "gates"
         ? preview
@@ -1799,16 +2029,26 @@ export function ProjectStepSummary({
           : null
         : step === "confirm"
           ? created
-            ? `已创建 ${created.project} · ${created.scope}`
+            ? t("projectSetup.created", {
+                v0: created.project,
+                v1: created.scope,
+              })
             : null
           : live
-            ? `采集中：${service.project} · ${service.scope}${
-                service.last_commit
-                  ? `，最近一次 ${new Date(service.last_commit).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}`
-                  : ""
-              }`
+            ? t("projectSetup.collecting", {
+                v0: service.project,
+                v1: service.scope,
+                v2: service.last_commit
+                  ? t("projectSetup.lastRun", {
+                      v0: new Date(service.last_commit).toLocaleTimeString(
+                        locale(),
+                        { hour: "2-digit", minute: "2-digit" },
+                      ),
+                    })
+                  : "",
+              })
             : setup.activateFailure
-              ? "开始采集没有完成"
+              ? t("projectSetup.collectionDidNotStart")
               : null;
   return (
     <div className="step-summary">
@@ -1816,7 +2056,10 @@ export function ProjectStepSummary({
       {step === "start" ? <UnmappedAlert setup={setup} /> : null}
       {step === "project" ? (
         <Button size="sm" onClick={onOpen}>
-          {preview ? "继续新建项目" : "新建项目"} <ArrowRight />
+          {preview
+            ? t("projectSetup.continueCreatingProject")
+            : t("projectSetup.newProject")}{" "}
+          <ArrowRight />
         </Button>
       ) : null}
     </div>

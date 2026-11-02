@@ -1,4 +1,19 @@
-import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { t, locale } from "./i18n";
+import { useQuery } from "@tanstack/react-query";
+import {
+  queryClient,
+  modelsOptions,
+  modelsKey,
+  summaryOptions,
+  summaryKey,
+  updateSummary,
+  refreshModel,
+  invalidateModel,
+  optimisticReview,
+  focusKey,
+} from "./focus-cache";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, RefreshCw } from "lucide-react";
 import { BrandMark } from "@/components/brand-mark";
 import { Num } from "@/components/motion";
@@ -27,26 +42,58 @@ export const ruleOrder = [
   "automation",
 ] as const;
 export const ruleNames: Record<string, string> = {
-  revert: "回退",
-  feature_after_freeze: "冻结后进入 MP 的新功能",
-  customer_feedback: "客户反馈",
-  other_model: "其他机型的改动",
-  no_issue_id: "没有问题单号",
-  automation: "自动化改动（gerrit）",
+  get revert() {
+    return t("focus.reverts");
+  },
+  get feature_after_freeze() {
+    return t("focus.featuresEnteringMPAfterFreeze");
+  },
+  get customer_feedback() {
+    return t("focus.customerFeedback");
+  },
+  get other_model() {
+    return t("focus.changesForOtherModels");
+  },
+  get no_issue_id() {
+    return t("focus.noIssueID");
+  },
+  get automation() {
+    return t("focus.automatedChangesGerrit");
+  },
 };
 export const ruleHow: Record<string, string> = {
-  revert: "提交以 Revert 开头",
-  feature_after_freeze: "标注 [Feature]，冻结日期之后进入以 _MP 结尾的分支",
-  customer_feedback: "提交含“客户反馈”",
-  other_model: "提交标注的机型都不是这个机型",
-  no_issue_id: "提交里没有 W-、R-、Bug # 这样的编号",
-  automation: "由 gerrit 账号提交",
+  get revert() {
+    return t("focus.commitStartsWithRevert");
+  },
+  get feature_after_freeze() {
+    return t("focus.taggedFeatureAndEntersABranchEndingInMP");
+  },
+  get customer_feedback() {
+    return t("focus.commitContainsCustomerFeedback");
+  },
+  get other_model() {
+    return t("focus.noneOfTheModelsTaggedInTheCommitMatch");
+  },
+  get no_issue_id() {
+    return t("focus.commitHasNoIdentifierSuchAsWROr");
+  },
+  get automation() {
+    return t("focus.submittedByTheGerritAccount");
+  },
 };
 export const actionNames: Record<string, string> = {
-  alert: "提醒",
-  track: "跟踪",
-  log: "只记录",
-  ignore: "忽略",
+  get alert() {
+    return t("focus.alert");
+  },
+  get track() {
+    return t("focus.track");
+  },
+  get log() {
+    return t("focus.logOnly");
+  },
+  get ignore() {
+    return t("focus.ignore");
+  },
 };
 export const defaultRules: Record<string, string> = {
   revert: "alert",
@@ -59,7 +106,7 @@ export const defaultRules: Record<string, string> = {
 
 // Scope descriptions end in "的" or "全部", ready for the noun.
 export const sourceText = (sources: string[]) =>
-  sources.map((s) => `${s}问题`).join(" · ");
+  sources.map((s) => t("focus.issuesFrom", { v0: s })).join(" · ");
 
 /** One gate against its target: percent, the gap in issues, and whether it holds. */
 export function gate(v: number, n: number, target: number) {
@@ -105,25 +152,38 @@ export function lede(models: ModelSummary[]) {
       behind.measures.fatal_open - behind.targets.fatal_max,
     );
     const bits = [];
-    if (s.gap) bits.push(`严重问题还差 ${s.gap} 个`);
-    if (fatal) bits.push(`${behind.measures.fatal_open} 个致命问题未解决`);
+    if (s.gap)
+      bits.push(t("focus.moreSevereIssuesToResolve", { count: s.gap }));
+    if (fatal)
+      bits.push(
+        t("focus.fatalIssuesUnresolved", { count: behind.measures.fatal_open }),
+      );
     if (!bits.length) {
       const o = gate(
         behind.measures.overall_resolved,
         behind.measures.overall_total,
         behind.targets.overall_pct,
       );
-      bits.push(`整体还差 ${o.gap} 个`);
+      bits.push(t("focus.moreIssuesToResolveOverall", { count: o.gap }));
     }
-    parts.push(`${behind.code} 落后最多：${bits.join("，")}。`);
+    parts.push(
+      t("focus.isFurthestBehind", {
+        v0: behind.code,
+        v1: bits.join(t("format.listSeparator")),
+      }),
+    );
   } else {
-    parts.push("关注的机型都达到了门槛。");
+    parts.push(t("focus.allFollowedModelsMeetTheirTargets"));
   }
   if (busiest.new_issues + busiest.week_changes > 0)
     parts.push(
-      `${busiest.code} 本周最忙，新增 ${busiest.new_issues} 个问题，合入 ${busiest.week_merged} 个变更。`,
+      t("focus.wasBusiestThisWeekNewIssuesAndMergedChanges", {
+        v0: busiest.code,
+        v1: busiest.new_issues,
+        v2: busiest.week_merged,
+      }),
     );
-  return parts.join("");
+  return parts.join(t("format.sentenceSeparator"));
 }
 
 export const greens = ["#e2ded2", "#c6d8bd", "#8fb784", "#4f8a4a", "#24552b"];
@@ -132,6 +192,7 @@ export const level = (n: number) =>
 
 /** Twelve Monday-first weeks, one cell per day. */
 function WeekGrid({ days }: { days: number[] }) {
+  useTranslation();
   return (
     <div className="week-grid" aria-hidden="true">
       {days.map((n, i) => (
@@ -141,6 +202,7 @@ function WeekGrid({ days }: { days: number[] }) {
   );
 }
 export function Strip({ days }: { days: number[] }) {
+  useTranslation();
   return (
     <div className="day-strip" aria-hidden="true">
       {days.map((n, i) => (
@@ -151,6 +213,7 @@ export function Strip({ days }: { days: number[] }) {
 }
 
 function GateCell({ v, n, target }: { v: number; n: number; target: number }) {
+  useTranslation();
   const g = gate(v, n, target);
   return (
     <div className="gate-cell">
@@ -165,7 +228,12 @@ function GateCell({ v, n, target }: { v: number; n: number; target: number }) {
         <i style={{ left: `calc(${target}% - 1px)` }} />
       </span>
       <small className={g.ok ? "" : "short"}>
-        {g.ok ? "达标" : `还差 ${g.gap} 个`} · 目标 {target}%
+        {t("focus.target", {
+          v0: g.ok
+            ? t("focus.targetMet")
+            : t("focus.moreToResolve", { v0: g.gap }),
+          v1: target,
+        })}
       </small>
     </div>
   );
@@ -173,75 +241,105 @@ function GateCell({ v, n, target }: { v: number; n: number; target: number }) {
 
 /** Followed models: the list, the cached summary first, then a fresh read. */
 export function useFocus(enabled: boolean) {
-  const [models, setModels] = useState<FocusModel[] | null>(null);
-  const [summary, setSummary] = useState<FocusSummary | null>(null);
+  const modelsQuery = useQuery({ ...modelsOptions, enabled }, queryClient);
+  const summaryQuery = useQuery({ ...summaryOptions, enabled }, queryClient);
+  const models = modelsQuery.data ?? null;
+  const summary = useMemo(() => {
+    if (!summaryQuery.data) return null;
+    if (!models) return summaryQuery.data;
+    const followed = new Set(models.map((model) => model.code));
+    return {
+      ...summaryQuery.data,
+      models: summaryQuery.data.models.filter((model) =>
+        followed.has(model.code),
+      ),
+    };
+  }, [summaryQuery.data, models]);
   const [refreshing, setRefreshing] = useState(false);
+  const pendingRefreshes = useRef(0);
+  const reviewVersions = useRef(new Map<string, number>());
   const [failure, setFailure] = useState<SetupFailure | null>(null);
-  async function refresh(code?: string) {
+  async function refresh(code?: string, force = true) {
+    pendingRefreshes.current++;
     setRefreshing(true);
     setFailure(null);
     try {
-      const data = await focus(code ? "refresh" : "summary", { code });
-      if (data.summary) setSummary(data.summary);
+      const current = queryClient.getQueryData<FocusModel[]>(modelsKey) ?? [];
+      const errors: unknown[] = [];
+      for (const target of code ? [code] : current.map((model) => model.code)) {
+        try {
+          await refreshModel(target, force);
+        } catch (error) {
+          errors.push(error);
+        }
+      }
+      if (errors.length) throw errors[0];
     } catch (error) {
       setFailure(failureOf(error));
     } finally {
-      setRefreshing(false);
+      pendingRefreshes.current--;
+      setRefreshing(pendingRefreshes.current > 0);
     }
   }
   useEffect(() => {
-    if (!enabled) return;
-    void (async () => {
-      try {
-        const list = await focus("list");
-        setModels(list.models ?? []);
-        const cached = await focus("cached");
-        if (cached.summary) setSummary(cached.summary);
-        if (list.models?.length) await refresh();
-      } catch (error) {
-        setFailure(failureOf(error));
-      }
-    })();
-  }, [enabled]);
+    if (enabled && modelsQuery.isSuccess && summaryQuery.isFetched)
+      void refresh(undefined, false);
+  }, [enabled, modelsQuery.isSuccess, summaryQuery.isFetched]);
   async function save(model: FocusModel) {
+    invalidateModel(model.code);
+    await queryClient.cancelQueries({ queryKey: modelsKey });
+    await queryClient.cancelQueries({ queryKey: summaryKey });
     const data = await focus("save", { model });
-    setModels(data.models ?? []);
+    queryClient.setQueryData(modelsKey, data.models ?? []);
     await refresh(model.code);
   }
   async function remove(code: string) {
+    invalidateModel(code);
+    await queryClient.cancelQueries({ queryKey: modelsKey });
     const data = await focus("remove", { code });
-    setModels(data.models ?? []);
-    setSummary((s) =>
-      s ? { ...s, models: s.models.filter((m) => m.code !== code) } : s,
-    );
+    queryClient.setQueryData(modelsKey, data.models ?? []);
+    updateSummary((previous) => ({
+      ...previous,
+      models: previous.models.filter((model) => model.code !== code),
+    }));
+    queryClient.removeQueries({ queryKey: [...focusKey, "model", code] });
+    queryClient.removeQueries({ queryKey: [...focusKey, "view", code] });
   }
-  /** Optimistic: the change leaves 需要留意 (accept) or gains its mark (track). */
   async function review(code: string, change: number, action: string) {
-    setSummary((s) =>
-      s
-        ? {
-            ...s,
-            models: s.models.map((m) =>
-              m.code !== code
-                ? m
-                : {
-                    ...m,
-                    flagged:
-                      action === "accept"
-                        ? m.flagged.filter((f) => f.number !== change)
-                        : m.flagged.map((f) =>
-                            f.number === change
-                              ? { ...f, tracked: action === "track" }
-                              : f,
-                          ),
-                  },
-            ),
-          }
-        : s,
+    invalidateModel(code);
+    const reviewKey = `${code}:${change}`;
+    const version = (reviewVersions.current.get(reviewKey) ?? 0) + 1;
+    reviewVersions.current.set(reviewKey, version);
+    const previous = queryClient
+      .getQueryData<FocusSummary>(summaryKey)
+      ?.models.find((model) => model.code === code);
+    const previousItem = previous?.flagged.find(
+      (item) => item.number === change,
     );
+    updateSummary((summary) => optimisticReview(summary, code, change, action));
     try {
       await focus("review", { code, change, review: action });
+      await queryClient.invalidateQueries({
+        queryKey: [...focusKey, "model", code, "changes"],
+      });
     } catch (error) {
+      if (previousItem && reviewVersions.current.get(reviewKey) === version) {
+        updateSummary((summary) => ({
+          ...summary,
+          models: summary.models.map((model) => {
+            if (model.code !== code) return model;
+            const flagged = model.flagged.filter(
+              (item) => item.number !== change,
+            );
+            flagged.splice(
+              previous!.flagged.indexOf(previousItem),
+              0,
+              previousItem,
+            );
+            return { ...model, flagged };
+          }),
+        }));
+      }
       setFailure(failureOf(error));
     }
   }
@@ -257,8 +355,15 @@ export function useFocus(enabled: boolean) {
     summary,
     ordered,
     refreshing,
-    failure,
+    failure:
+      failure ??
+      (modelsQuery.error
+        ? failureOf(modelsQuery.error)
+        : summaryQuery.error
+          ? failureOf(summaryQuery.error)
+          : null),
     refresh,
+    ensure: (code: string) => refresh(code, false),
     save,
     remove,
     review,
@@ -268,7 +373,7 @@ export type FocusState = ReturnType<typeof useFocus>;
 
 export function since(at?: string) {
   if (!at) return "";
-  return new Date(at).toLocaleTimeString("zh-CN", {
+  return new Date(at).toLocaleTimeString(locale(), {
     hour: "2-digit",
     minute: "2-digit",
   });
@@ -282,8 +387,9 @@ export function FocusHome({
   state: FocusState;
   onModel: (code: string) => void;
 }) {
+  useTranslation();
   const { ordered, summary } = state;
-  const today = new Date().toLocaleDateString("zh-CN", {
+  const today = new Date().toLocaleDateString(locale(), {
     month: "long",
     day: "numeric",
     weekday: "long",
@@ -292,27 +398,32 @@ export function FocusHome({
     <div className="focus-home">
       <section className="lede">
         <span className="kicker">
-          {today} · {state.models?.length ?? 0} 个关注机型
-          {summary?.computed_at ? ` · ${since(summary.computed_at)} 读取` : ""}
-          {state.refreshing ? " · 正在更新…" : ""}
+          {t("focus.followedModels", {
+            v0: today,
+            count: state.models?.length ?? 0,
+            v2: summary?.computed_at
+              ? t("focus.loaded", { v0: since(summary.computed_at) })
+              : "",
+            v3: state.refreshing ? t("focus.updating") : "",
+          })}
         </span>
         {ordered.length ? (
           <h1>{lede(ordered)}</h1>
         ) : (
           <h1 className="lede-loading">
-            <BrandMark size={44} busy /> 正在读取关注的机型…
+            <BrandMark size={44} busy /> {t("focus.loadingFollowedModels")}
           </h1>
         )}
       </section>
       {state.failure ? <FailureNote failure={state.failure} /> : null}
-      <section className="ledger" aria-label="关注的机型">
+      <section className="ledger" aria-label={t("focus.followedModels2")}>
         <div className="ledger-head" aria-hidden="true">
-          <span>机型</span>
-          <span>严重问题解决率</span>
-          <span>整体解决率</span>
-          <span>致命未解决</span>
-          <span>近 12 周代码变更</span>
-          <span>本周</span>
+          <span>{t("app.model")}</span>
+          <span>{t("focus.severeIssueResolution")}</span>
+          <span>{t("focus.overallResolution")}</span>
+          <span>{t("focus.fatalIssuesUnresolved2")}</span>
+          <span>{t("focus.codeChangesOver12Weeks")}</span>
+          <span>{t("focus.thisWeek")}</span>
         </div>
         {ordered.length
           ? ordered.map((m) => (
@@ -326,7 +437,10 @@ export function FocusHome({
               >
                 <span className="ledger-model">
                   <strong>{m.code}</strong>
-                  <small>{sourceText(m.sources) || "未设置问题来源"}</small>
+                  <small>
+                    {sourceText(m.sources) ||
+                      t("focus.noIssueSourcesConfigured")}
+                  </small>
                 </span>
                 {m.measures ? (
                   <>
@@ -350,26 +464,30 @@ export function FocusHome({
                       >
                         {m.measures.fatal_open}
                       </strong>
-                      <small>上限 {m.targets.fatal_max}</small>
+                      <small>
+                        {t("focus.limit", { v0: m.targets.fatal_max })}
+                      </small>
                     </span>
                   </>
                 ) : (
                   <span className="ledger-missing">
-                    {m.errors[0] ?? "没有问题来源"}
+                    {m.errors[0] ?? t("focus.noIssueSources")}
                   </span>
                 )}
                 <WeekGrid days={m.days} />
                 <span className="ledger-week">
                   <span>
-                    <strong>{m.new_issues ? `+${m.new_issues}` : "0"}</strong>{" "}
-                    新问题
+                    <strong>{m.new_issues ? `+${m.new_issues}` : "0"}</strong>
+                    {t("focus.newIssues")}
                   </span>
                   <span>
-                    <strong>{m.week_changes}</strong> 变更 · 合入{" "}
-                    {m.week_merged}
+                    <strong>{m.week_changes}</strong>{" "}
+                    {t("focus.changesMerged", { v0: m.week_merged })}
                   </span>
                   {m.flagged.length ? (
-                    <span className="short">{m.flagged.length} 个需要留意</span>
+                    <span className="short">
+                      {t("focus.needAttention", { v0: m.flagged.length })}
+                    </span>
                   ) : null}
                 </span>
               </motion.button>
@@ -400,6 +518,7 @@ function Pick({
   on: boolean;
   toggle: () => void;
 }) {
+  useTranslation();
   return (
     <button
       type="button"
@@ -427,6 +546,7 @@ export function FollowPage({
   onDone: (code: string) => void;
   onCancel: () => void;
 }) {
+  useTranslation();
   const existing = state.models?.find((m) => m.code === initial) ?? null;
   const [code, setCode] = useState(initial ?? "");
   const [suggestions, setSuggestions] = useState<Suggestions | null>(null);
@@ -546,11 +666,11 @@ export function FollowPage({
     <div className="follow-page">
       <section className="follow-head">
         <label>
-          <span className="kicker">机型代号</span>
+          <span className="kicker">{t("focus.modelCode")}</span>
           <Input
             className="code-input"
             value={code}
-            aria-label="机型代号"
+            aria-label={t("focus.modelCode")}
             placeholder="E6751SM"
             maxLength={32}
             autoFocus={!initial}
@@ -562,8 +682,7 @@ export function FollowPage({
         </label>
         <div className="follow-intro">
           <p className="quiet">
-            按代号在飞书项目、Jira 和 Gerrit
-            里找候选。勾选属于这个机型的，规则决定哪些开发提交值得你看。
+            {t("focus.findCandidatesByModelCodeInMeegleJiraAnd")}
           </p>
           <Button
             variant="outline"
@@ -571,7 +690,7 @@ export function FollowPage({
             onClick={() => void find(code)}
           >
             {loading ? <Spinner aria-hidden="true" /> : <RefreshCw />}
-            查找
+            {t("focus.find")}
           </Button>
         </div>
       </section>
@@ -579,9 +698,11 @@ export function FollowPage({
       {suggestions ? (
         <>
           <div className="follow-columns">
-            <section aria-label="问题">
-              <h2>问题</h2>
-              <span className="quiet column-note">飞书项目 · 关联项目</span>
+            <section aria-label={t("focus.issues")}>
+              <h2>{t("focus.issues")}</h2>
+              <span className="quiet column-note">
+                {t("focus.meegleLinkedProject")}
+              </span>
               {suggestions.meegle.length ? (
                 suggestions.meegle.map((c) => (
                   <Pick
@@ -592,7 +713,7 @@ export function FollowPage({
                   />
                 ))
               ) : (
-                <p className="quiet empty-line">没有找到</p>
+                <p className="quiet empty-line">{t("focus.noMatches")}</p>
               )}
               <span className="quiet column-note">Jira</span>
               {suggestions.jira.length ? (
@@ -605,13 +726,16 @@ export function FollowPage({
                   />
                 ))
               ) : (
-                <p className="quiet empty-line">没有找到</p>
+                <p className="quiet empty-line">{t("focus.noMatches")}</p>
               )}
             </section>
-            <section aria-label="代码">
-              <h2>代码</h2>
+            <section aria-label={t("focus.code")}>
+              <h2>{t("focus.code")}</h2>
               <span className="quiet column-note">
-                Gerrit 分支 · 名称含 {suggestions.stem} · 近一年变更
+                {t(
+                  "focus.gerritBranchesNamesContainingChangesOverThePastYear",
+                  { v0: suggestions.stem },
+                )}
               </span>
               {suggestions.branches.map((c) => (
                 <Pick
@@ -622,17 +746,19 @@ export function FollowPage({
                 />
               ))}
             </section>
-            <section aria-label="规则">
-              <h2>规则</h2>
+            <section aria-label={t("focus.rules")}>
+              <h2>{t("focus.rules")}</h2>
               <span className="quiet column-note">
-                右侧为预选分支近 13 周会命中的次数
+                {t("focus.theRightColumnShowsMatchesInTheSelectedBranches")}
               </span>
               {ruleOrder.map((r) => (
                 <div className="rule-edit" key={r}>
                   <div>
                     <span>{ruleNames[r]}</span>
                     <span className="quiet">
-                      {suggestions.rule_counts[r] ?? 0} 次
+                      {t("focus.matches", {
+                        count: suggestions.rule_counts[r] ?? 0,
+                      })}
                     </span>
                   </div>
                   <span className="quiet">{ruleHow[r]}</span>
@@ -656,7 +782,7 @@ export function FollowPage({
                 </div>
               ))}
               <label className="freeze">
-                <span>MP 冻结日期</span>
+                <span>{t("focus.mpFreezeDate")}</span>
                 <Input
                   type="date"
                   value={freeze}
@@ -667,24 +793,31 @@ export function FollowPage({
           </div>
           <footer className="follow-foot">
             <span>
-              关注 {suggestions.code}：{chosenMeegle.length + chosenJira.length}{" "}
-              个问题来源，共 {issueCount} 个问题 · {chosenBranches.length}{" "}
-              个分支 · {alerts} 条规则会提醒你
+              {t("focus.followIssueSourcesIssuesBranchesAlertRules", {
+                v0: suggestions.code,
+                v1: chosenMeegle.length + chosenJira.length,
+                v2: issueCount,
+                v3: chosenBranches.length,
+                v4: alerts,
+              })}
             </span>
             <div>
               <Button variant="ghost" onClick={onCancel}>
-                <ArrowLeft /> 取消
+                <ArrowLeft /> {t("focus.cancel")}
               </Button>
               <Button disabled={saving} onClick={() => void follow()}>
                 {saving ? <Spinner aria-hidden="true" /> : null}
-                {existing ? "保存" : `关注 ${suggestions.code}`}
+                {existing
+                  ? t("focus.save")
+                  : t("focus.follow", { v0: suggestions.code })}
               </Button>
             </div>
           </footer>
         </>
       ) : loading ? (
         <p className="quiet">
-          <Spinner aria-hidden="true" /> 正在三个工具里查找 {code}…
+          <Spinner aria-hidden="true" />{" "}
+          {t("focus.searchingThreeToolsFor", { v0: code })}
         </p>
       ) : null}
     </div>

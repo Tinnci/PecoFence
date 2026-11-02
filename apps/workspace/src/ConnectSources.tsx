@@ -1,3 +1,5 @@
+import { useTranslation } from "react-i18next";
+import { t } from "./i18n";
 import { useState } from "react";
 import { ArrowRight, LogIn, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -21,33 +23,53 @@ import { Status } from "./Status";
 import { FailureNote, failureOf } from "./TemplateImport";
 
 const names: Record<string, string> = {
-  meegle: "飞书项目",
+  get meegle() {
+    return t("projectSetup.meegle");
+  },
   jira: "Jira",
   gerrit: "Gerrit",
   jenkins: "Jenkins",
 };
 /** What fixes each source's state; tools own their logins (ADR-0004). */
 const remedies: Record<string, Record<string, string>> = {
-  meegle: {
-    not_configured: "在终端运行 meegle auth login，选择飞书项目站点并登录。",
-    not_installed:
-      "安装飞书项目命令行工具：npm install -g @lark-project/meegle",
+  get meegle() {
+    return {
+      not_configured: t("connectSources.runMeegleAuthLoginInATerminalChooseA"),
+      not_installed: t(
+        "connectSources.installTheMeegleCommandLineToolNpmInstallG",
+      ),
+    };
   },
-  jira: {
-    not_configured: "在 WSL 中为 jira-cli 配置个人访问令牌文件。",
-    signed_out:
-      "Jira 拒绝了令牌，请在 jira-cli 的令牌文件中换成新的个人访问令牌。",
-    not_installed: "在 WSL 中安装 jira-cli。",
+  get jira() {
+    return {
+      not_configured: t(
+        "connectSources.configureAPersonalAccessTokenFileForJiraCli",
+      ),
+      signed_out: t("connectSources.jiraRejectedTheTokenReplaceItWithANew"),
+      not_installed: t("connectSources.installJiraCliInWSL"),
+    };
   },
-  gerrit: {
-    not_configured: "运行 grr config init，配置 Gerrit 账号和 SSH 密钥。",
-    signed_out: "Gerrit 拒绝了 SSH 认证，请检查 grr 配置的密钥。",
-    not_installed: "安装 Gerrit 命令行工具 grr。",
+  get gerrit() {
+    return {
+      not_configured: t(
+        "connectSources.runGrrConfigInitToConfigureYourGerritAccount",
+      ),
+      signed_out: t(
+        "connectSources.gerritRejectedSSHAuthenticationCheckTheKeyConfiguredIn",
+      ),
+      not_installed: t("connectSources.installTheGerritCommandLineToolGrr"),
+    };
   },
-  jenkins: {
-    not_configured: "在 WSL 中为 jenkins-bridge 添加 Jenkins 服务器配置。",
-    unreachable: "无法通过网页数据转发访问 Jenkins，请先启动网页数据转发。",
-    not_installed: "在 WSL 中安装 jenkins-bridge。",
+  get jenkins() {
+    return {
+      not_configured: t(
+        "connectSources.addJenkinsServerConfigurationForJenkinsBridgeInWSL",
+      ),
+      unreachable: t(
+        "connectSources.jenkinsIsUnreachableThroughTheBrowserForwarderStartThe",
+      ),
+      not_installed: t("connectSources.installJenkinsBridgeInWSL"),
+    };
   },
 };
 function remedy(c: Connection) {
@@ -55,8 +77,8 @@ function remedy(c: Connection) {
   return (
     remedies[c.source]?.[c.state] ??
     (c.state === "unreachable"
-      ? "暂时无法连接，请检查网络后重新检查。"
-      : "检查未完成，请重新检查。")
+      ? t("connectSources.temporarilyUnableToConnectCheckTheNetworkAndTry")
+      : t("connectSources.theCheckDidNotFinishTryAgain"))
   );
 }
 
@@ -73,6 +95,7 @@ function SourceRow({
   onSignIn: () => void;
   onOpen: (id: string) => void;
 }) {
+  useTranslation();
   const fix = remedy(connection);
   const identity = [connection.account, connection.host]
     .filter(Boolean)
@@ -90,14 +113,16 @@ function SourceRow({
           <Status state={connection.state} />
         </ItemTitle>
         <ItemDescription>
-          {signingIn ? "请在浏览器中完成登录…" : (fix ?? identity)}
+          {signingIn
+            ? t("connectSources.finishSigningInInYourBrowser")
+            : (fix ?? identity)}
         </ItemDescription>
       </ItemContent>
       <ItemActions>
         {connection.sign_in && connection.state !== "connected" ? (
           <Button size="sm" disabled={busy} onClick={onSignIn}>
             {signingIn ? <Spinner aria-hidden="true" /> : <LogIn />}
-            登录
+            {t("connectSources.signIn")}
           </Button>
         ) : null}
         {connection.source === "jenkins" &&
@@ -107,7 +132,8 @@ function SourceRow({
             variant="outline"
             onClick={() => onOpen("cdp-forwarder")}
           >
-            网页数据转发 <ArrowRight />
+            {t("connectSources.browserForwarder")}
+            <ArrowRight />
           </Button>
         ) : null}
       </ItemActions>
@@ -129,6 +155,7 @@ export default function ConnectSources({
   onReport: (report: ConnectionReport) => void;
   onOpen: (id: string) => void;
 }) {
+  useTranslation();
   const [busy, setBusy] = useState(false);
   const [signingIn, setSigningIn] = useState<string | null>(null);
   const [signInFailure, setSignInFailure] = useState<SetupFailure | null>(null);
@@ -180,16 +207,19 @@ export default function ConnectSources({
       ) : null}
       {report ? (
         <>
-          <h4 className="source-group">问题来源</h4>
-          <ItemGroup aria-label="问题来源">{rows(issueSources)}</ItemGroup>
-          <h4 className="source-group">代码与构建</h4>
-          <ItemGroup aria-label="代码与构建">
+          <h4 className="source-group">{t("projectSetup.issueSources")}</h4>
+          <ItemGroup aria-label={t("projectSetup.issueSources")}>
+            {rows(issueSources)}
+          </ItemGroup>
+          <h4 className="source-group">{t("connectSources.codeAndBuilds")}</h4>
+          <ItemGroup aria-label={t("connectSources.codeAndBuilds")}>
             {rows(["gerrit", "jenkins"])}
           </ItemGroup>
         </>
       ) : !failure ? (
         <p className="loading-inline" role="status">
-          <Spinner aria-hidden="true" /> 正在检查各来源的登录状态…
+          <Spinner aria-hidden="true" />{" "}
+          {t("connectSources.checkingSignInStatusForEachSource")}
         </p>
       ) : null}
       <div className="import-actions">
@@ -199,7 +229,7 @@ export default function ConnectSources({
           onClick={() => void recheck()}
         >
           {busy && !signingIn ? <Spinner aria-hidden="true" /> : <RefreshCw />}
-          重新检查
+          {t("templateImport.checkAgain")}
         </Button>
       </div>
     </div>

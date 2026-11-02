@@ -1,3 +1,5 @@
+import { useTranslation } from "react-i18next";
+import { t } from "./i18n";
 import { useState } from "react";
 import { CircleAlert, CircleCheck, FileJson, RefreshCw } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -27,45 +29,112 @@ import type {
 import { applyTemplate, planTemplate } from "./api";
 
 const failures: Record<string, string> = {
-  desktop_required: "导入需要在工作台桌面版中进行。",
-  spm_missing: "未找到 Windows 版 spm。请先安装 SPM。",
-  spm_update_required: "已安装的 spm 不支持项目导入，请更新 SPM。",
-  spm_timeout: "spm 未及时响应，请重试。",
-  spm_unavailable: "spm 无法运行，请确认安装完整后重试。",
-  spm_invalid_response: "spm 返回了无法识别的结果，请更新 SPM 后重试。",
-  setup_busy: "另一个项目操作正在进行，请稍候。",
-  template_unreadable: "无法读取所选文件。",
-  template_too_large: "文件超过 1 MiB，不是项目模板。",
-  template_stale: "导入计划已失效，请重新选择模板。",
-  template_invalid: "模板无效",
-  import_conflict: "已有文件与模板不同，可以备份后替换。",
-  import_io: "写入项目配置失败",
-  sign_in_failed: "登录没有完成，可以再试一次",
-  sign_in_host_unknown:
-    "尚未选择飞书项目站点，请先在终端运行 meegle auth login",
-  sign_in_unsupported: "此来源由它自己的工具配置",
-  invalid_input: "选择的内容无效",
-  tool_missing: "来源的命令行工具未安装",
-  signed_out: "来源未登录，请先在“连接来源”中登录",
-  source_failed: "来源返回了错误",
-  scope_empty: "这个范围里没有问题",
-  scope_too_large: "范围太大，请缩小选择",
-  scope_incomplete: "来源没有返回完整范围，请重试",
-  mapping_undetected: "无法识别字段",
-  questions_open: "还有状态没有对应",
-  draft_changed: "范围在确认后发生了变化，请重新确认",
+  get desktop_required() {
+    return t("templateImport.importRequiresTheDesktopWorkspaceApp");
+  },
+  get spm_missing() {
+    return t("templateImport.windowsSpmWasNotFoundInstallSPMFirst");
+  },
+  get spm_update_required() {
+    return t("templateImport.thisVersionOfSpmDoesNotSupportProjectImport");
+  },
+  get spm_timeout() {
+    return t("templateImport.spmDidNotRespondInTimeTryAgain");
+  },
+  get spm_unavailable() {
+    return t("templateImport.spmCouldNotRunCheckTheInstallationAndTry");
+  },
+  get spm_invalid_response() {
+    return t("templateImport.spmReturnedAnUnrecognizedResultUpdateSPMAndTry");
+  },
+  get setup_busy() {
+    return t("templateImport.anotherProjectOperationIsRunningPleaseWait");
+  },
+  get template_unreadable() {
+    return t("templateImport.couldNotReadTheSelectedFile");
+  },
+  get template_too_large() {
+    return t("templateImport.theFileExceeds1MiBAndIsNotA");
+  },
+  get template_stale() {
+    return t("templateImport.theImportPlanHasExpiredSelectTheTemplateAgain");
+  },
+  get template_invalid() {
+    return t("templateImport.invalidTemplate");
+  },
+  get import_conflict() {
+    return t("templateImport.existingFilesDifferFromTheTemplateYouCanBack");
+  },
+  get import_io() {
+    return t("templateImport.couldNotWriteProjectConfiguration");
+  },
+  get sign_in_failed() {
+    return t("templateImport.signInDidNotFinishTryAgain");
+  },
+  get sign_in_host_unknown() {
+    return t("templateImport.noMeegleSiteSelectedRunMeegleAuthLoginIn");
+  },
+  get sign_in_unsupported() {
+    return t("templateImport.configureThisSourceUsingItsOwnTool");
+  },
+  get invalid_input() {
+    return t("templateImport.invalidSelection");
+  },
+  get tool_missing() {
+    return t("templateImport.theSourceCommandLineToolIsNotInstalled");
+  },
+  get signed_out() {
+    return t("templateImport.thisSourceIsSignedOutSignInUnderConnect");
+  },
+  get source_failed() {
+    return t("templateImport.theSourceReturnedAnError");
+  },
+  get scope_empty() {
+    return t("templateImport.thereAreNoIssuesInThisScope");
+  },
+  get scope_too_large() {
+    return t("templateImport.theScopeIsTooLargeNarrowYourSelection");
+  },
+  get scope_incomplete() {
+    return t("templateImport.theSourceReturnedAnIncompleteScopeTryAgain");
+  },
+  get mapping_undetected() {
+    return t("templateImport.couldNotIdentifyFields");
+  },
+  get questions_open() {
+    return t("templateImport.someStatusesStillNeedMapping");
+  },
+  get draft_changed() {
+    return t("templateImport.theScopeChangedAfterConfirmationConfirmItAgain");
+  },
 };
 export const roles: Record<string, string> = {
-  deployment: "部署配置",
-  live_config: "采集配置",
-  template_lock: "模板锁定",
-  scope_query: "范围查询",
+  get deployment() {
+    return t("templateImport.deploymentConfiguration");
+  },
+  get live_config() {
+    return t("templateImport.collectionConfiguration");
+  },
+  get template_lock() {
+    return t("templateImport.templateLock");
+  },
+  get scope_query() {
+    return t("templateImport.scopeQuery");
+  },
 };
 export const actions: Record<string, string> = {
-  create: "新建",
-  unchanged: "不变",
-  replace: "备份后替换",
-  conflict: "与模板不同",
+  get create() {
+    return t("templateImport.create");
+  },
+  get unchanged() {
+    return t("templateImport.unchanged");
+  },
+  get replace() {
+    return t("templateImport.backUpAndReplace");
+  },
+  get conflict() {
+    return t("templateImport.differsFromTemplate");
+  },
 };
 export function failureOf(error: unknown): SetupFailure {
   return typeof error === "object" && error && "code" in error
@@ -73,6 +142,7 @@ export function failureOf(error: unknown): SetupFailure {
     : { code: "spm_unavailable" };
 }
 export function FailureNote({ failure }: { failure: SetupFailure }) {
+  useTranslation();
   const text = failures[failure.code] ?? failures.spm_unavailable;
   return (
     <Alert className="alert-warning">
@@ -93,6 +163,7 @@ export default function TemplateImport({
   statusFailure: SetupFailure | null;
   onRefresh: () => Promise<void>;
 }) {
+  useTranslation();
   const [plan, setPlan] = useState<ImportPlan | null>(null);
   const [result, setResult] = useState<ImportPlan | null>(null);
   const [failure, setFailure] = useState<SetupFailure | null>(null);
@@ -137,7 +208,7 @@ export default function TemplateImport({
   return (
     <div className="template-import">
       {status?.projects.length ? (
-        <ItemGroup aria-label="已导入的项目">
+        <ItemGroup aria-label={t("templateImport.importedProjects")}>
           {status.projects.map((p) => (
             <Item key={p.directory} variant="outline" size="sm">
               <ItemContent>
@@ -145,10 +216,10 @@ export default function TemplateImport({
                   {p.project ?? "?"} / {p.scope ?? "?"}
                   <Badge variant={p.check.valid ? "secondary" : "destructive"}>
                     {!p.check.valid
-                      ? "配置无法加载"
+                      ? t("templateImport.couldNotLoadConfiguration")
                       : p.check.ready
-                        ? "可以采集"
-                        : "已导入"}
+                        ? t("templateImport.readyToCollect")
+                        : t("templateImport.imported")}
                   </Badge>
                 </ItemTitle>
               </ItemContent>
@@ -163,24 +234,33 @@ export default function TemplateImport({
         <Alert role="status">
           <CircleCheck />
           <AlertTitle>
-            已导入 {result.project} / {result.scope}
-            {result.backups.length
-              ? `，原文件已备份（${result.backups.length} 个）`
-              : ""}
-            。
+            {t("templateImport.imported2", {
+              v0: result.project,
+              v1: result.scope,
+              v2: result.backups.length
+                ? t("templateImport.originalFilesBackedUp", {
+                    v0: result.backups.length,
+                  })
+                : "",
+            })}
           </AlertTitle>
           <AlertDescription>
-            来源由各自的工具登录，连接状态见“连接来源”。
+            {t("templateImport.signInUsingEachSourceToolSeeConnectSources")}
           </AlertDescription>
         </Alert>
       ) : null}
       {plan ? (
-        <Card className="import-plan" role="region" aria-label="导入计划">
+        <Card
+          className="import-plan"
+          role="region"
+          aria-label={t("templateImport.importPlan")}
+        >
           <CardHeader>
             <CardTitle>{plan.template.title}</CardTitle>
             <CardDescription>
-              项目 <strong>{plan.project}</strong> · 范围{" "}
-              <strong>{plan.scope}</strong> · 实时采集
+              {t("templateImport.project")}
+              <strong>{plan.project}</strong> {t("templateImport.scope")}
+              <strong>{plan.scope}</strong> {t("templateImport.liveCollection")}
             </CardDescription>
             <CardAction>
               <Badge variant="outline">
@@ -219,11 +299,15 @@ export default function TemplateImport({
           </CardContent>
           <CardFooter className="import-actions">
             {unchanged ? (
-              <span className="muted">配置已与模板一致</span>
+              <span className="muted">
+                {t("templateImport.configurationAlreadyMatchesTheTemplate")}
+              </span>
             ) : (
               <Button disabled={busy} onClick={() => void apply(!!conflict)}>
                 {busy ? <Spinner aria-hidden="true" /> : null}
-                {conflict ? "备份并替换" : "导入"}
+                {conflict
+                  ? t("templateImport.backUpAndReplace2")
+                  : t("templateImport.import")}
               </Button>
             )}
             <Button
@@ -231,7 +315,7 @@ export default function TemplateImport({
               disabled={busy}
               onClick={() => setPlan(null)}
             >
-              {unchanged ? "完成" : "取消"}
+              {unchanged ? t("templateImport.done") : t("model.cancel")}
             </Button>
           </CardFooter>
         </Card>
@@ -239,7 +323,7 @@ export default function TemplateImport({
         <div className="import-actions">
           <Button disabled={busy} onClick={() => void choose()}>
             {busy ? <Spinner aria-hidden="true" /> : <FileJson />}
-            选择项目模板…
+            {t("templateImport.chooseProjectTemplate")}
           </Button>
           <Button
             variant="outline"
@@ -247,7 +331,7 @@ export default function TemplateImport({
             onClick={() => void refreshStatus()}
           >
             <RefreshCw />
-            重新检查
+            {t("templateImport.checkAgain")}
           </Button>
         </div>
       )}

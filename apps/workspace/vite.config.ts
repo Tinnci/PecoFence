@@ -1,4 +1,5 @@
-import { defineConfig, type Plugin } from "vite";
+import { defineConfig } from "vitest/config";
+import type { Plugin } from "vite";
 import tailwindcss from "@tailwindcss/vite";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -116,6 +117,7 @@ function localHub(): Plugin {
 export default defineConfig({
   plugins: [tailwindcss(), localHub()],
   clearScreen: false,
+  test: { setupFiles: ["./tests/setup.ts"] },
   resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
   server: {
     host: "127.0.0.1",

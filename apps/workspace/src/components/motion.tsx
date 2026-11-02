@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import type { ReactNode } from "react";
 import { LazyMotion, MotionConfig } from "motion/react";
 import NumberFlow from "@number-flow/react";
@@ -33,8 +34,10 @@ export function Num({
   digits?: number;
   sign?: boolean;
 }) {
+  const { i18n } = useTranslation();
   return (
     <NumberFlow
+      locales={i18n.resolvedLanguage}
       value={value}
       prefix={prefix}
       suffix={suffix}

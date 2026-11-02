@@ -1,3 +1,5 @@
+import { useTranslation } from "react-i18next";
+import { t } from "./i18n";
 import { useState } from "react";
 import { Check, ChevronRight, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -76,6 +78,7 @@ export default function Checklist({
   projectSetup?: ProjectSetup;
   onOpenProject?: () => void;
 }) {
+  useTranslation();
   const components = report.components.filter((c) => c.lifecycle !== "paused");
   const [current, setCurrent] = useState(
     selected ??
@@ -91,7 +94,10 @@ export default function Checklist({
   }
   return (
     <div className="checklist-layout">
-      <aside className="component-list" aria-label="选择组件">
+      <aside
+        className="component-list"
+        aria-label={t("checklist.chooseComponent")}
+      >
         <ScrollArea className="component-scroll">
           <ItemGroup>
             {components.map((c) => (
@@ -116,7 +122,11 @@ export default function Checklist({
           </ItemGroup>
         </ScrollArea>
       </aside>
-      <Card className="setup-detail" aria-label="组件设置" role="region">
+      <Card
+        className="setup-detail"
+        aria-label={t("checklist.componentSetup")}
+        role="region"
+      >
         <CardContent>
           {component ? (
             <>
@@ -168,7 +178,9 @@ export default function Checklist({
                       <CheckResult observation={step.observation} />
                       {step.needs.length ? (
                         <div className="prerequisites">
-                          <Badge variant="ghost">前置步骤</Badge>
+                          <Badge variant="ghost">
+                            {t("checklist.prerequisites")}
+                          </Badge>
                           {step.needs.map((id) => {
                             const local = component.setup.find(
                               (s) => s.id === id,
@@ -192,7 +204,9 @@ export default function Checklist({
                                 key={id}
                                 variant="secondary"
                                 size="sm"
-                                aria-label={`配置${dependency.name}`}
+                                aria-label={t("checklist.configure", {
+                                  v0: dependency.name,
+                                })}
                                 onClick={() => onOpen(id)}
                               >
                                 {dependency.name}
@@ -200,7 +214,11 @@ export default function Checklist({
                                 <ChevronRight />
                               </Button>
                             ) : (
-                              <small key={id}>{id} · 暂未找到配置说明</small>
+                              <small key={id}>
+                                {t("checklist.noSetupInstructionsFoundYet", {
+                                  v0: id,
+                                })}
+                              </small>
                             );
                           })}
                         </div>
@@ -230,7 +248,8 @@ export default function Checklist({
                       {component.id === "spm" && step.id === "project" ? (
                         <Collapsible className="advanced-import">
                           <CollapsibleTrigger className="details-trigger">
-                            高级 · 从配置文件导入 <ChevronDown size={12} />
+                            {t("checklist.advancedImportConfigurationFile")}
+                            <ChevronDown size={12} />
                           </CollapsibleTrigger>
                           <CollapsibleContent>
                             <TemplateImport
@@ -242,7 +261,11 @@ export default function Checklist({
                         </Collapsible>
                       ) : null}
                       {step.state === "planned" ? (
-                        <small>配置入口将在后续版本提供</small>
+                        <small>
+                          {t(
+                            "checklist.configurationWillBeAvailableInAFutureVersion",
+                          )}
+                        </small>
                       ) : null}
                     </div>
                   </article>
@@ -253,18 +276,24 @@ export default function Checklist({
                     <EmptyMedia variant="icon">
                       <ShieldCheck />
                     </EmptyMedia>
-                    <EmptyTitle>暂无额外配置步骤</EmptyTitle>
+                    <EmptyTitle>
+                      {t("checklist.noAdditionalSetupSteps")}
+                    </EmptyTitle>
                     <EmptyDescription>
                       {component.checkable
-                        ? "可检查此组件，确认当前状态。"
-                        : "此组件尚未声明自动检查项。"}
+                        ? t(
+                            "checklist.checkThisComponentToConfirmItsCurrentStatus",
+                          )
+                        : t("checklist.thisComponentHasNoAutomaticChecksYet")}
                     </EmptyDescription>
                   </EmptyHeader>
                 </Empty>
               )}
             </>
           ) : (
-            <p>尚未发现组件。请先安装开发工具。</p>
+            <p>
+              {t("checklist.noComponentsFoundInstallTheDevelopmentToolsFirst")}
+            </p>
           )}
         </CardContent>
       </Card>

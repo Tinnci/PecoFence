@@ -15,6 +15,8 @@ import { FocusHome, FollowPage, lede, useFocus } from "../src/Focus";
 import { ModelPage, jobsFor, phaseOf, progress, span } from "../src/Model";
 import type { ModelTab } from "../src/api";
 
+import { queryClient } from "../src/focus-cache";
+
 const targets = { severe_pct: 95, overall_pct: 85, fatal_max: 0 };
 const summary = (code: string, measures: number[], extra = {}) => ({
   code,
@@ -184,6 +186,7 @@ const listed = (number: number, state: string, rules: string[] = []) => ({
 });
 
 beforeEach(() => {
+  queryClient.clear();
   mocks.focus.mockReset().mockImplementation(async (action: string) => {
     if (action === "list")
       return {
@@ -230,7 +233,11 @@ beforeEach(() => {
     return {};
   });
 });
-afterEach(cleanup);
+afterEach(async () => {
+  cleanup();
+  await queryClient.cancelQueries();
+  queryClient.clear();
+});
 
 function Harness({
   view,
@@ -400,6 +407,16 @@ describe("followed models", () => {
     render(<Harness view="model" code="E6765SM" />);
     expect(await screen.findByText(/没有关注 E6765SM/)).toBeTruthy();
     expect(screen.getByRole("button", { name: "关注 E6765SM" })).toBeTruthy();
+  });
+
+  it("defers Jenkins reads while editing settings", async () => {
+    render(<Harness view="model" initialTab="settings" />);
+    await screen.findByRole("region", { name: "规则" });
+    expect(
+      mocks.focus.mock.calls.some(
+        (call) => call[0] === "builds" || call[0] === "builds_cached",
+      ),
+    ).toBe(false);
   });
 
   it("reads phases and progress the way SPM does", () => {

@@ -1,4 +1,13 @@
-import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import {
+  languagePreference,
+  setLanguage,
+  type LanguagePreference,
+} from "./i18n";
+import { t } from "./i18n";
+import { useModelPreference } from "./model-navigation";
+import { prefetchBuilds, queryClient, focusKey } from "./focus-cache";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -39,6 +48,11 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuGroup,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { FocusHome, FollowPage, shortfall, useFocus } from "./Focus";
@@ -90,6 +104,7 @@ function ComponentCard({
   component: Component;
   onOpen: () => void;
 }) {
+  useTranslation();
   return (
     <Item
       variant="outline"
@@ -107,20 +122,46 @@ function ComponentCard({
         <ItemDescription>{component.summary}</ItemDescription>
       </ItemContent>
       <ItemFooter className="card-bottom">
-        查看配置 <ArrowRight size={14} />
+        {t("app.viewConfiguration")}
+        <ArrowRight size={14} />
       </ItemFooter>
     </Item>
   );
 }
 export default function App() {
+  useTranslation();
   const [page, setPage] = useState<Page>("home");
   const [modelCode, setModelCode] = useState<string | null>(null);
   const [followCode, setFollowCode] = useState<string | undefined>(undefined);
   const focusState = useFocus(desktop());
-  const [modelTab, setModelTab] = useState<ModelTab>("overview");
+  const [modelTab, setModelTab] = useModelPreference<ModelTab>(
+    modelCode ?? "",
+    "tab",
+    "overview",
+  );
+  const prefetchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
+  const cancelPrefetch = () => clearTimeout(prefetchTimer.current);
+  function warmModel(code: string) {
+    cancelPrefetch();
+    prefetchTimer.current = setTimeout(() => void prefetchBuilds(code), 150);
+  }
+  useEffect(() => cancelPrefetch, []);
+  const scroll = useRef<HTMLDivElement>(null);
+  const positions = useRef(new Map<string, number>());
+  const viewKey = `${page}:${modelCode ?? ""}:${modelTab}`;
+  useLayoutEffect(() => {
+    const element = scroll.current;
+    if (!element) return;
+    element.scrollTop = positions.current.get(viewKey) ?? 0;
+    return () => {
+      positions.current.set(viewKey, element.scrollTop);
+    };
+  }, [viewKey]);
   function openModel(code: string) {
+    void focusState.ensure(code);
     setModelCode(code);
-    setModelTab("overview");
     setPage("model");
   }
   const [hub, setHub] = useState<HubReport | null>(null);
@@ -199,7 +240,8 @@ export default function App() {
     void navigation((next, code, tab) => {
       if (!mounted.current) return;
       if (code) setModelCode(code);
-      if (tab) setModelTab(tab);
+      if (tab && code)
+        queryClient.setQueryData([...focusKey, "view", code, "tab"], tab);
       setPage(next);
     })
       .then((fn) => {
@@ -244,13 +286,22 @@ export default function App() {
     active.find((c) => attention(c) && c.setup.length);
   const checkedCount = active.filter((c) => c.checked_at).length;
   const headings: Record<Page, [string, string]> = {
-    home: ["让工作，从这里开始。", "项目、工具与连接，都有各自的位置。"],
-    setup: ["设置清单", "按组件查看配置要求和当前进度。"],
-    health: ["运行状况", "检查本机工具与连接的当前状态。"],
-    project: ["新建 SPM 项目", "从选择范围到第一批数据。"],
-    activity: ["代码活动", "Gerrit 变更，按天。"],
-    model: ["机型", ""],
-    follow: ["关注机型", ""],
+    home: [
+      t("app.startYourWorkHere"),
+      t("app.projectsToolsAndConnectionsAllInOnePlace"),
+    ],
+    setup: [
+      t("app.setupChecklist"),
+      t("app.configurationRequirementsAndProgressByComponent"),
+    ],
+    health: [t("app.health"), t("app.checkLocalToolsAndConnections")],
+    project: [
+      t("app.newSPMProject"),
+      t("app.fromChoosingAScopeToYourFirstData"),
+    ],
+    activity: [t("app.codeActivity"), t("app.gerritChangesDayByDay")],
+    model: [t("app.model"), ""],
+    follow: [t("app.followAModel"), ""],
   };
   const followed = focusState.summary?.models.length
     ? focusState.ordered
@@ -260,10 +311,10 @@ export default function App() {
     return { code: m.code, short: summary ? shortfall(summary) > 0 : null };
   });
   const more = [
-    { id: "setup", title: "设置清单" },
-    { id: "health", title: "运行状况" },
-    { id: "activity", title: "代码活动" },
-    { id: "project", title: "新建 SPM 项目" },
+    { id: "setup", title: t("app.setupChecklist") },
+    { id: "health", title: t("app.health") },
+    { id: "activity", title: t("app.codeActivity") },
+    { id: "project", title: t("app.newSPMProject") },
   ] as const;
   return (
     <TooltipProvider>
@@ -278,10 +329,10 @@ export default function App() {
             }}
           >
             <BrandMark busy={focusState.refreshing} />
-            工作台
+            {t("app.workspace")}
           </button>
           <nav
-            aria-label="主导航"
+            aria-label={t("app.mainNavigation")}
             className="model-tabs"
             data-tauri-drag-region
           >
@@ -291,7 +342,7 @@ export default function App() {
               aria-current={page === "home" ? "page" : undefined}
               onClick={() => setPage("home")}
             >
-              关注
+              {t("app.following")}
               {page === "home" ? <TabLine id="appbar" /> : null}
             </button>
             {tabs.map((t) => (
@@ -303,6 +354,9 @@ export default function App() {
                   page === "model" && modelCode === t.code ? "page" : undefined
                 }
                 onClick={() => openModel(t.code)}
+                onMouseEnter={() => warmModel(t.code)}
+                onMouseLeave={cancelPrefetch}
+                onFocus={() => void prefetchBuilds(t.code)}
               >
                 <i
                   className={
@@ -324,17 +378,37 @@ export default function App() {
               setPage("follow");
             }}
           >
-            <Plus /> 关注机型
+            <Plus /> {t("app.followAModel2")}
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger
               render={
-                <Button variant="ghost" aria-label="更多">
+                <Button variant="ghost" aria-label={t("app.more")}>
                   <Menu />
                 </Button>
               }
             />
             <DropdownMenuContent align="end">
+              <DropdownMenuGroup>
+                <DropdownMenuLabel>{t("language.label")}</DropdownMenuLabel>
+                <DropdownMenuRadioGroup
+                  value={languagePreference()}
+                  onValueChange={(value) =>
+                    void setLanguage(value as LanguagePreference)
+                  }
+                >
+                  <DropdownMenuRadioItem closeOnClick value="system">
+                    {t("language.system")}
+                  </DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem closeOnClick value="zh-CN">
+                    简体中文
+                  </DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem closeOnClick value="en">
+                    English
+                  </DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+              </DropdownMenuGroup>
+              <DropdownMenuSeparator />
               {more.map((item) => (
                 <DropdownMenuItem
                   key={item.id}
@@ -350,10 +424,11 @@ export default function App() {
           </DropdownMenu>
           {isTauri() ? <WindowControls /> : null}
         </header>
-        <div className="window-scroll">
+        <div className="window-scroll" ref={scroll}>
           <main id="main" className="page-content">
             {page === "model" && modelCode ? (
               <ModelPage
+                key={modelCode}
                 state={focusState}
                 code={modelCode}
                 tab={modelTab}
@@ -388,18 +463,17 @@ export default function App() {
                     {busy ? <Spinner aria-hidden="true" /> : <RefreshCw />}
                     {busy
                       ? lastRequest.current.check
-                        ? "正在检查…"
-                        : "正在读取…"
-                      : "检查状态"}
+                        ? t("app.checking")
+                        : t("app.loading")
+                      : t("app.checkStatus")}
                   </Button>
                 </div>
                 {page === "home" ? (
                   <section className="follow-invite">
                     <div>
-                      <h2>从关注一个机型开始</h2>
+                      <h2>{t("app.startByFollowingAModel")}</h2>
                       <p>
-                        选择你负责的机型，工作台会把它在飞书项目、Jira 和 Gerrit
-                        里的问题和代码变更放在一起，并按你的规则提醒。
+                        {t("app.chooseAModelYouOwnTheWorkspaceBringsTogether")}
                       </p>
                     </div>
                     <Button
@@ -408,7 +482,8 @@ export default function App() {
                         setPage("follow");
                       }}
                     >
-                      关注机型 <ArrowRight />
+                      {t("app.followAModel3")}
+                      <ArrowRight />
                     </Button>
                   </section>
                 ) : null}
@@ -429,7 +504,8 @@ export default function App() {
                 </div>
                 {!report && !error ? (
                   <div className="loading" role="status">
-                    <Spinner aria-hidden="true" /> 正在发现本机组件…
+                    <Spinner aria-hidden="true" />{" "}
+                    {t("app.discoveringLocalComponents")}
                   </div>
                 ) : null}
                 {report ? (
@@ -483,12 +559,16 @@ export default function App() {
                       hidden={page === "activity"}
                     >
                       <span>
-                        {report.checked ? "最近全量检查" : "最近读取"} ·{" "}
-                        {new Date(report.observed_at).toLocaleString("zh-CN")}
+                        {report.checked
+                          ? t("app.lastFullCheck")
+                          : t("app.lastLoaded")}{" "}
+                        · {new Date(report.observed_at).toLocaleString("zh-CN")}
                       </span>
                       {report.unmanifested.length ? (
                         <span>
-                          {report.unmanifested.length} 个组件尚未提供配置说明
+                          {t("app.componentsHaveNoSetupInstructionsYet", {
+                            v0: report.unmanifested.length,
+                          })}
                         </span>
                       ) : null}
                     </footer>
@@ -519,24 +599,31 @@ function HomeOverview({
   active: Component[];
   openSetup: (id?: string) => void;
 }) {
+  useTranslation();
   return (
     <>
       <Card className="welcome-panel">
         <CardContent className="welcome-body">
           <div className="welcome-main">
-            <span className="eyebrow">准备好你的工作空间</span>
+            <span className="eyebrow">{t("app.prepareYourWorkspace")}</span>
             <h2>
               {totals.total > 0 && totals.done === totals.total
-                ? "配置已完成"
-                : "连接工具，开始协作"}
+                ? t("app.setupComplete")
+                : t("app.connectYourToolsAndStartCollaborating")}
             </h2>
             <p>
               {next
-                ? `下一步：${next.name} · ${next.setup.find((s) => s.state !== "done")?.title ?? "查看配置"}`
-                : "查看设置清单，了解本机工具的配置要求。"}
+                ? t("app.next", {
+                    v0: next.name,
+                    v1:
+                      next.setup.find((s) => s.state !== "done")?.title ??
+                      t("app.viewConfiguration2"),
+                  })
+                : t("app.openTheSetupChecklistToSeeLocalToolRequirements")}
             </p>
             <Button size="lg" onClick={() => openSetup(next?.id)}>
-              查看设置清单 <ArrowRight />
+              {t("app.viewSetupChecklist")}
+              <ArrowRight />
             </Button>
           </div>
           <div className="progress-box">
@@ -544,21 +631,23 @@ function HomeOverview({
               {totals.done}
               <span> / {totals.total}</span>
             </strong>
-            <p>配置步骤已完成</p>
+            <p>{t("app.setupStepsCompleted")}</p>
             <Progress
               className="setup-progress"
               value={totals.total ? (totals.done / totals.total) * 100 : 0}
-              aria-label="配置完成进度"
+              aria-label={t("app.setupProgress")}
             />
             <small>
-              {checkedCount ? `${checkedCount} 个组件已检查` : "状态尚未检查"}
+              {checkedCount
+                ? t("app.componentsChecked", { count: checkedCount })
+                : t("app.statusHasNotBeenChecked")}
             </small>
           </div>
         </CardContent>
       </Card>
       <section className="projects">
         <div className="section-heading">
-          <h2>你的项目</h2>
+          <h2>{t("app.yourProjects")}</h2>
           <span className="quiet-label">SPM</span>
         </div>
         <Empty className="project-empty">
@@ -566,19 +655,20 @@ function HomeOverview({
             <EmptyMedia variant="icon">
               <LayoutDashboard />
             </EmptyMedia>
-            <EmptyTitle>从项目配置开始</EmptyTitle>
+            <EmptyTitle>{t("app.startWithProjectConfiguration")}</EmptyTitle>
             <EmptyDescription>
-              导入 SPM 负责人提供的项目模板，再连接来源。
+              {t("app.importTheProjectTemplateProvidedByYourSPMOwner")}
             </EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
             <Button variant="outline" onClick={() => openSetup("spm")}>
-              查看项目配置 <ArrowRight />
+              {t("app.viewProjectConfiguration")}
+              <ArrowRight />
             </Button>
           </EmptyContent>
         </Empty>
       </section>
-      {groups.map(([group, title]) => {
+      {groups().map(([group, title]) => {
         const rows = active
           .filter((c) => c.group === group)
           .sort((a, b) => Number(b.id === "spm") - Number(a.id === "spm"));
@@ -603,7 +693,8 @@ function HomeOverview({
       {report.components.some((c) => c.lifecycle === "paused") ? (
         <Collapsible className="paused">
           <CollapsibleTrigger className="details-trigger">
-            已暂停的组件 <ChevronDown size={12} />
+            {t("app.pausedComponents")}
+            <ChevronDown size={12} />
           </CollapsibleTrigger>
           <CollapsibleContent>
             {report.components

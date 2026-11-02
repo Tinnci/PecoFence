@@ -1,32 +1,68 @@
+import { t } from "./i18n";
 import type { Component, HubReport } from "./contracts/hub";
 
-export const groups = [
-  ["delivery", "交付与构建"],
-  ["people", "沟通与人员"],
-  ["output", "报告与产出"],
-  ["desktop", "桌面与工具"],
-] as const;
+export const groups = () =>
+  [
+    ["delivery", t("model.deliveryAndBuilds")],
+    ["people", t("model.communicationAndPeople")],
+    ["output", t("model.reportsAndOutputs")],
+    ["desktop", t("model.desktopAndTools")],
+  ] as const;
 export const stateLabels: Record<string, string> = {
-  ready: "已就绪",
-  installed: "已安装",
-  not_installed: "未安装",
-  setup_pending: "待配置",
-  unchecked: "未检查",
-  unknown: "状态未知",
-  action_needed: "需要处理",
-  invalid: "配置有误",
-  paused: "已暂停",
-  planned: "待支持",
-  manual: "需手动配置",
-  done: "已完成",
-  connected: "已连接",
-  signed_out: "未登录",
-  not_configured: "未配置",
-  unreachable: "无法连接",
-  error: "检查失败",
+  get ready() {
+    return t("model.ready");
+  },
+  get installed() {
+    return t("model.installed");
+  },
+  get not_installed() {
+    return t("model.notInstalled");
+  },
+  get setup_pending() {
+    return t("model.setupNeeded");
+  },
+  get unchecked() {
+    return t("model.notChecked");
+  },
+  get unknown() {
+    return t("model.unknownStatus");
+  },
+  get action_needed() {
+    return t("model.actionNeeded");
+  },
+  get invalid() {
+    return t("model.invalidConfiguration");
+  },
+  get paused() {
+    return t("model.paused");
+  },
+  get planned() {
+    return t("model.planned");
+  },
+  get manual() {
+    return t("model.manualConfiguration");
+  },
+  get done() {
+    return t("model.done");
+  },
+  get connected() {
+    return t("model.connected");
+  },
+  get signed_out() {
+    return t("model.signedOut");
+  },
+  get not_configured() {
+    return t("model.notConfigured");
+  },
+  get unreachable() {
+    return t("model.unreachable");
+  },
+  get error() {
+    return t("model.checkFailed");
+  },
 };
 export function label(state: string) {
-  return stateLabels[state] ?? "状态未知";
+  return stateLabels[state] ?? t("model.unknownStatus");
 }
 export function progress(report: HubReport) {
   const steps = report.components
@@ -71,25 +107,25 @@ export function checkExplanation(
   observation: import("./contracts/hub").Observation,
 ): string {
   if (observation.reason === "check_timeout")
-    return "检查超时，暂时无法确认状态。稍后可重试此组件。";
+    return t("model.theCheckTimedOutTryCheckingThisComponentAgain");
   if (observation.reason === "check_unavailable")
-    return "检查程序无法运行。请确认组件已安装，再重试。";
+    return t("model.theCheckCouldNotRunConfirmTheComponentIs");
   if (observation.reason === "inconsistent_result")
-    return "检查返回了不一致的结果。请更新组件后重试。";
+    return t("model.theCheckReturnedInconsistentResultsUpdateTheComponentAnd");
   const code = observation.code?.toLowerCase();
   if (code === "proxy_unavailable")
-    return "网页转发服务无法连接。先检查网页数据转发，再重试。";
+    return t("model.theBrowserForwarderIsUnreachableCheckItThenTry");
   if (code === "transport_error")
-    return "工具报告连接失败。请检查本机客户端及其连接。";
+    return t("model.theToolReportedAConnectionFailureCheckTheLocal");
   if (
     code &&
     /^(auth|unauthorized|forbidden|invalid_token|credentials)/.test(code)
   )
-    return "请确认登录、凭据和访问权限，再查看此组件的配置要求。";
-  if (observation.state === "done") return "检查已通过。";
+    return t("model.checkYourSignInCredentialsAndAccessPermissionsThen");
+  if (observation.state === "done") return t("model.checkPassed");
   if (observation.state === "action_needed")
-    return "组件检查未通过，请查看配置清单和依赖组件。";
-  return "尚未确认组件状态，可重试检查。";
+    return t("model.theComponentCheckFailedReviewItsSetupChecklistAnd");
+  return t("model.componentStatusHasNotBeenConfirmedTryCheckingAgain");
 }
 
 /**

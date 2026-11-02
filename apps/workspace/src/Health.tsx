@@ -1,3 +1,5 @@
+import { useTranslation } from "react-i18next";
+import { t } from "./i18n";
 import type { Component, HubReport } from "./contracts/hub";
 import { Status } from "./Status";
 import { Button } from "@/components/ui/button";
@@ -9,6 +11,7 @@ import {
   Dependencies,
 } from "./CheckResult";
 function StepFailures({ component }: { component: Component }) {
+  useTranslation();
   const status = component.status;
   return component.setup
     .filter((step) => {
@@ -46,8 +49,9 @@ export default function Health({
   onCheck: (id: string) => void;
   onOpen: (id: string) => void;
 }) {
+  useTranslation();
   return (
-    <section className="health-list" aria-label="组件运行状况">
+    <section className="health-list" aria-label={t("health.componentHealth")}>
       {report.components.map((c) => (
         <Card
           className="health-row"
@@ -76,7 +80,9 @@ export default function Health({
                 </p>
               ))}
               {c.lifecycle !== "paused" && !c.checkable ? (
-                <small className="muted">暂无自动检查项</small>
+                <small className="muted">
+                  {t("health.noAutomaticChecksYet")}
+                </small>
               ) : null}
             </div>
             <div className="health-actions">
@@ -91,7 +97,7 @@ export default function Health({
                 onClick={() => onOpen(c.id)}
                 disabled={c.lifecycle === "paused"}
               >
-                查看配置
+                {t("app.viewConfiguration2")}
               </Button>
             </div>
           </CardContent>
