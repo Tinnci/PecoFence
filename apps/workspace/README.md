@@ -287,7 +287,9 @@ Each followed model has four subpages under its head (`--open model:<CODE>[:over
   while it runs) and the branches grouped by phase.
 - **分支**: branches grouped as 主线, IR, PB and MP (read from `_IR`, `_PB`, `_MP` in the name).
   A branch lists its changes from the last summary with what the rules made of each, filtered
-  by 需要留意, 全部, 只记录 or 已忽略, and the jobs whose current parameters name it.
+  by 需要留意, 全部, 只记录 or 已忽略, and its Jenkins jobs: those whose current parameters name
+  the branch, else those of the same phase whose name starts it (E6767SM_IR → E6767SM_SYS_A16_IR).
+  The daily-build parameters name manifests (`PROJ_T`, `REPO_URL_T`), not Gerrit branches.
 - **构建**: jobs from `spm focus builds`, grouped by phase. A running build shows elapsed time
   against Jenkins' estimate and when it should end, and the page rereads every minute while
   one runs. Ten bars give the recent durations and results. 当前配置 is the newest build's

@@ -12,7 +12,7 @@ import { useState } from "react";
 const mocks = vi.hoisted(() => ({ focus: vi.fn() }));
 vi.mock("../src/api", () => mocks);
 import { FocusHome, FollowPage, lede, useFocus } from "../src/Focus";
-import { ModelPage, phaseOf, progress, span } from "../src/Model";
+import { ModelPage, jobsFor, phaseOf, progress, span } from "../src/Model";
 import type { ModelTab } from "../src/api";
 
 const targets = { severe_pct: 95, overall_pct: 85, fatal_max: 0 };
@@ -401,6 +401,14 @@ describe("followed models", () => {
       2 * hour,
     );
     expect(late).toMatchObject({ pct: 99, late: true });
+    const jobs = builds.jobs.map((j) => ({ ...j, parameters: {} }));
+    expect(
+      jobsFor("E6767SM_SYS_A16_IR", "ir", jobs as never).map((j) => j.name),
+    ).toEqual(["E6767SM_IR"]);
+    expect(jobsFor("E6765SM_E6767SM_VND_A13_IR", "ir", jobs as never)).toEqual(
+      [],
+    );
+    expect(jobsFor("E6767SM_SYS_A16_MP", "mp", jobs as never)).toEqual([]);
   });
 
   it("sets a freeze date and targets in place and saves them together", async () => {

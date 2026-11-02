@@ -466,13 +466,21 @@ export function phaseOf(name: string) {
           ? "mp"
           : "main";
 }
-/** Jobs whose current parameters name the branch. */
-const jobsFor = (branch: string, jobs: JobView[] = []) =>
-  jobs.filter((j) =>
+/** Jobs whose current parameters name the branch; otherwise jobs of the same phase whose name,
+ * without its phase suffix, starts the branch name (E6767SM_IR → E6767SM_SYS_A16_IR). */
+export function jobsFor(branch: string, phase: string, jobs: JobView[] = []) {
+  const named = jobs.filter((j) =>
     Object.values(j.parameters).some(
       (v) => typeof v === "string" && v.split(/[\s,;:]+/).includes(branch),
     ),
   );
+  if (named.length) return named;
+  return jobs.filter((j) => {
+    if (j.disabled || j.phase !== phase) return false;
+    const stem = j.name.replace(/_(IR|PB|MP)$/i, "");
+    return branch.toUpperCase().startsWith(`${stem.toUpperCase()}_`);
+  });
+}
 
 const stateNames: Record<string, string> = {
   flagged: "需要留意",
@@ -536,7 +544,8 @@ function BranchesTab({
     )
       setFilter("all");
   }, [list]);
-  const jobs = branch ? jobsFor(branch, builds.data?.jobs) : [];
+  const jobs =
+    branch && strip ? jobsFor(branch, strip.phase, builds.data?.jobs) : [];
   const shown = list?.filter((l) => inFilter(l, filter)) ?? [];
   return (
     <div className="branches-tab">
@@ -588,7 +597,7 @@ function BranchesTab({
               ))}
             </div>
           ) : builds.data ? (
-            <p className="quiet">没有构建任务的当前配置指向这个分支。</p>
+            <p className="quiet">没有对应这个分支的构建任务。</p>
           ) : null}
           <div className="segmented" role="radiogroup" aria-label="筛选">
             {filters.map(([key, label]) => (
