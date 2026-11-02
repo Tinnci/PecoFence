@@ -4,7 +4,11 @@ import {
   sourceTimelineJobs,
 } from "./job-sources";
 import { JobSourcesEditor, SourceRoutingNote } from "./JobSources";
-import { buildAssociation, withBranchJob } from "./build-association";
+import {
+  buildAssociation,
+  withBranchJob,
+  withBranchJobs,
+} from "./build-association";
 import { BranchBuildAssociation } from "./BranchBuildAssociation";
 import { ManifestInputs } from "./ManifestInputs";
 import {
@@ -708,12 +712,16 @@ const filters = () =>
     ["all", t("model.all")],
     ["logged", t("focus.logOnly")],
     ["ignored", t("model.ignored")],
+    ["abandoned", t("model.abandoned")],
   ] as const;
-const inFilter = (l: Listed, f: string) =>
+export const inFilter = (l: Listed, f: string) =>
   f === "all" ||
-  (f === "attention"
-    ? ["flagged", "tracked"].includes(l.state)
-    : l.state === f);
+  (f === "abandoned"
+    ? l.status.toUpperCase() === "ABANDONED"
+    : l.status.toUpperCase() !== "ABANDONED" &&
+      (f === "attention"
+        ? ["flagged", "tracked"].includes(l.state)
+        : l.state === f));
 
 function BranchesTab({
   m,
@@ -722,6 +730,7 @@ function BranchesTab({
   selected,
   onSelect,
   onAssociate,
+  onSetJobs,
 }: {
   m: ModelSummary;
   saved?: FocusModel;
@@ -729,6 +738,7 @@ function BranchesTab({
   selected: string | null;
   onSelect: (branch: string) => void;
   onAssociate?: (branch: string, job: string | null) => Promise<unknown>;
+  onSetJobs?: (branch: string, jobs: string[]) => Promise<unknown>;
 }) {
   useTranslation();
   const groups = branchGroups(m, saved);
@@ -783,11 +793,16 @@ function BranchesTab({
         : allJobs.filter((job) => job.job === timelineJob);
   const routes = sourceRoutes(saved, branch ?? "");
   const historicalJobs = (builds.data?.jobs ?? []).filter((job) =>
-    routes.historical.some((r) => r.job === job.job),
+    routes.historical.some((r) => r.job === job.job) &&
+    (saved?.branch_jobs?.[branch] === undefined || saved.branch_jobs[branch].includes(job.job)),
   );
   const timelineJobs =
-    timelineJob === "suggested" && association.kind === "historical"
-      ? historicalJobs
+    timelineJob === "suggested"
+      ? [
+          ...new Map(
+            [...selectedJobs, ...historicalJobs].map((job) => [job.job, job]),
+          ).values(),
+        ]
       : selectedJobs;
   const events = branchTimeline(
     shown,
@@ -911,14 +926,27 @@ function BranchesTab({
             <BranchBuildAssociation
               key={branch}
               association={association}
+              availableJobs={allJobs.filter(
+                (job) =>
+                  !saved?.ignored_jobs?.includes(job.job) &&
+                  !routes.historical.some((route) => route.job === job.job),
+              )}
+              lockedJobs={routes.current.map((route) => route.job)}
+              selectedJobs={[
+                ...new Set([
+                  ...jobs.map((job) => job.job),
+                  ...association.missing,
+                ]),
+              ]}
+              onSet={
+                onSetJobs ? (names) => onSetJobs(branch, names) : undefined
+              }
               loading={builds.loading}
               onConfirm={
                 onAssociate ? (job) => onAssociate(branch, job.job) : undefined
               }
               onReset={
-                onAssociate &&
-                selectedGroup?.jobs === undefined &&
-                saved?.branch_jobs?.[branch] !== undefined
+                onAssociate && saved?.branch_jobs?.[branch] !== undefined
                   ? () => onAssociate(branch, null)
                   : undefined
               }
@@ -953,7 +981,10 @@ function BranchesTab({
             >
               <SelectTrigger size="sm" aria-label={t("timeline.builds")}>
                 <SelectValue>
-                  {(value) => timelineOptions.find((option) => option.value === value)?.label ?? value}
+                  {(value) =>
+                    timelineOptions.find((option) => option.value === value)
+                      ?.label ?? value
+                  }
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
@@ -1038,7 +1069,9 @@ function BranchesTab({
                           title={`Gerrit #${l.number}`}
                           actions={commitContextActions(l)}
                         >
-                          <li className={`change state-${l.state}`}>
+                          <li
+                            className={`change state-${l.status === "ABANDONED" ? "abandoned" : l.state}`}
+                          >
                             <span
                               className="change-when"
                               title={t("timeline.changeCreated")}
@@ -1054,7 +1087,20 @@ function BranchesTab({
                                 </ExternalLink>
                               </p>
                               <span className="flagged-meta">
-                                {stateNames[l.state]}
+                                <span
+                                  className={`change-status status-${l.status.toLowerCase()}`}
+                                >
+                                  {l.status === "MERGED"
+                                    ? t("model.merged")
+                                    : l.status === "ABANDONED"
+                                      ? t("model.abandoned")
+                                      : l.status === "NEW"
+                                        ? t("model.awaitingReview")
+                                        : l.status}
+                                </span>
+                                {l.status !== "ABANDONED"
+                                  ? ` · ${stateNames[l.state] ?? l.state}`
+                                  : ""}
                                 {l.rules.length
                                   ? ` · ${l.rules.map((r) => ruleNames[r] ?? r).join("、")}`
                                   : ""}{" "}
@@ -2058,6 +2104,12 @@ export function ModelPage({
               builds={builds}
               selected={branch}
               onSelect={setBranch}
+              onSetJobs={
+                saved
+                  ? (branch, jobs) =>
+                      state.save(withBranchJobs(saved, branch, jobs), false)
+                  : undefined
+              }
               onAssociate={
                 saved
                   ? (branch, job) =>

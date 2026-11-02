@@ -4063,3 +4063,13 @@ a.external-link.bar { text-decoration: none; }
 .source-history-editor > .link {
   justify-self: start;
 }
+
+.association-targets { margin-block: 8px; }
+.association-targets fieldset { display: grid; gap: 8px; margin-top: 8px; }
+.association-targets label { display: flex; gap: 8px; align-items: start; overflow-wrap: anywhere; }
+.association-targets small { display: block; }
+
+.change-status { font-weight: 500; }
+.status-merged { color: var(--primary); }
+.state-abandoned .change-status { color: var(--muted-foreground); }
+.state-abandoned .flagged-meta { opacity: .75; }

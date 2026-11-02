@@ -13,7 +13,14 @@ import { useState } from "react";
 const mocks = vi.hoisted(() => ({ focus: vi.fn() }));
 vi.mock("../src/api", () => mocks);
 import { FocusHome, FollowPage, lede, useFocus } from "../src/Focus";
-import { ModelPage, jobsFor, phaseOf, progress, span } from "../src/Model";
+import {
+  ModelPage,
+  jobsFor,
+  phaseOf,
+  progress,
+  span,
+  inFilter,
+} from "../src/Model";
 import type { ModelTab } from "../src/api";
 
 import { queryClient } from "../src/focus-cache";
@@ -452,7 +459,16 @@ describe("followed models", () => {
       if (["summary", "cached", "refresh"].includes(action))
         return { summary: { models: [model] } };
       if (["builds", "builds_cached"].includes(action))
-        return { builds: { ...builds, code: "E6751SM", jobs: [candidate] } };
+        return {
+          builds: {
+            ...builds,
+            code: "E6751SM",
+            jobs: [
+              candidate,
+              { ...candidate, job: "folder/E6751SM-B", name: "E6751SM-B" },
+            ],
+          },
+        };
       if (action === "changes") return { changes: [] };
       if (action === "save") {
         saved = args.model;
@@ -469,9 +485,24 @@ describe("followed models", () => {
     );
     await screen.findByText("本地配置关联", { exact: false });
     expect(saved.branch_jobs).toEqual({ [branch]: ["folder/E6751SM-A"] });
-    expect(screen.getByRole("combobox", { name: "构建标记" }).textContent).not.toContain("suggested");
+    expect(
+      screen.getByRole("combobox", { name: "构建标记" }).textContent,
+    ).not.toContain("suggested");
     expect(mocks.focus.mock.calls.map((c) => c[0])).toEqual(["save"]);
     expect(screen.getByText(/Jenkins #57/)).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "关联构建目标" }));
+    await userEvent.click(
+      await screen.findByRole("checkbox", { name: /E6751SM-B/ }),
+    );
+    await waitFor(() =>
+      expect(saved.branch_jobs![branch]).toEqual([
+        "folder/E6751SM-A",
+        "folder/E6751SM-B",
+      ]),
+    );
+    expect(screen.getByText("E6751SM-A · Jenkins #57")).toBeTruthy();
+    expect(screen.getByText("E6751SM-B · Jenkins #57")).toBeTruthy();
+    expect(mocks.focus.mock.calls.map((c) => c[0])).toEqual(["save", "save"]);
     await userEvent.click(screen.getByRole("button", { name: "恢复自动识别" }));
     await screen.findByText("找到同型号候选任务，关联待确认");
     expect(saved.branch_jobs).toEqual({});
@@ -671,4 +702,16 @@ describe("followed models", () => {
     );
     expect(screen.getByRole("tabpanel")).toBeTruthy();
   });
+});
+
+it("keeps cached abandoned changes out of attention and log filters", () => {
+  const change = {
+    status: "ABANDONED",
+    state: "tracked",
+  } as import("../src/contracts/setup").Listed;
+  expect(inFilter(change, "attention")).toBe(false);
+  expect(inFilter(change, "logged")).toBe(false);
+  expect(inFilter(change, "abandoned")).toBe(true);
+  expect(inFilter(change, "all")).toBe(true);
+  expect(inFilter({ ...change, status: "MERGED" }, "attention")).toBe(true);
 });

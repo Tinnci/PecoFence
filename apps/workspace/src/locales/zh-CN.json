@@ -816,5 +816,9 @@
   "work.showing_other": "{{count}} 条",
   "work.summary": "问题与需求",
   "work.noActivity": "{{days}} 天无动态",
-  "work.checkDue": "到期复查"
+  "work.checkDue": "到期复查",
+  "association.manageTargets": "关联构建目标",
+  "association.sharedHelp": "同一源码分支可以关联多个构建任务。按任务完整路径保存，各目标分别显示构建记录；取消全部勾选可隐藏此分支的构建标记。",
+  "association.targets": "构建任务",
+  "association.sourceManaged": "来源记录关联，请在设置中修改"
 }

@@ -816,5 +816,9 @@
   "work.showing_other": "{{count}} shown",
   "work.summary": "Issues and requirements",
   "work.noActivity": "no activity for {{days}} days",
-  "work.checkDue": "check due"
+  "work.checkDue": "check due",
+  "association.manageTargets": "Manage build targets",
+  "association.sharedHelp": "A shared source branch can link to multiple jobs. Full job paths identify targets independently. Clear all to hide build markers on this branch.",
+  "association.targets": "Build jobs",
+  "association.sourceManaged": "Managed by source routing in Settings"
 }

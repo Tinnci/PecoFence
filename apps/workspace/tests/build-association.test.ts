@@ -1,5 +1,9 @@
 import { expect, it } from "vitest";
-import { buildAssociation, withBranchJob } from "../src/build-association";
+import {
+  buildAssociation,
+  withBranchJob,
+  withBranchJobs,
+} from "../src/build-association";
 import type { FocusModel, JobView } from "../src/contracts/setup";
 const job = (name: string, phase = "main", extra = {}): JobView => ({
   job: `folder/${name}`,
@@ -93,9 +97,50 @@ it("tracks A and B variants independently in the same model", () => {
     for (const layer of ["SYS_A16", "VND_A13"]) {
       const branch = `E6751SM-${variant}_${layer}_MP`;
       const candidate = buildAssociation(branch, "mp", jobs);
-      expect(candidate.candidates.map((j) => j.name)).toEqual([`E6751SM-${variant}`]);
-      const model = { branch_jobs: { [branch]: [`folder/E6751SM-${variant}`] } } as FocusModel;
-      expect(buildAssociation(branch, "mp", jobs, model).jobs.map((j) => j.name)).toEqual([`E6751SM-${variant}`]);
+      expect(candidate.candidates.map((j) => j.name)).toEqual([
+        `E6751SM-${variant}`,
+      ]);
+      const model = {
+        branch_jobs: { [branch]: [`folder/E6751SM-${variant}`] },
+      } as unknown as FocusModel;
+      expect(
+        buildAssociation(branch, "mp", jobs, model).jobs.map((j) => j.name),
+      ).toEqual([`E6751SM-${variant}`]);
     }
   }
+});
+
+it("explicitly shares A source across A and B tasks and preserves missing targets", () => {
+  const jobs = [job("E6751SM-A"), job("E6751SM-B")];
+  const base = { branches: [branch], branch_jobs: {} } as unknown as FocusModel;
+  const shared = withBranchJobs(
+    base,
+    branch,
+    jobs.map((j) => j.job),
+  );
+  expect(buildAssociation(branch, "mp", jobs, shared).jobs).toEqual(jobs);
+  expect(
+    buildAssociation(branch, "mp", jobs.slice(0, 1), shared).missing,
+  ).toEqual(["folder/E6751SM-B"]);
+  expect(
+    buildAssociation(branch, "mp", jobs, withBranchJobs(shared, branch, []))
+      .jobs,
+  ).toEqual([]);
+  expect(shared.branch_jobs![branch]).toHaveLength(2);
+});
+it("a source switch for one target preserves a second target sharing the old source", () => {
+  const a = job("E6751SM-A"),
+    b = job("E6751SM-B");
+  const model = {
+    branch_jobs: { [branch]: [a.job, b.job] },
+    job_sources: {
+      [a.job]: { branch: "PARENT_SYS_MP", previous: [branch], note: "" },
+    },
+  } as unknown as FocusModel;
+  expect(buildAssociation(branch, "mp", [a, b], model).jobs).toEqual([b]);
+  model.branch_jobs = { PARENT_SYS_MP: [b.job] };
+  expect(buildAssociation("PARENT_SYS_MP", "mp", [a, b], model).jobs).toEqual([
+    a,
+    b,
+  ]);
 });

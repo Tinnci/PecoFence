@@ -609,3 +609,12 @@ Lucide supplies icons, Motion and tw-animate-css handle animation, Number Flow
 animates figures, and Geist supplies typography. TanStack Query owns request caching;
 i18next/react-i18next provide translations. `shadcn` is component tooling, not a
 second runtime UI framework.
+
+Branch build associations support multiple jobs sharing one SYS/VND source branch.
+The branch page's Manage build targets disclosure saves explicit full job paths
+locally, including an empty selection; Restore automatic matching removes the
+override. Missing cached targets stay visible. Per-job source routing is applied
+independently, so one target switching branches does not remove another target.
+Source-managed targets are edited in source settings. The timeline picker can show
+all associated targets or one named job; identical build numbers in different jobs
+remain independent. No Jenkins tasks are executed by these controls.

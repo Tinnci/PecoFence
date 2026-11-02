@@ -1,3 +1,8 @@
+import {
+  Collapsible,
+  CollapsibleTrigger,
+  CollapsibleContent,
+} from "./components/ui/collapsible";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link2 } from "lucide-react";
@@ -12,11 +17,19 @@ export function BranchBuildAssociation({
   loading,
   onConfirm,
   onReset,
+  availableJobs = [],
+  selectedJobs = [],
+  lockedJobs = [],
+  onSet,
 }: {
   association: BuildAssociation;
   loading: boolean;
   onConfirm?: (job: JobView) => Promise<unknown>;
   onReset?: () => Promise<unknown>;
+  availableJobs?: JobView[];
+  selectedJobs?: string[];
+  lockedJobs?: string[];
+  onSet?: (jobs: string[]) => Promise<unknown>;
 }) {
   useTranslation();
   const [busy, setBusy] = useState(false);
@@ -32,11 +45,6 @@ export function BranchBuildAssociation({
       setBusy(false);
     }
   }
-  if (
-    (association.kind === "source" || association.kind === "historical") &&
-    !association.missing.length
-  )
-    return null;
   return (
     <div className="build-association">
       {association.kind === "unconfirmed" ? (
@@ -100,6 +108,52 @@ export function BranchBuildAssociation({
               .join(", "),
           })}
         </p>
+      ) : null}
+      {onSet ? (
+        <Collapsible className="association-targets">
+          <CollapsibleTrigger className="link">
+            {t("association.manageTargets")}
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <p className="quiet">{t("association.sharedHelp")}</p>
+            <fieldset disabled={busy}>
+              <legend>{t("association.targets")}</legend>
+              {[
+                ...new Set([
+                  ...availableJobs
+                    .filter((job) => !job.disabled)
+                    .map((job) => job.job),
+                  ...selectedJobs,
+                ]),
+              ].map((name) => (
+                <label key={name}>
+                  <input
+                    type="checkbox"
+                    disabled={lockedJobs.includes(name)}
+                    checked={selectedJobs.includes(name)}
+                    onChange={() =>
+                      void save(() =>
+                        onSet(
+                          selectedJobs.includes(name)
+                            ? selectedJobs.filter((job) => job !== name)
+                            : [...selectedJobs, name],
+                        ),
+                      )
+                    }
+                  />
+                  <span>
+                    {availableJobs.find((job) => job.job === name)?.name ??
+                      name}
+                    {lockedJobs.includes(name)
+                      ? ` · ${t("association.sourceManaged")}`
+                      : ""}
+                    <small className="quiet">{name}</small>
+                  </span>
+                </label>
+              ))}
+            </fieldset>
+          </CollapsibleContent>
+        </Collapsible>
       ) : null}
       {failure ? <FailureNote failure={failure} /> : null}
     </div>

@@ -23,29 +23,27 @@ export function buildAssociation(
   lineJobs?: string[],
 ): BuildAssociation {
   const routes = sourceRoutes(model, branch);
-  if (routes.current.length) {
-    const names = routes.current.map((e) => e.job);
+  const configured = model?.branch_jobs?.[branch] ?? lineJobs;
+  const routed = routes.current.map((entry) => entry.job);
+  const historical = new Set(routes.historical.map((entry) => entry.job));
+  // A job's recorded history applies only to that job, not every build target.
+  if (configured !== undefined || routed.length) {
+    const names = [...new Set([...(configured ?? []), ...routed])].filter(
+      (name) => !historical.has(name) && !model?.ignored_jobs?.includes(name),
+    );
     return {
-      kind: "source",
-      jobs: jobs.filter((j) => names.includes(j.job)),
+      kind:
+        !names.length && historical.size && configured?.length
+          ? "historical"
+          : configured !== undefined
+            ? "configured"
+            : "source",
+      jobs: jobs.filter((job) => names.includes(job.job)),
       candidates: [],
-      missing: names.filter((name) => !jobs.some((j) => j.job === name)),
+      missing: names.filter((name) => !jobs.some((job) => job.job === name)),
     };
   }
-  if (routes.historical.length)
-    return { kind: "historical", jobs: [], candidates: [], missing: [] };
-  // A known current source elsewhere overrides both old local links and name heuristics.
-  jobs = jobs.filter(
-    (job) => !model?.job_sources?.[job.job]?.previous.includes(branch),
-  );
-  const configured = model?.branch_jobs?.[branch] ?? lineJobs;
-  if (configured !== undefined)
-    return {
-      kind: "configured",
-      jobs: jobs.filter((j) => configured.includes(j.job)),
-      candidates: [],
-      missing: configured.filter((name) => !jobs.some((j) => j.job === name)),
-    };
+  jobs = jobs.filter((job) => !historical.has(job.job));
   const active = jobs.filter(
     (j) =>
       !j.disabled && j.phase !== "old" && !model?.ignored_jobs?.includes(j.job),
@@ -73,7 +71,11 @@ export function buildAssociation(
     (j) => j.phase === "main" && namedPhase(j.name) === "main",
   );
   return {
-    kind: candidates.length ? "unconfirmed" : "none",
+    kind: candidates.length
+      ? "unconfirmed"
+      : routes.historical.length
+        ? "historical"
+        : "none",
     jobs: [],
     candidates,
     missing: [],
@@ -89,4 +91,16 @@ export function withBranchJob(
   else
     branch_jobs[branch] = [...new Set([...(branch_jobs[branch] ?? []), job])];
   return { ...model, branch_jobs };
+}
+
+/** Replace one branch's explicit targets; [] intentionally disables automatic matches. */
+export function withBranchJobs(
+  model: FocusModel,
+  branch: string,
+  jobs: string[],
+): FocusModel {
+  return {
+    ...model,
+    branch_jobs: { ...model.branch_jobs, [branch]: [...new Set(jobs)] },
+  };
 }
