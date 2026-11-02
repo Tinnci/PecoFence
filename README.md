@@ -189,3 +189,7 @@ The optional video project in `extras/` is independent of the app build.
 技能注册不授予远端写入、数据外发或导出权限。
 
 便笺与待办的统一创建、编辑和保存方式见 [组件体验说明](docs/NOTES_AND_TODO.md)。
+
+### Local build source history
+
+Model settings can record a Jenkins job’s current primary tracked branch, previous branches, an optional cutover build number, and explicit inclusive historical build ranges. These records are local manual assignments. Unknown build ranges stay unassigned; overlapping ranges and contradictory cutovers are rejected. Source branches are added to the followed scope, including shared parent branches whose names differ from the model. Jenkins access remains read-only.

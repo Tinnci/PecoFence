@@ -1,7 +1,15 @@
+import { sourceRoutes } from "./job-sources";
 import type { FocusModel, JobView } from "./contracts/setup";
 import { namedPhase } from "./release-lines";
 export type BuildAssociation = {
-  kind: "configured" | "input" | "name" | "unconfirmed" | "none";
+  kind:
+    | "configured"
+    | "input"
+    | "name"
+    | "unconfirmed"
+    | "none"
+    | "source"
+    | "historical";
   jobs: JobView[];
   candidates: JobView[];
   missing: string[];
@@ -14,7 +22,23 @@ export function buildAssociation(
   model?: FocusModel,
   lineJobs?: string[],
 ): BuildAssociation {
-  const configured = lineJobs ?? model?.branch_jobs?.[branch];
+  const routes = sourceRoutes(model, branch);
+  if (routes.current.length) {
+    const names = routes.current.map((e) => e.job);
+    return {
+      kind: "source",
+      jobs: jobs.filter((j) => names.includes(j.job)),
+      candidates: [],
+      missing: names.filter((name) => !jobs.some((j) => j.job === name)),
+    };
+  }
+  if (routes.historical.length)
+    return { kind: "historical", jobs: [], candidates: [], missing: [] };
+  // A known current source elsewhere overrides both old local links and name heuristics.
+  jobs = jobs.filter(
+    (job) => !model?.job_sources?.[job.job]?.previous.includes(branch),
+  );
+  const configured = model?.branch_jobs?.[branch] ?? lineJobs;
   if (configured !== undefined)
     return {
       kind: "configured",

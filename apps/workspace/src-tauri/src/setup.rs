@@ -594,10 +594,34 @@ pub struct ReleaseLine {
     pub branches: Vec<String>,
     pub jobs: Vec<String>,
 }
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct SourceSegment {
+    pub branch: String,
+    #[ts(type = "number")]
+    pub first_build: u64,
+    #[ts(type = "number")]
+    pub last_build: u64,
+    pub note: String,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct JobSource {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub history: Option<Vec<SourceSegment>>,
+    pub branch: String,
+    pub previous: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub since_build: Option<u64>,
+    pub note: String,
+}
 /// A followed model as `spm focus` stores it; SPM validates every value.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(deny_unknown_fields)]
 pub struct FocusModel {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub job_sources: Option<BTreeMap<String, JobSource>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub branch_jobs: Option<BTreeMap<String, Vec<String>>>,
@@ -1375,6 +1399,8 @@ pub fn types() -> String {
             ServiceHealth::decl(&config),
             FocusTargets::decl(&config),
             ReleaseLine::decl(&config),
+            JobSource::decl(&config),
+            SourceSegment::decl(&config),
             FocusModel::decl(&config),
             Candidate::decl(&config),
             Suggestions::decl(&config),

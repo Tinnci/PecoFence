@@ -32,6 +32,11 @@ export function BranchBuildAssociation({
       setBusy(false);
     }
   }
+  if (
+    (association.kind === "source" || association.kind === "historical") &&
+    !association.missing.length
+  )
+    return null;
   return (
     <div className="build-association">
       {association.kind === "unconfirmed" ? (

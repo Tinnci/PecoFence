@@ -67,7 +67,7 @@ it("honors configured jobs including cache gaps, without replacing them with gue
       model,
       ["folder/explicit"],
     ).jobs.map((j) => j.name),
-  ).toEqual(["explicit"]);
+  ).toEqual(["E6751SM-A"]);
 });
 it("preserves other branch mappings and never changes source scope when associating or resetting", () => {
   const model = {

@@ -1,3 +1,9 @@
+import {
+  sourceBranches,
+  sourceRoutes,
+  sourceTimelineJobs,
+} from "./job-sources";
+import { JobSourcesEditor, SourceRoutingNote } from "./JobSources";
 import { buildAssociation, withBranchJob } from "./build-association";
 import { BranchBuildAssociation } from "./BranchBuildAssociation";
 import { ManifestInputs } from "./ManifestInputs";
@@ -67,6 +73,7 @@ import type {
   Flagged,
   FocusModel,
   JobView,
+  JobSource,
   Listed,
   ModelSummary,
   Preview,
@@ -487,10 +494,12 @@ function JobRow({
   job,
   now,
   phaseConfirmed = false,
+  source,
 }: {
   job: JobView;
   now: number;
   phaseConfirmed?: boolean;
+  source?: JobSource;
 }) {
   useTranslation();
   return (
@@ -527,6 +536,11 @@ function JobRow({
               <span className="quiet">{t("model.disabled")}</span>
             ) : null}
           </div>
+          {source ? (
+            <p className="job-source-label">
+              {t("source.currentLocal")} · <code>{source.branch}</code>
+            </p>
+          ) : null}
           {job.error ? (
             <span className="short">{job.error}</span>
           ) : (
@@ -627,6 +641,7 @@ function BuildsTab({
                 job={j}
                 now={now}
                 phaseConfirmed={!!g.label}
+                source={saved?.job_sources?.[j.job]}
               />
             ))}
           </section>
@@ -759,7 +774,18 @@ function BranchesTab({
       : timelineJob === "suggested"
         ? jobs
         : allJobs.filter((job) => job.job === timelineJob);
-  const events = branchTimeline(shown, selectedJobs);
+  const routes = sourceRoutes(saved, branch ?? "");
+  const historicalJobs = (builds.data?.jobs ?? []).filter((job) =>
+    routes.historical.some((r) => r.job === job.job),
+  );
+  const timelineJobs =
+    timelineJob === "suggested" && association.kind === "historical"
+      ? historicalJobs
+      : selectedJobs;
+  const events = branchTimeline(
+    shown,
+    sourceTimelineJobs(timelineJobs, branch ?? "", saved),
+  );
 
   return (
     <div className="branches-tab">
@@ -808,7 +834,18 @@ function BranchesTab({
                   }}
                 >
                   <span className="branch-pick-name">
-                    <span>{b.branch}</span>
+                    <span>
+                      {b.branch}
+                      {sourceRoutes(saved, b.branch).current.length ? (
+                        <small className="source-badge">
+                          {t("source.current")}
+                        </small>
+                      ) : sourceRoutes(saved, b.branch).historical.length ? (
+                        <small className="source-badge">
+                          {t("source.historical")}
+                        </small>
+                      ) : null}
+                    </span>
                     {b.flagged ? (
                       <span className="short">{b.flagged}</span>
                     ) : null}
@@ -839,6 +876,12 @@ function BranchesTab({
               })}
             </p>
           </header>
+          <SourceRoutingNote
+            branch={branch}
+            model={saved}
+            sampleUrl={list?.find((l) => l.url)?.url}
+            onSelect={onSelect}
+          />
           {builds.data ? (
             <BranchBuildAssociation
               key={branch}
@@ -882,11 +925,14 @@ function BranchesTab({
                 onChange={(event) => setTimelineJob(event.target.value)}
               >
                 <option value="suggested">
-                  {association.kind === "configured"
-                    ? selectedGroup?.jobs !== undefined
-                      ? t("release.linkedJobs")
-                      : t("association.useSaved")
-                    : t("timeline.suggested")}
+                  {association.kind === "source" ||
+                  association.kind === "historical"
+                    ? t("source.savedRouting")
+                    : association.kind === "configured"
+                      ? selectedGroup?.jobs !== undefined
+                        ? t("release.linkedJobs")
+                        : t("association.useSaved")
+                      : t("timeline.suggested")}
                 </option>
                 <option value="off">{t("timeline.hideBuilds")}</option>
                 {allJobs.map((job) => (
@@ -1164,6 +1210,7 @@ type Draft = Pick<
   | "release_lines"
   | "ignored_jobs"
   | "branch_jobs"
+  | "job_sources"
 >;
 const draftOf = (m: FocusModel): Draft => ({
   rules: { ...defaultRules, ...m.rules },
@@ -1172,6 +1219,7 @@ const draftOf = (m: FocusModel): Draft => ({
   release_lines: m.release_lines ?? [],
   ignored_jobs: m.ignored_jobs ?? [],
   branch_jobs: m.branch_jobs ?? {},
+  job_sources: m.job_sources ?? {},
 });
 const bounded = (v: string, max: number) =>
   Math.max(0, Math.min(max, Math.round(Number(v) || 0)));
@@ -1188,7 +1236,7 @@ const targetNames = {
 } as const;
 const modelOf = (saved: FocusModel, draft: Draft): FocusModel => {
   const { freeze, ...rest } = draft;
-  return { ...saved, ...rest, freeze: freeze || undefined };
+  return sourceBranches({ ...saved, ...rest, freeze: freeze || undefined });
 };
 
 function Delta({ before, after }: { before: number; after: number }) {
@@ -1580,6 +1628,11 @@ function SettingsTab({
               ...draft,
               release_lines,
               ignored_jobs,
+              job_sources: Object.fromEntries(
+                Object.entries(draft.job_sources ?? {}).filter(
+                  ([job]) => !ignored_jobs.includes(job),
+                ),
+              ),
               branch_jobs: Object.fromEntries(
                 Object.entries(draft.branch_jobs ?? {}).map(
                   ([branch, jobs]) => [
@@ -1590,6 +1643,11 @@ function SettingsTab({
               ),
             })
           }
+        />
+        <JobSourcesEditor
+          jobs={builds.data?.jobs ?? []}
+          sources={draft.job_sources ?? {}}
+          onChange={(job_sources) => setDraft({ ...draft, job_sources })}
         />
         {Object.keys(draft.branch_jobs ?? {}).length ? (
           <section

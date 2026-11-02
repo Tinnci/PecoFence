@@ -651,6 +651,24 @@ export function FollowPage({
         ),
       })),
       ignored_jobs: existing?.ignored_jobs,
+      job_sources: Object.fromEntries(
+        Object.entries(existing?.job_sources ?? {})
+          .filter(([, source]) =>
+            chosenBranches.some((b) => b.name === source.branch),
+          )
+          .map(([job, source]) => [
+            job,
+            {
+              ...source,
+              history: source.history?.filter((range) =>
+                chosenBranches.some((b) => b.name === range.branch),
+              ),
+              previous: source.previous.filter((branch) =>
+                chosenBranches.some((b) => b.name === branch),
+              ),
+            },
+          ]),
+      ),
       branch_jobs: Object.fromEntries(
         Object.entries(existing?.branch_jobs ?? {}).filter(([branch]) =>
           chosenBranches.some((b) => b.name === branch),
