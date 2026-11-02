@@ -16,7 +16,15 @@ fn target(args: &[String]) -> Result<String, String> {
                     || page.strip_prefix("model:").is_some_and(|rest| {
                         let (code, tab) = rest.split_once(':').unwrap_or((rest, "overview"));
                         setup::valid_code(code)
-                            && ["overview", "branches", "builds", "settings"].contains(&tab)
+                            && [
+                                "overview",
+                                "issues",
+                                "requirements",
+                                "branches",
+                                "builds",
+                                "settings",
+                            ]
+                            .contains(&tab)
                     })) =>
         {
             Ok(page.clone())
@@ -291,6 +299,8 @@ fn desktop() {
             "changes",
             "builds",
             "builds_cached",
+            "issues_cached",
+            "requirements_cached",
         ]
         .contains(&action.as_str())
         {
@@ -308,6 +318,7 @@ fn desktop() {
             "summary" | "refresh" => 600,
             "suggest" => 180,
             "builds" => 120,
+            "issues" | "requirements" => 300,
             _ => 30,
         });
         let output = process::spm_with(&spm_exe()?, &args, input.as_deref(), deadline).await?;

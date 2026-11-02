@@ -16,6 +16,7 @@ import {
 } from "./browser-links";
 import { useTranslation } from "react-i18next";
 import { t, locale } from "./i18n";
+import { WorkItemsTab, useWorkItems } from "./WorkItems";
 import { useModelPreference } from "./model-navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -101,6 +102,12 @@ export const phaseNames: Record<string, string> = {
 const tabNames: Record<ModelTab, string> = {
   get overview() {
     return t("model.overview");
+  },
+  get issues() {
+    return t("model.issues");
+  },
+  get requirements() {
+    return t("model.requirements");
   },
   get branches() {
     return t("model.branches");
@@ -1503,6 +1510,16 @@ export function ModelPage({
   const m = state.summary?.models.find((x) => x.code === code);
   const saved = state.models?.find((x) => x.code === code);
   const builds = useBuilds(code, tab !== "settings");
+  const issueWork = useWorkItems(
+    code,
+    "issues",
+    tab === "issues" || tab === "overview",
+  );
+  const requirementWork = useWorkItems(
+    code,
+    "requirements",
+    tab === "requirements",
+  );
   const [branch, setBranch] = useModelPreference<string | null>(
     code,
     "branch",
@@ -1672,6 +1689,12 @@ export function ModelPage({
             {tabKey === "overview" && m.flagged.length ? (
               <span className="tab-count short">{m.flagged.length}</span>
             ) : null}
+            {tabKey === "issues" && issueWork.openCount ? (
+              <span className="tab-count">{issueWork.openCount}</span>
+            ) : null}
+            {tabKey === "requirements" && requirementWork.openCount ? (
+              <span className="tab-count">{requirementWork.openCount}</span>
+            ) : null}
             {tabKey === "builds" && running ? (
               <span className="tab-count building">
                 {t("model.building2", { count: running })}
@@ -1703,6 +1726,8 @@ export function ModelPage({
           }}
           onBuilds={() => onTab("builds")}
         />
+      ) : tab === "issues" || tab === "requirements" ? (
+        <WorkItemsTab code={code} kind={tab} saved={saved} state={state} />
       ) : tab === "branches" ? (
         <BranchesTab
           m={m}

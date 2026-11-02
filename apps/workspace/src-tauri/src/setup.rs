@@ -588,6 +588,9 @@ pub struct FocusTargets {
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(deny_unknown_fields)]
 pub struct FocusModel {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub tracking: Option<TrackingConfig>,
     pub code: String,
     #[serde(default)]
     pub issues: Vec<ScopeQuery>,
@@ -786,8 +789,96 @@ pub struct FocusSummary {
     pub computed_at: Option<String>,
     pub models: Vec<ModelSummary>,
 }
+/// How a model's issues and requirements are classified; SPM validates it.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+pub struct TrackingConfig {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub jira_software_field: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub jira_requirement_jql: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub jira_software_values: Option<Vec<String>>,
+    /// Work item ID → customer or internal.
+    #[serde(default)]
+    pub origin_overrides: std::collections::BTreeMap<String, String>,
+}
+/// A software issue or requirement in a model's scope.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct WorkItem {
+    pub id: String,
+    pub display_id: String,
+    pub title: String,
+    pub url: String,
+    pub source: String,
+    pub scope_id: String,
+    pub status: String,
+    /// pending, active, review, testing, blocked, done, cancelled or unknown.
+    pub group: String,
+    pub resolution: String,
+    pub owner: String,
+    pub severity: String,
+    pub updated: String,
+    pub software_evidence: String,
+    /// Requirements: customer or internal.
+    #[serde(default)]
+    pub origin: String,
+    /// internet for lockscreen poster, ads, Push and analytics work.
+    #[serde(default)]
+    pub origin_kind: String,
+    #[serde(default)]
+    pub origin_evidence: String,
+    /// Gerrit changes whose subjects name the item.
+    #[serde(default)]
+    pub commits: Vec<u32>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct DomainValue {
+    pub value: String,
+    pub count: u32,
+    pub software: bool,
+}
+/// The Jira field that decides software, with every value seen.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct Classification {
+    pub field: String,
+    pub field_name: String,
+    pub configured: bool,
+    pub values: Vec<DomainValue>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct TrackingSource {
+    pub id: String,
+    pub source: String,
+    pub label: String,
+    pub filter: String,
+    pub software_filter: String,
+    pub total: u32,
+    pub matched: u32,
+    pub excluded: u32,
+    pub unclassified: u32,
+    pub updated_at: Option<String>,
+    pub stale: bool,
+    pub error: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub classification: Option<Classification>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct WorkItems {
+    pub code: String,
+    pub kind: String,
+    pub checked_at: String,
+    pub sources: Vec<TrackingSource>,
+    pub items: Vec<WorkItem>,
+}
 #[derive(Debug, Default, Serialize, Deserialize, TS)]
 pub struct FocusData {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub work_items: Option<WorkItems>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub models: Option<Vec<FocusModel>>,
@@ -836,6 +927,18 @@ pub fn focus_args(
     let code = || code.filter(|c| valid_code(c)).map(str::to_owned);
     let mut args: Vec<String> = vec!["focus".into()];
     match action {
+        "issues" | "issues_cached" | "requirements" | "requirements_cached" => {
+            args.extend([
+                "work-items".into(),
+                "--code".into(),
+                code()?,
+                "--kind".into(),
+                action.trim_end_matches("_cached").into(),
+            ]);
+            if action.ends_with("_cached") {
+                args.push("--cached".into());
+            }
+        }
         "list" => args.push("list".into()),
         "save" => args.push("save".into()),
         "summary" => args.push("summary".into()),
@@ -1137,6 +1240,12 @@ pub fn types() -> String {
             IssueLink::decl(&config),
             ModelSummary::decl(&config),
             FocusSummary::decl(&config),
+            TrackingConfig::decl(&config),
+            WorkItem::decl(&config),
+            DomainValue::decl(&config),
+            Classification::decl(&config),
+            TrackingSource::decl(&config),
+            WorkItems::decl(&config),
             FocusData::decl(&config),
             Activation::decl(&config),
         ]

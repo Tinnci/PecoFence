@@ -279,6 +279,23 @@ four models) replaces it. Review actions apply optimistically and persist with `
 SPM owns the model file and the rules; `docs/CONFIGURATION.md` in SPM describes them. The
 `feature_after_freeze` rule stays silent until a freeze date is set.
 
+## 问题与需求
+
+Each model has 问题 and 需求 beside 概览 (`--open model:<CODE>:issues|requirements`), read with
+`spm focus work-items`: the disk cache at once, a fresh read when it is over 30 minutes old, and 刷新.
+
+- The scope line says what was read and how software was decided, with the counts: in scope,
+  software, excluded and unclassified. For old Jira projects the 领域 values are listed as
+  软件/非软件 switches (hardware, production and material preset to 非软件); saving rereads.
+- One bar shows the scope by stage (待处理, 处理中, 评审, 回归测试, 阻塞, 已完成, 已取消); its
+  legend filters, 未完成 by default. Search covers ID, title, owner and status; a toggle keeps
+  open items untouched for 14 days.
+- Rows link the ID and title to Jira or 飞书项目 and show the source status coloured by stage,
+  resolution, owner, priority, days since the last update and how many Gerrit changes name the item.
+- 需求 splits into 客户需求 and 内部需求, with 互联网/运营 (lockscreen poster, articles, ads, Push,
+  analytics) inside internal. Each row says why (标题含“客户需求”, 标签, 没有客户标记) and
+  改为客户/改为内部 saves a per-item override.
+
 ## 标题栏
 
 The window has no Windows title bar (`decorations: false`, `shadow: true`): the 48 px top bar is

@@ -46,8 +46,16 @@ export async function loadHub(
   }
   throw new Error("desktop_required");
 }
-export type ModelTab = "overview" | "branches" | "builds" | "settings";
-const modelTabs: ModelTab[] = ["overview", "branches", "builds", "settings"];
+export type ModelTab =
+  "overview" | "issues" | "requirements" | "branches" | "builds" | "settings";
+const modelTabs: ModelTab[] = [
+  "overview",
+  "issues",
+  "requirements",
+  "branches",
+  "builds",
+  "settings",
+];
 /** A launch target: a page, or `model:<CODE>[:<tab>]` for a followed model. */
 function route(target: string): [Page, string?, ModelTab?] | null {
   if (target.startsWith("model:")) {
@@ -172,7 +180,11 @@ export async function focus(
     | "preview"
     | "changes"
     | "builds"
-    | "builds_cached",
+    | "builds_cached"
+    | "issues"
+    | "issues_cached"
+    | "requirements"
+    | "requirements_cached",
   args: {
     code?: string;
     change?: number;

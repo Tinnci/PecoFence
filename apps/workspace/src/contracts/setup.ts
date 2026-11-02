@@ -82,7 +82,7 @@ export type GateSummary = { gate_id: string, state: string, n: number, v: number
 export type Unmapped = { field: string, value: string, count: number, };
 export type ServiceHealth = { state: string, mode: string, project?: string, scope?: string, last_poll?: string, last_commit?: string, revision: number, error?: string, gates: Array<GateSummary>, unmapped: Array<Unmapped>, };
 export type FocusTargets = { severe_pct: number, overall_pct: number, fatal_max: number, };
-export type FocusModel = { code: string, issues: Array<ScopeQuery>, branches: Array<string>, 
+export type FocusModel = { tracking?: TrackingConfig, code: string, issues: Array<ScopeQuery>, branches: Array<string>, 
 /**
  * Jenkins jobs by full name; empty reads the model's Project_Daily_Build folder.
  */
@@ -110,7 +110,7 @@ export type Listed = { number: number, subject: string, project: string, branch:
  * flagged, earlier, tracked, accepted, logged, ignored or clean.
  */
 state: string, };
-export type BuildRun = { number: number, url?: string, result?: string, building: boolean,
+export type BuildRun = { number: number, url?: string, result?: string, building: boolean, 
 /**
  * Start, epoch milliseconds.
  */
@@ -122,5 +122,31 @@ export type Flagged = { number: number, subject: string, project: string, branch
 export type IssueLink = { id: string, url: string, resolved: boolean, severe: boolean, fatal: boolean, };
 export type ModelSummary = { code: string, targets: FocusTargets, issues: number, sources: Array<string>, issue_links?: Array<IssueLink>, measures?: Measures, new_issues: number, days: Array<number>, days_from: string, week_changes: number, week_merged: number, branches: Array<BranchStrip>, flagged: Array<Flagged>, rule_counts: { [key in string]: number }, rules: { [key in string]: string }, freeze?: string, errors: Array<string>, };
 export type FocusSummary = { computed_at?: string, models: Array<ModelSummary>, };
-export type FocusData = { models?: Array<FocusModel>, suggestions?: Suggestions, summary?: FocusSummary, preview?: Preview, changes?: Array<Listed>, builds?: Builds, };
+export type TrackingConfig = { jira_software_field?: string, jira_requirement_jql?: string, jira_software_values?: Array<string>, 
+/**
+ * Work item ID → customer or internal.
+ */
+origin_overrides: { [key in string]: string }, };
+export type WorkItem = { id: string, display_id: string, title: string, url: string, source: string, scope_id: string, status: string, 
+/**
+ * pending, active, review, testing, blocked, done, cancelled or unknown.
+ */
+group: string, resolution: string, owner: string, severity: string, updated: string, software_evidence: string, 
+/**
+ * Requirements: customer or internal.
+ */
+origin: string, 
+/**
+ * internet for lockscreen poster, ads, Push and analytics work.
+ */
+origin_kind: string, origin_evidence: string, 
+/**
+ * Gerrit changes whose subjects name the item.
+ */
+commits: Array<number>, };
+export type DomainValue = { value: string, count: number, software: boolean, };
+export type Classification = { field: string, field_name: string, configured: boolean, values: Array<DomainValue>, };
+export type TrackingSource = { id: string, source: string, label: string, filter: string, software_filter: string, total: number, matched: number, excluded: number, unclassified: number, updated_at: string | null, stale: boolean, error: string | null, classification?: Classification, };
+export type WorkItems = { code: string, kind: string, checked_at: string, sources: Array<TrackingSource>, items: Array<WorkItem>, };
+export type FocusData = { work_items?: WorkItems, models?: Array<FocusModel>, suggestions?: Suggestions, summary?: FocusSummary, preview?: Preview, changes?: Array<Listed>, builds?: Builds, };
 export type Activation = { health?: ServiceHealth, waited_secs?: number, };

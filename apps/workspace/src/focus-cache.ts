@@ -1,6 +1,11 @@
 import { QueryClient, queryOptions } from "@tanstack/react-query";
 import { focus } from "./api";
-import type { Builds, FocusModel, FocusSummary } from "./contracts/setup";
+import type {
+  Builds,
+  FocusModel,
+  FocusSummary,
+  WorkItems,
+} from "./contracts/setup";
 
 // One desktop window uses the default SPM configuration root. Keep the scope in
 // every key so a future profile picker can create an isolated cache.
@@ -170,4 +175,36 @@ export function optimisticReview(
           },
     ),
   };
+}
+
+export type WorkKind = "issues" | "requirements";
+/** Issues and requirements: the disk cache at once, a fresh read when older than 30 minutes. */
+export function workItemsOptions(code: string, kind: WorkKind) {
+  return queryOptions({
+    queryKey: [...focusKey, "model", code, kind],
+    staleTime: 30 * 60_000,
+    queryFn: async () => {
+      const result = await focus(kind, { code });
+      if (!result.work_items || result.work_items.code !== code)
+        throw { code: "spm_invalid_response" };
+      return result.work_items;
+    },
+  });
+}
+export async function prefetchWorkItems(code: string, kind: WorkKind) {
+  const options = workItemsOptions(code, kind);
+  if (!queryClient.getQueryData(options.queryKey)) {
+    try {
+      const cached = (await focus(`${kind}_cached`, { code })).work_items;
+      if (cached?.code === code && !queryClient.getQueryData(options.queryKey))
+        queryClient.setQueryData<WorkItems>(options.queryKey, cached, {
+          updatedAt: Number.isFinite(Date.parse(cached.checked_at))
+            ? Math.min(Date.now(), Date.parse(cached.checked_at))
+            : 0,
+        });
+    } catch {
+      /* The fresh read reports the actionable error. */
+    }
+  }
+  await queryClient.prefetchQuery(options);
 }
