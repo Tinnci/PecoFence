@@ -124,6 +124,23 @@ export function shapeFlow(events: FlowEvent[]): Shaped[] {
   return out.sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
 }
 
+/** Every flow of the given items, read ten at a time and kept each on its own; resolves
+ * once all have arrived or failed. */
+export async function loadFlows(code: string, items: WorkItem[]) {
+  const ids = items
+    .filter((i) => i.source === "meegle")
+    .map((i) => i.id)
+    .filter((id) => !queryClient.getQueryData(flowOptions(code, id).queryKey));
+  for (let i = 0; i < ids.length; i += 10) {
+    const data = await focus("flows", {
+      code,
+      items: ids.slice(i, i + 10),
+    }).catch(() => null);
+    for (const f of data?.flows ?? [])
+      queryClient.setQueryData(flowOptions(code, f.item).queryKey, f);
+  }
+}
+
 /** Flows the user is likely to open next: one read for all of them, each kept on its own. */
 export function prefetchFlows(code: string, items: WorkItem[]) {
   const ids = items
@@ -140,8 +157,18 @@ export function prefetchFlows(code: string, items: WorkItem[]) {
 }
 
 /** A 飞书项目 item's 流转记录, read when first opened and ahead of it on hover. */
-export function ItemFlow({ code, item }: { code: string; item: WorkItem }) {
-  const [open, setOpen] = useState(false);
+export function ItemFlow({
+  code,
+  item,
+  expand = false,
+}: {
+  code: string;
+  item: WorkItem;
+  /** Held open, e.g. while the whole view is exported. */
+  expand?: boolean;
+}) {
+  const [opened, setOpen] = useState(false);
+  const open = opened || expand;
   const flow = useQuery(
     { ...flowOptions(code, item.id), enabled: open },
     queryClient,

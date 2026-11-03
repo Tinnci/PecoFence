@@ -918,5 +918,9 @@
   "views.kind.issues": "Issues",
   "views.kind.requirements": "Requirements",
   "views.stage.open": "Open",
-  "views.stage.all": "All stages"
+  "views.stage.all": "All stages",
+  "views.exportAsShown": "Export as shown",
+  "views.exportAsShownHint": "Rows on screen, collapsed stays collapsed",
+  "views.exportExpanded": "Export with everything expanded",
+  "views.exportExpandedHint": "Every row, every group and each flow history"
 }

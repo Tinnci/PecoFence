@@ -58,7 +58,7 @@ import {
 import { since, type FocusState } from "./Focus";
 import { FailureNote, failureOf } from "./TemplateImport";
 import { useModelPreference } from "./model-navigation";
-import { ItemFlow, prefetchFlows } from "./Flow";
+import { ItemFlow, loadFlows, prefetchFlows } from "./Flow";
 import {
   DisplayMenu,
   FilterAdd,
@@ -600,11 +600,13 @@ function Row({
   code,
   item,
   now,
+  expand,
   onLocal,
 }: {
   code: string;
   item: WorkItem;
   now: number;
+  expand: boolean;
   onLocal: () => void;
 }) {
   const a = item.activity;
@@ -692,7 +694,7 @@ function Row({
             <span className="quiet">{item.origin_evidence}</span>
           </span>
         ) : null}
-        <div className="work-foot no-export">
+        <div className={expand ? "work-foot" : "work-foot no-export"}>
           <span className="work-local">
             {local?.tags.map((tag) => (
               <span key={tag} className="local-tag">
@@ -717,7 +719,7 @@ function Row({
               {t("work.mark")}
             </button>
           </span>
-          <ItemFlow code={code} item={item} />
+          <ItemFlow code={code} item={item} expand={expand} />
         </div>
       </div>
     </motion.li>
@@ -1075,6 +1077,8 @@ export function WorkItemsTab({
   );
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const exportRef = useRef<HTMLDivElement>(null);
+  // While an expanded export is taken: every row, every group open, every flow open.
+  const [expandAll, setExpandAll] = useState(false);
   const [shown, setShown] = useState(PAGE);
   const [editing, setEditing] = useState<string | null>(null);
   const [now] = useState(() => Date.now());
@@ -1301,6 +1305,13 @@ export function WorkItemsTab({
               }}
             />
             <ExportButton
+              prepare={async (expanded) => {
+                if (!expanded) return () => {};
+                await loadFlows(code, filtered);
+                setExpandAll(true);
+                await new Promise((r) => setTimeout(r, 120));
+                return () => setExpandAll(false);
+              }}
               target={exportRef}
               fileName={`${code}-${kind}-${new Date().toISOString().slice(0, 10)}`}
             />
@@ -1322,13 +1333,16 @@ export function WorkItemsTab({
             <FilterChips items={staged} value={filters} onChange={setFilters} />
             {filtered.length ? (
               <ol className="work-list">
-                {groupItems(filtered.slice(0, shown), group).map((g) => (
+                {groupItems(
+                  expandAll ? filtered : filtered.slice(0, shown),
+                  group,
+                ).map((g) => (
                   <Fragment key={g.key || "all"}>
                     <GroupHeader
                       field={group}
                       value={g.key}
                       count={g.items.length}
-                      collapsed={collapsed.has(g.key)}
+                      collapsed={!expandAll && collapsed.has(g.key)}
                       onToggle={() =>
                         setCollapsed((c) => {
                           const next = new Set(c);
@@ -1337,7 +1351,7 @@ export function WorkItemsTab({
                         })
                       }
                     />
-                    {collapsed.has(g.key)
+                    {!expandAll && collapsed.has(g.key)
                       ? null
                       : g.items.map((i) => (
                           <Row
@@ -1345,6 +1359,7 @@ export function WorkItemsTab({
                             code={code}
                             item={i}
                             now={now}
+                            expand={expandAll}
                             onLocal={() => setEditing(`${i.source}:${i.id}`)}
                           />
                         ))}

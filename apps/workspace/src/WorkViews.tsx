@@ -180,27 +180,35 @@ export function ViewsMenu({
 export function ExportButton({
   target,
   fileName,
+  prepare,
 }: {
   target: RefObject<HTMLElement | null>;
   fileName: string;
+  /** Gets the page ready (expanded or not) and returns how to put it back. */
+  prepare: (expanded: boolean) => Promise<() => void>;
 }) {
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<SetupFailure | null>(null);
-  async function run() {
+  async function run(expanded: boolean) {
     const node = target.current;
     if (!node) return;
     setBusy(true);
     setFailure(null);
-    node.classList.add("exporting");
+    let restore = () => {};
     try {
+      restore = await prepare(expanded);
+      node.classList.add("exporting");
+      if (expanded) node.classList.add("exporting-all");
       // Let the caption lay out before the picture is taken.
       await new Promise((r) =>
         requestAnimationFrame(() => requestAnimationFrame(r)),
       );
       const background =
         getComputedStyle(document.body).backgroundColor || "#ffffff";
+      // Browsers cap a canvas near 32k pixels a side; a long expanded view drops to 1x.
+      const ratio = node.scrollHeight * 2 > 30000 ? 1 : 2;
       const url = await toPng(node, {
-        pixelRatio: 2,
+        pixelRatio: ratio,
         backgroundColor: background,
         cacheBust: true,
         filter: (n) =>
@@ -218,26 +226,41 @@ export function ExportButton({
           : failureOf(error),
       );
     } finally {
-      node.classList.remove("exporting");
+      node.classList.remove("exporting", "exporting-all");
+      restore();
       setBusy(false);
     }
   }
   return (
     <>
-      <button
-        type="button"
-        className="filter-add"
-        disabled={busy}
-        onClick={() => void run()}
-        title={t("views.export")}
-      >
-        {busy ? (
-          <Spinner className="size-3.5" />
-        ) : (
-          <ImageDown size={14} aria-hidden="true" />
-        )}
-        {t("views.exportShort")}
-      </button>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          className="filter-add"
+          disabled={busy}
+          title={t("views.export")}
+        >
+          {busy ? (
+            <Spinner className="size-3.5" />
+          ) : (
+            <ImageDown size={14} aria-hidden="true" />
+          )}
+          {t("views.exportShort")}
+        </DropdownMenuTrigger>
+        <DropdownMenuContent className="filter-menu" align="end">
+          <DropdownMenuItem onClick={() => void run(false)}>
+            <span className="export-option">
+              <span>{t("views.exportAsShown")}</span>
+              <span className="quiet">{t("views.exportAsShownHint")}</span>
+            </span>
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => void run(true)}>
+            <span className="export-option">
+              <span>{t("views.exportExpanded")}</span>
+              <span className="quiet">{t("views.exportExpandedHint")}</span>
+            </span>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
       {failure ? <FailureNote failure={failure} /> : null}
     </>
   );

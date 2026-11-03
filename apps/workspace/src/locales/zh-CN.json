@@ -918,5 +918,9 @@
   "views.kind.issues": "问题",
   "views.kind.requirements": "需求",
   "views.stage.open": "未关闭",
-  "views.stage.all": "全部阶段"
+  "views.stage.all": "全部阶段",
+  "views.exportAsShown": "按当前显示导出",
+  "views.exportAsShownHint": "已显示的行，折叠的保持折叠",
+  "views.exportExpanded": "展开全部后导出",
+  "views.exportExpandedHint": "全部行、全部分组和每条流转记录"
 }

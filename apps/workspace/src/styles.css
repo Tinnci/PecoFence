@@ -4311,3 +4311,10 @@ a .owner-chip { color: inherit; }
 .work-export.exporting .export-caption strong { font-size: 15px; color: var(--foreground); }
 .work-export.exporting .work-group { position: static; }
 .work-export.exporting .filter-chip-remove, .work-export.exporting .filter-bar .link { display: none; }
+
+/* An expanded export keeps each item's flow but none of its buttons. */
+.export-option { display: flex; flex-direction: column; gap: 1px; }
+.export-option .quiet { font-size: 11px; }
+.work-export.exporting-all .local-edit,
+.work-export.exporting-all .work-foot .chevron { display: none; }
+.work-export.exporting-all .item-flow > .change-files-toggle { color: var(--foreground); font-weight: 500; }
