@@ -618,3 +618,9 @@ independently, so one target switching branches does not remove another target.
 Source-managed targets are edited in source settings. The timeline picker can show
 all associated targets or one named job; identical build numbers in different jobs
 remain independent. No Jenkins tasks are executed by these controls.
+
+### Next tracking features
+
+The [tracking feature design](docs/TRACKING_NEXT_FEATURES.md) defines the proposed
+owner workload, saved views, activity provenance, annotation sharing, and version
+readiness flows, with implementation order and acceptance checks.
