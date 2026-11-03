@@ -4140,7 +4140,27 @@ a.external-link.bar { text-decoration: none; }
 .diff-bar span { display: block; }
 .diff-bar .added { background: #2da44e; }
 .diff-bar .removed { background: #e5534b; }
-.diff-skeleton { height: 48px; margin: 4px 0; }
+.diff-loading { display: flex; flex-direction: column; gap: 6px; padding: 6px 0 8px 18px; }
+.diff-loading-line { height: 10px; border-radius: 3px; }
+.diff-loading-line:nth-child(3n + 1) { width: 72%; }
+.diff-loading-line:nth-child(3n + 2) { width: 54%; }
+.diff-loading-line:nth-child(3n) { width: 63%; }
+.message-row .file-kind { color: var(--muted-foreground); margin: 0 auto; }
+.message-row { grid-template-columns: 12px 16px minmax(0, 1fr); }
+.message-title { font-family: inherit; font-weight: 500; }
+.commit-message { margin: 4px 0 10px 18px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; display: flex; flex-direction: column; gap: 8px; }
+.commit-message .commit-subject { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.commit-message .commit-subject strong { font-weight: 600; margin-left: 2px; }
+.commit-message p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.commit-tag { padding: 0 6px; border-radius: 4px; background: var(--muted); color: var(--muted-foreground); font: 500 11px/18px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.commit-fields, .commit-trailers { margin: 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 3px 12px; }
+.commit-fields > div, .commit-trailers > div { display: contents; }
+.commit-fields dt { color: var(--muted-foreground); }
+.commit-fields dd, .commit-trailers dd { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.commit-trailers { padding-top: 8px; border-top: 1px dashed var(--border); font: 11px/16px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--muted-foreground); }
+.verdict { display: inline-block; padding: 0 6px; border-radius: 999px; font-size: 11px; font-weight: 600; line-height: 18px; }
+.verdict-pass { color: #1a7f37; background: color-mix(in oklab, #2da44e 14%, transparent); }
+.verdict-fail { color: #cf222e; background: color-mix(in oklab, #e5534b 14%, transparent); }
 .diff-view {
   margin: 4px 0 10px;
   max-height: 480px;

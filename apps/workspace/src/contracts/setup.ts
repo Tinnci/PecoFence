@@ -162,7 +162,11 @@ export type AnnotatedItem = {
  * issues or requirements
  */
 kind: string, item: WorkItem, };
-export type ChangeFiles = { change: number, files: Array<ChangeFile>, };
+export type ChangeFiles = { change: number, 
+/**
+ * The full commit message; absent when Gerrit did not return it.
+ */
+message: string | null, files: Array<ChangeFile>, };
 export type ChangeFile = { path: string, 
 /**
  * ADDED, MODIFIED, DELETED, RENAMED, COPIED or REWRITE

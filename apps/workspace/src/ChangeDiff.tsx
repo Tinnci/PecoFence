@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useIsFetching, useQuery } from "@tanstack/react-query";
 import {
   ChevronRight,
+  FileText,
   GitMerge,
   GitPullRequestArrow,
   GitPullRequestClosed,
@@ -12,6 +13,8 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Spinner } from "@/components/ui/spinner";
+import { ExternalLink } from "@/components/external-link";
 import type { ChangeFile } from "./contracts/setup";
 import { focus } from "./api";
 import { queryClient } from "./focus-cache";
@@ -45,7 +48,18 @@ const kinds: Record<string, string> = {
   REWRITE: "W",
 };
 
-/** A change's files, each opening its diff; read only when first expanded. */
+/** Lines that stand in for content while it is read: a pulse, never a blank gap. */
+function Loading({ lines = 3 }: { lines?: number }) {
+  return (
+    <div className="diff-loading" aria-busy="true">
+      {Array.from({ length: lines }, (_, i) => (
+        <Skeleton key={i} className="diff-loading-line" />
+      ))}
+    </div>
+  );
+}
+
+/** A change's message and files, each opening in place; read only when first expanded. */
 export function ChangeFiles({
   code,
   change,
@@ -54,24 +68,27 @@ export function ChangeFiles({
   change: number;
 }) {
   const [open, setOpen] = useState(false);
-  const files = useQuery(
+  const read = useQuery(
     {
       queryKey: ["change-files", code, change],
       queryFn: async () =>
-        (await focus("change_files", { code, change })).change_files?.files ??
-        [],
+        (await focus("change_files", { code, change })).change_files ?? null,
       enabled: open,
       staleTime: 5 * 60_000,
     },
     queryClient,
   );
-  const list = files.data;
+  const list = read.data?.files;
   const added = list?.reduce((n, f) => n + f.insertions, 0) ?? 0;
   const removed = list?.reduce((n, f) => n + f.deletions, 0) ?? 0;
   return (
     <Collapsible open={open} onOpenChange={setOpen} className="change-files">
       <CollapsibleTrigger className="change-files-toggle">
-        <ChevronRight size={13} aria-hidden="true" className="chevron" />
+        {read.isFetching ? (
+          <Spinner className="size-3" />
+        ) : (
+          <ChevronRight size={13} aria-hidden="true" className="chevron" />
+        )}
         {list ? t("diff.files", { count: list.length }) : t("diff.changes")}
         {list?.length ? (
           <span className="diff-counts">
@@ -81,21 +98,44 @@ export function ChangeFiles({
         ) : null}
       </CollapsibleTrigger>
       <CollapsibleContent className="change-files-panel">
-        {files.error ? <FailureNote failure={failureOf(files.error)} /> : null}
-        {!list && !files.error ? <Skeleton className="diff-skeleton" /> : null}
-        {list ? (
-          list.length ? (
-            <ul className="file-list">
-              {list.map((f) => (
-                <FileRow key={f.path} code={code} change={change} file={f} />
-              ))}
-            </ul>
-          ) : (
-            <p className="quiet">{t("diff.noFiles")}</p>
-          )
+        {read.error ? <FailureNote failure={failureOf(read.error)} /> : null}
+        {!read.data && !read.error ? <Loading /> : null}
+        {read.data ? (
+          <ul className="file-list">
+            {read.data.message ? (
+              <MessageRow message={read.data.message} />
+            ) : null}
+            {list?.map((f) => (
+              <FileRow key={f.path} code={code} change={change} file={f} />
+            ))}
+            {list && !list.length ? (
+              <li className="quiet">{t("diff.noFiles")}</li>
+            ) : null}
+          </ul>
         ) : null}
       </CollapsibleContent>
     </Collapsible>
+  );
+}
+
+function MessageRow({ message }: { message: string }) {
+  const parsed = parseMessage(message);
+  return (
+    <li>
+      <Collapsible>
+        <CollapsibleTrigger className="file-row message-row">
+          <ChevronRight size={12} aria-hidden="true" className="chevron" />
+          <FileText size={12} aria-hidden="true" className="file-kind" />
+          <span className="file-path message-title">
+            {t("diff.message")}
+            <span className="file-dir"> · {parsed.title}</span>
+          </span>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <CommitMessage parsed={parsed} />
+        </CollapsibleContent>
+      </Collapsible>
+    </li>
   );
 }
 
@@ -109,13 +149,22 @@ function FileRow({
   file: ChangeFile;
 }) {
   const [open, setOpen] = useState(false);
+  const loading =
+    useIsFetching(
+      { queryKey: ["change-diff", code, change, file.path] },
+      queryClient,
+    ) > 0;
   const slash = file.path.lastIndexOf("/");
   const total = file.insertions + file.deletions;
   return (
     <li>
       <Collapsible open={open} onOpenChange={setOpen}>
         <CollapsibleTrigger className="file-row" title={file.path}>
-          <ChevronRight size={12} aria-hidden="true" className="chevron" />
+          {loading ? (
+            <Spinner className="size-3" />
+          ) : (
+            <ChevronRight size={12} aria-hidden="true" className="chevron" />
+          )}
           <span
             className={`file-kind kind-${file.kind.toLowerCase()}`}
             title={file.kind}
@@ -173,7 +222,7 @@ function FileDiff({
     queryClient,
   );
   if (diff.error) return <FailureNote failure={failureOf(diff.error)} />;
-  if (!diff.data) return <Skeleton className="diff-skeleton" />;
+  if (!diff.data) return <Loading lines={6} />;
   return (
     <>
       <DiffView text={diff.data.diff} />
@@ -181,6 +230,154 @@ function FileDiff({
         <p className="quiet diff-truncated">{t("diff.truncated")}</p>
       ) : null}
     </>
+  );
+}
+
+export type Message = {
+  /** Bracketed tags opening the subject: [HM][P6700LV][SPM][Feature]. */
+  tags: string[];
+  title: string;
+  /** key: value lines, a key alone on its line taking the lines under it. */
+  fields: { key: string; value: string }[];
+  /** Paragraphs that are not fields. */
+  text: string[];
+  /** Git trailers: Change-Id, Signed-off-by and the like. */
+  trailers: { key: string; value: string }[];
+};
+
+const TRAILER =
+  /^(Change-Id|Signed-off-by|Reviewed-on|Reviewed-by|Tested-by|Acked-by|Cc|Co-authored-by|Bug|Test):\s*(.*)$/i;
+const FIELD = /^([^\s:：][^:：]{0,24}?)\s*[:：]\s*(.*)$/;
+
+/** The team's commit layout: tagged subject, key: value fields, then git trailers. */
+export function parseMessage(message: string): Message {
+  const lines = message.replace(/\r/g, "").split("\n");
+  const subject = lines[0] ?? "";
+  const tags: string[] = [];
+  let rest = subject.trim();
+  for (
+    let m = /^\[([^\]]{1,40})\]/.exec(rest);
+    m;
+    m = /^\[([^\]]{1,40})\]/.exec(rest)
+  ) {
+    tags.push(m[1]);
+    rest = rest.slice(m[0].length).trimStart();
+  }
+  const title = rest.replace(/^[:：]\s*/, "") || subject;
+  const out: Message = { tags, title, fields: [], text: [], trailers: [] };
+  let open: { key: string; value: string } | null = null;
+  let paragraph: string[] = [];
+  const flush = () => {
+    if (paragraph.length) out.text.push(paragraph.join("\n"));
+    paragraph = [];
+  };
+  for (const raw of lines.slice(1)) {
+    const line = raw.trim();
+    if (!line) {
+      open = null;
+      flush();
+      continue;
+    }
+    const trailer = TRAILER.exec(line);
+    if (trailer) {
+      flush();
+      open = null;
+      out.trailers.push({ key: trailer[1], value: trailer[2] });
+      continue;
+    }
+    const field = FIELD.exec(line);
+    // "http://..." is a link, not a key.
+    if (field && !field[2].startsWith("//")) {
+      flush();
+      open = { key: field[1], value: field[2] };
+      out.fields.push(open);
+      continue;
+    }
+    if (open && !open.value) {
+      open.value = line;
+      continue;
+    }
+    if (open) {
+      open.value += "\n" + line;
+      continue;
+    }
+    paragraph.push(line);
+  }
+  flush();
+  return out;
+}
+
+/** Text with its links made clickable. */
+function Linked({ text }: { text: string }) {
+  const parts = text.split(/(https?:\/\/[^\s，。、)）]+)/g);
+  return (
+    <>
+      {parts.map((p, i) =>
+        /^https?:\/\//.test(p) ? (
+          <ExternalLink key={i} href={p}>
+            {p}
+          </ExternalLink>
+        ) : (
+          p
+        ),
+      )}
+    </>
+  );
+}
+
+/** A verdict like [PASS] or FAIL as a pill. */
+function Value({ value }: { value: string }) {
+  const verdict = /^\[?\s*(PASS|PASSED|OK|FAIL|FAILED|NA|N\/A)\s*\]?$/i.exec(
+    value,
+  );
+  if (verdict) {
+    const pass = /^(PASS|PASSED|OK)$/i.test(verdict[1]);
+    return (
+      <span className={`verdict ${pass ? "verdict-pass" : "verdict-fail"}`}>
+        {verdict[1].toUpperCase()}
+      </span>
+    );
+  }
+  return <Linked text={value} />;
+}
+
+function CommitMessage({ parsed }: { parsed: Message }) {
+  return (
+    <article className="commit-message" aria-label={t("diff.message")}>
+      <div className="commit-subject">
+        {parsed.tags.map((tag) => (
+          <span key={tag} className="commit-tag">
+            {tag}
+          </span>
+        ))}
+        <strong>{parsed.title}</strong>
+      </div>
+      {parsed.text.map((p, i) => (
+        <p key={i}>
+          <Linked text={p} />
+        </p>
+      ))}
+      {parsed.fields.length ? (
+        <dl className="commit-fields">
+          {parsed.fields.map((f, i) => (
+            <div key={i}>
+              <dt>{f.key}</dt>
+              <dd>{f.value ? <Value value={f.value} /> : "—"}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
+      {parsed.trailers.length ? (
+        <dl className="commit-trailers">
+          {parsed.trailers.map((f, i) => (
+            <div key={i}>
+              <dt>{f.key}</dt>
+              <dd>{f.value}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
+    </article>
   );
 }
 

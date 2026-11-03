@@ -7,7 +7,12 @@ vi.mock("../src/api", async (original) => ({
   ...(await original<typeof import("../src/api")>()),
   focus: mocks.focus,
 }));
-import { ChangeFiles, ChangeStatus, diffLines } from "../src/ChangeDiff";
+import {
+  ChangeFiles,
+  ChangeStatus,
+  diffLines,
+  parseMessage,
+} from "../src/ChangeDiff";
 import { queryClient } from "../src/focus-cache";
 
 const diff = [
@@ -30,6 +35,8 @@ beforeEach(() => {
       ? {
           change_files: {
             change: 80481,
+            message:
+              "[HM][P][SPM][Feature]:改 spec\n\nST-result:[PASS]\n\nChange-Id: I1",
             files: [
               {
                 path: "buildspec/P.spec",
@@ -74,6 +81,9 @@ describe("change diffs", () => {
       code: "P6700LV",
       change: 80481,
     });
+    await user.click(screen.getByRole("button", { name: /提交说明/ }));
+    const message = await screen.findByRole("article", { name: "提交说明" });
+    expect(within(message).getByText("PASS")).toBeTruthy();
     await user.click(file);
     const view = await screen.findByRole("region", { name: "差异" });
     expect(within(view).getByText("SW = V15")).toBeTruthy();
@@ -84,6 +94,43 @@ describe("change diffs", () => {
         path: "buildspec/P.spec",
       }),
     );
+  });
+
+  it("reads the team's commit layout", () => {
+    const m = parseMessage(
+      [
+        "[HM][P6700LV][SPM][Feature]:自动化修改P6700LV.spec",
+        "",
+        "describe:本提交为自动生成",
+        "触发链接：http://192.168.11.103:8080/job/AutoSpec/160/",
+        "",
+        "ST-result:[PASS]",
+        "",
+        "Associated Branch Path:",
+        "build/buildplus",
+        "",
+        "是否影响共分支项目：否",
+        "",
+        "Change-Id: Iafe3d08",
+        "Signed-off-by: shitianchi <tianchi.shi@sprocomm.com>",
+      ].join("\n"),
+    );
+    expect(m.tags).toEqual(["HM", "P6700LV", "SPM", "Feature"]);
+    expect(m.title).toBe("自动化修改P6700LV.spec");
+    expect(m.fields).toEqual([
+      { key: "describe", value: "本提交为自动生成" },
+      {
+        key: "触发链接",
+        value: "http://192.168.11.103:8080/job/AutoSpec/160/",
+      },
+      { key: "ST-result", value: "[PASS]" },
+      { key: "Associated Branch Path", value: "build/buildplus" },
+      { key: "是否影响共分支项目", value: "否" },
+    ]);
+    expect(m.trailers.map((t) => t.key)).toEqual([
+      "Change-Id",
+      "Signed-off-by",
+    ]);
   });
 
   it("shows each Gerrit status as its own pill", () => {

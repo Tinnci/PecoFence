@@ -910,6 +910,9 @@ pub struct Comment {
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct ChangeFiles {
     pub change: u32,
+    /// The full commit message; absent when Gerrit did not return it.
+    #[serde(default)]
+    pub message: Option<String>,
     pub files: Vec<ChangeFile>,
 }
 /// One file of a change's current patchset.

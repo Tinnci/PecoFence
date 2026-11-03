@@ -839,5 +839,6 @@
   "diff.noFiles": "No file changes",
   "diff.truncated": "Diff too large; showing the first 512 KB",
   "diff.binary": "Binary file or no text difference",
-  "diff.view": "Diff"
+  "diff.view": "Diff",
+  "diff.message": "Commit message"
 }
