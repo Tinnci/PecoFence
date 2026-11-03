@@ -176,7 +176,7 @@ function MessageRow({ message }: { message: string }) {
   const parsed = parseMessage(message);
   return (
     <li>
-      <Collapsible>
+      <Collapsible defaultOpen>
         <CollapsibleTrigger className="file-row message-row">
           <ChevronRight size={12} aria-hidden="true" className="chevron" />
           <FileText size={12} aria-hidden="true" className="file-kind" />
