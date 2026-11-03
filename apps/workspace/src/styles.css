@@ -3654,6 +3654,17 @@ a.external-link.bar { text-decoration: none; }
   grid-column: 2;
   justify-self: start;
 }
+.local-correct > [data-slot="select-trigger"]:first-child {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+.local-correct > .local-remote,
+.local-correct > .local-correction-value {
+  grid-column: 1 / -1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.local-correct > .local-correction-value { width: 100%; }
 .local-notes {
   margin: 0;
   padding: 0;

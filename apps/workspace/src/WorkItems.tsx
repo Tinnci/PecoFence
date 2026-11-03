@@ -854,7 +854,7 @@ function LocalDialog({
                 ))}
               </SelectContent>
             </Select>
-            <span className="quiet">
+            <span className="quiet local-remote">
               {t("work.remoteNow", {
                 value: remote ? fieldValue(field, remote) : "—",
               })}
@@ -868,7 +868,7 @@ function LocalDialog({
                 }))}
                 onValueChange={(v) => setValue((v as string) ?? "")}
               >
-                <SelectTrigger size="sm" aria-label={t("work.value")}>
+                <SelectTrigger size="sm" className="local-correction-value" aria-label={t("work.value")}>
                   <SelectValue placeholder={t("work.pick")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -881,6 +881,7 @@ function LocalDialog({
               </Select>
             ) : (
               <Input
+                className="local-correction-value"
                 value={value}
                 maxLength={200}
                 aria-label={t("work.value")}
