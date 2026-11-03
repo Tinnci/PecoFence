@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useIsFetching, useQuery } from "@tanstack/react-query";
 import {
   ChevronRight,
@@ -442,22 +442,37 @@ export function parseMessage(message: string): Message {
   return out;
 }
 
+// A markdown link [text](url) first, then a bare address; an address ends at whitespace,
+// brackets, quotes or CJK punctuation, so "[url](url)" never becomes one broken address.
+const LINK =
+  /\[([^\]\n]{1,300})\]\((https?:\/\/[^\s()]+)\)|(https?:\/\/[^\s，。、；：！？（）()<>"'\[\]{}]+)/g;
+
 /** Text with its links made clickable. */
 export function Linked({ text }: { text: string }) {
-  const parts = text.split(/(https?:\/\/[^\s，。、)）]+)/g);
-  return (
-    <>
-      {parts.map((p, i) =>
-        /^https?:\/\//.test(p) ? (
-          <ExternalLink key={i} href={p}>
-            {p}
-          </ExternalLink>
-        ) : (
-          p
-        ),
-      )}
-    </>
-  );
+  const out: ReactNode[] = [];
+  let last = 0;
+  for (const m of text.matchAll(LINK)) {
+    const at = m.index ?? 0;
+    if (at > last) out.push(text.slice(last, at));
+    // A trailing full stop or comma belongs to the sentence, not the address.
+    let href = m[2] ?? m[3];
+    let tail = "";
+    const trimmed = /[.,;:!?]+$/.exec(href);
+    if (!m[2] && trimmed) {
+      tail = trimmed[0];
+      href = href.slice(0, -tail.length);
+    }
+    const label = m[1] && m[1] !== href ? m[1] : href;
+    out.push(
+      <ExternalLink key={at} href={href}>
+        {label}
+      </ExternalLink>,
+    );
+    if (tail) out.push(tail);
+    last = at + m[0].length;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return <>{out}</>;
 }
 
 /** A verdict like [PASS] or FAIL as a pill. */
