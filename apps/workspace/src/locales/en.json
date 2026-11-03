@@ -831,5 +831,13 @@
   "work.history.uncorrected": "{{field}} correction undone",
   "work.history.check": "Check on {{date}}",
   "work.history.unchecked": "Check cleared",
-  "work.history.imported": "Local layer imported"
+  "work.history.imported": "Local layer imported",
+  "diff.changes": "Changes",
+  "diff.files": "{{count}} files",
+  "diff.files_one": "{{count}} file",
+  "diff.files_other": "{{count}} files",
+  "diff.noFiles": "No file changes",
+  "diff.truncated": "Diff too large; showing the first 512 KB",
+  "diff.binary": "Binary file or no text difference",
+  "diff.view": "Diff"
 }

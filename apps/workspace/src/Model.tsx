@@ -38,6 +38,7 @@ import {
 } from "./browser-links";
 import { useTranslation } from "react-i18next";
 import { t, locale } from "./i18n";
+import { ChangeFiles, ChangeStatus } from "./ChangeDiff";
 import {
   Tooltip,
   TooltipContent,
@@ -792,9 +793,11 @@ function BranchesTab({
         ? jobs
         : allJobs.filter((job) => job.job === timelineJob);
   const routes = sourceRoutes(saved, branch ?? "");
-  const historicalJobs = (builds.data?.jobs ?? []).filter((job) =>
-    routes.historical.some((r) => r.job === job.job) &&
-    (saved?.branch_jobs?.[branch] === undefined || saved.branch_jobs[branch].includes(job.job)),
+  const historicalJobs = (builds.data?.jobs ?? []).filter(
+    (job) =>
+      routes.historical.some((r) => r.job === job.job) &&
+      (saved?.branch_jobs?.[branch] === undefined ||
+        saved.branch_jobs[branch].includes(job.job)),
   );
   const timelineJobs =
     timelineJob === "suggested"
@@ -1070,7 +1073,7 @@ function BranchesTab({
                           actions={commitContextActions(l)}
                         >
                           <li
-                            className={`change state-${l.status === "ABANDONED" ? "abandoned" : l.state}`}
+                            className={`change state-${l.status === "ABANDONED" ? "abandoned" : l.state} gerrit-${l.status.toLowerCase()}`}
                           >
                             <span
                               className="change-when"
@@ -1087,19 +1090,9 @@ function BranchesTab({
                                 </ExternalLink>
                               </p>
                               <span className="flagged-meta">
-                                <span
-                                  className={`change-status status-${l.status.toLowerCase()}`}
-                                >
-                                  {l.status === "MERGED"
-                                    ? t("model.merged")
-                                    : l.status === "ABANDONED"
-                                      ? t("model.abandoned")
-                                      : l.status === "NEW"
-                                        ? t("model.awaitingReview")
-                                        : l.status}
-                                </span>
-                                {l.status !== "ABANDONED"
-                                  ? ` · ${stateNames[l.state] ?? l.state}`
+                                <ChangeStatus status={l.status} />
+                                {l.status !== "ABANDONED" && l.state !== "clean"
+                                  ? ` ${stateNames[l.state] ?? l.state}`
                                   : ""}
                                 {l.rules.length
                                   ? ` · ${l.rules.map((r) => ruleNames[r] ?? r).join("、")}`
@@ -1134,6 +1127,7 @@ function BranchesTab({
                                   </>
                                 ) : null}
                               </span>
+                              <ChangeFiles code={m.code} change={l.number} />
                             </div>
                           </li>
                         </ContextTarget>

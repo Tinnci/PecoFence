@@ -831,5 +831,13 @@
   "work.history.uncorrected": "撤销{{field}}更正",
   "work.history.check": "{{date}} 复查",
   "work.history.unchecked": "取消复查",
-  "work.history.imported": "导入本地标记"
+  "work.history.imported": "导入本地标记",
+  "diff.changes": "改动",
+  "diff.files": "{{count}} 个文件",
+  "diff.files_one": "{{count}} 个文件",
+  "diff.files_other": "{{count}} 个文件",
+  "diff.noFiles": "没有文件改动",
+  "diff.truncated": "差异过大，只显示前 512 KB",
+  "diff.binary": "二进制文件或无文本差异",
+  "diff.view": "差异"
 }

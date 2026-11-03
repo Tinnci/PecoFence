@@ -189,7 +189,9 @@ export async function focus(
     | "requirements_cached"
     | "requirements_full"
     | "annotate"
-    | "history",
+    | "history"
+    | "change_files"
+    | "change_diff",
   args: {
     code?: string;
     job?: string;
@@ -201,6 +203,7 @@ export async function focus(
     source?: string;
     item?: string;
     op?: Record<string, unknown>;
+    path?: string;
   } = {},
 ): Promise<FocusData> {
   return isTauri()
@@ -216,6 +219,7 @@ export async function focus(
         source: args.source ?? null,
         item: args.item ?? null,
         op: args.op ?? null,
+        path: args.path ?? null,
       })
     : desktopOnly();
 }

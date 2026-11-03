@@ -280,9 +280,22 @@ fn desktop() {
         source: Option<String>,
         item: Option<String>,
         op: Option<serde_json::Value>,
+        path: Option<String>,
         state: tauri::State<'_, State>,
     ) -> Result<setup::FocusData, setup::SetupFailure> {
-        let args = if action == "build_evidence" {
+        let args = if action == "change_files" || action == "change_diff" {
+            let path = if action == "change_diff" {
+                Some(
+                    path.as_deref()
+                        .ok_or_else(|| setup::SetupFailure::new("invalid_input"))?,
+                )
+            } else {
+                None
+            };
+            code.as_deref()
+                .zip(change)
+                .and_then(|(code, change)| setup::diff_args(code, change, path))
+        } else if action == "build_evidence" {
             code.as_deref()
                 .zip(job.as_deref())
                 .zip(build)
@@ -341,6 +354,7 @@ fn desktop() {
             "summary" | "refresh" => 600,
             "suggest" => 180,
             "builds" | "build_evidence" => 120,
+            "change_files" | "change_diff" => 60,
             "issues" | "requirements" | "issues_full" | "requirements_full" => 300,
             _ => 30,
         });

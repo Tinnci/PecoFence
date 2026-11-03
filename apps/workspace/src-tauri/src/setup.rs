@@ -908,6 +908,29 @@ pub struct Comment {
     pub text: String,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct ChangeFiles {
+    pub change: u32,
+    pub files: Vec<ChangeFile>,
+}
+/// One file of a change's current patchset.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct ChangeFile {
+    pub path: String,
+    /// ADDED, MODIFIED, DELETED, RENAMED, COPIED or REWRITE
+    pub kind: String,
+    pub insertions: u32,
+    pub deletions: u32,
+}
+/// One file's unified diff, from its `diff --git` line.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct ChangeDiff {
+    pub change: u32,
+    pub path: String,
+    pub patch_set: Option<u32>,
+    pub diff: String,
+    pub truncated: bool,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct AnnotatedItem {
     /// issues or requirements
     pub kind: String,
@@ -1018,6 +1041,12 @@ pub struct FocusData {
     pub history: Option<ItemHistory>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
+    pub change_files: Option<ChangeFiles>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub change_diff: Option<ChangeDiff>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub models: Option<Vec<FocusModel>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
@@ -1058,6 +1087,32 @@ pub struct LogWindow {
     pub start: u64,
     #[ts(type = "number")]
     pub bytes: u64,
+}
+/// `spm focus diff`: a change's files, or one file's diff when `path` is given.
+pub fn diff_args(code: &str, change: u32, path: Option<&str>) -> Option<Vec<String>> {
+    if !valid_code(code) || change == 0 {
+        return None;
+    }
+    let mut args: Vec<String> = vec![
+        "focus".into(),
+        "diff".into(),
+        "--code".into(),
+        code.into(),
+        "--change".into(),
+        change.to_string(),
+    ];
+    if let Some(path) = path {
+        if path.is_empty()
+            || path.len() > 1024
+            || path.starts_with(['-', '/'])
+            || path.contains("..")
+            || path.chars().any(char::is_control)
+        {
+            return None;
+        }
+        args.extend(["--path".into(), path.into()]);
+    }
+    Some(args)
 }
 pub fn build_evidence_args(code: &str, job: &str, build: u32) -> Option<Vec<String>> {
     if !valid_code(code)
@@ -1473,6 +1528,9 @@ pub fn types() -> String {
             Comment::decl(&config),
             LocalLayer::decl(&config),
             AnnotatedItem::decl(&config),
+            ChangeFiles::decl(&config),
+            ChangeFile::decl(&config),
+            ChangeDiff::decl(&config),
             ItemHistory::decl(&config),
             LocalEvent::decl(&config),
             Transition::decl(&config),
@@ -1518,6 +1576,15 @@ mod tests {
             assert!(build_evidence_args("P6700LV", job, 23).is_none());
         }
         assert!(build_evidence_args("P6700LV", "folder/model", 0).is_none());
+        assert_eq!(
+            diff_args("P6700LV", 80481, Some("buildspec/P6700LV.spec")).unwrap()[6..],
+            ["--path", "buildspec/P6700LV.spec"]
+        );
+        assert_eq!(diff_args("P6700LV", 80481, None).unwrap().len(), 6);
+        for bad in ["--raw", "/etc/passwd", "a/../b", "", "a\nb"] {
+            assert!(diff_args("P6700LV", 1, Some(bad)).is_none(), "{bad}");
+        }
+        assert!(diff_args("P6700LV", 0, None).is_none());
     }
 
     #[test]
