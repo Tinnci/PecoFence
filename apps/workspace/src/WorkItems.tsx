@@ -52,6 +52,13 @@ import { since, type FocusState } from "./Focus";
 import { FailureNote, failureOf } from "./TemplateImport";
 import { useModelPreference } from "./model-navigation";
 import {
+  AgeChip,
+  CommitsChip,
+  OwnerChip,
+  ReopenedChip,
+  SeverityBadge,
+} from "./Badges";
+import {
   SortBuilder,
   compareBy,
   defaultSort,
@@ -594,20 +601,17 @@ function Row({
           {item.title}
         </ExternalLink>
         <span className="work-meta">
+          <SeverityBadge value={item.severity} />
           <span className={`status-chip stage-${item.group}`}>
             {item.status}
           </span>
+          <OwnerChip name={item.owner} />
           {held !== null ? (
-            <Hint
-              className={stale ? "short" : undefined}
-              text={t(`work.since.${a.status_since_source || "unknown"}`)}
-            >
-              {t("work.held", { count: held })}
+            <Hint text={t(`work.since.${a.status_since_source || "unknown"}`)}>
+              <AgeChip days={stale ? Math.max(held, 7) : held}>
+                {t("work.held", { count: held })}
+              </AgeChip>
             </Hint>
-          ) : null}
-          {item.owner ? <span>{item.owner}</span> : null}
-          {item.severity ? (
-            <span className="quiet">{item.severity}</span>
           ) : null}
           {created !== null ? (
             <span className="quiet">
@@ -627,19 +631,8 @@ function Row({
                 : ""}
             </Hint>
           ) : null}
-          {a.reopened ? (
-            <span className="short">
-              {t("work.reopened", { count: a.reopened })}
-            </span>
-          ) : null}
-          {item.commits.length ? (
-            <span
-              className="work-commits"
-              title={item.commits.map((n) => `#${n}`).join(" ")}
-            >
-              {t("work.commits", { count: item.commits.length })}
-            </span>
-          ) : null}
+          {a.reopened ? <ReopenedChip count={a.reopened} /> : null}
+          {item.commits.length ? <CommitsChip numbers={item.commits} /> : null}
         </span>
         {comment ? (
           <span className="work-activity">

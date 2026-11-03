@@ -39,6 +39,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { t, locale } from "./i18n";
 import { ChangeFiles, ChangeStatus, prefetchChange } from "./ChangeDiff";
+import { OwnerChip } from "./Badges";
 import {
   Tooltip,
   TooltipContent,
@@ -317,7 +318,7 @@ function FlaggedRow({
           <ExternalLink
             href={gerritSearchUrl(item.url, gerritTerm("owner", item.owner))}
           >
-            {item.owner}
+            <OwnerChip name={item.owner} />
           </ExternalLink>{" "}
           · {item.number}
         </span>
@@ -1122,7 +1123,7 @@ function BranchesTab({
                                     gerritTerm("owner", l.owner),
                                   )}
                                 >
-                                  {l.owner}
+                                  <OwnerChip name={l.owner} />
                                 </ExternalLink>{" "}
                                 · {l.number}
                                 {l.issues.length ? (

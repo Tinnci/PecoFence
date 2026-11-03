@@ -868,5 +868,6 @@
   "work.sortDir.value.asc": "小→大",
   "work.sortDir.value.desc": "大→小",
   "work.sortDir.order.asc": "首项→末项",
-  "work.sortDir.order.desc": "末项→首项"
+  "work.sortDir.order.desc": "末项→首项",
+  "work.unassigned": "未分配"
 }

@@ -868,5 +868,6 @@
   "work.sortDir.value.asc": "Low → high",
   "work.sortDir.value.desc": "High → low",
   "work.sortDir.order.asc": "First → last",
-  "work.sortDir.order.desc": "Last → first"
+  "work.sortDir.order.desc": "Last → first",
+  "work.unassigned": "Unassigned"
 }
