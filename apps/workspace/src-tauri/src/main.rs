@@ -281,6 +281,7 @@ fn desktop() {
         item: Option<String>,
         op: Option<serde_json::Value>,
         path: Option<String>,
+        items: Option<Vec<String>>,
         state: tauri::State<'_, State>,
     ) -> Result<setup::FocusData, setup::SetupFailure> {
         let args = if matches!(
@@ -357,7 +358,7 @@ fn desktop() {
             "summary" | "refresh" => 600,
             "suggest" => 180,
             "builds" | "build_evidence" => 120,
-            "change_files" | "change_diff" | "change_diffs" | "flow" => 90,
+            "change_files" | "change_diff" | "change_diffs" | "flow" | "flows" => 90,
             "issues" | "requirements" | "issues_full" | "requirements_full" => 300,
             _ => 30,
         });

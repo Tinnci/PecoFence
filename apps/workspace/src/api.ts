@@ -193,7 +193,8 @@ export async function focus(
     | "change_files"
     | "change_diff"
     | "change_diffs"
-    | "flow",
+    | "flow"
+    | "flows",
   args: {
     code?: string;
     job?: string;
@@ -206,6 +207,7 @@ export async function focus(
     item?: string;
     op?: Record<string, unknown>;
     path?: string;
+    items?: string[];
   } = {},
 ): Promise<FocusData> {
   return isTauri()
@@ -222,6 +224,7 @@ export async function focus(
         item: args.item ?? null,
         op: args.op ?? null,
         path: args.path ?? null,
+        items: args.items ?? null,
       })
     : desktopOnly();
 }

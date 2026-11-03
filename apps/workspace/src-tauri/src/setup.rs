@@ -1096,6 +1096,9 @@ pub struct FocusData {
     pub flow: Option<ItemFlow>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
+    pub flows: Option<Vec<ItemFlow>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub models: Option<Vec<FocusModel>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
@@ -1136,6 +1139,20 @@ pub struct LogWindow {
     pub start: u64,
     #[ts(type = "number")]
     pub bytes: u64,
+}
+/// `spm focus flow`: one to ten 飞书项目 items' 流转记录, read in parallel.
+pub fn flow_args(code: &str, items: &[String]) -> Option<Vec<String>> {
+    if !valid_code(code) || items.is_empty() || items.len() > 10 {
+        return None;
+    }
+    let mut args: Vec<String> = vec!["focus".into(), "flow".into(), "--code".into(), code.into()];
+    for item in items {
+        if !valid_item("meegle", item) {
+            return None;
+        }
+        args.extend(["--item".into(), item.clone()]);
+    }
+    Some(args)
 }
 /// `spm focus diff`: a change's files, or one file's diff when `path` is given.
 pub fn diff_args(code: &str, change: u32, path: Option<&str>, all: bool) -> Option<Vec<String>> {
@@ -1231,17 +1248,6 @@ pub fn focus_args(
     let code = || code.filter(|c| valid_code(c)).map(str::to_owned);
     let mut args: Vec<String> = vec!["focus".into()];
     match action {
-        "flow" => {
-            let (source, item) = annotation.filter(|(s, i)| *s == "meegle" && valid_item(s, i))?;
-            let _ = source;
-            args.extend([
-                "flow".into(),
-                "--code".into(),
-                code()?,
-                "--item".into(),
-                item.into(),
-            ]);
-        }
         "annotate" | "history" => {
             let (source, item) = annotation.filter(|(s, i)| valid_item(s, i))?;
             args.extend([
@@ -1658,6 +1664,12 @@ mod tests {
             assert!(diff_args("P6700LV", 1, Some(bad), false).is_none(), "{bad}");
         }
         assert!(diff_args("P6700LV", 0, None, false).is_none());
+        assert_eq!(
+            flow_args("E6765GDL", &["1".into(), "2".into()]).unwrap()[4..],
+            ["--item", "1", "--item", "2"]
+        );
+        assert!(flow_args("E6765GDL", &["--x".into()]).is_none());
+        assert!(flow_args("E6765GDL", &[]).is_none());
     }
 
     #[test]

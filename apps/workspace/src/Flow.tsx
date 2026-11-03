@@ -48,6 +48,14 @@ const isKey = (v: string) =>
 const near = (a: FlowEvent, b: FlowEvent) =>
   a.by === b.by && Math.abs(Date.parse(a.at) - Date.parse(b.at)) <= 120_000;
 
+/** Comment markdown as a reader sees it: images become a link, hidden markers go. */
+function readable(text: string) {
+  return text
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/!\[[^\]]*\]\((\S+?)\)/g, `${t("flow.image")} $1`)
+    .trim();
+}
+
 export type Shaped = FlowEvent & {
   details: { field: string; from: string; value: string }[];
 };
@@ -91,11 +99,18 @@ export function shapeFlow(events: FlowEvent[]): Shaped[] {
       out.push({ ...e, to: to.join("、"), from: from.join("、"), details: [] });
       continue;
     }
-    out.push({ ...e, details: [] });
+    out.push({ ...e, text: readable(e.text), details: [] });
   }
   // A form filled during a move belongs to that move; other edits close in time group.
   for (const e of edits) {
-    const move = out.find((o) => o.kind === "status" && near(o, e));
+    // The form belongs to the move written nearest to it, not the first one nearby.
+    const move = out
+      .filter((o) => o.kind === "status" && near(o, e))
+      .sort(
+        (a, b) =>
+          Math.abs(Date.parse(a.at) - Date.parse(e.at)) -
+          Math.abs(Date.parse(b.at) - Date.parse(e.at)),
+      )[0];
     const group =
       move ??
       last(out, (o) => o.kind === "field" && near(o, e)) ??
@@ -109,11 +124,19 @@ export function shapeFlow(events: FlowEvent[]): Shaped[] {
   return out.sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
 }
 
-/** Flows the user is likely to open next, read ahead in the background. */
+/** Flows the user is likely to open next: one read for all of them, each kept on its own. */
 export function prefetchFlows(code: string, items: WorkItem[]) {
-  for (const i of items)
-    if (i.source === "meegle")
-      void queryClient.prefetchQuery(flowOptions(code, i.id));
+  const ids = items
+    .filter((i) => i.source === "meegle")
+    .map((i) => i.id)
+    .filter((id) => !queryClient.getQueryData(flowOptions(code, id).queryKey));
+  if (!ids.length) return;
+  void focus("flows", { code, items: ids.slice(0, 10) })
+    .then((data) => {
+      for (const f of data.flows ?? [])
+        queryClient.setQueryData(flowOptions(code, f.item).queryKey, f);
+    })
+    .catch(() => undefined);
 }
 
 /** A 飞书项目 item's 流转记录, read when first opened and ahead of it on hover. */

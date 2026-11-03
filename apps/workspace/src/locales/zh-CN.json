@@ -884,5 +884,6 @@
   "flow.formerMember": "已离开的成员",
   "flow.fields": "修改 {{count}} 项",
   "flow.fields_one": "修改 {{count}} 项",
-  "flow.fields_other": "修改 {{count}} 项"
+  "flow.fields_other": "修改 {{count}} 项",
+  "flow.image": "[图片]"
 }

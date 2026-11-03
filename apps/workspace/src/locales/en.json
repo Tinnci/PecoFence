@@ -884,5 +884,6 @@
   "flow.formerMember": "Former member",
   "flow.fields": "Changed {{count}} fields",
   "flow.fields_one": "Changed {{count}} field",
-  "flow.fields_other": "Changed {{count}} fields"
+  "flow.fields_other": "Changed {{count}} fields",
+  "flow.image": "[image]"
 }
