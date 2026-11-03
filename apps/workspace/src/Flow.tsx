@@ -49,7 +49,7 @@ const near = (a: FlowEvent, b: FlowEvent) =>
   a.by === b.by && Math.abs(Date.parse(a.at) - Date.parse(b.at)) <= 120_000;
 
 export type Shaped = FlowEvent & {
-  details: { field: string; value: string }[];
+  details: { field: string; from: string; value: string }[];
 };
 const last = (list: Shaped[], test: (o: Shaped) => boolean) => {
   for (let i = list.length - 1; i >= 0; i--) if (test(list[i])) return list[i];
@@ -104,7 +104,7 @@ export function shapeFlow(events: FlowEvent[]): Shaped[] {
         out.push(g);
         return g;
       })();
-    group.details.push({ field: e.field, value: e.to });
+    group.details.push({ field: e.field, from: e.from, value: e.to });
   }
   return out.sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
 }
@@ -208,6 +208,12 @@ function FlowRow({ e }: { e: Shaped }) {
           ) : null}
           {e.kind === "field" && e.details.length === 1 ? (
             <span className="flow-value">
+              {e.details[0].from ? (
+                <>
+                  <span className="flow-from">{e.details[0].from}</span>
+                  {" → "}
+                </>
+              ) : null}
               <Linked text={e.details[0].value} />
             </span>
           ) : null}
@@ -223,6 +229,12 @@ function FlowRow({ e }: { e: Shaped }) {
               <div key={i}>
                 <dt>{d.field}</dt>
                 <dd title={d.value}>
+                  {d.from ? (
+                    <>
+                      <span className="flow-from">{d.from}</span>
+                      {" → "}
+                    </>
+                  ) : null}
                   <Linked text={d.value} />
                 </dd>
               </div>
