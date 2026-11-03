@@ -4205,3 +4205,20 @@ a.external-link.bar { text-decoration: none; }
 .vote-up { color: #1a7f37; background: color-mix(in oklab, #2da44e 12%, transparent); }
 .vote-down { color: #cf222e; background: color-mix(in oklab, #e5534b 12%, transparent); }
 .vote-strong { font-weight: 700; }
+
+/* Multi-level sort, 飞书项目 style: numbered conditions, each with its own direction. */
+.sort-builder { display: contents; }
+.sort-toggle { display: inline-flex; align-items: center; gap: 6px; max-width: 320px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--background); color: var(--foreground); font: inherit; font-size: 13px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sort-toggle[data-panel-open] { border-color: var(--ring, var(--foreground)); }
+.sort-panel { flex-basis: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--card, var(--background)); }
+.sort-title { margin: 0 0 8px; font-size: 12px; color: var(--muted-foreground); }
+.sort-panel ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.sort-panel li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sort-rank { width: 18px; height: 18px; border-radius: 50%; background: var(--muted); color: var(--muted-foreground); font-size: 11px; line-height: 18px; text-align: center; flex: none; }
+.sort-dir { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.sort-dir button { border: 0; padding: 3px 10px; background: none; color: var(--muted-foreground); font: inherit; font-size: 12px; cursor: pointer; }
+.sort-dir button[aria-pressed="true"] { background: var(--muted); color: var(--foreground); font-weight: 500; }
+.sort-remove { border: 0; background: none; color: var(--muted-foreground); cursor: pointer; padding: 2px; }
+.sort-remove:disabled { opacity: .3; cursor: default; }
+.sort-actions { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
+.work-filters { flex-wrap: wrap; }

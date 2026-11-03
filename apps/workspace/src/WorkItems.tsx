@@ -51,6 +51,13 @@ import {
 import { since, type FocusState } from "./Focus";
 import { FailureNote, failureOf } from "./TemplateImport";
 import { useModelPreference } from "./model-navigation";
+import {
+  SortBuilder,
+  compareBy,
+  defaultSort,
+  sortValue,
+  type SortKey,
+} from "./WorkSort";
 import { t } from "./i18n";
 
 /** Stages in the order work moves; done and cancelled close the item. */
@@ -868,7 +875,11 @@ function LocalDialog({
                 }))}
                 onValueChange={(v) => setValue((v as string) ?? "")}
               >
-                <SelectTrigger size="sm" className="local-correction-value" aria-label={t("work.value")}>
+                <SelectTrigger
+                  size="sm"
+                  className="local-correction-value"
+                  aria-label={t("work.value")}
+                >
                   <SelectValue placeholder={t("work.pick")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -968,8 +979,42 @@ function LocalDialog({
 }
 
 const PAGE = 150;
-const sorts = ["activity", "held", "created"] as const;
-type Sort = (typeof sorts)[number];
+
+/** One field's filter: every value present with its count, or all of them. */
+function FilterSelect({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: [string, number][];
+  onChange: (v: string) => void;
+}) {
+  const items = [
+    { value: "*", label: `${label} · ${t("work.filterAll")}` },
+    ...options.map(([v, n]) => ({ value: v, label: `${v} ${n}` })),
+  ];
+  return (
+    <Select
+      value={value || "*"}
+      items={items}
+      onValueChange={(v) => onChange(!v || v === "*" ? "" : (v as string))}
+    >
+      <SelectTrigger size="sm" aria-label={label}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {items.map((o) => (
+          <SelectItem key={o.value} value={o.value}>
+            {o.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
 
 /** What needs a look: one filter at a time, kept per model so 概览 can open the tab on it. */
 export type Attention =
@@ -1025,7 +1070,17 @@ export function WorkItemsTab({
   const view = useWorkView(code, kind);
   const { stage, setStage, attention, setAttention, origin, setOrigin } = view;
   const [search, setSearch] = useState("");
-  const [sort, setSort] = useState<Sort>("activity");
+  const [sortKeys, setSortKeys] = useModelPreference<SortKey[]>(
+    code,
+    `${kind}-sort`,
+    defaultSort,
+  );
+  const [owner, setOwner] = useModelPreference(code, `${kind}-owner`, "");
+  const [severity, setSeverity] = useModelPreference(
+    code,
+    `${kind}-severity`,
+    "",
+  );
   const [shown, setShown] = useState(PAGE);
   const [editing, setEditing] = useState<string | null>(null);
   const [now] = useState(() => Date.now());
@@ -1074,6 +1129,8 @@ export function WorkItemsTab({
             : i.group === stage,
       )
       .filter((i) => attends(i, attention, now))
+      .filter((i) => !owner || (i.owner || "—") === owner)
+      .filter((i) => !severity || (i.severity || "—") === severity)
       .filter(
         (i) =>
           !q ||
@@ -1081,15 +1138,19 @@ export function WorkItemsTab({
             .toLowerCase()
             .includes(q),
       )
-      .sort((a, b) =>
-        sort === "activity"
-          ? time(lastActivity(b)) - time(lastActivity(a))
-          : sort === "held"
-            ? time(a.activity.status_since || a.updated) -
-              time(b.activity.status_since || b.updated)
-            : time(a.activity.created) - time(b.activity.created),
-      );
-  }, [scoped, stage, attention, search, sort, now]);
+      .sort(compareBy(sortKeys, (i, f) => sortValue(i, f, time, lastActivity)));
+  }, [scoped, stage, attention, search, sortKeys, owner, severity, now]);
+  // Each filter offers the values present, most frequent first.
+  const choices = (pick: (i: WorkItem) => string) => {
+    const counts = new Map<string, number>();
+    for (const i of scoped) {
+      const v = pick(i) || "—";
+      counts.set(v, (counts.get(v) ?? 0) + 1);
+    }
+    return [...counts].sort((a, b) => b[1] - a[1]);
+  };
+  const owners = choices((i) => i.owner);
+  const severities = choices((i) => i.severity);
   const origins = useMemo(() => {
     const items = data?.items ?? [];
     const count = (f: (i: WorkItem) => boolean) => [
@@ -1205,25 +1266,19 @@ export function WorkItemsTab({
               aria-label={t("work.search")}
               onChange={(e) => setSearch(e.target.value)}
             />
-            <Select
-              value={sort}
-              items={sorts.map((s) => ({
-                value: s,
-                label: t(`work.sort.${s}`),
-              }))}
-              onValueChange={(v) => v && setSort(v as Sort)}
-            >
-              <SelectTrigger size="sm" aria-label={t("work.sort")}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {sorts.map((s) => (
-                  <SelectItem key={s} value={s}>
-                    {t(`work.sort.${s}`)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <FilterSelect
+              label={t("work.sortField.owner")}
+              value={owner}
+              options={owners}
+              onChange={setOwner}
+            />
+            <FilterSelect
+              label={t("work.sortField.severity")}
+              value={severity}
+              options={severities}
+              onChange={setSeverity}
+            />
+            <SortBuilder value={sortKeys} onChange={setSortKeys} />
             <span className="quiet work-count">
               {t("work.showing", { count: list.length })}
             </span>
