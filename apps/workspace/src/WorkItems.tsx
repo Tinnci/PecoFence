@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { RefreshCw, Tag } from "lucide-react";
@@ -52,6 +52,17 @@ import { since, type FocusState } from "./Focus";
 import { FailureNote, failureOf } from "./TemplateImport";
 import { useModelPreference } from "./model-navigation";
 import { ItemFlow, prefetchFlows } from "./Flow";
+import {
+  DisplayMenu,
+  FilterAdd,
+  FilterChips,
+  GroupHeader,
+  groupItems,
+  matches,
+  type Filters,
+  type GroupField,
+} from "./WorkFilters";
+import { m as motion } from "motion/react";
 import {
   AgeChip,
   CommitsChip,
@@ -595,7 +606,11 @@ function Row({
   const stale = isStale(item, now);
   const local = item.local;
   return (
-    <li className={`work-row stage-edge-${item.group}`}>
+    <motion.li
+      layout="position"
+      transition={{ duration: 0.22, ease: [0.2, 0, 0, 1] }}
+      className={`work-row stage-edge-${item.group}`}
+    >
       <ExternalLink href={item.url} className="work-id">
         {item.display_id}
       </ExternalLink>
@@ -669,33 +684,35 @@ function Row({
             <span className="quiet">{item.origin_evidence}</span>
           </span>
         ) : null}
-        <ItemFlow code={code} item={item} />
-        <span className="work-local">
-          {local?.tags.map((tag) => (
-            <span key={tag} className="local-tag">
-              {tag}
-            </span>
-          ))}
-          {local?.corrections.map((c) => (
-            <CorrectionChip key={c.field} c={c} />
-          ))}
-          {local?.next_check ? (
-            <span className={isDue(item) ? "short" : "quiet"}>
-              {t("work.nextCheck", { date: local.next_check.slice(5) })}
-            </span>
-          ) : null}
-          {local?.notes.length ? (
-            <span className="quiet" title={local.notes.at(-1)?.text}>
-              {t("work.notes", { count: local.notes.length })}
-            </span>
-          ) : null}
-          <button type="button" className="link local-edit" onClick={onLocal}>
-            <Tag aria-hidden="true" />
-            {t("work.mark")}
-          </button>
-        </span>
+        <div className="work-foot">
+          <span className="work-local">
+            {local?.tags.map((tag) => (
+              <span key={tag} className="local-tag">
+                {tag}
+              </span>
+            ))}
+            {local?.corrections.map((c) => (
+              <CorrectionChip key={c.field} c={c} />
+            ))}
+            {local?.next_check ? (
+              <span className={isDue(item) ? "short" : "quiet"}>
+                {t("work.nextCheck", { date: local.next_check.slice(5) })}
+              </span>
+            ) : null}
+            {local?.notes.length ? (
+              <span className="quiet" title={local.notes.at(-1)?.text}>
+                {t("work.notes", { count: local.notes.length })}
+              </span>
+            ) : null}
+            <button type="button" className="link local-edit" onClick={onLocal}>
+              <Tag aria-hidden="true" />
+              {t("work.mark")}
+            </button>
+          </span>
+          <ItemFlow code={code} item={item} />
+        </div>
       </div>
-    </li>
+    </motion.li>
   );
 }
 
@@ -979,42 +996,6 @@ function LocalDialog({
 
 const PAGE = 150;
 
-/** One field's filter: every value present with its count, or all of them. */
-function FilterSelect({
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  options: [string, number][];
-  onChange: (v: string) => void;
-}) {
-  const items = [
-    { value: "*", label: `${label} · ${t("work.filterAll")}` },
-    ...options.map(([v, n]) => ({ value: v, label: `${v} ${n}` })),
-  ];
-  return (
-    <Select
-      value={value || "*"}
-      items={items}
-      onValueChange={(v) => onChange(!v || v === "*" ? "" : (v as string))}
-    >
-      <SelectTrigger size="sm" aria-label={label}>
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {items.map((o) => (
-          <SelectItem key={o.value} value={o.value}>
-            {o.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
-}
-
 /** What needs a look: one filter at a time, kept per model so 概览 can open the tab on it. */
 export type Attention =
   "" | "blocked" | "stale" | "due" | "corrected" | "conflict" | `tag:${string}`;
@@ -1074,12 +1055,17 @@ export function WorkItemsTab({
     `${kind}-sort`,
     defaultSort,
   );
-  const [owner, setOwner] = useModelPreference(code, `${kind}-owner`, "");
-  const [severity, setSeverity] = useModelPreference(
+  const [filters, setFilters] = useModelPreference<Filters>(
     code,
-    `${kind}-severity`,
-    "",
+    `${kind}-filters`,
+    {},
   );
+  const [group, setGroup] = useModelPreference<GroupField>(
+    code,
+    `${kind}-group`,
+    "none",
+  );
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const [shown, setShown] = useState(PAGE);
   const [editing, setEditing] = useState<string | null>(null);
   const [now] = useState(() => Date.now());
@@ -1128,8 +1114,6 @@ export function WorkItemsTab({
             : i.group === stage,
       )
       .filter((i) => attends(i, attention, now))
-      .filter((i) => !owner || (i.owner || "—") === owner)
-      .filter((i) => !severity || (i.severity || "—") === severity)
       .filter(
         (i) =>
           !q ||
@@ -1138,7 +1122,13 @@ export function WorkItemsTab({
             .includes(q),
       )
       .sort(compareBy(sortKeys, (i, f) => sortValue(i, f, time, lastActivity)));
-  }, [scoped, stage, attention, search, sortKeys, owner, severity, now]);
+  }, [scoped, stage, attention, search, sortKeys, now]);
+  // Filter lists count what the stage, attention and search already show.
+  const staged = list;
+  const filtered = useMemo(
+    () => staged.filter((i) => matches(i, filters)),
+    [staged, filters],
+  );
   // The top open 飞书项目 items are the likeliest to be opened: their flows arrive early.
   useEffect(() => {
     const top = list
@@ -1148,17 +1138,6 @@ export function WorkItemsTab({
     const timer = setTimeout(() => prefetchFlows(code, top), 1200);
     return () => clearTimeout(timer);
   }, [list, code]);
-  // Each filter offers the values present, most frequent first.
-  const choices = (pick: (i: WorkItem) => string) => {
-    const counts = new Map<string, number>();
-    for (const i of scoped) {
-      const v = pick(i) || "—";
-      counts.set(v, (counts.get(v) ?? 0) + 1);
-    }
-    return [...counts].sort((a, b) => b[1] - a[1]);
-  };
-  const owners = choices((i) => i.owner);
-  const severities = choices((i) => i.severity);
   const origins = useMemo(() => {
     const items = data?.items ?? [];
     const count = (f: (i: WorkItem) => boolean) => [
@@ -1274,45 +1253,55 @@ export function WorkItemsTab({
               aria-label={t("work.search")}
               onChange={(e) => setSearch(e.target.value)}
             />
-            <FilterSelect
-              label={t("work.sortField.owner")}
-              value={owner}
-              options={owners}
-              onChange={setOwner}
-            />
-            <FilterSelect
-              label={t("work.sortField.severity")}
-              value={severity}
-              options={severities}
-              onChange={setSeverity}
-            />
+            <FilterAdd items={staged} value={filters} onChange={setFilters} />
+            <DisplayMenu group={group} onGroup={setGroup} />
             <SortBuilder value={sortKeys} onChange={setSortKeys} />
             <span className="quiet work-count">
-              {t("work.showing", { count: list.length })}
+              {t("work.showing", { count: filtered.length })}
             </span>
           </div>
-          {list.length ? (
+          <FilterChips items={staged} value={filters} onChange={setFilters} />
+          {filtered.length ? (
             <ol className="work-list">
-              {list.slice(0, shown).map((i) => (
-                <Row
-                  key={`${i.scope_id}-${i.id}`}
-                  code={code}
-                  item={i}
-                  now={now}
-                  onLocal={() => setEditing(`${i.source}:${i.id}`)}
-                />
+              {groupItems(filtered.slice(0, shown), group).map((g) => (
+                <Fragment key={g.key || "all"}>
+                  <GroupHeader
+                    field={group}
+                    value={g.key}
+                    count={g.items.length}
+                    collapsed={collapsed.has(g.key)}
+                    onToggle={() =>
+                      setCollapsed((c) => {
+                        const next = new Set(c);
+                        if (!next.delete(g.key)) next.add(g.key);
+                        return next;
+                      })
+                    }
+                  />
+                  {collapsed.has(g.key)
+                    ? null
+                    : g.items.map((i) => (
+                        <Row
+                          key={`${i.scope_id}-${i.id}`}
+                          code={code}
+                          item={i}
+                          now={now}
+                          onLocal={() => setEditing(`${i.source}:${i.id}`)}
+                        />
+                      ))}
+                </Fragment>
               ))}
             </ol>
           ) : (
             <p className="quiet empty-line">{t("work.none")}</p>
           )}
-          {list.length > shown ? (
+          {filtered.length > shown ? (
             <button
               type="button"
               className="link"
               onClick={() => setShown(shown + PAGE)}
             >
-              {t("work.more", { count: list.length - shown })}
+              {t("work.more", { count: filtered.length - shown })}
             </button>
           ) : null}
           {editingItem ? (

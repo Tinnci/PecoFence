@@ -4272,3 +4272,33 @@ a .owner-chip { color: inherit; }
 .flow-form > div { display: contents; }
 .flow-form dt { color: var(--muted-foreground); }
 .flow-form dd { margin: 0; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* Filters as chips, Linear style: field, operator, values; the field quiet, the values read. */
+.filter-bar { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.filter-chip { display: inline-flex; align-items: stretch; border: 1px solid var(--border); border-radius: 6px; background: var(--background); overflow: hidden; font-size: 12px; }
+.filter-chip-body { display: inline-flex; align-items: center; gap: 0; border: 0; background: none; padding: 0; font: inherit; color: inherit; cursor: pointer; }
+.filter-chip-body > span { padding: 3px 8px; line-height: 18px; }
+.filter-field { color: var(--muted-foreground); border-right: 1px solid var(--border); }
+.filter-op { color: var(--muted-foreground); border-right: 1px solid var(--border); }
+.filter-values { font-weight: 500; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.filter-chip-body:hover .filter-values { background: var(--muted); }
+.filter-chip-remove { border: 0; border-left: 1px solid var(--border); background: none; padding: 0 6px; color: var(--muted-foreground); cursor: pointer; }
+.filter-chip-remove:hover { color: var(--foreground); background: var(--muted); }
+.filter-add { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px dashed var(--border); border-radius: 6px; background: none; color: var(--muted-foreground); font: inherit; font-size: 13px; cursor: pointer; }
+.filter-add:hover, .filter-add[data-popup-open] { color: var(--foreground); border-style: solid; }
+.filter-menu { min-width: 220px; max-height: 360px; overflow-y: auto; }
+.filter-option { display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; }
+.filter-option > :first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.filter-count { margin-left: auto; color: var(--muted-foreground); font-size: 12px; font-variant-numeric: tabular-nums; }
+/* A group reads as a section, not a row: its mark, then how many, a hairline under it. */
+.work-group { list-style: none; position: sticky; top: 0; z-index: 1; background: var(--background); }
+.work-group button { display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px 2px 6px; border: 0; border-bottom: 1px solid var(--border); background: none; font: inherit; font-size: 13px; color: var(--foreground); cursor: pointer; text-align: left; }
+.work-group .chevron { display: inline-block; color: var(--muted-foreground); transition: transform .15s ease; }
+.work-group .chevron[data-open="true"] { transform: rotate(90deg); }
+.work-group .filter-count { margin-left: 0; }
+
+/* One quiet line under an item: local marks, then its 流转记录; the record opens below both. */
+.work-foot { display: flex; flex-wrap: wrap; align-items: center; column-gap: 14px; row-gap: 4px; }
+.work-foot .item-flow { display: contents; }
+.work-foot .item-flow > .change-files-toggle { order: 1; }
+.work-foot .item-flow > .change-files-panel { order: 2; flex-basis: 100%; }
