@@ -947,6 +947,24 @@ pub struct ChangeDiff {
     pub diff: String,
     pub truncated: bool,
 }
+/// A 飞书项目 item's 流转记录, oldest first.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct ItemFlow {
+    pub item: String,
+    pub events: Vec<FlowEvent>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct FlowEvent {
+    pub at: String,
+    pub by: String,
+    pub bot: bool,
+    /// created, status, assign, field or comment
+    pub kind: String,
+    pub field: String,
+    pub from: String,
+    pub to: String,
+    pub text: String,
+}
 /// Every file's diff from one read; files missing after a cut are read one by one.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct ChangeDiffs {
@@ -1073,6 +1091,9 @@ pub struct FocusData {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub change_diffs: Option<ChangeDiffs>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub flow: Option<ItemFlow>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub models: Option<Vec<FocusModel>>,
@@ -1210,6 +1231,17 @@ pub fn focus_args(
     let code = || code.filter(|c| valid_code(c)).map(str::to_owned);
     let mut args: Vec<String> = vec!["focus".into()];
     match action {
+        "flow" => {
+            let (source, item) = annotation.filter(|(s, i)| *s == "meegle" && valid_item(s, i))?;
+            let _ = source;
+            args.extend([
+                "flow".into(),
+                "--code".into(),
+                code()?,
+                "--item".into(),
+                item.into(),
+            ]);
+        }
         "annotate" | "history" => {
             let (source, item) = annotation.filter(|(s, i)| valid_item(s, i))?;
             args.extend([
@@ -1563,6 +1595,8 @@ pub fn types() -> String {
             ChangeEvent::decl(&config),
             ChangeDiff::decl(&config),
             ChangeDiffs::decl(&config),
+            ItemFlow::decl(&config),
+            FlowEvent::decl(&config),
             ItemHistory::decl(&config),
             LocalEvent::decl(&config),
             Transition::decl(&config),

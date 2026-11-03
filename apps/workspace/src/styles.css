@@ -4252,3 +4252,17 @@ a .owner-chip { color: inherit; }
 .commits-chip { color: var(--muted-foreground); }
 .work-versions { padding: 0 6px; border-radius: 4px; background: var(--muted); font: 11px/18px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--muted-foreground); }
 .work-id { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+
+/* 飞书项目 流转记录 on the Gerrit rail: status moves stand out, assignments show people. */
+.item-flow { display: block; margin-top: 2px; }
+.item-flow > .change-files-toggle { margin-left: 0; }
+.event-created .event-dot { border-color: #0969da; }
+.event-status .event-dot { background: #8250df; border-color: #8250df; }
+.event-assign .event-dot { border-color: #1a7f37; }
+.event-field .event-dot { border-color: var(--border); }
+.event-comment .event-dot { border-color: #9a5b00; }
+.event-status .event-kind { color: #8250df; font-weight: 600; }
+.flow-move { display: inline-flex; align-items: center; gap: 4px; }
+.flow-from { color: var(--muted-foreground); text-decoration: line-through; text-decoration-color: color-mix(in oklab, var(--muted-foreground) 50%, transparent); }
+.flow-to { padding: 0 6px; border-radius: 4px; background: color-mix(in oklab, #8250df 12%, transparent); color: #6639ba; font-weight: 500; }
+.flow-value { padding: 0 6px; border-radius: 4px; background: var(--muted); max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

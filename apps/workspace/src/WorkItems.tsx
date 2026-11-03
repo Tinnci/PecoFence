@@ -51,6 +51,7 @@ import {
 import { since, type FocusState } from "./Focus";
 import { FailureNote, failureOf } from "./TemplateImport";
 import { useModelPreference } from "./model-navigation";
+import { ItemFlow } from "./Flow";
 import {
   AgeChip,
   CommitsChip,
@@ -577,10 +578,12 @@ function CorrectionChip({ c }: { c: Correction }) {
 }
 
 function Row({
+  code,
   item,
   now,
   onLocal,
 }: {
+  code: string;
   item: WorkItem;
   now: number;
   onLocal: () => void;
@@ -605,7 +608,9 @@ function Row({
           <span className={`status-chip stage-${item.group}`}>
             {item.status}
           </span>
-          <OwnerChip name={item.owner} />
+          {item.owner || !closed.has(item.group) ? (
+            <OwnerChip name={item.owner} />
+          ) : null}
           {held !== null ? (
             <Hint text={t(`work.since.${a.status_since_source || "unknown"}`)}>
               <AgeChip days={stale ? Math.max(held, 7) : held}>
@@ -664,6 +669,7 @@ function Row({
             <span className="quiet">{item.origin_evidence}</span>
           </span>
         ) : null}
+        <ItemFlow code={code} item={item} />
         <span className="work-local">
           {local?.tags.map((tag) => (
             <span key={tag} className="local-tag">
@@ -1281,6 +1287,7 @@ export function WorkItemsTab({
               {list.slice(0, shown).map((i) => (
                 <Row
                   key={`${i.scope_id}-${i.id}`}
+                  code={code}
                   item={i}
                   now={now}
                   onLocal={() => setEditing(`${i.source}:${i.id}`)}

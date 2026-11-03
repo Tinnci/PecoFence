@@ -869,5 +869,16 @@
   "work.sortDir.value.desc": "High → low",
   "work.sortDir.order.asc": "First → last",
   "work.sortDir.order.desc": "Last → first",
-  "work.unassigned": "Unassigned"
+  "work.unassigned": "Unassigned",
+  "flow.title": "Flow history",
+  "flow.moves": "{{count}} status changes",
+  "flow.moves_one": "{{count}} status change",
+  "flow.moves_other": "{{count}} status changes",
+  "flow.none": "No records",
+  "flow.automation": "Automation",
+  "flow.created": "Created",
+  "flow.status": "Moved",
+  "flow.assign": "Assigned {{field}}",
+  "flow.field": "Changed {{field}}",
+  "flow.comment": "Commented"
 }

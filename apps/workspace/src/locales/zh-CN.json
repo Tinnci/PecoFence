@@ -869,5 +869,16 @@
   "work.sortDir.value.desc": "大→小",
   "work.sortDir.order.asc": "首项→末项",
   "work.sortDir.order.desc": "末项→首项",
-  "work.unassigned": "未分配"
+  "work.unassigned": "未分配",
+  "flow.title": "流转记录",
+  "flow.moves": "{{count}} 次流转",
+  "flow.moves_one": "{{count}} 次流转",
+  "flow.moves_other": "{{count}} 次流转",
+  "flow.none": "没有记录",
+  "flow.automation": "自动化",
+  "flow.created": "创建",
+  "flow.status": "流转",
+  "flow.assign": "指派 {{field}}",
+  "flow.field": "修改 {{field}}",
+  "flow.comment": "评论"
 }

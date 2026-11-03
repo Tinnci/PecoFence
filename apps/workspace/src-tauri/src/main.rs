@@ -357,7 +357,7 @@ fn desktop() {
             "summary" | "refresh" => 600,
             "suggest" => 180,
             "builds" | "build_evidence" => 120,
-            "change_files" | "change_diff" | "change_diffs" => 90,
+            "change_files" | "change_diff" | "change_diffs" | "flow" => 90,
             "issues" | "requirements" | "issues_full" | "requirements_full" => 300,
             _ => 30,
         });

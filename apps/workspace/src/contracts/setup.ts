@@ -183,6 +183,12 @@ export type ChangeEvent = { at: string, by: string, bot: boolean,
 kind: string, patch_set: number | null, votes: Array<[string, string]>, text: string, };
 export type ChangeDiff = { change: number, path: string, patch_set: number | null, diff: string, truncated: boolean, };
 export type ChangeDiffs = { change: number, patch_set: number | null, files: { [key in string]: string }, truncated: boolean, };
+export type ItemFlow = { item: string, events: Array<FlowEvent>, };
+export type FlowEvent = { at: string, by: string, bot: boolean, 
+/**
+ * created, status, assign, field or comment
+ */
+kind: string, field: string, from: string, to: string, text: string, };
 export type ItemHistory = { local: LocalLayer | null, events: Array<LocalEvent>, transitions: Array<Transition>, };
 export type LocalEvent = { at: string, 
 /**
@@ -203,5 +209,5 @@ export type FocusData = { build_evidence?: BuildEvidence, work_items?: WorkItems
 /**
  * After an annotation: the item as the last read shows it, with the new layer.
  */
-work_item?: AnnotatedItem, history?: ItemHistory, change_files?: ChangeFiles, change_diff?: ChangeDiff, change_diffs?: ChangeDiffs, models?: Array<FocusModel>, suggestions?: Suggestions, summary?: FocusSummary, preview?: Preview, changes?: Array<Listed>, builds?: Builds, };
+work_item?: AnnotatedItem, history?: ItemHistory, change_files?: ChangeFiles, change_diff?: ChangeDiff, change_diffs?: ChangeDiffs, flow?: ItemFlow, models?: Array<FocusModel>, suggestions?: Suggestions, summary?: FocusSummary, preview?: Preview, changes?: Array<Listed>, builds?: Builds, };
 export type Activation = { health?: ServiceHealth, waited_secs?: number, };

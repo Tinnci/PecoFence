@@ -1,0 +1,134 @@
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { ChevronRight } from "lucide-react";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Spinner } from "@/components/ui/spinner";
+import type { FlowEvent, WorkItem } from "./contracts/setup";
+import { focus } from "./api";
+import { queryClient } from "./focus-cache";
+import { FailureNote, failureOf } from "./TemplateImport";
+import { OwnerChip } from "./Badges";
+import { t } from "./i18n";
+
+const flowOptions = (code: string, item: string) => ({
+  queryKey: ["item-flow", code, item] as const,
+  queryFn: async () =>
+    (await focus("flow", { code, source: "meegle", item })).flow ?? null,
+  staleTime: 5 * 60_000,
+});
+
+const clock: Intl.DateTimeFormatOptions = {
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+};
+const when = (at: string) => {
+  const d = new Date(at);
+  return Number.isNaN(d.getTime()) ? at : d.toLocaleString(undefined, clock);
+};
+
+/** A 飞书项目 item's 流转记录, read when first opened and ahead of it on hover. */
+export function ItemFlow({ code, item }: { code: string; item: WorkItem }) {
+  const [open, setOpen] = useState(false);
+  const flow = useQuery(
+    { ...flowOptions(code, item.id), enabled: open },
+    queryClient,
+  );
+  if (item.source !== "meegle") return null;
+  const events = flow.data?.events;
+  const moves = events?.filter((e) => e.kind === "status").length ?? 0;
+  return (
+    <Collapsible open={open} onOpenChange={setOpen} className="item-flow">
+      <CollapsibleTrigger
+        className="change-files-toggle"
+        onPointerEnter={() =>
+          void queryClient.prefetchQuery(flowOptions(code, item.id))
+        }
+      >
+        {flow.isFetching ? (
+          <Spinner className="size-3" />
+        ) : (
+          <ChevronRight size={13} aria-hidden="true" className="chevron" />
+        )}
+        {t("flow.title")}
+        {events ? (
+          <span className="file-dir">
+            {" "}
+            · {t("flow.moves", { count: moves })}
+          </span>
+        ) : null}
+      </CollapsibleTrigger>
+      <CollapsibleContent className="change-files-panel">
+        {flow.error ? <FailureNote failure={failureOf(flow.error)} /> : null}
+        {!flow.data && !flow.error ? (
+          <div className="diff-loading" aria-busy="true">
+            {[0, 1, 2, 3].map((i) => (
+              <Skeleton key={i} className="diff-loading-line" />
+            ))}
+          </div>
+        ) : null}
+        {events ? (
+          events.length ? (
+            <ol className="gerrit-timeline">
+              {events.map((e, i) => (
+                <FlowRow key={i} e={e} />
+              ))}
+            </ol>
+          ) : (
+            <p className="quiet">{t("flow.none")}</p>
+          )
+        ) : null}
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+function FlowRow({ e }: { e: FlowEvent }) {
+  return (
+    <li className={`gerrit-event event-${e.kind}${e.bot ? " event-bot" : ""}`}>
+      <time dateTime={e.at}>{when(e.at)}</time>
+      <span className="event-dot" aria-hidden="true" />
+      <div className="event-body">
+        <span className="event-head">
+          <strong>{e.by || t("flow.automation")}</strong>
+          <span className="event-kind">
+            {e.kind === "assign" || e.kind === "field"
+              ? t(`flow.${e.kind}`, { field: e.field })
+              : t(`flow.${e.kind}`)}
+          </span>
+          {e.kind === "status" ? (
+            <span className="flow-move">
+              {e.from ? <span className="flow-from">{e.from}</span> : null}
+              <span aria-hidden="true">→</span>
+              <span className="flow-to">{e.to}</span>
+            </span>
+          ) : null}
+          {e.kind === "assign" ? (
+            <>
+              {e.to
+                ? e.to
+                    .split("、")
+                    .map((name) => <OwnerChip key={name} name={name} />)
+                : null}
+              {e.from ? <span className="flow-from">{e.from}</span> : null}
+            </>
+          ) : null}
+          {e.kind === "field" && e.to ? (
+            <span className="flow-value">{e.to}</span>
+          ) : null}
+        </span>
+        {e.text ? (
+          <span className="event-text" title={e.text}>
+            {e.text}
+          </span>
+        ) : null}
+      </div>
+    </li>
+  );
+}

@@ -192,7 +192,8 @@ export async function focus(
     | "history"
     | "change_files"
     | "change_diff"
-    | "change_diffs",
+    | "change_diffs"
+    | "flow",
   args: {
     code?: string;
     job?: string;
