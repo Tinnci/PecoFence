@@ -81,7 +81,7 @@ describe("change diffs", () => {
       code: "P6700LV",
       change: 80481,
     });
-    await user.click(screen.getByRole("button", { name: /提交说明/ }));
+    // The commit message is open from the start.
     const message = await screen.findByRole("article", { name: "提交说明" });
     expect(within(message).getByText("PASS")).toBeTruthy();
     await user.click(file);
