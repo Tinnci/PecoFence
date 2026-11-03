@@ -617,7 +617,7 @@ function Row({
   const local = item.local;
   return (
     <motion.li
-      layout="position"
+      layout={expand ? false : "position"}
       transition={{ duration: 0.22, ease: [0.2, 0, 0, 1] }}
       className={`work-row stage-edge-${item.group}`}
     >
@@ -1309,7 +1309,6 @@ export function WorkItemsTab({
                 if (!expanded) return () => {};
                 await loadFlows(code, filtered);
                 setExpandAll(true);
-                await new Promise((r) => setTimeout(r, 120));
                 return () => setExpandAll(false);
               }}
               target={exportRef}

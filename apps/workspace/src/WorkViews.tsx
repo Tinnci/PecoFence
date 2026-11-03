@@ -199,15 +199,21 @@ export function ExportButton({
       restore = await prepare(expanded);
       node.classList.add("exporting");
       if (expanded) node.classList.add("exporting-all");
-      // Let the caption lay out before the picture is taken.
+      // Fonts can change wrapping and row heights after expansion.
+      await document.fonts.ready;
+      // Let React commit the expanded rows and the static export styles lay out.
       await new Promise((r) =>
         requestAnimationFrame(() => requestAnimationFrame(r)),
       );
       const background =
         getComputedStyle(document.body).backgroundColor || "#ffffff";
       // Browsers cap a canvas near 32k pixels a side; a long expanded view drops to 1x.
-      const ratio = node.scrollHeight * 2 > 30000 ? 1 : 2;
+      const width = node.scrollWidth;
+      const height = node.scrollHeight;
+      const ratio = Math.max(width, height) * 2 > 30000 ? 1 : 2;
       const url = await toPng(node, {
+        width,
+        height,
         pixelRatio: ratio,
         backgroundColor: background,
         cacheBust: true,

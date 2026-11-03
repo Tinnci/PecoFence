@@ -4318,3 +4318,10 @@ a .owner-chip { color: inherit; }
 .work-export.exporting-all .local-edit,
 .work-export.exporting-all .work-foot .chevron { display: none; }
 .work-export.exporting-all .item-flow > .change-files-toggle { color: var(--foreground); font-weight: 500; }
+
+/* Motion's inline projection transforms describe an intermediate screen layout.
+   Capture natural row positions, including rows outside the viewport. */
+.work-export.exporting .work-row { transform: none !important; translate: none !important; }
+.work-export.exporting,
+.work-export.exporting * { animation: none !important; transition: none !important; }
+.work-export.exporting .item-flow > .change-files-panel[data-open] { height: auto !important; max-height: none !important; overflow: visible !important; }
