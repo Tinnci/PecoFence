@@ -166,12 +166,21 @@ export type ChangeFiles = { change: number,
 /**
  * The full commit message; absent when Gerrit did not return it.
  */
-message: string | null, files: Array<ChangeFile>, };
+message: string | null, 
+/**
+ * Gerrit's review history: uploads, votes, merge, abandon, comments.
+ */
+timeline: Array<ChangeEvent> | null, files: Array<ChangeFile>, };
 export type ChangeFile = { path: string, 
 /**
  * ADDED, MODIFIED, DELETED, RENAMED, COPIED or REWRITE
  */
 kind: string, insertions: number, deletions: number, };
+export type ChangeEvent = { at: string, by: string, bot: boolean, 
+/**
+ * upload, review, merged, abandoned, restored or comment
+ */
+kind: string, patch_set: number | null, votes: Array<[string, string]>, text: string, };
 export type ChangeDiff = { change: number, path: string, patch_set: number | null, diff: string, truncated: boolean, };
 export type ChangeDiffs = { change: number, patch_set: number | null, files: { [key in string]: string }, truncated: boolean, };
 export type ItemHistory = { local: LocalLayer | null, events: Array<LocalEvent>, transitions: Array<Transition>, };

@@ -913,7 +913,21 @@ pub struct ChangeFiles {
     /// The full commit message; absent when Gerrit did not return it.
     #[serde(default)]
     pub message: Option<String>,
+    /// Gerrit's review history: uploads, votes, merge, abandon, comments.
+    #[serde(default)]
+    pub timeline: Option<Vec<ChangeEvent>>,
     pub files: Vec<ChangeFile>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct ChangeEvent {
+    pub at: String,
+    pub by: String,
+    pub bot: bool,
+    /// upload, review, merged, abandoned, restored or comment
+    pub kind: String,
+    pub patch_set: Option<u32>,
+    pub votes: Vec<(String, String)>,
+    pub text: String,
 }
 /// One file of a change's current patchset.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -1546,6 +1560,7 @@ pub fn types() -> String {
             AnnotatedItem::decl(&config),
             ChangeFiles::decl(&config),
             ChangeFile::decl(&config),
+            ChangeEvent::decl(&config),
             ChangeDiff::decl(&config),
             ChangeDiffs::decl(&config),
             ItemHistory::decl(&config),

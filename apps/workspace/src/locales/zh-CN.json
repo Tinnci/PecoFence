@@ -840,5 +840,16 @@
   "diff.truncated": "差异过大，只显示前 512 KB",
   "diff.binary": "二进制文件或无文本差异",
   "diff.view": "差异",
-  "diff.message": "提交说明"
+  "diff.message": "提交说明",
+  "gerrit.timeline": "审批时间线",
+  "gerrit.steps": "{{count}} 步",
+  "gerrit.steps_one": "{{count}} 步",
+  "gerrit.steps_other": "{{count}} 步",
+  "gerrit.upload": "上传补丁集",
+  "gerrit.uploadSet": "上传补丁集 {{n}}",
+  "gerrit.review": "评审",
+  "gerrit.merged": "合入",
+  "gerrit.abandoned": "废弃",
+  "gerrit.restored": "恢复",
+  "gerrit.comment": "评论"
 }

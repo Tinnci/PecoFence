@@ -3,6 +3,7 @@ import { useIsFetching, useQuery } from "@tanstack/react-query";
 import {
   ChevronRight,
   FileText,
+  History,
   GitMerge,
   GitPullRequestArrow,
   GitPullRequestClosed,
@@ -15,7 +16,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { ExternalLink } from "@/components/external-link";
-import type { ChangeFile } from "./contracts/setup";
+import type { ChangeEvent, ChangeFile } from "./contracts/setup";
 import { focus } from "./api";
 import { queryClient } from "./focus-cache";
 import { FailureNote, failureOf } from "./TemplateImport";
@@ -159,6 +160,9 @@ export function ChangeFiles({
             {read.data.message ? (
               <MessageRow message={read.data.message} />
             ) : null}
+            {read.data.timeline?.length ? (
+              <TimelineRow events={read.data.timeline} />
+            ) : null}
             {list?.map((f) => (
               <FileRow key={f.path} code={code} change={change} file={f} />
             ))}
@@ -170,6 +174,94 @@ export function ChangeFiles({
       </CollapsibleContent>
     </Collapsible>
   );
+}
+
+const clock: Intl.DateTimeFormatOptions = {
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+};
+
+/** Gerrit's review history: who uploaded, voted, merged or abandoned, and when. */
+function TimelineRow({ events }: { events: ChangeEvent[] }) {
+  const closing = [...events]
+    .reverse()
+    .find((e) => e.kind === "merged" || e.kind === "abandoned");
+  const people = events.filter((e) => !e.bot).length;
+  return (
+    <li>
+      <Collapsible defaultOpen>
+        <CollapsibleTrigger className="file-row message-row">
+          <ChevronRight size={12} aria-hidden="true" className="chevron" />
+          <History size={12} aria-hidden="true" className="file-kind" />
+          <span className="file-path message-title">
+            {t("gerrit.timeline")}
+            <span className="file-dir">
+              {" "}
+              · {t("gerrit.steps", { count: people })}
+              {closing
+                ? ` · ${t(`gerrit.${closing.kind}`)} ${new Date(closing.at).toLocaleString(undefined, clock)}`
+                : ""}
+            </span>
+          </span>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <ol className="gerrit-timeline">
+            {events.map((e, i) => (
+              <li
+                key={i}
+                className={`gerrit-event event-${e.kind}${e.bot ? " event-bot" : ""}`}
+              >
+                <time dateTime={e.at}>
+                  {new Date(e.at).toLocaleString(undefined, clock)}
+                </time>
+                <span className="event-dot" aria-hidden="true" />
+                <div className="event-body">
+                  <span className="event-head">
+                    <strong>{e.by || "Gerrit"}</strong>
+                    <span className="event-kind">
+                      {e.kind === "upload" && e.patch_set
+                        ? t("gerrit.uploadSet", { n: e.patch_set })
+                        : t(`gerrit.${e.kind}`)}
+                    </span>
+                    {e.votes.map(([label, value]) => (
+                      <span
+                        key={label}
+                        className={`vote ${value.startsWith("-") ? "vote-down" : "vote-up"}${/[2-9]/.test(value) ? " vote-strong" : ""}`}
+                      >
+                        {label} {value}
+                      </span>
+                    ))}
+                    {e.patch_set && e.kind !== "upload" ? (
+                      <span className="event-ps">PS{e.patch_set}</span>
+                    ) : null}
+                  </span>
+                  {eventText(e) ? (
+                    <span className="event-text" title={e.text}>
+                      <Linked text={eventText(e)} />
+                    </span>
+                  ) : null}
+                </div>
+              </li>
+            ))}
+          </ol>
+        </CollapsibleContent>
+      </Collapsible>
+    </li>
+  );
+}
+
+/** The message under its lead: votes and "Uploaded patch set" say nothing the row does not. */
+function eventText(e: ChangeEvent) {
+  return e.text
+    .split("\n")
+    .filter(
+      (l, i) =>
+        !(i === 0 && (e.votes.length || /^Uploaded patch set/i.test(l))),
+    )
+    .join("\n")
+    .trim();
 }
 
 function MessageRow({ message }: { message: string }) {

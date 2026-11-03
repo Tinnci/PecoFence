@@ -4178,3 +4178,30 @@ a.external-link.bar { text-decoration: none; }
 .diff-del { background: color-mix(in oklab, #e5534b 14%, transparent); }
 .diff-hunk td { background: var(--muted); color: var(--muted-foreground); }
 .diff-truncated { font-size: 12px; }
+
+/* Gerrit review history: a rail of dots, merge and abandon marked, bots quiet. */
+.gerrit-timeline { list-style: none; margin: 4px 0 10px 18px; padding: 0; font-size: 12px; }
+.gerrit-event { position: relative; display: grid; grid-template-columns: 84px 14px minmax(0, 1fr); gap: 6px; padding: 3px 0; }
+.gerrit-event time { color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.gerrit-event::before { content: ""; position: absolute; left: 95px; top: 0; bottom: 0; width: 1px; background: var(--border); }
+.gerrit-event:first-child::before { top: 9px; }
+.gerrit-event:last-child::before { bottom: calc(100% - 9px); }
+.event-dot { position: relative; z-index: 1; width: 9px; height: 9px; margin: 4px 0 0 1px; border-radius: 50%; background: var(--background); border: 2px solid var(--muted-foreground); }
+.event-upload .event-dot { border-color: #0969da; }
+.event-review .event-dot { border-color: #9a5b00; }
+.event-merged .event-dot { background: #1a7f37; border-color: #1a7f37; }
+.event-abandoned .event-dot { background: var(--muted-foreground); border-color: var(--muted-foreground); }
+.event-restored .event-dot { border-color: #8250df; }
+.event-body { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.event-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.event-kind { color: var(--muted-foreground); }
+.event-merged .event-kind { color: #1a7f37; font-weight: 600; }
+.event-abandoned .event-kind { font-weight: 600; }
+.event-ps { color: var(--muted-foreground); font: 10px/16px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.event-text { color: var(--muted-foreground); white-space: pre-wrap; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.event-bot { opacity: .62; }
+.event-bot .event-text { -webkit-line-clamp: 1; }
+.vote { padding: 0 6px; border-radius: 999px; font: 500 11px/17px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.vote-up { color: #1a7f37; background: color-mix(in oklab, #2da44e 12%, transparent); }
+.vote-down { color: #cf222e; background: color-mix(in oklab, #e5534b 12%, transparent); }
+.vote-strong { font-weight: 700; }

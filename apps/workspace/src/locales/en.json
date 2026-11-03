@@ -840,5 +840,16 @@
   "diff.truncated": "Diff too large; showing the first 512 KB",
   "diff.binary": "Binary file or no text difference",
   "diff.view": "Diff",
-  "diff.message": "Commit message"
+  "diff.message": "Commit message",
+  "gerrit.timeline": "Review timeline",
+  "gerrit.steps": "{{count}} steps",
+  "gerrit.steps_one": "{{count}} step",
+  "gerrit.steps_other": "{{count}} steps",
+  "gerrit.upload": "Uploaded a patch set",
+  "gerrit.uploadSet": "Uploaded patch set {{n}}",
+  "gerrit.review": "Reviewed",
+  "gerrit.merged": "Merged",
+  "gerrit.abandoned": "Abandoned",
+  "gerrit.restored": "Restored",
+  "gerrit.comment": "Commented"
 }
