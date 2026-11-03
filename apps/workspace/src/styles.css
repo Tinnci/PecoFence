@@ -4325,3 +4325,8 @@ a .owner-chip { color: inherit; }
 .work-export.exporting,
 .work-export.exporting * { animation: none !important; transition: none !important; }
 .work-export.exporting .item-flow > .change-files-panel[data-open] { height: auto !important; max-height: none !important; overflow: visible !important; }
+
+.flow-comment.flow-comment-full,
+.work-export.exporting-all .event-text { display: block; -webkit-line-clamp: unset; overflow: visible; }
+.work-export.exporting-all .flow-form dd { display: block; -webkit-line-clamp: unset; overflow: visible; }
+.work-export.exporting-all .flow-value { max-width: none; white-space: normal; overflow: visible; overflow-wrap: anywhere; }

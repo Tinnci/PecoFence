@@ -922,5 +922,7 @@
   "views.exportAsShown": "按当前显示导出",
   "views.exportAsShownHint": "已显示的行，折叠的保持折叠",
   "views.exportExpanded": "展开全部后导出",
-  "views.exportExpandedHint": "全部行、全部分组和每条流转记录"
+  "views.exportExpandedHint": "全部行、全部分组和每条流转记录",
+  "flow.expandText": "展开全文",
+  "flow.collapseText": "收起全文"
 }

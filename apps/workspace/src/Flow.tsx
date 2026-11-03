@@ -50,8 +50,26 @@ const near = (a: FlowEvent, b: FlowEvent) =>
 
 /** Comment markdown as a reader sees it: images become a link, hidden markers go. */
 function readable(text: string) {
-  return text
-    .replace(/<!--[\s\S]*?-->/g, "")
+  const clean = text.replace(/<!--[\s\S]*?-->/g, "");
+  // Parse inertly, then extract text. Never render source HTML or its styles.
+  if (!/<\/?(?:span|div|p|br|a|img|pre|code|strong|em|b|i|ul|ol|li|blockquote|h[1-6]|table|tr|td)\b[^>]*>|&(?:#\d+|#x[\da-f]+|[a-z]+);/i.test(clean))
+    return clean.replace(/!\[[^\]]*\]\((\S+?)\)/g, `${t("flow.image")} $1`).trim();
+  const doc = new DOMParser().parseFromString(clean, "text/html");
+  doc.querySelectorAll("script, style, iframe, object").forEach((n) => n.remove());
+  doc.querySelectorAll("br").forEach((n) => n.replaceWith("\n"));
+  doc.querySelectorAll("a[href]").forEach((n) => {
+    const href = n.getAttribute("href") ?? "";
+    if (/^https?:\/\//i.test(href)) {
+      const label = n.textContent || href;
+      n.replaceWith(label === href ? href : `[${label}](${href})`);
+    }
+  });
+  doc.querySelectorAll("img").forEach((n) => {
+    const src = n.getAttribute("src") ?? "";
+    n.replaceWith(/^https?:\/\//i.test(src) ? `${t("flow.image")} ${src}` : n.getAttribute("alt") ?? "");
+  });
+  doc.querySelectorAll("p, div, li, pre, blockquote, h1, h2, h3, tr").forEach((n) => n.append("\n"));
+  return (doc.body.textContent ?? "")
     .replace(/!\[[^\]]*\]\((\S+?)\)/g, `${t("flow.image")} $1`)
     .trim();
 }
@@ -223,9 +241,11 @@ export function ItemFlow({
 }
 
 function FlowRow({ e }: { e: Shaped }) {
+  const [full, setFull] = useState(false);
+  const long = e.text.length > 160 || e.text.split("\n").length > 3;
   return (
     <li className={`gerrit-event event-${e.kind}${e.bot ? " event-bot" : ""}`}>
-      <time dateTime={e.at}>{when(e.at)}</time>
+      <time dateTime={e.at} title={new Date(e.at).toLocaleString() }>{when(e.at)}</time>
       <span className="event-dot" aria-hidden="true" />
       <div className="event-body">
         <span className="event-head">
@@ -269,9 +289,16 @@ function FlowRow({ e }: { e: Shaped }) {
           ) : null}
         </span>
         {e.text ? (
-          <span className="event-text" title={e.text}>
-            <Linked text={e.text} />
-          </span>
+          <>
+            <span className={`event-text flow-comment${!long || full ? " flow-comment-full" : ""}`}>
+              <Linked text={e.text} />
+            </span>
+            {long ? (
+              <button type="button" className="link no-export" aria-expanded={full} onClick={() => setFull(!full)}>
+                {t(full ? "flow.collapseText" : "flow.expandText")}
+              </button>
+            ) : null}
+          </>
         ) : null}
         {e.details.length > (e.kind === "field" ? 1 : 0) ? (
           <dl className="flow-form">

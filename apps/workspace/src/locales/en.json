@@ -922,5 +922,7 @@
   "views.exportAsShown": "Export as shown",
   "views.exportAsShownHint": "Rows on screen, collapsed stays collapsed",
   "views.exportExpanded": "Export with everything expanded",
-  "views.exportExpandedHint": "Every row, every group and each flow history"
+  "views.exportExpandedHint": "Every row, every group and each flow history",
+  "flow.expandText": "Show full comment",
+  "flow.collapseText": "Collapse comment"
 }
