@@ -880,5 +880,9 @@
   "flow.status": "Moved",
   "flow.assign": "Assigned {{field}}",
   "flow.field": "Changed {{field}}",
-  "flow.comment": "Commented"
+  "flow.comment": "Commented",
+  "flow.formerMember": "Former member",
+  "flow.fields": "Changed {{count}} fields",
+  "flow.fields_one": "Changed {{count}} field",
+  "flow.fields_other": "Changed {{count}} fields"
 }

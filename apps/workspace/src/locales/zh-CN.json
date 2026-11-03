@@ -880,5 +880,9 @@
   "flow.status": "流转",
   "flow.assign": "指派 {{field}}",
   "flow.field": "修改 {{field}}",
-  "flow.comment": "评论"
+  "flow.comment": "评论",
+  "flow.formerMember": "已离开的成员",
+  "flow.fields": "修改 {{count}} 项",
+  "flow.fields_one": "修改 {{count}} 项",
+  "flow.fields_other": "修改 {{count}} 项"
 }

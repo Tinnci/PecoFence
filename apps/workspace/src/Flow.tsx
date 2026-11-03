@@ -13,6 +13,7 @@ import { focus } from "./api";
 import { queryClient } from "./focus-cache";
 import { FailureNote, failureOf } from "./TemplateImport";
 import { OwnerChip } from "./Badges";
+import { Linked } from "./ChangeDiff";
 import { t } from "./i18n";
 
 const flowOptions = (code: string, item: string) => ({
@@ -33,6 +34,81 @@ const when = (at: string) => {
   return Number.isNaN(d.getTime()) ? at : d.toLocaleString(undefined, clock);
 };
 
+// 飞书项目 records every field a transition form touches, and its workflow keeps internal
+// fields of its own. What a reader needs: moves with the form filled for them, people
+// assigned, edits that say something, comments.
+const internal = new Set([
+  "当前状态授权角色",
+  "关联状态流转",
+  "关联评审",
+  "状态",
+]);
+const isKey = (v: string) =>
+  /^\d{15,}$/.test(v) || /^role_/.test(v) || /^\d+_[a-z0-9]{4,}$/i.test(v);
+const near = (a: FlowEvent, b: FlowEvent) =>
+  a.by === b.by && Math.abs(Date.parse(a.at) - Date.parse(b.at)) <= 120_000;
+
+export type Shaped = FlowEvent & {
+  details: { field: string; value: string }[];
+};
+const last = (list: Shaped[], test: (o: Shaped) => boolean) => {
+  for (let i = list.length - 1; i >= 0; i--) if (test(list[i])) return list[i];
+  return undefined;
+};
+
+/** Events as read: merged, grouped and cleared of what only the workflow needs. */
+export function shapeFlow(events: FlowEvent[]): Shaped[] {
+  const out: Shaped[] = [];
+  const edits: FlowEvent[] = [];
+  for (const e of events) {
+    if (e.kind === "field") {
+      if (!internal.has(e.field) && e.to && !isKey(e.to)) edits.push(e);
+      continue;
+    }
+    if (e.kind === "assign") {
+      const people = (v: string) =>
+        v
+          .split("、")
+          .filter(Boolean)
+          .map((p) => (/^\d{15,}$/.test(p) ? t("flow.formerMember") : p));
+      const to = people(e.to);
+      const from = people(e.from).filter((p) => !to.includes(p));
+      const same = last(
+        out,
+        (o) => o.kind === "assign" && o.field === e.field && near(o, e),
+      );
+      if (same) {
+        same.to = [
+          ...new Set([...same.to.split("、").filter(Boolean), ...to]),
+        ].join("、");
+        same.from = [
+          ...new Set([...same.from.split("、").filter(Boolean), ...from]),
+        ]
+          .filter((p) => !same.to.includes(p))
+          .join("、");
+        continue;
+      }
+      out.push({ ...e, to: to.join("、"), from: from.join("、"), details: [] });
+      continue;
+    }
+    out.push({ ...e, details: [] });
+  }
+  // A form filled during a move belongs to that move; other edits close in time group.
+  for (const e of edits) {
+    const move = out.find((o) => o.kind === "status" && near(o, e));
+    const group =
+      move ??
+      last(out, (o) => o.kind === "field" && near(o, e)) ??
+      (() => {
+        const g: Shaped = { ...e, kind: "field", to: "", details: [] };
+        out.push(g);
+        return g;
+      })();
+    group.details.push({ field: e.field, value: e.to });
+  }
+  return out.sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+}
+
 /** Flows the user is likely to open next, read ahead in the background. */
 export function prefetchFlows(code: string, items: WorkItem[]) {
   for (const i of items)
@@ -48,7 +124,7 @@ export function ItemFlow({ code, item }: { code: string; item: WorkItem }) {
     queryClient,
   );
   if (item.source !== "meegle") return null;
-  const events = flow.data?.events;
+  const events = flow.data ? shapeFlow(flow.data.events) : undefined;
   const moves = events?.filter((e) => e.kind === "status").length ?? 0;
   return (
     <Collapsible open={open} onOpenChange={setOpen} className="item-flow">
@@ -96,7 +172,7 @@ export function ItemFlow({ code, item }: { code: string; item: WorkItem }) {
   );
 }
 
-function FlowRow({ e }: { e: FlowEvent }) {
+function FlowRow({ e }: { e: Shaped }) {
   return (
     <li className={`gerrit-event event-${e.kind}${e.bot ? " event-bot" : ""}`}>
       <time dateTime={e.at}>{when(e.at)}</time>
@@ -105,9 +181,13 @@ function FlowRow({ e }: { e: FlowEvent }) {
         <span className="event-head">
           <strong>{e.by || t("flow.automation")}</strong>
           <span className="event-kind">
-            {e.kind === "assign" || e.kind === "field"
-              ? t(`flow.${e.kind}`, { field: e.field })
-              : t(`flow.${e.kind}`)}
+            {e.kind === "assign"
+              ? t("flow.assign", { field: e.field })
+              : e.kind === "field"
+                ? e.details.length > 1
+                  ? t("flow.fields", { count: e.details.length })
+                  : t("flow.field", { field: e.details[0]?.field ?? e.field })
+                : t(`flow.${e.kind}`)}
           </span>
           {e.kind === "status" ? (
             <span className="flow-move">
@@ -126,14 +206,28 @@ function FlowRow({ e }: { e: FlowEvent }) {
               {e.from ? <span className="flow-from">{e.from}</span> : null}
             </>
           ) : null}
-          {e.kind === "field" && e.to ? (
-            <span className="flow-value">{e.to}</span>
+          {e.kind === "field" && e.details.length === 1 ? (
+            <span className="flow-value">
+              <Linked text={e.details[0].value} />
+            </span>
           ) : null}
         </span>
         {e.text ? (
           <span className="event-text" title={e.text}>
-            {e.text}
+            <Linked text={e.text} />
           </span>
+        ) : null}
+        {e.details.length > (e.kind === "field" ? 1 : 0) ? (
+          <dl className="flow-form">
+            {e.details.map((d, i) => (
+              <div key={i}>
+                <dt>{d.field}</dt>
+                <dd title={d.value}>
+                  <Linked text={d.value} />
+                </dd>
+              </div>
+            ))}
+          </dl>
         ) : null}
       </div>
     </li>

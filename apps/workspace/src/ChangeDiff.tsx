@@ -443,7 +443,7 @@ export function parseMessage(message: string): Message {
 }
 
 /** Text with its links made clickable. */
-function Linked({ text }: { text: string }) {
+export function Linked({ text }: { text: string }) {
   const parts = text.split(/(https?:\/\/[^\s，。、)）]+)/g);
   return (
     <>

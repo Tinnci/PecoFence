@@ -4266,3 +4266,9 @@ a .owner-chip { color: inherit; }
 .flow-from { color: var(--muted-foreground); text-decoration: line-through; text-decoration-color: color-mix(in oklab, var(--muted-foreground) 50%, transparent); }
 .flow-to { padding: 0 6px; border-radius: 4px; background: color-mix(in oklab, #8250df 12%, transparent); color: #6639ba; font-weight: 500; }
 .flow-value { padding: 0 6px; border-radius: 4px; background: var(--muted); max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* The form filled with a move: field names left, what was written right, links live. */
+.flow-form { margin: 4px 0 2px; padding: 6px 8px; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 2px 10px; border-left: 2px solid color-mix(in oklab, #8250df 35%, transparent); background: color-mix(in oklab, var(--muted) 60%, transparent); border-radius: 0 4px 4px 0; }
+.flow-form > div { display: contents; }
+.flow-form dt { color: var(--muted-foreground); }
+.flow-form dd { margin: 0; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
