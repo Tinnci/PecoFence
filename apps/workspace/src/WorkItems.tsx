@@ -8,7 +8,7 @@ import {
 } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { RefreshCw, Tag } from "lucide-react";
+import { RefreshCw, Tag, ChevronsDownUp, ChevronsUpDown } from "lucide-react";
 import { Toggle } from "@base-ui/react/toggle";
 import { ToggleGroup } from "@base-ui/react/toggle-group";
 import {
@@ -606,12 +606,14 @@ function Row({
   item,
   now,
   expand,
+  expansion,
   onLocal,
 }: {
   code: string;
   item: WorkItem;
   now: number;
   expand: boolean;
+  expansion: { open: boolean; revision: number };
   onLocal: () => void;
 }) {
   const a = item.activity;
@@ -724,7 +726,13 @@ function Row({
               {t("work.mark")}
             </button>
           </span>
-          <ItemFlow code={code} item={item} expand={expand} />
+          <ItemFlow
+            key={expansion.revision}
+            code={code}
+            item={item}
+            expand={expand}
+            initiallyOpen={expansion.open}
+          />
         </div>
       </div>
     </motion.li>
@@ -1085,6 +1093,8 @@ export function WorkItemsTab({
   // While an expanded export is taken: every row, every group open, every flow open.
   const [expandAll, setExpandAll] = useState(false);
   const [shown, setShown] = useState(PAGE);
+  const shownBeforeExpand = useRef(PAGE);
+  const [expansion, setExpansion] = useState({ open: false, revision: 0 });
   const [editing, setEditing] = useState<string | null>(null);
   const [now] = useState(() => Date.now());
   const data: WorkItems | null = work.data;
@@ -1309,6 +1319,39 @@ export function WorkItemsTab({
                 setOrigin(v.origin ?? "all");
               }}
             />
+            <button
+              type="button"
+              className="filter-add"
+              aria-expanded={expansion.open}
+              aria-controls={`work-items-${kind}`}
+              disabled={!filtered.length || expandAll}
+              onClick={() => {
+                const open = !expansion.open;
+                if (open) {
+                  shownBeforeExpand.current = shown;
+                  setShown(filtered.length);
+                  setCollapsed(new Set());
+                } else {
+                  setShown(shownBeforeExpand.current);
+                  setCollapsed(
+                    group === "none"
+                      ? new Set()
+                      : new Set(groupItems(filtered, group).map((g) => g.key)),
+                  );
+                }
+                setExpansion((previous) => ({
+                  open,
+                  revision: previous.revision + 1,
+                }));
+              }}
+            >
+              {expansion.open ? (
+                <ChevronsDownUp aria-hidden="true" />
+              ) : (
+                <ChevronsUpDown aria-hidden="true" />
+              )}
+              {t(expansion.open ? "work.collapseAll" : "work.expandAll")}
+            </button>
             <ExportButton
               prepare={async (expanded) => {
                 if (!expanded) return () => {};
@@ -1336,7 +1379,7 @@ export function WorkItemsTab({
             </div>
             <FilterChips items={staged} value={filters} onChange={setFilters} />
             {filtered.length ? (
-              <ol className="work-list">
+              <ol id={`work-items-${kind}`} className="work-list">
                 {groupItems(
                   expandAll ? filtered : filtered.slice(0, shown),
                   group,
@@ -1364,6 +1407,7 @@ export function WorkItemsTab({
                             item={i}
                             now={now}
                             expand={expandAll}
+                            expansion={expansion}
                             onLocal={() => setEditing(`${i.source}:${i.id}`)}
                           />
                         ))}

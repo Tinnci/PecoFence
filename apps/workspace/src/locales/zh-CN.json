@@ -924,5 +924,7 @@
   "views.exportExpanded": "展开全部后导出",
   "views.exportExpandedHint": "全部行、全部分组和每条流转记录",
   "flow.expandText": "展开全文",
-  "flow.collapseText": "收起全文"
+  "flow.collapseText": "收起全文",
+  "work.expandAll": "展开全部",
+  "work.collapseAll": "收起全部"
 }

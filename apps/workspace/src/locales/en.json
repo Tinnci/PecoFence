@@ -924,5 +924,7 @@
   "views.exportExpanded": "Export with everything expanded",
   "views.exportExpandedHint": "Every row, every group and each flow history",
   "flow.expandText": "Show full comment",
-  "flow.collapseText": "Collapse comment"
+  "flow.collapseText": "Collapse comment",
+  "work.expandAll": "Expand all",
+  "work.collapseAll": "Collapse all"
 }

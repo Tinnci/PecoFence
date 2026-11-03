@@ -4330,3 +4330,6 @@ a .owner-chip { color: inherit; }
 .work-export.exporting-all .event-text { display: block; -webkit-line-clamp: unset; overflow: visible; }
 .work-export.exporting-all .flow-form dd { display: block; -webkit-line-clamp: unset; overflow: visible; }
 .work-export.exporting-all .flow-value { max-width: none; white-space: normal; overflow: visible; overflow-wrap: anywhere; }
+
+.flow-details-full .flow-form dd { display: block; -webkit-line-clamp: unset; overflow: visible; }
+.flow-details-full .flow-value { max-width: none; white-space: normal; overflow: visible; overflow-wrap: anywhere; }

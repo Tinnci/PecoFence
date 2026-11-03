@@ -155,14 +155,16 @@ export function ItemFlow({
   code,
   item,
   expand = false,
+  initiallyOpen = false,
 }: {
   code: string;
   item: WorkItem;
   /** Held open, e.g. while the whole view is exported. */
   expand?: boolean;
+  initiallyOpen?: boolean;
 }) {
   const { i18n } = useTranslation();
-  const [opened, setOpen] = useState(false);
+  const [opened, setOpen] = useState(initiallyOpen);
   const open = opened || expand;
   const flow = useQuery(
     { ...flowOptions(code, item), enabled: open && item.source === "meegle" },
@@ -216,7 +218,12 @@ export function ItemFlow({
           events.length ? (
             <ol className="gerrit-timeline">
               {events.map((e, i) => (
-                <FlowRow key={i} e={e} />
+                <FlowRow
+                  key={i}
+                  e={e}
+                  expand={expand}
+                  initiallyFull={initiallyOpen}
+                />
               ))}
             </ol>
           ) : (
@@ -228,8 +235,17 @@ export function ItemFlow({
   );
 }
 
-function FlowRow({ e }: { e: Shaped }) {
-  const [full, setFull] = useState(false);
+function FlowRow({
+  e,
+  expand,
+  initiallyFull,
+}: {
+  e: Shaped;
+  expand: boolean;
+  initiallyFull: boolean;
+}) {
+  const [full, setFull] = useState(initiallyFull);
+  const textFull = full || expand;
   const long = e.text.length > 160 || e.text.split("\n").length > 3;
   return (
     <li className={`gerrit-event event-${e.kind}${e.bot ? " event-bot" : ""}`}>
@@ -237,7 +253,7 @@ function FlowRow({ e }: { e: Shaped }) {
         {when(e.at)}
       </time>
       <span className="event-dot" aria-hidden="true" />
-      <div className="event-body">
+      <div className={`event-body${textFull ? " flow-details-full" : ""}`}>
         <span className="event-head">
           <strong>{e.by || t("flow.automation")}</strong>
           <span className="event-kind">
@@ -281,7 +297,7 @@ function FlowRow({ e }: { e: Shaped }) {
         {e.text ? (
           <>
             <span
-              className={`event-text flow-comment${!long || full ? " flow-comment-full" : ""}`}
+              className={`event-text flow-comment${!long || textFull ? " flow-comment-full" : ""}`}
             >
               <Linked text={e.text} />
             </span>
@@ -289,10 +305,10 @@ function FlowRow({ e }: { e: Shaped }) {
               <button
                 type="button"
                 className="link no-export"
-                aria-expanded={full}
-                onClick={() => setFull(!full)}
+                aria-expanded={textFull}
+                onClick={() => setFull(!textFull)}
               >
-                {t(full ? "flow.collapseText" : "flow.expandText")}
+                {t(textFull ? "flow.collapseText" : "flow.expandText")}
               </button>
             ) : null}
           </>
