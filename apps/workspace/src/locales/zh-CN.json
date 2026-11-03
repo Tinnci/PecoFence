@@ -904,5 +904,19 @@
   "work.groupField.owner": "负责人",
   "work.groupField.severity": "严重程度",
   "work.groupField.stage": "阶段",
-  "work.groupField.status": "状态"
+  "work.groupField.status": "状态",
+  "views.title": "视图",
+  "views.saved": "已保存的视图",
+  "views.saveCurrent": "保存当前视图",
+  "views.saveHint": "保存当前的阶段、需要关注、来源、筛选、分组和排序；只存在本机。",
+  "views.name": "视图名称",
+  "views.save": "保存",
+  "views.delete": "删除视图",
+  "views.export": "把当前视图导出为 PNG",
+  "views.exportShort": "导出图片",
+  "views.exportFailed": "导出图片失败，请重试。",
+  "views.kind.issues": "问题",
+  "views.kind.requirements": "需求",
+  "views.stage.open": "未关闭",
+  "views.stage.all": "全部阶段"
 }

@@ -228,3 +228,13 @@ export async function focus(
       })
     : desktopOnly();
 }
+
+/** Saves an exported PNG where the user picks; the path, or null when cancelled. */
+export async function savePng(
+  name: string,
+  png: Uint8Array,
+): Promise<string | null> {
+  return isTauri()
+    ? invoke<string | null>("save_png", { name, png: Array.from(png) })
+    : desktopOnly();
+}

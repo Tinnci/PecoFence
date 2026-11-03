@@ -904,5 +904,19 @@
   "work.groupField.owner": "Owner",
   "work.groupField.severity": "Severity",
   "work.groupField.stage": "Stage",
-  "work.groupField.status": "Status"
+  "work.groupField.status": "Status",
+  "views.title": "Views",
+  "views.saved": "Saved views",
+  "views.saveCurrent": "Save current view",
+  "views.saveHint": "Saves the stage, attention, origin, filters, grouping and sort; kept on this machine only.",
+  "views.name": "View name",
+  "views.save": "Save",
+  "views.delete": "Delete a view",
+  "views.export": "Export the current view as PNG",
+  "views.exportShort": "Export image",
+  "views.exportFailed": "The image could not be exported; try again.",
+  "views.kind.issues": "Issues",
+  "views.kind.requirements": "Requirements",
+  "views.stage.open": "Open",
+  "views.stage.all": "All stages"
 }

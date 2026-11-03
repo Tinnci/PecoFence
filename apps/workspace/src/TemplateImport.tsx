@@ -32,6 +32,9 @@ import type {
 import { applyTemplate, planTemplate } from "./api";
 
 const failures: Record<string, string> = {
+  get export_failed() {
+    return t("views.exportFailed");
+  },
   get desktop_required() {
     return t("templateImport.importRequiresTheDesktopWorkspaceApp");
   },

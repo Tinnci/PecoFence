@@ -20,6 +20,7 @@ fn main() {
             "service_status",
             "remap",
             "focus",
+            "save_png",
         ]),
     ))
     .expect("Tauri build configuration");

@@ -1,4 +1,11 @@
-import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  Fragment,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { RefreshCw, Tag } from "lucide-react";
@@ -63,6 +70,7 @@ import {
   type GroupField,
 } from "./WorkFilters";
 import { m as motion } from "motion/react";
+import { ExportButton, ViewsMenu, type View } from "./WorkViews";
 import {
   AgeChip,
   CommitsChip,
@@ -684,7 +692,7 @@ function Row({
             <span className="quiet">{item.origin_evidence}</span>
           </span>
         ) : null}
-        <div className="work-foot">
+        <div className="work-foot no-export">
           <span className="work-local">
             {local?.tags.map((tag) => (
               <span key={tag} className="local-tag">
@@ -1066,6 +1074,7 @@ export function WorkItemsTab({
     "none",
   );
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
+  const exportRef = useRef<HTMLDivElement>(null);
   const [shown, setShown] = useState(PAGE);
   const [editing, setEditing] = useState<string | null>(null);
   const [now] = useState(() => Date.now());
@@ -1123,6 +1132,28 @@ export function WorkItemsTab({
       )
       .sort(compareBy(sortKeys, (i, f) => sortValue(i, f, time, lastActivity)));
   }, [scoped, stage, attention, search, sortKeys, now]);
+  const currentView = {
+    filters,
+    group,
+    sort: sortKeys,
+    stage,
+    attention,
+    origin,
+  };
+  // What the exported picture says it shows, in the words of the controls.
+  const exportSummary = [
+    t(`views.stage.${stage}`, {
+      defaultValue: t(`work.stage.${stage}`, { defaultValue: stage }),
+    }),
+    ...Object.entries(filters)
+      .filter(([, v]) => v?.length)
+      .map(([f, v]) => `${t(`work.filterField.${f}`)}：${v!.join("、")}`),
+    group !== "none"
+      ? t("work.groupedBy", { field: t(`work.groupField.${group}`) })
+      : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
   // Filter lists count what the stage, attention and search already show.
   const staged = list;
   const filtered = useMemo(
@@ -1256,54 +1287,83 @@ export function WorkItemsTab({
             <FilterAdd items={staged} value={filters} onChange={setFilters} />
             <DisplayMenu group={group} onGroup={setGroup} />
             <SortBuilder value={sortKeys} onChange={setSortKeys} />
+            <ViewsMenu
+              code={code}
+              kind={kind}
+              current={currentView}
+              onApply={(v: View) => {
+                setFilters(v.filters ?? {});
+                setGroup(v.group ?? "none");
+                setSortKeys(v.sort?.length ? v.sort : defaultSort);
+                setStage(v.stage ?? "open");
+                setAttention((v.attention ?? "") as Attention);
+                setOrigin(v.origin ?? "all");
+              }}
+            />
+            <ExportButton
+              target={exportRef}
+              fileName={`${code}-${kind}-${new Date().toISOString().slice(0, 10)}`}
+            />
             <span className="quiet work-count">
               {t("work.showing", { count: filtered.length })}
             </span>
           </div>
-          <FilterChips items={staged} value={filters} onChange={setFilters} />
-          {filtered.length ? (
-            <ol className="work-list">
-              {groupItems(filtered.slice(0, shown), group).map((g) => (
-                <Fragment key={g.key || "all"}>
-                  <GroupHeader
-                    field={group}
-                    value={g.key}
-                    count={g.items.length}
-                    collapsed={collapsed.has(g.key)}
-                    onToggle={() =>
-                      setCollapsed((c) => {
-                        const next = new Set(c);
-                        if (!next.delete(g.key)) next.add(g.key);
-                        return next;
-                      })
-                    }
-                  />
-                  {collapsed.has(g.key)
-                    ? null
-                    : g.items.map((i) => (
-                        <Row
-                          key={`${i.scope_id}-${i.id}`}
-                          code={code}
-                          item={i}
-                          now={now}
-                          onLocal={() => setEditing(`${i.source}:${i.id}`)}
-                        />
-                      ))}
-                </Fragment>
-              ))}
-            </ol>
-          ) : (
-            <p className="quiet empty-line">{t("work.none")}</p>
-          )}
-          {filtered.length > shown ? (
-            <button
-              type="button"
-              className="link"
-              onClick={() => setShown(shown + PAGE)}
-            >
-              {t("work.more", { count: filtered.length - shown })}
-            </button>
-          ) : null}
+          <div ref={exportRef} className="work-export">
+            <div className="export-caption" aria-hidden="true">
+              <strong>
+                {code} · {t(`views.kind.${kind}`)}
+              </strong>
+              <span>{exportSummary}</span>
+              <span>
+                {t("work.showing", { count: filtered.length })} ·{" "}
+                {new Date().toLocaleString()}
+              </span>
+            </div>
+            <FilterChips items={staged} value={filters} onChange={setFilters} />
+            {filtered.length ? (
+              <ol className="work-list">
+                {groupItems(filtered.slice(0, shown), group).map((g) => (
+                  <Fragment key={g.key || "all"}>
+                    <GroupHeader
+                      field={group}
+                      value={g.key}
+                      count={g.items.length}
+                      collapsed={collapsed.has(g.key)}
+                      onToggle={() =>
+                        setCollapsed((c) => {
+                          const next = new Set(c);
+                          if (!next.delete(g.key)) next.add(g.key);
+                          return next;
+                        })
+                      }
+                    />
+                    {collapsed.has(g.key)
+                      ? null
+                      : g.items.map((i) => (
+                          <Row
+                            key={`${i.scope_id}-${i.id}`}
+                            code={code}
+                            item={i}
+                            now={now}
+                            onLocal={() => setEditing(`${i.source}:${i.id}`)}
+                          />
+                        ))}
+                  </Fragment>
+                ))}
+              </ol>
+            ) : (
+              <p className="quiet empty-line">{t("work.none")}</p>
+            )}
+            {filtered.length > shown ? (
+              <button
+                type="button"
+                className="link no-export"
+                onClick={() => setShown(shown + PAGE)}
+              >
+                {t("work.more", { count: filtered.length - shown })}
+              </button>
+            ) : null}
+          </div>
           {editingItem ? (
             <LocalDialog
               item={editingItem}

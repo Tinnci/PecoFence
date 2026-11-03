@@ -4302,3 +4302,12 @@ a .owner-chip { color: inherit; }
 .work-foot .item-flow { display: contents; }
 .work-foot .item-flow > .change-files-toggle { order: 1; }
 .work-foot .item-flow > .change-files-panel { order: 2; flex-basis: 100%; }
+
+/* An exported view: a caption only the picture shows, the rows without their action line. */
+.work-export { display: flex; flex-direction: column; gap: 8px; }
+.export-caption { display: none; }
+.work-export.exporting { padding: 20px 24px; }
+.work-export.exporting .export-caption { display: flex; flex-direction: column; gap: 2px; padding-bottom: 10px; border-bottom: 1px solid var(--border); font-size: 12px; color: var(--muted-foreground); }
+.work-export.exporting .export-caption strong { font-size: 15px; color: var(--foreground); }
+.work-export.exporting .work-group { position: static; }
+.work-export.exporting .filter-chip-remove, .work-export.exporting .filter-bar .link { display: none; }

@@ -87,6 +87,46 @@ fn desktop() {
         path.to_str()
             .ok_or_else(|| setup::SetupFailure::new("template_unreadable"))
     }
+    /// Saves a PNG the page drew (an exported view) where the user picks; returns the path,
+    /// or None when the dialog was cancelled. Only PNG bytes are written.
+    #[tauri::command]
+    async fn save_png(
+        app: tauri::AppHandle,
+        name: String,
+        png: Vec<u8>,
+    ) -> Result<Option<String>, setup::SetupFailure> {
+        use tauri_plugin_dialog::DialogExt;
+        if png.len() > 64 * 1024 * 1024 || !png.starts_with(b"\x89PNG\r\n\x1a\n") {
+            return Err(setup::SetupFailure::new("invalid_input"));
+        }
+        let mut file: String = name
+            .chars()
+            .filter(|c| c.is_alphanumeric() || matches!(c, '-' | '_' | '.' | ' '))
+            .take(80)
+            .collect();
+        if !file.to_lowercase().ends_with(".png") {
+            file.push_str(".png");
+        }
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        app.dialog()
+            .file()
+            .set_title("导出视图")
+            .add_filter("PNG", &["png"])
+            .set_file_name(&file)
+            .save_file(move |path| {
+                let _ = sender.send(path);
+            });
+        let Some(path) = receiver
+            .await
+            .ok()
+            .flatten()
+            .and_then(|p| p.into_path().ok())
+        else {
+            return Ok(None);
+        };
+        std::fs::write(&path, &png).map_err(|_| setup::SetupFailure::new("export_failed"))?;
+        Ok(Some(path.display().to_string()))
+    }
     #[tauri::command]
     async fn template_plan(
         app: tauri::AppHandle,
@@ -519,7 +559,8 @@ fn desktop() {
             activate,
             service_status,
             remap,
-            focus
+            focus,
+            save_png
         ])
         .run(tauri::generate_context!())
         .expect("workspace runtime");
