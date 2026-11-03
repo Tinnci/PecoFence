@@ -283,7 +283,10 @@ fn desktop() {
         path: Option<String>,
         state: tauri::State<'_, State>,
     ) -> Result<setup::FocusData, setup::SetupFailure> {
-        let args = if action == "change_files" || action == "change_diff" {
+        let args = if matches!(
+            action.as_str(),
+            "change_files" | "change_diff" | "change_diffs"
+        ) {
             let path = if action == "change_diff" {
                 Some(
                     path.as_deref()
@@ -292,9 +295,9 @@ fn desktop() {
             } else {
                 None
             };
-            code.as_deref()
-                .zip(change)
-                .and_then(|(code, change)| setup::diff_args(code, change, path))
+            code.as_deref().zip(change).and_then(|(code, change)| {
+                setup::diff_args(code, change, path, action == "change_diffs")
+            })
         } else if action == "build_evidence" {
             code.as_deref()
                 .zip(job.as_deref())
@@ -354,7 +357,7 @@ fn desktop() {
             "summary" | "refresh" => 600,
             "suggest" => 180,
             "builds" | "build_evidence" => 120,
-            "change_files" | "change_diff" => 60,
+            "change_files" | "change_diff" | "change_diffs" => 90,
             "issues" | "requirements" | "issues_full" | "requirements_full" => 300,
             _ => 30,
         });

@@ -59,6 +59,55 @@ function Loading({ lines = 3 }: { lines?: number }) {
   );
 }
 
+// Change reads, in one place. A change's files and message are one read (about 1 s); every
+// file's diff is one more read of the whole patchset (about 3 s), split per file here, so
+// opening files never waits on Gerrit once that read lands. SPM keeps both on disk: merged and
+// abandoned changes for 30 days, open ones for 10 minutes.
+const FIVE_MINUTES = 5 * 60_000;
+export const changeFilesOptions = (code: string, change: number) => ({
+  queryKey: ["change-files", code, change] as const,
+  queryFn: async () =>
+    (await focus("change_files", { code, change })).change_files ?? null,
+  staleTime: FIVE_MINUTES,
+});
+const diffsOptions = (code: string, change: number) => ({
+  queryKey: ["change-diffs", code, change] as const,
+  queryFn: async () =>
+    (await focus("change_diffs", { code, change })).change_diffs ?? null,
+  staleTime: FIVE_MINUTES,
+  retry: false,
+});
+const diffKey = (code: string, change: number, path: string) =>
+  ["change-diff", code, change, path] as const;
+const diffOptions = (code: string, change: number, path: string) => ({
+  queryKey: diffKey(code, change, path),
+  queryFn: async () => {
+    // The whole-patchset read is usually already under way; a file it holds needs no read.
+    const all = await queryClient
+      .fetchQuery(diffsOptions(code, change))
+      .catch(() => null);
+    const text = all?.files[path];
+    if (text !== undefined)
+      return {
+        change,
+        path,
+        patch_set: all!.patch_set,
+        diff: text,
+        truncated: false,
+      };
+    return (
+      (await focus("change_diff", { code, change, path })).change_diff ?? null
+    );
+  },
+  staleTime: FIVE_MINUTES,
+});
+
+/** Files and message ahead of a click; the diffs once the change is open. */
+export function prefetchChange(code: string, change: number, diffs = false) {
+  void queryClient.prefetchQuery(changeFilesOptions(code, change));
+  if (diffs) void queryClient.prefetchQuery(diffsOptions(code, change));
+}
+
 /** A change's message and files, each opening in place; read only when first expanded. */
 export function ChangeFiles({
   code,
@@ -69,21 +118,26 @@ export function ChangeFiles({
 }) {
   const [open, setOpen] = useState(false);
   const read = useQuery(
-    {
-      queryKey: ["change-files", code, change],
-      queryFn: async () =>
-        (await focus("change_files", { code, change })).change_files ?? null,
-      enabled: open,
-      staleTime: 5 * 60_000,
-    },
+    { ...changeFilesOptions(code, change), enabled: open },
     queryClient,
   );
   const list = read.data?.files;
   const added = list?.reduce((n, f) => n + f.insertions, 0) ?? 0;
   const removed = list?.reduce((n, f) => n + f.deletions, 0) ?? 0;
   return (
-    <Collapsible open={open} onOpenChange={setOpen} className="change-files">
-      <CollapsibleTrigger className="change-files-toggle">
+    <Collapsible
+      open={open}
+      onOpenChange={(next) => {
+        if (next) prefetchChange(code, change, true);
+        setOpen(next);
+      }}
+      className="change-files"
+    >
+      <CollapsibleTrigger
+        className="change-files-toggle"
+        onPointerEnter={() => prefetchChange(code, change)}
+        onFocus={() => prefetchChange(code, change)}
+      >
         {read.isFetching ? (
           <Spinner className="size-3" />
         ) : (
@@ -150,10 +204,8 @@ function FileRow({
 }) {
   const [open, setOpen] = useState(false);
   const loading =
-    useIsFetching(
-      { queryKey: ["change-diff", code, change, file.path] },
-      queryClient,
-    ) > 0;
+    useIsFetching({ queryKey: diffKey(code, change, file.path) }, queryClient) >
+    0;
   const slash = file.path.lastIndexOf("/");
   const total = file.insertions + file.deletions;
   return (
@@ -211,16 +263,7 @@ function FileDiff({
   change: number;
   path: string;
 }) {
-  const diff = useQuery(
-    {
-      queryKey: ["change-diff", code, change, path],
-      queryFn: async () =>
-        (await focus("change_diff", { code, change, path })).change_diff ??
-        null,
-      staleTime: 5 * 60_000,
-    },
-    queryClient,
-  );
+  const diff = useQuery(diffOptions(code, change, path), queryClient);
   if (diff.error) return <FailureNote failure={failureOf(diff.error)} />;
   if (!diff.data) return <Loading lines={6} />;
   return (

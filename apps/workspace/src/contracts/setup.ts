@@ -173,6 +173,7 @@ export type ChangeFile = { path: string,
  */
 kind: string, insertions: number, deletions: number, };
 export type ChangeDiff = { change: number, path: string, patch_set: number | null, diff: string, truncated: boolean, };
+export type ChangeDiffs = { change: number, patch_set: number | null, files: { [key in string]: string }, truncated: boolean, };
 export type ItemHistory = { local: LocalLayer | null, events: Array<LocalEvent>, transitions: Array<Transition>, };
 export type LocalEvent = { at: string, 
 /**
@@ -193,5 +194,5 @@ export type FocusData = { build_evidence?: BuildEvidence, work_items?: WorkItems
 /**
  * After an annotation: the item as the last read shows it, with the new layer.
  */
-work_item?: AnnotatedItem, history?: ItemHistory, change_files?: ChangeFiles, change_diff?: ChangeDiff, models?: Array<FocusModel>, suggestions?: Suggestions, summary?: FocusSummary, preview?: Preview, changes?: Array<Listed>, builds?: Builds, };
+work_item?: AnnotatedItem, history?: ItemHistory, change_files?: ChangeFiles, change_diff?: ChangeDiff, change_diffs?: ChangeDiffs, models?: Array<FocusModel>, suggestions?: Suggestions, summary?: FocusSummary, preview?: Preview, changes?: Array<Listed>, builds?: Builds, };
 export type Activation = { health?: ServiceHealth, waited_secs?: number, };

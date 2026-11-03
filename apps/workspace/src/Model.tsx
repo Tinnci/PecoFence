@@ -38,7 +38,7 @@ import {
 } from "./browser-links";
 import { useTranslation } from "react-i18next";
 import { t, locale } from "./i18n";
-import { ChangeFiles, ChangeStatus } from "./ChangeDiff";
+import { ChangeFiles, ChangeStatus, prefetchChange } from "./ChangeDiff";
 import {
   Tooltip,
   TooltipContent,
@@ -762,6 +762,15 @@ function BranchesTab({
   );
   const list = changes.data ?? null;
   const failure = changes.error ? failureOf(changes.error) : null;
+  // The newest changes are the likeliest to be opened: their files and message arrive early.
+  useEffect(() => {
+    if (!list?.length) return;
+    const timer = setTimeout(
+      () => list.slice(0, 3).forEach((l) => prefetchChange(m.code, l.number)),
+      800,
+    );
+    return () => clearTimeout(timer);
+  }, [list, m.code]);
   const [filter, setFilter] = useModelPreference(m.code, "filter", "attention");
   useEffect(() => {
     if (
