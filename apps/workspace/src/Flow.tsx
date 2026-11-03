@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronRight } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { ChevronRight, RefreshCw } from "lucide-react";
 import {
   Collapsible,
   CollapsibleContent,
@@ -9,19 +10,12 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import type { FlowEvent, WorkItem } from "./contracts/setup";
-import { focus } from "./api";
+import { flowOptions, refreshFlow } from "./flow-cache";
 import { queryClient } from "./focus-cache";
 import { FailureNote, failureOf } from "./TemplateImport";
 import { OwnerChip } from "./Badges";
 import { Linked } from "./ChangeDiff";
 import { t } from "./i18n";
-
-const flowOptions = (code: string, item: string) => ({
-  queryKey: ["item-flow", code, item] as const,
-  queryFn: async () =>
-    (await focus("flow", { code, source: "meegle", item })).flow ?? null,
-  staleTime: 5 * 60_000,
-});
 
 const clock: Intl.DateTimeFormatOptions = {
   month: "2-digit",
@@ -52,10 +46,18 @@ const near = (a: FlowEvent, b: FlowEvent) =>
 function readable(text: string) {
   const clean = text.replace(/<!--[\s\S]*?-->/g, "");
   // Parse inertly, then extract text. Never render source HTML or its styles.
-  if (!/<\/?(?:span|div|p|br|a|img|pre|code|strong|em|b|i|ul|ol|li|blockquote|h[1-6]|table|tr|td)\b[^>]*>|&(?:#\d+|#x[\da-f]+|[a-z]+);/i.test(clean))
-    return clean.replace(/!\[[^\]]*\]\((\S+?)\)/g, `${t("flow.image")} $1`).trim();
+  if (
+    !/<\/?(?:span|div|p|br|a|img|pre|code|strong|em|b|i|ul|ol|li|blockquote|h[1-6]|table|tr|td)\b[^>]*>|&(?:#\d+|#x[\da-f]+|[a-z]+);/i.test(
+      clean,
+    )
+  )
+    return clean
+      .replace(/!\[[^\]]*\]\((\S+?)\)/g, `${t("flow.image")} $1`)
+      .trim();
   const doc = new DOMParser().parseFromString(clean, "text/html");
-  doc.querySelectorAll("script, style, iframe, object").forEach((n) => n.remove());
+  doc
+    .querySelectorAll("script, style, iframe, object")
+    .forEach((n) => n.remove());
   doc.querySelectorAll("br").forEach((n) => n.replaceWith("\n"));
   doc.querySelectorAll("a[href]").forEach((n) => {
     const href = n.getAttribute("href") ?? "";
@@ -66,9 +68,15 @@ function readable(text: string) {
   });
   doc.querySelectorAll("img").forEach((n) => {
     const src = n.getAttribute("src") ?? "";
-    n.replaceWith(/^https?:\/\//i.test(src) ? `${t("flow.image")} ${src}` : n.getAttribute("alt") ?? "");
+    n.replaceWith(
+      /^https?:\/\//i.test(src)
+        ? `${t("flow.image")} ${src}`
+        : (n.getAttribute("alt") ?? ""),
+    );
   });
-  doc.querySelectorAll("p, div, li, pre, blockquote, h1, h2, h3, tr").forEach((n) => n.append("\n"));
+  doc
+    .querySelectorAll("p, div, li, pre, blockquote, h1, h2, h3, tr")
+    .forEach((n) => n.append("\n"));
   return (doc.body.textContent ?? "")
     .replace(/!\[[^\]]*\]\((\S+?)\)/g, `${t("flow.image")} $1`)
     .trim();
@@ -142,38 +150,6 @@ export function shapeFlow(events: FlowEvent[]): Shaped[] {
   return out.sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
 }
 
-/** Every flow of the given items, read ten at a time and kept each on its own; resolves
- * once all have arrived or failed. */
-export async function loadFlows(code: string, items: WorkItem[]) {
-  const ids = items
-    .filter((i) => i.source === "meegle")
-    .map((i) => i.id)
-    .filter((id) => !queryClient.getQueryData(flowOptions(code, id).queryKey));
-  for (let i = 0; i < ids.length; i += 10) {
-    const data = await focus("flows", {
-      code,
-      items: ids.slice(i, i + 10),
-    }).catch(() => null);
-    for (const f of data?.flows ?? [])
-      queryClient.setQueryData(flowOptions(code, f.item).queryKey, f);
-  }
-}
-
-/** Flows the user is likely to open next: one read for all of them, each kept on its own. */
-export function prefetchFlows(code: string, items: WorkItem[]) {
-  const ids = items
-    .filter((i) => i.source === "meegle")
-    .map((i) => i.id)
-    .filter((id) => !queryClient.getQueryData(flowOptions(code, id).queryKey));
-  if (!ids.length) return;
-  void focus("flows", { code, items: ids.slice(0, 10) })
-    .then((data) => {
-      for (const f of data.flows ?? [])
-        queryClient.setQueryData(flowOptions(code, f.item).queryKey, f);
-    })
-    .catch(() => undefined);
-}
-
 /** A 飞书项目 item's 流转记录, read when first opened and ahead of it on hover. */
 export function ItemFlow({
   code,
@@ -185,21 +161,25 @@ export function ItemFlow({
   /** Held open, e.g. while the whole view is exported. */
   expand?: boolean;
 }) {
+  const { i18n } = useTranslation();
   const [opened, setOpen] = useState(false);
   const open = opened || expand;
   const flow = useQuery(
-    { ...flowOptions(code, item.id), enabled: open },
+    { ...flowOptions(code, item), enabled: open && item.source === "meegle" },
     queryClient,
   );
+  const events = useMemo(
+    () => (flow.data ? shapeFlow(flow.data.events) : undefined),
+    [flow.data, i18n.resolvedLanguage],
+  );
   if (item.source !== "meegle") return null;
-  const events = flow.data ? shapeFlow(flow.data.events) : undefined;
   const moves = events?.filter((e) => e.kind === "status").length ?? 0;
   return (
     <Collapsible open={open} onOpenChange={setOpen} className="item-flow">
       <CollapsibleTrigger
         className="change-files-toggle"
         onPointerEnter={() =>
-          void queryClient.prefetchQuery(flowOptions(code, item.id))
+          void queryClient.prefetchQuery(flowOptions(code, item))
         }
       >
         {flow.isFetching ? (
@@ -216,6 +196,14 @@ export function ItemFlow({
         ) : null}
       </CollapsibleTrigger>
       <CollapsibleContent className="change-files-panel">
+        <button
+          type="button"
+          className="link no-export"
+          disabled={flow.isFetching}
+          onClick={() => void refreshFlow(code, item).catch(() => undefined)}
+        >
+          <RefreshCw size={12} aria-hidden="true" /> {t("work.refresh")}
+        </button>
         {flow.error ? <FailureNote failure={failureOf(flow.error)} /> : null}
         {!flow.data && !flow.error ? (
           <div className="diff-loading" aria-busy="true">
@@ -245,7 +233,9 @@ function FlowRow({ e }: { e: Shaped }) {
   const long = e.text.length > 160 || e.text.split("\n").length > 3;
   return (
     <li className={`gerrit-event event-${e.kind}${e.bot ? " event-bot" : ""}`}>
-      <time dateTime={e.at} title={new Date(e.at).toLocaleString() }>{when(e.at)}</time>
+      <time dateTime={e.at} title={new Date(e.at).toLocaleString()}>
+        {when(e.at)}
+      </time>
       <span className="event-dot" aria-hidden="true" />
       <div className="event-body">
         <span className="event-head">
@@ -290,11 +280,18 @@ function FlowRow({ e }: { e: Shaped }) {
         </span>
         {e.text ? (
           <>
-            <span className={`event-text flow-comment${!long || full ? " flow-comment-full" : ""}`}>
+            <span
+              className={`event-text flow-comment${!long || full ? " flow-comment-full" : ""}`}
+            >
               <Linked text={e.text} />
             </span>
             {long ? (
-              <button type="button" className="link no-export" aria-expanded={full} onClick={() => setFull(!full)}>
+              <button
+                type="button"
+                className="link no-export"
+                aria-expanded={full}
+                onClick={() => setFull(!full)}
+              >
                 {t(full ? "flow.collapseText" : "flow.expandText")}
               </button>
             ) : null}

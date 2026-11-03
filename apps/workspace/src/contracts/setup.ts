@@ -183,7 +183,7 @@ export type ChangeEvent = { at: string, by: string, bot: boolean,
 kind: string, patch_set: number | null, votes: Array<[string, string]>, text: string, };
 export type ChangeDiff = { change: number, path: string, patch_set: number | null, diff: string, truncated: boolean, };
 export type ChangeDiffs = { change: number, patch_set: number | null, files: { [key in string]: string }, truncated: boolean, };
-export type ItemFlow = { item: string, events: Array<FlowEvent>, };
+export type ItemFlow = { fetched_at?: string, item: string, events: Array<FlowEvent>, };
 export type FlowEvent = { at: string, by: string, bot: boolean, 
 /**
  * created, status, assign, field or comment

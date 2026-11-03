@@ -58,7 +58,8 @@ import {
 import { since, type FocusState } from "./Focus";
 import { FailureNote, failureOf } from "./TemplateImport";
 import { useModelPreference } from "./model-navigation";
-import { ItemFlow, loadFlows, prefetchFlows } from "./Flow";
+import { ItemFlow } from "./Flow";
+import { loadFlows, prefetchFlows, refreshFlows } from "./flow-cache";
 import {
   DisplayMenu,
   FilterAdd,
@@ -181,7 +182,11 @@ export function useWorkItems(code: string, kind: WorkKind, enabled = true) {
     data: query.data ?? null,
     loading: query.isFetching,
     failure: query.error ? failureOf(query.error) : null,
-    refresh: () => query.refetch(),
+    refresh: async () => {
+      const result = await query.refetch();
+      if (!result.error) await refreshFlows(code);
+      return result;
+    },
     openCount: query.data
       ? query.data.items.filter((i) => !closed.has(i.group)).length
       : null,

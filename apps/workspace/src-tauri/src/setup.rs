@@ -950,6 +950,9 @@ pub struct ChangeDiff {
 /// A 飞书项目 item's 流转记录, oldest first.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct ItemFlow {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub fetched_at: Option<String>,
     pub item: String,
     pub events: Vec<FlowEvent>,
 }

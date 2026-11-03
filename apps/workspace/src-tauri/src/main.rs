@@ -324,14 +324,20 @@ fn desktop() {
         items: Option<Vec<String>>,
         state: tauri::State<'_, State>,
     ) -> Result<setup::FocusData, setup::SetupFailure> {
-        let args = if action == "flow" || action == "flows" {
+        let args = if matches!(action.as_str(), "flow" | "flows" | "flows_refresh") {
             let list = match (items, &item) {
-                (Some(list), _) if action == "flows" => list,
+                (Some(list), _) if action != "flow" => list,
                 (_, Some(one)) => vec![one.clone()],
                 _ => vec![],
             };
             code.as_deref()
                 .and_then(|code| setup::flow_args(code, &list))
+                .map(|mut args| {
+                    if action == "flows_refresh" {
+                        args.push("--refresh".into());
+                    }
+                    args
+                })
         } else if matches!(
             action.as_str(),
             "change_files" | "change_diff" | "change_diffs"
@@ -406,7 +412,8 @@ fn desktop() {
             "summary" | "refresh" => 600,
             "suggest" => 180,
             "builds" | "build_evidence" => 120,
-            "change_files" | "change_diff" | "change_diffs" | "flow" | "flows" => 90,
+            "change_files" | "change_diff" | "change_diffs" | "flow" | "flows"
+            | "flows_refresh" => 90,
             "issues" | "requirements" | "issues_full" | "requirements_full" => 300,
             _ => 30,
         });
