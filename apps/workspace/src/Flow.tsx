@@ -33,6 +33,13 @@ const when = (at: string) => {
   return Number.isNaN(d.getTime()) ? at : d.toLocaleString(undefined, clock);
 };
 
+/** Flows the user is likely to open next, read ahead in the background. */
+export function prefetchFlows(code: string, items: WorkItem[]) {
+  for (const i of items)
+    if (i.source === "meegle")
+      void queryClient.prefetchQuery(flowOptions(code, i.id));
+}
+
 /** A 飞书项目 item's 流转记录, read when first opened and ahead of it on hover. */
 export function ItemFlow({ code, item }: { code: string; item: WorkItem }) {
   const [open, setOpen] = useState(false);

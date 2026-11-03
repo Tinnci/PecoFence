@@ -51,7 +51,7 @@ import {
 import { since, type FocusState } from "./Focus";
 import { FailureNote, failureOf } from "./TemplateImport";
 import { useModelPreference } from "./model-navigation";
-import { ItemFlow } from "./Flow";
+import { ItemFlow, prefetchFlows } from "./Flow";
 import {
   AgeChip,
   CommitsChip,
@@ -1139,6 +1139,15 @@ export function WorkItemsTab({
       )
       .sort(compareBy(sortKeys, (i, f) => sortValue(i, f, time, lastActivity)));
   }, [scoped, stage, attention, search, sortKeys, owner, severity, now]);
+  // The top open 飞书项目 items are the likeliest to be opened: their flows arrive early.
+  useEffect(() => {
+    const top = list
+      .filter((i) => i.source === "meegle" && !closed.has(i.group))
+      .slice(0, 3);
+    if (!top.length) return;
+    const timer = setTimeout(() => prefetchFlows(code, top), 1200);
+    return () => clearTimeout(timer);
+  }, [list, code]);
   // Each filter offers the values present, most frequent first.
   const choices = (pick: (i: WorkItem) => string) => {
     const counts = new Map<string, number>();
