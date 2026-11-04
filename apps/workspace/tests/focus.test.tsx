@@ -343,7 +343,7 @@ describe("followed models", () => {
     });
     const side = screen.getByRole("region", { name: "构建" });
     await waitFor(() =>
-      expect(side.textContent).toContain("#96 已运行 1 小时"),
+      expect(side.textContent).toMatch(/#96 · 构建中已运行 1 小时/),
     );
     expect(side.textContent).not.toContain("E6767SM_old");
     expect(screen.getByRole("tab", { name: /构建1 个构建中/ })).toBeTruthy();
@@ -359,7 +359,8 @@ describe("followed models", () => {
     const user = userEvent.setup();
     render(<Harness view="model" initialTab="builds" />);
     const main = await screen.findByRole("article", { name: "E6767SM" });
-    expect(main.textContent).toMatch(/#96 已运行 1 小时 · 预计 \d\d:\d\d 完成/);
+    expect(main.textContent).toMatch(/#96 · 构建中已运行 1 小时/);
+    expect(main.textContent).toMatch(/预计 (\d\d\/\d\d )?\d\d:\d\d 完成/);
     expect(
       main.querySelector('[role="progressbar"]')?.getAttribute("aria-valuenow"),
     ).toBe("33");
@@ -392,7 +393,7 @@ describe("followed models", () => {
         .getAttribute("href"),
     ).toBe("https://review.example.test/c/mobile/+/3");
     expect(detail.textContent).not.toContain("change 2");
-    await waitFor(() => expect(detail.textContent).toContain("#96 已运行"));
+    await waitFor(() => expect(detail.textContent).toContain("#96 · 构建中"));
     const filter = screen.getByRole("radiogroup", { name: "筛选" });
     expect(filter.textContent).toContain("需要留意 1");
     await user.click(screen.getByRole("radio", { name: /全部/ }));

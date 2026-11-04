@@ -90,7 +90,7 @@ export function runtimeEstimate(job: JobView, now: number) {
       elapsed !== null && high !== null ? Math.max(0, high - elapsed) : null,
     progress:
       elapsed !== null && expected && !overdue
-        ? Math.min(95, (elapsed / expected) * 100)
+        ? Math.min(95, Math.round((elapsed / expected) * 100))
         : null,
     finishLow: run && low ? run.timestamp + low : null,
     finishHigh: run && high ? run.timestamp + high : null,

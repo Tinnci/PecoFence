@@ -1476,10 +1476,10 @@ pub fn focus_args(
                 "--item".into(),
                 item.into(),
             ]);
-            if action == "annotate" {
-                if let Some(code) = code() {
-                    args.extend(["--code".into(), code]);
-                }
+            if action == "annotate"
+                && let Some(code) = code()
+            {
+                args.extend(["--code".into(), code]);
             }
         }
         "issues"
@@ -1846,6 +1846,27 @@ pub fn types() -> String {
     )
 }
 
+pub fn source_fields_args(
+    code: &str,
+    item: &str,
+    address: &str,
+    refresh: bool,
+) -> Option<Vec<String>> {
+    if address.len() > 2048
+        || address.chars().any(char::is_control)
+        || !(address.starts_with("https://") || address.starts_with("http://"))
+    {
+        return None;
+    }
+    let mut args = flow_args(code, &[item.to_owned()])?;
+    args[1] = "source-fields".into();
+    args.extend(["--address".into(), address.into()]);
+    if refresh {
+        args.push("--refresh".into());
+    }
+    Some(args)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1889,9 +1910,7 @@ mod tests {
             ),
             path: Some("buildspec/P.spec".into()),
             items: Some(vec!["7140117552".into(), "7128060102".into()]),
-            addresses: Some(if action == "flow" {
-                vec!["https://project.feishu.cn/efzuhc/wentiguanli/detail/7140117552".into()]
-            } else if action.starts_with("source_fields") {
+            addresses: Some(if action == "flow" || action.starts_with("source_fields") {
                 vec!["https://project.feishu.cn/efzuhc/wentiguanli/detail/7140117552".into()]
             } else {
                 vec![
@@ -2507,25 +2526,4 @@ mod tests {
             ["setup", "import-template", "t.json", "--apply", "--replace"]
         );
     }
-}
-
-pub fn source_fields_args(
-    code: &str,
-    item: &str,
-    address: &str,
-    refresh: bool,
-) -> Option<Vec<String>> {
-    if address.len() > 2048
-        || address.chars().any(char::is_control)
-        || !(address.starts_with("https://") || address.starts_with("http://"))
-    {
-        return None;
-    }
-    let mut args = flow_args(code, &[item.to_owned()])?;
-    args[1] = "source-fields".into();
-    args.extend(["--address".into(), address.into()]);
-    if refresh {
-        args.push("--refresh".into());
-    }
-    Some(args)
 }
