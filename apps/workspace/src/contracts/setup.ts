@@ -121,7 +121,10 @@ timestamp: number, duration: number, estimated: number, cause?: string, node?: s
 export type ParamChange = { build: number, name: string, before: unknown, after: unknown, };
 export type JobView = { job: string, name: string, phase: string, disabled: boolean, builds: Array<BuildRun>, parameters: Record<string, unknown>, changes: Array<ParamChange>, error?: string, };
 export type QueuedBuild = { id: number, job: string, since: number | null, reason: string | null, blocked: boolean, buildable: boolean, };
-export type BuildQueue = { server_count: number, observed_at: string, items: Array<QueuedBuild>, };
+export type CapacityTask = { id: number, job: string, label: string | null, since: number | null, blocked: boolean, buildable: boolean, concurrent: boolean | null, low: number | null, high: number | null, samples: number, };
+export type CapacitySlot = { node: string, labels: Array<string>, online: boolean, idle: boolean, job: string | null, started: number | null, low: number | null, high: number | null, };
+export type BuildCapacity = { observed_at: string, slots: Array<CapacitySlot>, tasks: Array<CapacityTask>, };
+export type BuildQueue = { capacity?: BuildCapacity, capacity_error?: string, server_count: number, observed_at: string, items: Array<QueuedBuild>, };
 export type Builds = { code: string, folder?: string, jobs: Array<JobView>, queue?: BuildQueue, queue_error?: string, computed_at: string, errors: Array<string>, };
 export type BuildEvidence = { job: string, number: number, inspected_at: string, windows: Array<LogWindow>, total_bytes: number | null, software_number: string | null, system_manifest: string | null, vendor_manifest: string | null, vendor_skipped: boolean, archive_commit: string | null, archive_repository: string | null, };
 export type LogWindow = { start: number, bytes: number, };

@@ -669,3 +669,19 @@ queued requests appear. Running/queued views update their elapsed clock every
 30 seconds; hidden-document source polling is skipped. Queue read failures and
 snapshots older than two minutes remain visible. `/build-insights.html` is an
 isolated development preview using synthetic data.
+
+
+Queue snapshots now include bounded normal-executor occupancy and all server
+queue tasks for cross-model competition. The UI runs early and late FIFO
+scenarios over online, exactly labelled slots; it respects explicit per-job
+nonconcurrency and shows pending states for complex/missing label constraints,
+missing arrival times, blocked tasks, stale snapshots and unknown release times.
+It simulates currently runnable requests only; priority-sorter policies, resource
+locks and future arrivals are not read. Histories use successful duration
+quartiles; busy executors with fewer than three samples fall back to Jenkins
+estimated duration ±25%, an explicit modeling assumption. Completed reference
+windows never become an immediate-start promise while a request remains queued.
+
+The source projection caches job-duration samples for ten minutes, reads at most
+32 distinct jobs with eight concurrent history reads, and bounds the capacity
+collection to 25 seconds. No queued task is submitted, reprioritized or cancelled.

@@ -1090,5 +1090,19 @@
   "buildInsight.waited": "已等待 {{duration}}",
   "buildInsight.waitUnknown": "等待时间未知",
   "buildInsight.startPending": "开始时间待定",
-  "buildInsight.queueEmpty": "当前机型没有排队请求"
+  "buildInsight.queueEmpty": "当前机型没有排队请求",
+  "queueEstimate.method": "先到先服务模拟 · 仅计当前可调度请求；优先级规则、资源锁及后续插队未计入。参考历史耗时区间，样本不足的占用构建使用 Jenkins 估值 ±25%。",
+  "queueEstimate.capacityFailed": "执行器快照读取失败，开始时间暂无法预估。",
+  "queueEstimate.capacityMissing": "刷新后读取执行器占用，以模拟排队等待时间。",
+  "queueEstimate.resources": "在线 {{online}} 个槽位 · 空闲 {{idle}} · 离线 {{offline}} · 前序竞争请求 {{ahead}} 条",
+  "queueEstimate.pool": "匹配标签：{{label}}",
+  "queueEstimate.remaining": "模拟还需等待 {{duration}}",
+  "queueEstimate.start": "模拟开始 {{time}}",
+  "queueEstimate.readyPending": "参考时间已到，等待调度确认",
+  "queueEstimate.reason.stale": "快照已过期，刷新后重新预估",
+  "queueEstimate.reason.constraints": "节点约束不完整，开始时间待定",
+  "queueEstimate.reason.blocked": "等待前置条件，开始时间待定",
+  "queueEstimate.reason.offline": "无匹配的在线槽位",
+  "queueEstimate.reason.releaseUnknown": "占用任务释放时间未知，开始时间待定",
+  "queueEstimate.reason.orderUnknown": "入队时间缺失，暂无法模拟顺序"
 }

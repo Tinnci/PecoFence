@@ -3,6 +3,7 @@ import { Clock3, Hourglass, CircleAlert, Timer, Activity } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { ExternalLink } from "@/components/external-link";
 import type { Builds, JobView } from "./contracts/setup";
+import { forecastQueue } from "./queue-estimate";
 import { durationHistory, runtimeEstimate } from "./build-estimate";
 import { t, locale } from "./i18n";
 import { jobBrowserUrl } from "./browser-links";
@@ -129,6 +130,8 @@ export function BuildActivity({ data, now }: { data: Builds; now: number }) {
   const visibleJobs = new Set(data.jobs.map((job) => job.job));
   const queue =
     data.queue?.items.filter((item) => visibleJobs.has(item.job)) ?? [];
+  const capacity = data.queue?.capacity;
+  const forecasts = capacity ? forecastQueue(capacity, now) : null;
   const observed = Date.parse(data.queue?.observed_at ?? data.computed_at);
   const stale = !Number.isFinite(observed) || now - observed > 120000;
   return (
@@ -170,10 +173,28 @@ export function BuildActivity({ data, now }: { data: Builds; now: number }) {
               · {t("buildInsight.waitOrder")}
             </span>
           </div>
+          <p className="build-queue-method">
+            {capacity
+              ? t("queueEstimate.method")
+              : t(
+                  data.queue?.capacity_error
+                    ? "queueEstimate.capacityFailed"
+                    : "queueEstimate.capacityMissing",
+                )}
+          </p>
           {queue.map((item) => {
             const job = data.jobs.find((job) => job.job === item.job)!;
             const count = queue.filter((q) => q.job === item.job).length;
             const h = durationHistory(job);
+            const prediction = forecasts?.get(item.id);
+            const predicted =
+              prediction?.reason === "estimated" &&
+              prediction.startLow !== null &&
+              prediction.startHigh !== null &&
+              prediction.startHigh > now;
+            const forecastTask = capacity?.tasks.find(
+              (task) => task.id === item.id,
+            );
             return (
               <article key={item.id} className="build-queue-row">
                 <Hourglass size={16} aria-hidden="true" />
@@ -193,6 +214,21 @@ export function BuildActivity({ data, now }: { data: Builds; now: number }) {
                     ) : null}
                   </div>
                   <p>{queueReason(item.reason, item.blocked)}</p>
+                  {prediction ? (
+                    <small>
+                      {t("queueEstimate.resources", {
+                        online: prediction.online,
+                        idle: prediction.idle,
+                        offline: prediction.offline,
+                        ahead: prediction.ahead,
+                      })}
+                    </small>
+                  ) : null}
+                  {forecastTask?.label ? (
+                    <small>
+                      {t("queueEstimate.pool", { label: forecastTask.label })}
+                    </small>
+                  ) : null}
                   {h.low !== null && h.high !== null ? (
                     <small>
                       {t("buildInsight.afterStart", {
@@ -210,7 +246,33 @@ export function BuildActivity({ data, now }: { data: Builds; now: number }) {
                         })
                       : t("buildInsight.waitUnknown")}
                   </strong>
-                  <span>{t("buildInsight.startPending")}</span>
+                  {predicted ? (
+                    <>
+                      <span className="build-queue-prediction">
+                        {t("queueEstimate.remaining", {
+                          duration: range(
+                            Math.max(0, prediction!.startLow! - now),
+                            Math.max(0, prediction!.startHigh! - now),
+                          ),
+                        })}
+                      </span>
+                      <span>
+                        {t("queueEstimate.start", {
+                          time: `${time(Math.max(now, prediction!.startLow!))} – ${time(prediction!.startHigh!)}`,
+                        })}
+                      </span>
+                    </>
+                  ) : (
+                    <span>
+                      {t(
+                        prediction?.reason === "estimated"
+                          ? "queueEstimate.readyPending"
+                          : prediction
+                            ? `queueEstimate.reason.${prediction.reason}`
+                            : "buildInsight.startPending",
+                      )}
+                    </span>
+                  )}
                 </div>
               </article>
             );

@@ -187,3 +187,22 @@
     animation: none;
   }
 }
+
+.build-queue-method {
+  padding: 6px 20px 4px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1.7;
+}
+.build-queue-wait .build-queue-prediction {
+  color: var(--secondary-foreground);
+  font-weight: 600;
+}
+.build-queue-wait {
+  max-width: 310px;
+}
+@media (max-width: 760px) {
+  .build-queue-method {
+    padding-inline: 14px;
+  }
+}

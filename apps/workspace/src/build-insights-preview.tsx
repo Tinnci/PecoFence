@@ -70,6 +70,43 @@ async function preview() {
             computed_at: new Date(now).toISOString(),
             errors: [],
             queue: {
+              capacity: {
+                observed_at: new Date(now).toISOString(),
+                slots: [
+                  {
+                    node: "build-node-01",
+                    labels: ["fast_build_servers"],
+                    online: true,
+                    idle: false,
+                    job: job.job,
+                    started: now - 95 * minute,
+                    low: 120 * minute,
+                    high: 135 * minute,
+                  },
+                  {
+                    node: "build-node-02",
+                    labels: ["fast_build_servers"],
+                    online: true,
+                    idle: false,
+                    job: "demo/OTHER_MP",
+                    started: now - 5 * minute,
+                    low: 45 * minute,
+                    high: 55 * minute,
+                  },
+                ],
+                tasks: [101, 102].map((id, i) => ({
+                  id,
+                  job: job.job,
+                  label: "fast_build_servers",
+                  since: now - (i ? 8 : 24) * minute,
+                  blocked: false,
+                  buildable: true,
+                  concurrent: true,
+                  low: 120 * minute,
+                  high: 135 * minute,
+                  samples: 5,
+                })),
+              },
               server_count: 6,
               observed_at: new Date(now).toISOString(),
               items: [

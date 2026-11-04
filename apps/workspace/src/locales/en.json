@@ -1090,5 +1090,19 @@
   "buildInsight.waited": "Waiting {{duration}}",
   "buildInsight.waitUnknown": "Wait time unknown",
   "buildInsight.startPending": "Start time pending",
-  "buildInsight.queueEmpty": "No queued requests for this model"
+  "buildInsight.queueEmpty": "No queued requests for this model",
+  "queueEstimate.method": "FIFO simulation · Current runnable requests only; priority rules, resource locks and future arrivals are not included. Historical duration ranges; busy builds with insufficient samples use Jenkins estimates ±25%.",
+  "queueEstimate.capacityFailed": "Could not read executor capacity; start estimates unavailable.",
+  "queueEstimate.capacityMissing": "Refresh to read executor occupancy and simulate queue waits.",
+  "queueEstimate.resources": "{{online}} online slots · {{idle}} idle · {{offline}} offline · {{ahead}} prior competing requests",
+  "queueEstimate.pool": "Matching label: {{label}}",
+  "queueEstimate.remaining": "Simulated wait: {{duration}}",
+  "queueEstimate.start": "Simulated start {{time}}",
+  "queueEstimate.readyPending": "Reference time reached; awaiting scheduling",
+  "queueEstimate.reason.stale": "Snapshot expired; refresh to recalculate",
+  "queueEstimate.reason.constraints": "Incomplete node constraints; start time pending",
+  "queueEstimate.reason.blocked": "Waiting for prerequisites; start time pending",
+  "queueEstimate.reason.offline": "No matching online slots",
+  "queueEstimate.reason.releaseUnknown": "Executor release time unknown; start time pending",
+  "queueEstimate.reason.orderUnknown": "Missing queue time; order cannot be simulated"
 }

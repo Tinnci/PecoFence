@@ -782,7 +782,50 @@ pub struct QueuedBuild {
     pub buildable: bool,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct CapacityTask {
+    #[ts(type = "number")]
+    pub id: u64,
+    pub job: String,
+    pub label: Option<String>,
+    #[ts(type = "number | null")]
+    pub since: Option<i64>,
+    pub blocked: bool,
+    pub buildable: bool,
+    pub concurrent: Option<bool>,
+    #[ts(type = "number | null")]
+    pub low: Option<u64>,
+    #[ts(type = "number | null")]
+    pub high: Option<u64>,
+    pub samples: usize,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct CapacitySlot {
+    pub node: String,
+    pub labels: Vec<String>,
+    pub online: bool,
+    pub idle: bool,
+    pub job: Option<String>,
+    #[ts(type = "number | null")]
+    pub started: Option<i64>,
+    #[ts(type = "number | null")]
+    pub low: Option<u64>,
+    #[ts(type = "number | null")]
+    pub high: Option<u64>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct BuildCapacity {
+    pub observed_at: String,
+    pub slots: Vec<CapacitySlot>,
+    pub tasks: Vec<CapacityTask>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct BuildQueue {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub capacity: Option<BuildCapacity>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub capacity_error: Option<String>,
     pub server_count: usize,
     pub observed_at: String,
     pub items: Vec<QueuedBuild>,
@@ -1640,6 +1683,9 @@ pub fn types() -> String {
             ParamChange::decl(&config),
             JobView::decl(&config),
             QueuedBuild::decl(&config),
+            CapacityTask::decl(&config),
+            CapacitySlot::decl(&config),
+            BuildCapacity::decl(&config),
             BuildQueue::decl(&config),
             Builds::decl(&config),
             BuildEvidence::decl(&config),
