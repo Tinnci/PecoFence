@@ -1135,5 +1135,15 @@
   "related.evidence.subject": "Subject names it",
   "related.evidence.message": "Commit message names it",
   "related.evidence.field": "Field",
-  "related.evidence.flow": "Flow history"
+  "related.evidence.flow": "Flow history",
+  "platform.title": "Platforms",
+  "platform.hint": "Vendor, Android and kernel come from each model's Gerrit repositories and build parameters; you name the chip. Similar items prefer fixes from the same platform.",
+  "platform.unknownVendor": "Vendor unknown",
+  "platform.chip": "Chip of {{code}}",
+  "platform.chipPlaceholder": "Chip, e.g. MT6769 · Helio G81",
+  "platform.own": "This model: {{platform}}",
+  "platform.same.vendor": "Same vendor",
+  "platform.same.chip": "Same chip",
+  "platform.same.kernel": "Same kernel",
+  "platform.same.android": "Same Android"
 }

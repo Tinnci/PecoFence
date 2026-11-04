@@ -1023,9 +1023,21 @@ pub struct ChangeDiff {
     pub diff: String,
     pub truncated: bool,
 }
+/// A model's platform: vendor, Android and kernel from its code, the chip as named.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct Platform {
+    pub code: String,
+    pub vendor: String,
+    pub chip: String,
+    pub android: Vec<String>,
+    pub kernel: Vec<String>,
+    pub evidence: Vec<String>,
+}
 /// Gerrit changes bound to an item, and items like it with how they were fixed.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct Related {
+    #[serde(default)]
+    pub platform: Option<Platform>,
     pub item: String,
     #[serde(default)]
     pub instance: String,
@@ -1057,6 +1069,14 @@ pub struct SimilarItem {
     pub kind: String,
     pub item: SimilarWorkItem,
     pub score: f64,
+    /// The score weighed by what the two models' platforms share.
+    #[serde(default)]
+    pub rank: f64,
+    #[serde(default)]
+    pub platform: Option<Platform>,
+    /// vendor, chip, kernel or android
+    #[serde(default)]
+    pub same_platform: Vec<String>,
     pub shared: Vec<String>,
     pub changes: Vec<RelatedChange>,
     pub cause: Option<String>,
@@ -1257,6 +1277,9 @@ pub struct FocusData {
     pub related: Option<Related>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
+    pub platforms: Option<Vec<Platform>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub flows: Option<Vec<ItemFlow>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
@@ -1421,6 +1444,8 @@ pub struct FocusRequest {
     pub addresses: Option<Vec<String>>,
     /// The source server an item belongs to, e.g. `192.168.11.130:8080`.
     pub instance: Option<String>,
+    /// The chip a model is built on, as the user names it.
+    pub chip: Option<String>,
 }
 
 fn valid_address(url: &str) -> bool {
@@ -1484,6 +1509,22 @@ pub fn route_args(r: &FocusRequest) -> Option<Vec<String>> {
             diff_args(code?, r.change?, path, action == "change_diffs")
         }
         "build_evidence" => build_evidence_args(code?, r.job.as_deref()?, r.build?),
+        "platforms" => Some(vec!["focus".into(), "platforms".into()]),
+        "chip" => {
+            let code = code.filter(|c| valid_code(c))?;
+            let chip = r.chip.as_deref()?.trim();
+            if chip.chars().count() > 80 || chip.chars().any(char::is_control) {
+                return None;
+            }
+            // `--chip=…` keeps a name starting with a dash from reading as an option.
+            Some(vec![
+                "focus".into(),
+                "chip".into(),
+                "--code".into(),
+                code.into(),
+                format!("--chip={chip}"),
+            ])
+        }
         "related" => {
             let (source, item) = (r.source.as_deref()?, r.item.as_deref()?);
             let code = code.filter(|c| valid_code(c))?;
@@ -1906,6 +1947,7 @@ pub fn types() -> String {
             ChangeDiffs::decl(&config),
             ItemFlow::decl(&config),
             Related::decl(&config),
+            Platform::decl(&config),
             RelatedChange::decl(&config),
             LinkEvidence::decl(&config),
             SimilarItem::decl(&config),
@@ -2003,6 +2045,7 @@ mod tests {
                 ]
             }),
             instance: Some("192.168.11.130:8080".into()),
+            chip: Some("MT6769 · Helio G81".into()),
         }
     }
 

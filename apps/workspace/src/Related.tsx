@@ -9,6 +9,7 @@ import { queryClient } from "./focus-cache";
 import { ChangeFiles, ChangeStatus, Linked } from "./ChangeDiff";
 import { FailureNote, failureOf } from "./TemplateImport";
 import { t } from "./i18n";
+import { platformLabel } from "./Platforms";
 
 const relatedKey = (code: string, item: WorkItem) =>
   ["related", code, item.source, item.instance, item.id] as const;
@@ -80,6 +81,11 @@ export function Related({ code, item }: { code: string; item: WorkItem }) {
       </section>
       <section aria-label={t("related.similar")}>
         <h3>{t("related.similar")}</h3>
+        {data?.platform && platformLabel(data.platform) ? (
+          <p className="quiet related-platform">
+            {t("platform.own", { platform: platformLabel(data.platform) })}
+          </p>
+        ) : null}
         {!data && !query.error ? (
           <Skeleton className="diff-loading-line" />
         ) : null}
@@ -154,7 +160,15 @@ function SimilarRow({ s }: { s: SimilarItem }) {
         <span className={`status-chip stage-${s.item.group}`}>
           {s.item.status}
         </span>
-        <span className="quiet">{s.model}</span>
+        <span className="quiet">
+          {s.model}
+          {platformLabel(s.platform) ? ` · ${platformLabel(s.platform)}` : ""}
+        </span>
+        {s.same_platform.map((k) => (
+          <span key={k} className="platform-match">
+            {t(`platform.same.${k}`)}
+          </span>
+        ))}
       </span>
       <span className="related-subject">{s.item.title}</span>
       {s.shared.length ? (

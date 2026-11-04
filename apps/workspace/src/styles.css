@@ -4469,3 +4469,17 @@ a .owner-chip { color: inherit; }
 .related-fix > div { display: contents; }
 .related-fix dt { color: var(--muted-foreground); }
 .related-fix dd { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* Platforms: models grouped by SoC vendor, each with its versions and named chip. */
+.platforms { margin-top: 28px; display: flex; flex-direction: column; gap: 8px; }
+.platforms h2 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 16px; }
+.platforms > .quiet { margin: 0; font-size: 12px; }
+.platform-group h3 { margin: 10px 0 4px; font-size: 13px; }
+.platform-group ul { list-style: none; margin: 0; padding: 0; }
+.platform-group li { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(0, 1.4fr) minmax(180px, 1fr); align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+.platform-facts { display: flex; flex-wrap: wrap; gap: 4px; }
+.platform-chip { height: 28px; font-size: 13px; }
+.platform-chip.is-failed { border-color: #b4532a; }
+.platform-match { padding: 0 6px; border-radius: 4px; line-height: 18px; font-size: 11px; color: #24552b; background: #dbe7d5; }
+.related-platform { margin: 0 0 4px; font-size: 12px; }
+@media (max-width: 640px) { .platform-group li { grid-template-columns: 1fr; gap: 6px; } }

@@ -3,6 +3,7 @@ import { ContextTarget } from "./components/context-menu";
 import { modelContextActions } from "./context-actions";
 import { useTranslation } from "react-i18next";
 import { t, locale } from "./i18n";
+import { Platforms } from "./Platforms";
 import { useQuery } from "@tanstack/react-query";
 import {
   queryClient,
@@ -534,6 +535,7 @@ export function FocusHome({
               </div>
             ))}
       </section>
+      <Platforms models={state.models ?? null} />
     </div>
   );
 }

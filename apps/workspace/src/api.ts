@@ -198,6 +198,8 @@ export async function focus(
     | "annotate"
     | "history"
     | "related"
+    | "platforms"
+    | "chip"
     | "change_files"
     | "change_diff"
     | "change_diffs"
@@ -218,6 +220,7 @@ export async function focus(
     item?: string;
     op?: Record<string, unknown>;
     instance?: string;
+    chip?: string;
     path?: string;
     items?: string[];
     addresses?: string[];
@@ -237,6 +240,7 @@ export async function focus(
         item: args.item ?? null,
         op: args.op ?? null,
         instance: args.instance || null,
+        chip: args.chip ?? null,
         path: args.path ?? null,
         items: args.items ?? null,
         addresses: args.addresses ?? null,
