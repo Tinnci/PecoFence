@@ -1117,5 +1117,11 @@
   "projectSetup.workbenchHandoff": "Follow this project with its saved issue scope. Existing workbenches keep their settings and add this scope.",
   "projectSetup.openWorkbenchFailed": "Could not open the workbench. Try again.",
   "projectSetup.existingProjects": "Existing projects",
-  "projectSetup.workbenchCode": "Workbench: {{code}}"
+  "projectSetup.workbenchCode": "Workbench: {{code}}",
+  "model.rename": "Rename project",
+  "model.displayName": "Project / model name",
+  "model.renameHint": "This name appears in the top bar and project pages. Data remains linked to {{code}}.",
+  "model.resetName": "Use model code",
+  "model.cancelRename": "Cancel",
+  "model.renameFailed": "Could not save the name. Try again."
 }

@@ -13,6 +13,7 @@ import {
   Check,
   Bookmark,
   BookmarkX,
+  Pencil,
 } from "lucide-react";
 import { t } from "./i18n";
 import { browserUrl } from "./browser-urls";
@@ -81,6 +82,7 @@ export function modelContextActions(
   code: string,
   open: (code: string) => void,
   refresh: (code: string) => Promise<unknown>,
+  rename?: (code: string) => void,
 ): ContextAction[] {
   const views: [ModelTab, string, ContextAction["icon"]][] = [
     ["overview", t("model.overview"), LayoutDashboard],
@@ -122,6 +124,16 @@ export function modelContextActions(
         void refresh(code);
       },
     },
+    ...(rename
+      ? [
+          {
+            id: "rename",
+            label: t("model.rename"),
+            icon: Pencil,
+            run: () => rename(code),
+          },
+        ]
+      : []),
     copyContextAction("copy-code", t("context.copyModelCode"), code),
   ];
 }

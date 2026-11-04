@@ -1117,5 +1117,11 @@
   "projectSetup.workbenchHandoff": "带入已保存的问题范围并加入关注；已有工作台保留配置并合并范围。",
   "projectSetup.openWorkbenchFailed": "打开工作台失败，请重试",
   "projectSetup.existingProjects": "已有项目",
-  "projectSetup.workbenchCode": "工作台：{{code}}"
+  "projectSetup.workbenchCode": "工作台：{{code}}",
+  "model.rename": "重命名项目",
+  "model.displayName": "项目名（机型名）",
+  "model.renameHint": "名称将显示在顶部和项目页面。数据关联代号：{{code}}。",
+  "model.resetName": "恢复机型代号",
+  "model.cancelRename": "取消",
+  "model.renameFailed": "名称保存失败，请重试。"
 }

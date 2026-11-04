@@ -625,6 +625,9 @@ pub struct JobSource {
 pub struct FocusModel {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
+    pub name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub job_sources: Option<BTreeMap<String, JobSource>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]

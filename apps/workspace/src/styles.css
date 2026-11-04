@@ -4451,3 +4451,4 @@ a .owner-chip { color: inherit; }
 .project-workbench-row > strong { overflow-wrap: anywhere; }
 .project-workbench-action { display: grid; gap: 8px; }
 .collect-actions { flex-wrap: wrap; }
+.model-tab-name { display: inline-block; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }

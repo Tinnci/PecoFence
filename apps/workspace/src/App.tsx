@@ -45,6 +45,7 @@ import {
   Menu,
   Plus,
   RefreshCw,
+  Pencil,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -79,6 +80,7 @@ import type {
 } from "./contracts/setup";
 import { failureOf } from "./TemplateImport";
 import { projectWorkbench } from "./project-workbench";
+import { RenameModelDialog } from "./RenameModelDialog";
 import type { Component, HubReport, LoadFailure } from "./contracts/hub";
 import {
   attention,
@@ -139,6 +141,10 @@ function Workspace() {
   const [modelCode, setModelCode] = useState<string | null>(null);
   const [followCode, setFollowCode] = useState<string | undefined>(undefined);
   const focusState = useFocus(desktop());
+  const [renamingCode, setRenamingCode] = useState<string | null>(null);
+  const renaming = focusState.models?.find(
+    (model) => model.code === renamingCode,
+  );
   const [modelTab, setModelTab] = useModelPreference<ModelTab>(
     modelCode ?? "",
     "tab",
@@ -322,7 +328,11 @@ function Workspace() {
     : null;
   const tabs = (focusState.models ?? []).map((m) => {
     const summary = focusState.summary?.models.find((x) => x.code === m.code);
-    return { code: m.code, short: summary ? shortfall(summary) > 0 : null };
+    return {
+      code: m.code,
+      name: m.name ?? m.code,
+      short: summary ? shortfall(summary) > 0 : null,
+    };
   });
   const more = [
     { id: "setup", title: t("app.setupChecklist") },
@@ -333,6 +343,14 @@ function Workspace() {
   return (
     <TooltipProvider>
       <div className="app-shell">
+        {renaming ? (
+          <RenameModelDialog
+            key={renaming.code}
+            model={renaming}
+            onSave={(name) => focusState.rename(renaming.code, name)}
+            onClose={() => setRenamingCode(null)}
+          />
+        ) : null}
         <header className="appbar" data-tauri-drag-region>
           <button
             type="button"
@@ -363,11 +381,12 @@ function Workspace() {
             {tabs.map((t) => (
               <ContextTarget
                 key={t.code}
-                title={t.code}
+                title={t.name}
                 actions={modelContextActions(
                   t.code,
                   openModel,
                   focusState.refresh,
+                  setRenamingCode,
                 )}
               >
                 <button
@@ -392,7 +411,9 @@ function Workspace() {
                           : "dot ok"
                     }
                   />
-                  {t.code}
+                  <span className="model-tab-name" title={t.code}>
+                    {t.name}
+                  </span>
                   {page === "model" && modelCode === t.code ? (
                     <TabLine id="appbar" />
                   ) : null}
@@ -419,6 +440,17 @@ function Workspace() {
               }
             />
             <DropdownMenuContent align="end" className="workspace-menu">
+              {page === "model" &&
+              modelCode &&
+              focusState.models?.some((model) => model.code === modelCode) ? (
+                <DropdownMenuGroup>
+                  <DropdownMenuItem onClick={() => setRenamingCode(modelCode)}>
+                    <Pencil />
+                    {t("model.rename")}
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+              ) : null}
+
               <DropdownMenuGroup>
                 <DropdownMenuLabel>
                   <ActionIcon name="language" responsive={false} />

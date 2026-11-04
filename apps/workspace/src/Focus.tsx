@@ -296,6 +296,17 @@ export function useFocus(enabled: boolean) {
     queryClient.setQueryData(modelsKey, data.models ?? []);
     if (refreshSources) await refresh(model.code);
   }
+  async function rename(code: string, name: string) {
+    const current = (await focus("list")).models?.find(
+      (model) => model.code === code,
+    );
+    if (!current) throw new Error("model is no longer followed");
+    const value = name.trim();
+    const data = await focus("save", {
+      model: { ...current, name: value === code ? undefined : value },
+    });
+    queryClient.setQueryData(modelsKey, data.models ?? []);
+  }
   async function remove(code: string) {
     invalidateModel(code);
     await queryClient.cancelQueries({ queryKey: modelsKey });
@@ -368,6 +379,7 @@ export function useFocus(enabled: boolean) {
     refresh,
     ensure: (code: string) => refresh(code, false),
     save,
+    rename,
     remove,
     review,
   };
@@ -432,18 +444,27 @@ export function FocusHome({
           ? ordered.map((m) => (
               <ContextTarget
                 key={m.code}
-                title={m.code}
+                title={
+                  state.models?.find((model) => model.code === m.code)?.name ??
+                  m.code
+                }
                 actions={modelContextActions(m.code, onModel, state.refresh)}
               >
                 <motion.button
                   layout="position"
                   type="button"
                   className="ledger-row"
-                  aria-label={m.code}
+                  aria-label={
+                    state.models?.find((model) => model.code === m.code)
+                      ?.name ?? m.code
+                  }
                   onClick={() => onModel(m.code)}
                 >
                   <span className="ledger-model">
-                    <strong>{m.code}</strong>
+                    <strong>
+                      {state.models?.find((model) => model.code === m.code)
+                        ?.name ?? m.code}
+                    </strong>
                     <small>
                       {sourceText(m.sources) ||
                         t("focus.noIssueSourcesConfigured")}
@@ -641,6 +662,7 @@ export function FollowPage({
     for (const c of chosenJira) if (c.scope) issues.push(c.scope);
     return {
       code: suggestions.code,
+      name: existing?.name,
       issues,
       branches: chosenBranches.map((b) => b.name),
       jobs: existing?.jobs ?? [],

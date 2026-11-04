@@ -1921,7 +1921,7 @@ export function ModelPage({
   if (!m)
     return (
       <div className="model-page">
-        <h1 className="model-code">{code}</h1>
+        <h1 className="model-code">{saved?.name ?? code}</h1>
         {state.models && !saved ? (
           <p className="quiet">
             {t("model.youAreNotFollowing", { v0: code })}
@@ -1975,7 +1975,7 @@ export function ModelPage({
                 : []
             }
           >
-            <h1 className="model-code">{m.code}</h1>
+            <h1 className="model-code">{saved?.name ?? m.code}</h1>
           </ContextTarget>
           <p className="quiet">
             {t("model.gerritBranches", {
