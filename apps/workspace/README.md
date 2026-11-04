@@ -624,3 +624,26 @@ remain independent. No Jenkins tasks are executed by these controls.
 The [tracking feature design](docs/TRACKING_NEXT_FEATURES.md) defines the proposed
 owner workload, saved views, activity provenance, annotation sharing, and version
 readiness flows, with implementation order and acceptance checks.
+
+### Release checklist
+
+Each model has a **Release checklist / 发布检查** tab with fourteen checks split
+between planning and release. A checklist belongs to a model and an explicitly
+named version, upgrade baseline and development branches. New versions begin
+unchecked; changing a baseline requires a new checklist. Passed checks require
+an owner, validation notes and evidence; not-applicable checks require an owner
+and a reason. Completing checks records readiness, without running a rollout.
+
+Records use versioned local WebView storage on this device. Each save reads the
+latest store and checks the entry's last update to catch stale writes. Read/write
+failures are visible and never replace unreadable records. Unsaved edits stay in
+the current page while switching checks or versions; save them before leaving
+the tab or closing the app. Copy report includes the saved results, references
+and timestamps, and is unavailable while that version has unsaved edits. Shared
+storage, source-message ingestion and automatic verification remain future work.
+
+The isolated development preview is `/release-checklist.html` under the Vite
+server. Its synthetic records use a separate `CHECKLIST-DEMO` scope and make no
+source-system requests. Layout and hierarchy draw on
+[Stageshow's craft guidance](https://github.com/benjitaylor/skills/blob/main/stageshow/references/craft.md),
+using the Workspace components and colors.

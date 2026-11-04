@@ -1,3 +1,4 @@
+import ReleaseChecklist from "./ReleaseChecklist";
 import {
   sourceBranches,
   sourceRoutes,
@@ -146,6 +147,9 @@ const tabNames: Record<ModelTab, string> = {
   },
   get builds() {
     return t("model.builds");
+  },
+  get checklist() {
+    return t("releaseCheck.title");
   },
   get settings() {
     return t("model.settings");
@@ -1863,7 +1867,10 @@ export function ModelPage({
   useTranslation();
   const m = state.summary?.models.find((x) => x.code === code);
   const saved = state.models?.find((x) => x.code === code);
-  const sourceBuilds = useBuilds(code, tab !== "settings");
+  const sourceBuilds = useBuilds(
+    code,
+    tab !== "settings" && tab !== "checklist",
+  );
   const builds = {
     ...sourceBuilds,
     data: sourceBuilds.data
@@ -2123,6 +2130,12 @@ export function ModelPage({
             />
           ) : tab === "builds" ? (
             <BuildsTab builds={builds} saved={saved} />
+          ) : tab === "checklist" ? (
+            <ReleaseChecklist
+              key={code}
+              code={code}
+              branches={saved?.branches}
+            />
           ) : saved ? (
             <SettingsTab
               builds={sourceBuilds}

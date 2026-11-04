@@ -22,6 +22,7 @@ fn target(args: &[String]) -> Result<String, String> {
                                 "requirements",
                                 "branches",
                                 "builds",
+                                "checklist",
                                 "settings",
                             ]
                             .contains(&tab)

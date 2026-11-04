@@ -47,13 +47,20 @@ export async function loadHub(
   throw new Error("desktop_required");
 }
 export type ModelTab =
-  "overview" | "issues" | "requirements" | "branches" | "builds" | "settings";
+  | "overview"
+  | "issues"
+  | "requirements"
+  | "branches"
+  | "builds"
+  | "checklist"
+  | "settings";
 const modelTabs: ModelTab[] = [
   "overview",
   "issues",
   "requirements",
   "branches",
   "builds",
+  "checklist",
   "settings",
 ];
 /** A launch target: a page, or `model:<CODE>[:<tab>]` for a followed model. */

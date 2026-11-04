@@ -53,6 +53,7 @@ const icons = {
   settings: Settings,
   issues: Bug,
   requirements: ListTodo,
+  checklist: ClipboardList,
   check: Check,
   track: Bookmark,
   untrack: BookmarkMinus,
