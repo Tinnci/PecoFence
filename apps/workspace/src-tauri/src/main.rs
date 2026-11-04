@@ -71,6 +71,7 @@ fn desktop() {
         items_gate: tokio::sync::Semaphore,
         /// Histories never wait behind a multi-minute summary read.
         flow_gate: tokio::sync::Semaphore,
+        source_fields_gate: tokio::sync::Semaphore,
         /// Health reads run beside an activation so the page can show its progress.
         service_gate: tokio::sync::Semaphore,
         /// The private template copy and the sha256 of its last plan.
@@ -327,7 +328,22 @@ fn desktop() {
         addresses: Option<Vec<String>>,
         state: tauri::State<'_, State>,
     ) -> Result<setup::FocusData, setup::SetupFailure> {
-        let args = if matches!(action.as_str(), "flow" | "flows" | "flows_refresh") {
+        let args = if matches!(action.as_str(), "source_fields" | "source_fields_refresh") {
+            let urls = addresses.unwrap_or_default();
+            let [address] = urls.as_slice() else {
+                return Err(setup::SetupFailure::new("invalid_input"));
+            };
+            code.as_deref()
+                .zip(item.as_deref())
+                .and_then(|(code, item)| {
+                    setup::source_fields_args(
+                        code,
+                        item,
+                        address,
+                        action == "source_fields_refresh",
+                    )
+                })
+        } else if matches!(action.as_str(), "flow" | "flows" | "flows_refresh") {
             let list = match (items, &item) {
                 (Some(list), _) if action != "flow" => list,
                 (_, Some(one)) => vec![one.clone()],
@@ -416,6 +432,7 @@ fn desktop() {
                 Some(&state.items_gate)
             }
             "flow" | "flows" | "flows_refresh" => Some(&state.flow_gate),
+            "source_fields" | "source_fields_refresh" => Some(&state.source_fields_gate),
             _ => Some(&state.focus_gate),
         };
         let _permit = match gate {
@@ -430,8 +447,14 @@ fn desktop() {
             "summary" | "refresh" => 600,
             "suggest" => 180,
             "builds" | "build_evidence" => 120,
-            "change_files" | "change_diff" | "change_diffs" | "flow" | "flows"
-            | "flows_refresh" => 90,
+            "change_files"
+            | "change_diff"
+            | "change_diffs"
+            | "flow"
+            | "flows"
+            | "flows_refresh"
+            | "source_fields"
+            | "source_fields_refresh" => 90,
             "issues" | "requirements" | "issues_full" | "requirements_full" => 300,
             _ => 30,
         });
@@ -554,6 +577,7 @@ fn desktop() {
             service_gate: tokio::sync::Semaphore::new(1),
             focus_gate: tokio::sync::Semaphore::new(1),
             flow_gate: tokio::sync::Semaphore::new(1),
+            source_fields_gate: tokio::sync::Semaphore::new(2),
             items_gate: tokio::sync::Semaphore::new(2),
             pending: std::sync::Mutex::new(None),
         })

@@ -195,7 +195,9 @@ export async function focus(
     | "change_diffs"
     | "flow"
     | "flows"
-    | "flows_refresh",
+    | "flows_refresh"
+    | "source_fields"
+    | "source_fields_refresh",
   args: {
     code?: string;
     job?: string;

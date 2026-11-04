@@ -16,6 +16,7 @@ import { readableText } from "./work-text";
 import { isDue, updatedAt } from "./work-activity";
 import { ownerScope, ownerScopeLabel } from "./owner-workload";
 import { t } from "./i18n";
+import { SourceFields } from "./SourceFields";
 
 export const workItemKey = (item: WorkItem) =>
   JSON.stringify([item.source, item.scope_id, item.url, item.id]);
@@ -123,6 +124,9 @@ export function WorkItemDetails({
               ) : null}
             </dl>
           </section>
+          {item.source === "meegle" ? (
+            <SourceFields key={workItemKey(item)} code={code} item={item} />
+          ) : null}
           {activity.progress ? (
             <section aria-label={t("work.progress")}>
               <h3>{t("work.progress")}</h3>

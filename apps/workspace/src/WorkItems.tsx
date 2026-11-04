@@ -105,6 +105,7 @@ export {
 import { OwnerWorkload } from "./OwnerWorkload";
 import { WorkItemDetails, workItemKey } from "./WorkItemDetails";
 import { normalizeView } from "./view-storage";
+import { refreshSourceFields } from "./source-fields-cache";
 import { uniqueWorkItems } from "./owner-workload";
 
 /** Stages in the order work moves; done and cancelled close the item. */
@@ -176,7 +177,8 @@ export function useWorkItems(code: string, kind: WorkKind, enabled = true) {
     failure: query.error ? failureOf(query.error) : null,
     refresh: async () => {
       const result = await query.refetch();
-      if (!result.error) await refreshFlows(code);
+      if (!result.error)
+        await Promise.all([refreshFlows(code), refreshSourceFields(code)]);
       return result;
     },
     openCount: query.data

@@ -4376,3 +4376,11 @@ a .owner-chip { color: inherit; }
 .work-detail-corrections { display: flex; flex-direction: column; gap: 10px; }
 .work-detail-corrections dd { margin: 4px 0 0; }
 .work-detail-dialog .local-history { max-height: none; }
+
+.work-source-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
+.work-source-head .link { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; }
+.work-source-fields { margin: 0; }
+.work-source-fields > div { padding: 12px 0; border-bottom: 1px solid var(--border); }
+.work-source-fields dt { color: var(--muted-foreground); font-size: 12px; }
+.work-source-fields dd { margin: 5px 0 0; }
+.work-source-read { font-size: 11px; margin: 10px 0 0; }

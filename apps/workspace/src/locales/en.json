@@ -955,5 +955,14 @@
   "work.detailStatusSince": "Status since",
   "work.latestComment": "Latest comment",
   "work.noLocalDetails": "No local follow-up information",
-  "work.localHistory": "Local activity"
+  "work.localHistory": "Local activity",
+  "work.sourceFields": "Source fields",
+  "work.sourceNotReturned": "Not returned by the source",
+  "work.sourceEmpty": "Not filled in",
+  "work.sourceNoValues": "No populated source fields",
+  "work.sourceShowEmpty": "Show empty and unavailable fields ({{count}})",
+  "work.sourceHideEmpty": "Hide empty and unavailable fields",
+  "work.sourceReadAt": "Read at {{time}}",
+  "work.sourceYes": "Yes",
+  "work.sourceNo": "No"
 }

@@ -960,6 +960,22 @@ pub struct ItemFlow {
     pub events: Vec<FlowEvent>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct SourceField {
+    pub key: String,
+    pub name: String,
+    pub kind: String,
+    pub value: String,
+    pub available: bool,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct SourceFields {
+    pub item: String,
+    pub address: String,
+    pub item_updated: String,
+    pub fetched_at: String,
+    pub fields: Vec<SourceField>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct FlowFailure {
     pub item: String,
     pub address: Option<String>,
@@ -1112,6 +1128,9 @@ pub struct FocusData {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub flow_errors: Option<Vec<FlowFailure>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub source_fields: Option<SourceFields>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub models: Option<Vec<FocusModel>>,
@@ -1617,6 +1636,8 @@ pub fn types() -> String {
             ChangeDiff::decl(&config),
             ChangeDiffs::decl(&config),
             ItemFlow::decl(&config),
+            SourceField::decl(&config),
+            SourceFields::decl(&config),
             FlowFailure::decl(&config),
             FlowEvent::decl(&config),
             ItemHistory::decl(&config),
@@ -2199,4 +2220,25 @@ mod tests {
             ["setup", "import-template", "t.json", "--apply", "--replace"]
         );
     }
+}
+
+pub fn source_fields_args(
+    code: &str,
+    item: &str,
+    address: &str,
+    refresh: bool,
+) -> Option<Vec<String>> {
+    if address.len() > 2048
+        || address.chars().any(char::is_control)
+        || !(address.starts_with("https://") || address.starts_with("http://"))
+    {
+        return None;
+    }
+    let mut args = flow_args(code, &[item.to_owned()])?;
+    args[1] = "source-fields".into();
+    args.extend(["--address".into(), address.into()]);
+    if refresh {
+        args.push("--refresh".into());
+    }
+    Some(args)
 }

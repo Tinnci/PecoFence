@@ -955,5 +955,14 @@
   "work.detailStatusSince": "状态起始",
   "work.latestComment": "最新评论",
   "work.noLocalDetails": "暂无本地跟进信息",
-  "work.localHistory": "本机动态"
+  "work.localHistory": "本机动态",
+  "work.sourceFields": "源字段",
+  "work.sourceNotReturned": "来源未返回此字段",
+  "work.sourceEmpty": "未填写",
+  "work.sourceNoValues": "暂无已填写的源字段",
+  "work.sourceShowEmpty": "显示空值及未返回字段（{{count}}）",
+  "work.sourceHideEmpty": "收起空值及未返回字段",
+  "work.sourceReadAt": "读取于 {{time}}",
+  "work.sourceYes": "是",
+  "work.sourceNo": "否"
 }
