@@ -15,11 +15,13 @@ import {
 import type { WorkItem } from "./contracts/setup";
 import { OwnerChip, SeverityBadge, severityLevel } from "./Badges";
 import { t } from "./i18n";
+import { ownerScope, ownerScopeLabel } from "./owner-workload";
 
 // Filters as Linear shows them: one chip per field with the values chosen, values within a
 // field are alternatives, fields together narrow. Every list offers only values present.
 export const filterFields = [
   "owner",
+  "source",
   "severity",
   "stage",
   "status",
@@ -34,6 +36,8 @@ export function valuesOf(item: WorkItem, field: FilterField): string[] {
   switch (field) {
     case "owner":
       return [item.owner || NONE];
+    case "source":
+      return [ownerScope(item)];
     case "severity":
       return [item.severity || NONE];
     case "stage":
@@ -72,6 +76,7 @@ function tally(items: WorkItem[], field: FilterField) {
 }
 
 export function valueLabel(field: FilterField, v: string) {
+  if (field === "source") return ownerScopeLabel(v);
   if (v === NONE)
     return field === "owner" ? t("work.unassigned") : t("work.filterEmpty");
   return field === "stage" ? t(`work.stage.${v}`) : v;

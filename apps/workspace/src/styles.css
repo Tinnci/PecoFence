@@ -4333,3 +4333,23 @@ a .owner-chip { color: inherit; }
 
 .flow-details-full .flow-form dd { display: block; -webkit-line-clamp: unset; overflow: visible; }
 .flow-details-full .flow-value { max-width: none; white-space: normal; overflow: visible; overflow-wrap: anywhere; }
+
+/* Owner follow-up uses the overview's quiet table and link controls. */
+.owner-workload { margin-top: 16px; min-width: 0; }
+.owner-workload h3 { margin: 0; font-size: 13px; font-weight: 600; }
+.owner-kind { display: flex; gap: 10px; }
+.owner-kind .link { font-size: 12px; color: var(--muted-foreground); }
+.owner-kind .link[aria-pressed="true"] { color: var(--foreground); text-decoration: underline; text-underline-offset: 4px; }
+.owner-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.owner-table th, .owner-table td { padding: 8px 4px; border-bottom: 1px solid var(--border); text-align: right; font-weight: 400; font-variant-numeric: tabular-nums; }
+.owner-table thead th { color: var(--muted-foreground); font-size: 11px; }
+.owner-table th:first-child { text-align: left; max-width: 130px; }
+.owner-person { display: inline-flex; align-items: flex-start; flex-direction: column; gap: 3px; max-width: 100%; }
+.owner-person .owner-chip { max-width: 120px; }
+.owner-person small { color: var(--muted-foreground); max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; }
+.owner-count { min-width: 22px; text-align: right; font-variant-numeric: tabular-nums; }
+.owner-count.short { color: #8a3a19; }
+.owner-note { margin: 8px 0 0; font-size: 11px; }
+.owner-table { table-layout: fixed; }
+.owner-table th:first-child { width: 40%; }
+.owner-table thead th { overflow-wrap: anywhere; }

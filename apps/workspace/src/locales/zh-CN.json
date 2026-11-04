@@ -933,5 +933,17 @@
   "views.modified": "已修改",
   "views.updateCurrent": "更新当前视图",
   "views.nameExists": "已有同名视图，请使用其他名称。",
-  "views.storageFailed": "视图暂存于本次会话，未能写入本机存储。"
+  "views.storageFailed": "视图暂存于本次会话，未能写入本机存储。",
+  "work.owners": "负责人跟进",
+  "work.ownerKind": "条目类型",
+  "work.ownerInactive": "14天无动态",
+  "work.ownerDue": "到期",
+  "work.ownerMetric": "{{owner}}，{{metric}} {{count}} 条",
+  "work.ownerMore": "展开其余 {{count}} 位负责人",
+  "work.ownerLess": "收起",
+  "work.ownerUnknown": "{{count}} 条记录缺少活动时间",
+  "work.ownerCached": "部分来源尚未更新，统计包含上次读取的数据。",
+  "work.ownerEmpty": "暂无未关闭条目",
+  "work.ownerLoading": "正在加载负责人统计…",
+  "work.filterField.source": "来源空间"
 }

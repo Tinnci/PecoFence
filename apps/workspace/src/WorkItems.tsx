@@ -87,6 +87,24 @@ import {
   type SortKey,
 } from "./WorkSort";
 import { t } from "./i18n";
+import {
+  ageDays,
+  updatedAt,
+  lastActivity,
+  isStale,
+  isDue,
+  STALE_DAYS,
+} from "./work-activity";
+export {
+  ageDays,
+  updatedAt,
+  lastActivity,
+  isStale,
+  isDue,
+} from "./work-activity";
+import { OwnerWorkload } from "./OwnerWorkload";
+import { normalizeView } from "./view-storage";
+import { uniqueWorkItems } from "./owner-workload";
 
 /** Stages in the order work moves; done and cancelled close the item. */
 export const stages = [
@@ -100,7 +118,7 @@ export const stages = [
   "cancelled",
 ] as const;
 const closed = new Set(["done", "cancelled"]);
-const STALE_DAYS = 14;
+
 const fields = [
   "found_version",
   "target_version",
@@ -110,33 +128,6 @@ const fields = [
   "origin",
 ] as const;
 type Field = (typeof fields)[number];
-
-/** Jira writes ISO times with +0800; SPM writes 飞书项目 times as RFC 3339 (+08:00), and older
- * reads kept its zoneless China time ("2026-11-02 13:51:04", "2026-10-30"). */
-export function updatedAt(value: string) {
-  if (/^\d{10,}$/.test(value)) return Number(value);
-  const china = /^(\d{4}-\d\d-\d\d)(?:[ T](\d\d:\d\d(?::\d\d)?))?$/.exec(
-    value.trim(),
-  );
-  const text = china
-    ? `${china[1]}T${china[2] ?? "00:00:00"}+08:00`
-    : value.replace(/([+-]\d\d)(\d\d)$/, "$1:$2");
-  const parsed = Date.parse(text);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-export function ageDays(value: string, now = Date.now()) {
-  const at = updatedAt(value);
-  return at === null ? null : Math.floor((now - at) / 86_400_000);
-}
-/** The last status change or human comment; `updated` moves on any edit, bots included. */
-export const lastActivity = (item: WorkItem) =>
-  item.activity.last_activity || item.updated;
-export const isStale = (item: WorkItem, now = Date.now()) =>
-  !closed.has(item.group) &&
-  (ageDays(lastActivity(item), now) ?? 0) >= STALE_DAYS;
-const today = () => new Date().toLocaleDateString("sv-SE");
-export const isDue = (item: WorkItem, day = today()) =>
-  !!item.local?.next_check && item.local.next_check <= day;
 
 /** A build name's version and date: LAVA_LXX516_SW_V_V14_HW_V1.0_20260923_user → V14 · 09-23. */
 export function shortVersion(name: string) {
@@ -1100,7 +1091,7 @@ export function WorkItemsTab({
   const data: WorkItems | null = work.data;
   const scoped = useMemo(
     () =>
-      (data?.items ?? []).filter(
+      uniqueWorkItems(data?.items ?? []).filter(
         (i) =>
           origin === "all" ||
           (origin === "internet"
@@ -1465,20 +1456,16 @@ export function WorkSummary({
   onOpen: (kind: WorkKind) => void;
 }) {
   useTranslation();
-  const issueView = useWorkView(code, "issues");
-  const requirementView = useWorkView(code, "requirements");
+
   const [now] = useState(() => Date.now());
   const open = (w: WorkItems | null) =>
-    w?.items.filter((i) => !closed.has(i.group)) ?? [];
-  const go = (
-    kind: WorkKind,
-    view: ReturnType<typeof useWorkView>,
-    attention: Attention,
-    origin = "all",
-  ) => {
-    view.setStage("open");
-    view.setAttention(attention);
-    view.setOrigin(origin);
+    uniqueWorkItems(w?.items ?? []).filter((i) => !closed.has(i.group));
+  const go = (kind: WorkKind, attention: Attention, origin = "all") => {
+    applyWorkView(
+      code,
+      kind,
+      normalizeView({ stage: "open", attention, origin }),
+    );
     onOpen(kind);
   };
   const shortcut = (label: string, n: number, run: () => void, tone = "") =>
@@ -1498,7 +1485,7 @@ export function WorkSummary({
         <button
           type="button"
           className="work-summary-total"
-          onClick={() => go("issues", issueView, "")}
+          onClick={() => go("issues", "")}
         >
           <span>{t("model.issues")}</span>
           <strong>{issues ? openIssues.length : "—"}</strong>
@@ -1508,18 +1495,18 @@ export function WorkSummary({
           {shortcut(
             t("work.stage.blocked"),
             openIssues.filter((i) => i.group === "blocked").length,
-            () => go("issues", issueView, "blocked"),
+            () => go("issues", "blocked"),
             "short",
           )}
           {shortcut(
             t("work.noActivity", { days: STALE_DAYS }),
             openIssues.filter((i) => isStale(i, now)).length,
-            () => go("issues", issueView, "stale"),
+            () => go("issues", "stale"),
           )}
           {shortcut(
             t("work.checkDue"),
             openIssues.filter((i) => isDue(i)).length,
-            () => go("issues", issueView, "due"),
+            () => go("issues", "due"),
             "short",
           )}
         </span>
@@ -1528,7 +1515,7 @@ export function WorkSummary({
         <button
           type="button"
           className="work-summary-total"
-          onClick={() => go("requirements", requirementView, "")}
+          onClick={() => go("requirements", "")}
         >
           <span>{t("model.requirements")}</span>
           <strong>{requirements ? openRequirements.length : "—"}</strong>
@@ -1538,21 +1525,27 @@ export function WorkSummary({
           {shortcut(
             t("work.origin.customer"),
             openRequirements.filter((i) => i.origin === "customer").length,
-            () => go("requirements", requirementView, "", "customer"),
+            () => go("requirements", "", "customer"),
           )}
           {shortcut(
             t("work.origin.internal"),
             openRequirements.filter((i) => i.origin === "internal").length,
-            () => go("requirements", requirementView, "", "internal"),
+            () => go("requirements", "", "internal"),
           )}
           {shortcut(
             t("work.checkDue"),
             openRequirements.filter((i) => isDue(i)).length,
-            () => go("requirements", requirementView, "due"),
+            () => go("requirements", "due"),
             "short",
           )}
         </span>
       </div>
+      <OwnerWorkload
+        code={code}
+        issues={issues}
+        requirements={requirements}
+        onOpen={onOpen}
+      />
     </section>
   );
 }

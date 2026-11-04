@@ -49,6 +49,7 @@ const sortFields = [
 ];
 const filterFields = [
   "owner",
+  "source",
   "severity",
   "stage",
   "status",
