@@ -197,6 +197,15 @@ kind: string, patch_set: number | null, votes: Array<[string, string]>, text: st
 export type ChangeDiff = { change: number, path: string, patch_set: number | null, diff: string, truncated: boolean, };
 export type ChangeDiffs = { change: number, patch_set: number | null, files: { [key in string]: string }, truncated: boolean, };
 export type ItemFlow = { address?: string, fetched_at?: string, item: string, events: Array<FlowEvent>, };
+export type Related = { item: string, instance: string, changes: Array<RelatedChange>, similar: Array<SimilarItem>, };
+export type RelatedChange = { change: number, 
+/**
+ * The model whose summary read the change; None when none did.
+ */
+model: string | null, subject: string | null, status: string | null, branch: string | null, project: string | null, owner: string | null, url: string | null, evidence: Array<LinkEvidence>, };
+export type LinkEvidence = { kind: string, detail: string, };
+export type SimilarItem = { model: string, kind: string, item: SimilarWorkItem, score: number, shared: Array<string>, changes: Array<RelatedChange>, cause: string | null, plan: string | null, };
+export type SimilarWorkItem = { source: string, instance: string, id: string, display_id: string, title: string, url: string, status: string, group: string, owner: string, severity: string, };
 export type SourceField = { key: string, name: string, kind: string, value: string, available: boolean, };
 export type SourceFields = { item: string, address: string, item_updated: string, fetched_at: string, fields: Array<SourceField>, };
 export type FlowFailure = { item: string, address: string | null, code: string, };
@@ -225,5 +234,5 @@ export type FocusData = { build_evidence?: BuildEvidence, work_items?: WorkItems
 /**
  * After an annotation: the item as the last read shows it, with the new layer.
  */
-work_item?: AnnotatedItem, history?: ItemHistory, change_files?: ChangeFiles, change_diff?: ChangeDiff, change_diffs?: ChangeDiffs, flow?: ItemFlow, flows?: Array<ItemFlow>, flow_errors?: Array<FlowFailure>, source_fields?: SourceFields, models?: Array<FocusModel>, suggestions?: Suggestions, summary?: FocusSummary, preview?: Preview, changes?: Array<Listed>, builds?: Builds, };
+work_item?: AnnotatedItem, history?: ItemHistory, change_files?: ChangeFiles, change_diff?: ChangeDiff, change_diffs?: ChangeDiffs, flow?: ItemFlow, related?: Related, flows?: Array<ItemFlow>, flow_errors?: Array<FlowFailure>, source_fields?: SourceFields, models?: Array<FocusModel>, suggestions?: Suggestions, summary?: FocusSummary, preview?: Preview, changes?: Array<Listed>, builds?: Builds, };
 export type Activation = { health?: ServiceHealth, waited_secs?: number, };

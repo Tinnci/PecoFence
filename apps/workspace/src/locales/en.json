@@ -1123,5 +1123,17 @@
   "model.renameHint": "This name appears in the top bar and project pages. Data remains linked to {{code}}.",
   "model.resetName": "Use model code",
   "model.cancelRename": "Cancel",
-  "model.renameFailed": "Could not save the name. Try again."
+  "model.renameFailed": "Could not save the name. Try again.",
+  "related.changes": "Linked changes",
+  "related.similar": "Similar items and fixes",
+  "related.noChanges": "No linked Gerrit change found yet",
+  "related.noSimilar": "No similar item among those read",
+  "related.unread": "A change no summary has read",
+  "related.cause": "Cause",
+  "related.plan": "Fix",
+  "related.score": "{{score}}% alike",
+  "related.evidence.subject": "Subject names it",
+  "related.evidence.message": "Commit message names it",
+  "related.evidence.field": "Field",
+  "related.evidence.flow": "Flow history"
 }

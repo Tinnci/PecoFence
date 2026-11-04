@@ -17,6 +17,7 @@ import { isDue, updatedAt } from "./work-activity";
 import { ownerScope, ownerScopeLabel } from "./owner-workload";
 import { t } from "./i18n";
 import { SourceFields } from "./SourceFields";
+import { Related } from "./Related";
 
 export const workItemKey = (item: WorkItem) =>
   JSON.stringify([item.source, item.scope_id, item.url, item.id]);
@@ -202,6 +203,7 @@ export function WorkItemDetails({
               <p className="quiet">{t("work.noLocalDetails")}</p>
             ) : null}
           </section>
+          <Related code={code} item={item} />
           {item.source === "meegle" ? (
             <section aria-label={t("flow.title")}>
               <ItemFlow code={code} item={item} initiallyOpen />

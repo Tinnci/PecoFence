@@ -197,6 +197,7 @@ export async function focus(
     | "requirements_full"
     | "annotate"
     | "history"
+    | "related"
     | "change_files"
     | "change_diff"
     | "change_diffs"

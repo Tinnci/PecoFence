@@ -4452,3 +4452,20 @@ a .owner-chip { color: inherit; }
 .project-workbench-action { display: grid; gap: 8px; }
 .collect-actions { flex-wrap: wrap; }
 .model-tab-name { display: inline-block; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+
+/* Linked changes and similar items in an item's details. */
+.related-changes, .related-similar { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.related-change, .related-item { display: flex; flex-direction: column; gap: 4px; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+.related-change:last-child, .related-item:last-child { border-bottom: 0; }
+.related-change-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.related-subject { overflow-wrap: anywhere; }
+.related-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 12px; }
+.related-evidence, .related-term { padding: 0 6px; border-radius: 4px; background: var(--muted); color: var(--muted-foreground); line-height: 18px; }
+.related-term { background: none; box-shadow: inset 0 0 0 1px var(--border); }
+.related-score { display: inline-block; width: 36px; height: 6px; border-radius: 3px; background: var(--muted); overflow: hidden; }
+.related-score span { display: block; height: 100%; background: #24552b; }
+.related-item.is-closed .related-score span { background: #3f7a3c; }
+.related-fix { margin: 2px 0 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 3px 10px; padding: 6px 8px; border-left: 2px solid #3f7a3c; background: color-mix(in oklab, var(--muted) 60%, transparent); border-radius: 0 4px 4px 0; font-size: 12px; }
+.related-fix > div { display: contents; }
+.related-fix dt { color: var(--muted-foreground); }
+.related-fix dd { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }

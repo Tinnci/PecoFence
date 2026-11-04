@@ -1123,5 +1123,17 @@
   "model.renameHint": "名称将显示在顶部和项目页面。数据关联代号：{{code}}。",
   "model.resetName": "恢复机型代号",
   "model.cancelRename": "取消",
-  "model.renameFailed": "名称保存失败，请重试。"
+  "model.renameFailed": "名称保存失败，请重试。",
+  "related.changes": "关联提交",
+  "related.similar": "相似问题与解法",
+  "related.noChanges": "还没有找到关联的 Gerrit 提交",
+  "related.noSimilar": "已读取的条目里没有相似问题",
+  "related.unread": "未在摘要中读取的提交",
+  "related.cause": "原因分析",
+  "related.plan": "修改方案",
+  "related.score": "相似度 {{score}}%",
+  "related.evidence.subject": "标题含单号",
+  "related.evidence.message": "提交说明含单号",
+  "related.evidence.field": "字段",
+  "related.evidence.flow": "流转记录"
 }

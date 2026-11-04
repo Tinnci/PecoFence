@@ -1023,6 +1023,58 @@ pub struct ChangeDiff {
     pub diff: String,
     pub truncated: bool,
 }
+/// Gerrit changes bound to an item, and items like it with how they were fixed.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct Related {
+    pub item: String,
+    #[serde(default)]
+    pub instance: String,
+    pub changes: Vec<RelatedChange>,
+    pub similar: Vec<SimilarItem>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct RelatedChange {
+    pub change: u32,
+    /// The model whose summary read the change; None when none did.
+    pub model: Option<String>,
+    pub subject: Option<String>,
+    pub status: Option<String>,
+    pub branch: Option<String>,
+    pub project: Option<String>,
+    pub owner: Option<String>,
+    pub url: Option<String>,
+    pub evidence: Vec<LinkEvidence>,
+}
+/// Why an item and a change belong together: subject, message, field or flow.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct LinkEvidence {
+    pub kind: String,
+    pub detail: String,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct SimilarItem {
+    pub model: String,
+    pub kind: String,
+    pub item: SimilarWorkItem,
+    pub score: f64,
+    pub shared: Vec<String>,
+    pub changes: Vec<RelatedChange>,
+    pub cause: Option<String>,
+    pub plan: Option<String>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct SimilarWorkItem {
+    pub source: String,
+    pub instance: String,
+    pub id: String,
+    pub display_id: String,
+    pub title: String,
+    pub url: String,
+    pub status: String,
+    pub group: String,
+    pub owner: String,
+    pub severity: String,
+}
 /// A 飞书项目 item's 流转记录, oldest first.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct ItemFlow {
@@ -1200,6 +1252,9 @@ pub struct FocusData {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub flow: Option<ItemFlow>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub related: Option<Related>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub flows: Option<Vec<ItemFlow>>,
@@ -1429,6 +1484,30 @@ pub fn route_args(r: &FocusRequest) -> Option<Vec<String>> {
             diff_args(code?, r.change?, path, action == "change_diffs")
         }
         "build_evidence" => build_evidence_args(code?, r.job.as_deref()?, r.build?),
+        "related" => {
+            let (source, item) = (r.source.as_deref()?, r.item.as_deref()?);
+            let code = code.filter(|c| valid_code(c))?;
+            if !valid_item(source, item) {
+                return None;
+            }
+            let mut args: Vec<String> = vec![
+                "focus".into(),
+                "related".into(),
+                "--code".into(),
+                code.into(),
+                "--source".into(),
+                source.into(),
+                "--item".into(),
+                item.into(),
+            ];
+            if let Some(instance) = r.instance.as_deref().filter(|i| !i.is_empty()) {
+                if !valid_instance(instance) {
+                    return None;
+                }
+                args.extend(["--instance".into(), instance.into()]);
+            }
+            Some(args)
+        }
         _ => {
             let mut args = focus_args(
                 action,
@@ -1826,6 +1905,11 @@ pub fn types() -> String {
             ChangeDiff::decl(&config),
             ChangeDiffs::decl(&config),
             ItemFlow::decl(&config),
+            Related::decl(&config),
+            RelatedChange::decl(&config),
+            LinkEvidence::decl(&config),
+            SimilarItem::decl(&config),
+            SimilarWorkItem::decl(&config),
             SourceField::decl(&config),
             SourceFields::decl(&config),
             FlowFailure::decl(&config),

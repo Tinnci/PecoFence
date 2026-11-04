@@ -372,7 +372,8 @@ fn desktop() {
             | "issues_cached"
             | "requirements_cached"
             | "annotate"
-            | "history" => None,
+            | "history"
+            | "related" => None,
             "issues" | "requirements" | "issues_full" | "requirements_full" => {
                 Some(&state.items_gate)
             }
