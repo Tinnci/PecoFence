@@ -945,5 +945,15 @@
   "work.ownerCached": "部分来源尚未更新，统计包含上次读取的数据。",
   "work.ownerEmpty": "暂无未关闭条目",
   "work.ownerLoading": "正在加载负责人统计…",
-  "work.filterField.source": "来源空间"
+  "work.filterField.source": "来源空间",
+  "work.details": "详情",
+  "work.openSource": "打开来源页面",
+  "work.detailInfo": "条目信息",
+  "work.detailCreated": "创建时间",
+  "work.detailUpdated": "更新时间",
+  "work.detailActivity": "最近活动",
+  "work.detailStatusSince": "状态起始",
+  "work.latestComment": "最新评论",
+  "work.noLocalDetails": "暂无本地跟进信息",
+  "work.localHistory": "本机动态"
 }

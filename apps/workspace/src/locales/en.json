@@ -945,5 +945,15 @@
   "work.ownerCached": "Some sources are pending an update; counts include their last read.",
   "work.ownerEmpty": "No open work items",
   "work.ownerLoading": "Loading owners…",
-  "work.filterField.source": "Source space"
+  "work.filterField.source": "Source space",
+  "work.details": "Details",
+  "work.openSource": "Open source page",
+  "work.detailInfo": "Work item information",
+  "work.detailCreated": "Created",
+  "work.detailUpdated": "Updated",
+  "work.detailActivity": "Last activity",
+  "work.detailStatusSince": "Status since",
+  "work.latestComment": "Latest comment",
+  "work.noLocalDetails": "No local follow-up information",
+  "work.localHistory": "Local activity"
 }

@@ -21,6 +21,7 @@ import { FailureNote, failureOf } from "./TemplateImport";
 import { OwnerChip } from "./Badges";
 import { Linked } from "./ChangeDiff";
 import { t } from "./i18n";
+import { readableText } from "./work-text";
 
 const clock: Intl.DateTimeFormatOptions = {
   month: "2-digit",
@@ -46,46 +47,6 @@ const isKey = (v: string) =>
   /^\d{15,}$/.test(v) || /^role_/.test(v) || /^\d+_[a-z0-9]{4,}$/i.test(v);
 const near = (a: FlowEvent, b: FlowEvent) =>
   a.by === b.by && Math.abs(Date.parse(a.at) - Date.parse(b.at)) <= 120_000;
-
-/** Comment markdown as a reader sees it: images become a link, hidden markers go. */
-function readable(text: string) {
-  const clean = text.replace(/<!--[\s\S]*?-->/g, "");
-  // Parse inertly, then extract text. Never render source HTML or its styles.
-  if (
-    !/<\/?(?:span|div|p|br|a|img|pre|code|strong|em|b|i|ul|ol|li|blockquote|h[1-6]|table|tr|td)\b[^>]*>|&(?:#\d+|#x[\da-f]+|[a-z]+);/i.test(
-      clean,
-    )
-  )
-    return clean
-      .replace(/!\[[^\]]*\]\((\S+?)\)/g, `${t("flow.image")} $1`)
-      .trim();
-  const doc = new DOMParser().parseFromString(clean, "text/html");
-  doc
-    .querySelectorAll("script, style, iframe, object")
-    .forEach((n) => n.remove());
-  doc.querySelectorAll("br").forEach((n) => n.replaceWith("\n"));
-  doc.querySelectorAll("a[href]").forEach((n) => {
-    const href = n.getAttribute("href") ?? "";
-    if (/^https?:\/\//i.test(href)) {
-      const label = n.textContent || href;
-      n.replaceWith(label === href ? href : `[${label}](${href})`);
-    }
-  });
-  doc.querySelectorAll("img").forEach((n) => {
-    const src = n.getAttribute("src") ?? "";
-    n.replaceWith(
-      /^https?:\/\//i.test(src)
-        ? `${t("flow.image")} ${src}`
-        : (n.getAttribute("alt") ?? ""),
-    );
-  });
-  doc
-    .querySelectorAll("p, div, li, pre, blockquote, h1, h2, h3, tr")
-    .forEach((n) => n.append("\n"));
-  return (doc.body.textContent ?? "")
-    .replace(/!\[[^\]]*\]\((\S+?)\)/g, `${t("flow.image")} $1`)
-    .trim();
-}
 
 export type Shaped = FlowEvent & {
   details: { field: string; from: string; value: string }[];
@@ -130,7 +91,7 @@ export function shapeFlow(events: FlowEvent[]): Shaped[] {
       out.push({ ...e, to: to.join("、"), from: from.join("、"), details: [] });
       continue;
     }
-    out.push({ ...e, text: readable(e.text), details: [] });
+    out.push({ ...e, text: readableText(e.text), details: [] });
   }
   // A form filled during a move belongs to that move; other edits close in time group.
   for (const e of edits) {

@@ -4353,3 +4353,26 @@ a .owner-chip { color: inherit; }
 .owner-table { table-layout: fixed; }
 .owner-table th:first-child { width: 40%; }
 .owner-table thead th { overflow-wrap: anywhere; }
+
+/* A detail panel keeps the list in place and uses the existing dialog semantics. */
+.work-open-details { display: block; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.work-open-details:hover { text-decoration: underline; text-underline-offset: 3px; }
+.work-open-details:focus-visible { outline: 2px solid var(--ring, var(--foreground)); outline-offset: 3px; border-radius: 3px; }
+[data-slot="dialog-content"].work-detail-dialog { top: 0; bottom: 0; right: 0; left: auto; width: min(760px, 100vw); max-width: 100vw; height: 100dvh; max-height: 100dvh; translate: none; transform: none !important; border-radius: 12px 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 0; overflow: hidden; }
+.work-detail-header { padding: 22px 48px 18px 24px; display: flex; flex-direction: column; gap: 12px; border-bottom: 1px solid var(--border); }
+.work-detail-title { margin: 0; color: var(--foreground); font-size: 16px; line-height: 1.5; overflow-wrap: anywhere; }
+.work-detail-actions { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; font-size: 12px; }
+.work-detail-actions .link { display: inline-flex; gap: 5px; align-items: center; }
+.work-detail-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 24px 24px; }
+.work-detail-body > section { padding-top: 18px; margin-top: 18px; border-top: 1px solid var(--border); }
+.work-detail-body > section:first-child { border-top: 0; margin-top: 0; }
+.work-detail-body h3 { margin: 0 0 10px; font-size: 13px; font-weight: 600; }
+.work-detail-fields { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 9px 20px; margin: 0; font-size: 12px; }
+.work-detail-fields dt { color: var(--muted-foreground); }
+.work-detail-fields dd { margin: 0; overflow-wrap: anywhere; }
+.work-detail-text { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.6; font-size: 12px; margin-top: 5px; }
+.work-detail-notes { padding: 0; list-style: none; display: flex; flex-direction: column; gap: 14px; }
+.work-detail-notes time { font-size: 11px; }
+.work-detail-corrections { display: flex; flex-direction: column; gap: 10px; }
+.work-detail-corrections dd { margin: 4px 0 0; }
+.work-detail-dialog .local-history { max-height: none; }

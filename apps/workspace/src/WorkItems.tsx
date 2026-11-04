@@ -103,6 +103,7 @@ export {
   isDue,
 } from "./work-activity";
 import { OwnerWorkload } from "./OwnerWorkload";
+import { WorkItemDetails, workItemKey } from "./WorkItemDetails";
 import { normalizeView } from "./view-storage";
 import { uniqueWorkItems } from "./owner-workload";
 
@@ -231,15 +232,21 @@ function when(value: string) {
 type Entry = { at: number; text: string; quiet?: string };
 /** Remote creation and last comment, status changes seen here and every local edit, newest
  * first. */
-function entries(item: WorkItem, history: ItemHistory | undefined): Entry[] {
+function entries(
+  item: WorkItem,
+  history: ItemHistory | undefined,
+  includeSnapshot = true,
+): Entry[] {
   const out: Entry[] = [];
   const push = (at: string, text: string, quiet?: string) => {
     const time = updatedAt(at);
     if (time !== null) out.push({ at: time, text, quiet });
   };
-  push(item.activity.created, t("work.history.created"));
-  const comment = item.activity.last_comment;
-  if (comment) push(comment.at, comment.by, comment.text);
+  if (includeSnapshot) {
+    push(item.activity.created, t("work.history.created"));
+    const comment = item.activity.last_comment;
+    if (comment) push(comment.at, comment.by, comment.text);
+  }
   for (const m of history?.transitions ?? [])
     push(
       m.at,
@@ -286,7 +293,7 @@ function entries(item: WorkItem, history: ItemHistory | undefined): Entry[] {
 }
 
 /** What happened to the item, remote and local, on one clock. */
-function History({ item }: { item: WorkItem }) {
+function History({ item, full = false }: { item: WorkItem; full?: boolean }) {
   const query = useQuery(
     {
       queryKey: historyKey(item),
@@ -296,12 +303,13 @@ function History({ item }: { item: WorkItem }) {
     },
     queryClient,
   );
-  const list = entries(item, query.data ?? undefined);
+  const list = entries(item, query.data ?? undefined, !full);
   return (
-    <section aria-label={t("work.history")}>
-      <h3>{t("work.history")}</h3>
+    <section aria-label={t(full ? "work.localHistory" : "work.history")}>
+      <h3>{t(full ? "work.localHistory" : "work.history")}</h3>
+      {query.error ? <FailureNote failure={failureOf(query.error)} /> : null}
       <ol className="local-notes local-history">
-        {list.slice(0, 30).map((e, i) => (
+        {list.slice(0, full ? list.length : 30).map((e, i) => (
           <li key={i}>
             <span className="quiet">
               {new Date(e.at).toLocaleString(undefined, clock)}
@@ -599,6 +607,7 @@ function Row({
   expand,
   expansion,
   onLocal,
+  onDetails,
 }: {
   code: string;
   item: WorkItem;
@@ -606,6 +615,7 @@ function Row({
   expand: boolean;
   expansion: { open: boolean; revision: number };
   onLocal: () => void;
+  onDetails: () => void;
 }) {
   const a = item.activity;
   const held = ageDays(a.status_since, now);
@@ -623,9 +633,14 @@ function Row({
         {item.display_id}
       </ExternalLink>
       <div className="work-main">
-        <ExternalLink href={item.url} className="work-title">
+        <button
+          type="button"
+          className="work-title work-open-details"
+          aria-haspopup="dialog"
+          onClick={onDetails}
+        >
           {item.title}
-        </ExternalLink>
+        </button>
         <span className="work-meta">
           <SeverityBadge value={item.severity} />
           <span className={`status-chip stage-${item.group}`}>
@@ -1087,6 +1102,13 @@ export function WorkItemsTab({
   const shownBeforeExpand = useRef(PAGE);
   const [expansion, setExpansion] = useState({ open: false, revision: 0 });
   const [editing, setEditing] = useState<string | null>(null);
+  const [details, setDetails] = useState<string | null>(null);
+  const returnDetails = useRef<string | null>(null);
+  useEffect(() => {
+    setDetails(null);
+    setEditing(null);
+    returnDetails.current = null;
+  }, [code, kind]);
   const [now] = useState(() => Date.now());
   const data: WorkItems | null = work.data;
   const scoped = useMemo(
@@ -1199,9 +1221,11 @@ export function WorkItemsTab({
       internet: count((i) => i.origin_kind === "internet"),
     } as Record<string, number[]>;
   }, [data]);
-  const editingItem = data?.items.find(
-    (i) => `${i.source}:${i.id}` === editing,
-  );
+  const editingItem = data?.items.find((item) => workItemKey(item) === editing);
+  const detailItem = data?.items.find((item) => workItemKey(item) === details);
+  useEffect(() => {
+    if (data && details && !detailItem) setDetails(null);
+  }, [data, details, detailItem]);
   const attentionLabel = (a: Attention, n: number) =>
     a.startsWith("tag:")
       ? `# ${a.slice(4)} ${n}`
@@ -1403,13 +1427,17 @@ export function WorkItemsTab({
                       ? null
                       : g.items.map((i) => (
                           <Row
-                            key={`${i.scope_id}-${i.id}`}
+                            key={workItemKey(i)}
                             code={code}
                             item={i}
                             now={now}
                             expand={expandAll}
                             expansion={expansion}
-                            onLocal={() => setEditing(`${i.source}:${i.id}`)}
+                            onLocal={() => {
+                              returnDetails.current = null;
+                              setEditing(workItemKey(i));
+                            }}
+                            onDetails={() => setDetails(workItemKey(i))}
                           />
                         ))}
                   </Fragment>
@@ -1428,13 +1456,30 @@ export function WorkItemsTab({
               </button>
             ) : null}
           </div>
+          {detailItem ? (
+            <WorkItemDetails
+              code={code}
+              item={detailItem}
+              onClose={() => setDetails(null)}
+              onEdit={() => {
+                returnDetails.current = details;
+                setDetails(null);
+                setEditing(workItemKey(detailItem));
+              }}
+              history={<History item={detailItem} full />}
+            />
+          ) : null}
           {editingItem ? (
             <LocalDialog
               item={editingItem}
               kind={kind}
               code={code}
               tags={tags}
-              onClose={() => setEditing(null)}
+              onClose={() => {
+                setEditing(null);
+                setDetails(returnDetails.current);
+                returnDetails.current = null;
+              }}
             />
           ) : null}
         </>

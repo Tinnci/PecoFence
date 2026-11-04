@@ -193,6 +193,39 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("software issues and requirements", () => {
+  it("opens item details and returns after editing local follow-up", async () => {
+    const user = userEvent.setup();
+    render(
+      <WorkItemsTab
+        code="P6700LV"
+        kind="issues"
+        saved={saved as never}
+        state={state}
+      />,
+    );
+    const title = await screen.findByRole("button", { name: "title PLV-1" });
+    await user.click(title);
+    const detail = await screen.findByRole("dialog", { name: "PLV-1 · 详情" });
+    expect(
+      within(detail)
+        .getByRole("link", { name: /打开来源页面/ })
+        .getAttribute("href"),
+    ).toContain("PLV-1");
+    expect(
+      within(detail).getByRole("region", { name: "条目信息" }).textContent,
+    ).toContain("V09");
+    expect(
+      within(detail).getByRole("region", { name: "最新评论" }).textContent,
+    ).toContain("帮忙提供一下包名信息");
+    await user.click(within(detail).getByRole("button", { name: "本地标记" }));
+    await screen.findByRole("dialog", { name: "PLV-1 · 本地标记" });
+    await user.keyboard("{Escape}");
+    await screen.findByRole("dialog", { name: "PLV-1 · 详情" });
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(screen.getByRole("button", { name: "title PLV-1" })).toBeTruthy();
+  });
+
   it("shows open issues by stage with their activity, versions and local marks", async () => {
     const user = userEvent.setup();
     render(
