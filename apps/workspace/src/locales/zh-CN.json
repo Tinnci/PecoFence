@@ -1112,5 +1112,10 @@
   "work.resetFilters": "清除筛选，显示全部",
   "projectSetup.matchingGroups": "匹配 {{count}} 项",
   "projectSetup.selectMatches": "全选匹配项",
-  "projectSetup.unselectMatches": "取消选择匹配项"
+  "projectSetup.unselectMatches": "取消选择匹配项",
+  "projectSetup.openWorkbench": "打开项目工作台",
+  "projectSetup.workbenchHandoff": "带入已保存的问题范围并加入关注；已有工作台保留配置并合并范围。",
+  "projectSetup.openWorkbenchFailed": "打开工作台失败，请重试",
+  "projectSetup.existingProjects": "已有项目",
+  "projectSetup.workbenchCode": "工作台：{{code}}"
 }

@@ -14,6 +14,10 @@ export type ProjectCheck = { valid: boolean, ready: boolean, };
 export type ImportPlan = { template: TemplateInfo, project: string, scope: string, mode: string, directory: string, files: Array<PlanFile>, applicable: boolean, applied: boolean, backups: Array<string>, check?: ProjectCheck, };
 export type ImportedProject = { 
 /**
+ * Saved issue scope and targets for opening the existing model workbench.
+ */
+workspace?: FocusModel, 
+/**
  * Absent when a directory name is not valid UTF-8.
  */
 project: string | null, scope: string | null, directory: string, check: ProjectCheck, };

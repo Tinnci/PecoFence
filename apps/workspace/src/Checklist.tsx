@@ -30,6 +30,10 @@ import type {
   SetupFailure,
 } from "./contracts/setup";
 import TemplateImport from "./TemplateImport";
+import {
+  ProjectWorkbenches,
+  type OpenProjectWorkbench,
+} from "./ProjectWorkbenchButton";
 import ConnectSources from "./ConnectSources";
 import { ProjectStepSummary, type ProjectSetup } from "./ProjectSetup";
 import {
@@ -62,6 +66,7 @@ export default function Checklist({
   onConnectionReport,
   projectSetup,
   onOpenProject,
+  onOpenWorkbench,
 }: {
   report: HubReport;
   selected: string | null;
@@ -78,6 +83,7 @@ export default function Checklist({
   onConnectionReport: (report: ConnectionReport) => void;
   projectSetup?: ProjectSetup;
   onOpenProject?: () => void;
+  onOpenWorkbench?: OpenProjectWorkbench;
 }) {
   useTranslation();
   const components = report.components.filter((c) => c.lifecycle !== "paused");
@@ -253,6 +259,14 @@ export default function Checklist({
                           setup={projectSetup}
                           step={step.id}
                           onOpen={onOpenProject}
+                        />
+                      ) : null}
+                      {component.id === "spm" &&
+                      step.id === "project" &&
+                      onOpenWorkbench ? (
+                        <ProjectWorkbenches
+                          status={projects}
+                          onOpen={onOpenWorkbench}
                         />
                       ) : null}
                       {component.id === "spm" && step.id === "project" ? (

@@ -63,6 +63,7 @@ import { WindowControls } from "@/components/window-controls";
 import { isTauri } from "@tauri-apps/api/core";
 import {
   desktop,
+  focus,
   loadConnections as fetchConnections,
   loadHub,
   navigation,
@@ -72,10 +73,12 @@ import {
 } from "./api";
 import type {
   ConnectionReport,
+  FocusModel,
   ProjectStatus,
   SetupFailure,
 } from "./contracts/setup";
 import { failureOf } from "./TemplateImport";
+import { projectWorkbench } from "./project-workbench";
 import type { Component, HubReport, LoadFailure } from "./contracts/hub";
 import {
   attention,
@@ -260,6 +263,15 @@ function Workspace() {
     .filter((c) => issueSources.includes(c.source) && c.state === "connected")
     .map((c) => c.source as Source);
   const projectSetup = useProjectSetup(connectedSources, loadProjects);
+  async function openProjectWorkbench(seed: FocusModel) {
+    const existing = (await focus("list")).models?.find(
+      (model) => model.code === seed.code,
+    );
+    await focusState.save(projectWorkbench(seed, existing), false);
+    queryClient.setQueryData([...focusKey, "view", seed.code, "tab"], "issues");
+    openModel(seed.code);
+  }
+
   const hasProject = projects?.projects.some((p) => p.check.valid) ?? false;
   function openSetup(id?: string) {
     setSelected(id ?? null);
@@ -553,6 +565,7 @@ function Workspace() {
                         projects={projects}
                         projectsFailure={projectsFailure}
                         onProjects={loadProjects}
+                        onOpenWorkbench={openProjectWorkbench}
                         connections={connections}
                         connectionsFailure={connectionsFailure}
                         onConnections={loadConnections}
@@ -565,6 +578,8 @@ function Workspace() {
                     ) : page === "project" ? (
                       <ProjectWizard
                         setup={projectSetup}
+                        projects={projects}
+                        onOpenWorkbench={openProjectWorkbench}
                         onExit={() => openSetup("spm")}
                       />
                     ) : (

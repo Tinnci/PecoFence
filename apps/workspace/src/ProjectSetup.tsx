@@ -25,6 +25,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type {
   Activation,
+  ProjectStatus,
   GateSummary,
   ServiceHealth,
   Draft,
@@ -41,6 +42,10 @@ import type {
 } from "./contracts/setup";
 import { activate, discover, draft, remap, serviceStatus } from "./api";
 import { FailureNote, failureOf } from "./TemplateImport";
+import {
+  ProjectWorkbenchButton,
+  type OpenProjectWorkbench,
+} from "./ProjectWorkbenchButton";
 import { matchesSearch, normalizeSearch, searchTerms } from "./work-search";
 
 export type Source = "meegle" | "jira";
@@ -1924,14 +1929,22 @@ export function UnmappedAlert({ setup }: { setup: ProjectSetup }) {
 
 function CollectStep({
   setup,
+  projects,
+  onOpenWorkbench,
   onDone,
 }: {
   setup: ProjectSetup;
+  projects?: ProjectStatus | null;
+  onOpenWorkbench?: OpenProjectWorkbench;
   onDone: () => void;
 }) {
   useTranslation();
   const { created, service } = setup;
   if (!created) return null;
+  const workspace = projects?.projects.find(
+    (project) =>
+      project.project === created.project && project.scope === created.scope,
+  )?.workspace;
   const ours =
     service?.mode === "live" &&
     service.project === created.project &&
@@ -2008,8 +2021,14 @@ function CollectStep({
         <GateResults gates={service.gates} targets={setup.gates} />
       ) : null}
       {ours ? <UnmappedAlert setup={setup} /> : null}
+      {read && workspace && onOpenWorkbench ? (
+        <p className="quiet">{t("projectSetup.workbenchHandoff")}</p>
+      ) : null}
       <div className="collect-actions">
-        <Button variant={read ? "default" : "outline"} onClick={onDone}>
+        {read && workspace && onOpenWorkbench ? (
+          <ProjectWorkbenchButton seed={workspace} onOpen={onOpenWorkbench} />
+        ) : null}
+        <Button variant="outline" onClick={onDone}>
           <ActionIcon name="back" />
           {t("projectSetup.backToSetupChecklist")}
         </Button>
@@ -2021,9 +2040,13 @@ function CollectStep({
 /** 新建 SPM 项目: one focused page from scope to the first snapshot. */
 export function ProjectWizard({
   setup,
+  projects,
+  onOpenWorkbench,
   onExit,
 }: {
   setup: ProjectSetup;
+  projects?: ProjectStatus | null;
+  onOpenWorkbench?: OpenProjectWorkbench;
   onExit: () => void;
 }) {
   useTranslation();
@@ -2037,7 +2060,12 @@ export function ProjectWizard({
       ) : setup.step === "confirm" ? (
         <ConfirmStep setup={setup} />
       ) : (
-        <CollectStep setup={setup} onDone={onExit} />
+        <CollectStep
+          setup={setup}
+          projects={projects}
+          onOpenWorkbench={onOpenWorkbench}
+          onDone={onExit}
+        />
       )}
     </div>
   );

@@ -1112,5 +1112,10 @@
   "work.resetFilters": "Clear filters and show all",
   "projectSetup.matchingGroups": "{{count}} matches",
   "projectSetup.selectMatches": "Select all matches",
-  "projectSetup.unselectMatches": "Deselect matches"
+  "projectSetup.unselectMatches": "Deselect matches",
+  "projectSetup.openWorkbench": "Open project workbench",
+  "projectSetup.workbenchHandoff": "Follow this project with its saved issue scope. Existing workbenches keep their settings and add this scope.",
+  "projectSetup.openWorkbenchFailed": "Could not open the workbench. Try again.",
+  "projectSetup.existingProjects": "Existing projects",
+  "projectSetup.workbenchCode": "Workbench: {{code}}"
 }

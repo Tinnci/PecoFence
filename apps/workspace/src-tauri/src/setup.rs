@@ -111,6 +111,10 @@ pub struct ImportPlan {
 }
 #[derive(Debug, Serialize, Deserialize, TS)]
 pub struct ImportedProject {
+    /// Saved issue scope and targets for opening the existing model workbench.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub workspace: Option<FocusModel>,
     /// Absent when a directory name is not valid UTF-8.
     pub project: Option<String>,
     pub scope: Option<String>,
@@ -2227,6 +2231,28 @@ mod tests {
             "spm_invalid_response"
         );
     }
+    #[test]
+    fn status_preserves_project_workbench_scope_and_targets() {
+        let response = serde_json::json!({
+            "ok": true,
+            "data": {"config_root": "cfg", "projects": [{
+                "project": "MODEL", "scope": "main", "directory": "cfg/MODEL/main",
+                "check": {"valid": true, "ready": true},
+                "workspace": {
+                    "code": "MODEL", "issues": [{"source": "jira", "project": "TEST"}],
+                    "branches": [], "jobs": [], "rules": {},
+                    "targets": {"severe_pct": 95, "overall_pct": 85, "fatal_max": 0},
+                    "accepted": [], "tracked": []
+                }
+            }]}
+        });
+        let parsed = decode_status(Some(0), &serde_json::to_vec(&response).unwrap()).unwrap();
+        let seed = parsed.projects[0].workspace.as_ref().unwrap();
+        assert_eq!(seed.code, "MODEL");
+        assert_eq!(seed.issues.len(), 1);
+        assert_eq!(seed.targets.severe_pct, 95);
+    }
+
     #[test]
     fn reads_only_literal_shim_targets() {
         let shim = "@echo off\r\n\"C:\\Users\\A B\\AppData\\Local\\Tinnci\\SPM\\versions\\0.1.0-abc\\spm.exe\" %*\r\n";

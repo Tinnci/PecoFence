@@ -4444,3 +4444,10 @@ a .owner-chip { color: inherit; }
   color: var(--muted-foreground);
 }
 .work-empty-search p { margin: 0; }
+
+.project-workbenches { display: grid; gap: 8px; margin-block: 12px; }
+.project-workbenches h3 { margin: 0; font-size: 13px; color: var(--muted-foreground); }
+.project-workbench-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 12px; border: 1px solid var(--border); border-radius: 8px; }
+.project-workbench-row > strong { overflow-wrap: anywhere; }
+.project-workbench-action { display: grid; gap: 8px; }
+.collect-actions { flex-wrap: wrap; }
