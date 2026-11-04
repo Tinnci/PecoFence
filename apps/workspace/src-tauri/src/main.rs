@@ -327,82 +327,26 @@ fn desktop() {
         path: Option<String>,
         items: Option<Vec<String>>,
         addresses: Option<Vec<String>>,
+        instance: Option<String>,
         state: tauri::State<'_, State>,
     ) -> Result<setup::FocusData, setup::SetupFailure> {
-        let args = if matches!(action.as_str(), "source_fields" | "source_fields_refresh") {
-            let urls = addresses.unwrap_or_default();
-            let [address] = urls.as_slice() else {
-                return Err(setup::SetupFailure::new("invalid_input"));
-            };
-            code.as_deref()
-                .zip(item.as_deref())
-                .and_then(|(code, item)| {
-                    setup::source_fields_args(
-                        code,
-                        item,
-                        address,
-                        action == "source_fields_refresh",
-                    )
-                })
-        } else if matches!(action.as_str(), "flow" | "flows" | "flows_refresh") {
-            let list = match (items, &item) {
-                (Some(list), _) if action != "flow" => list,
-                (_, Some(one)) => vec![one.clone()],
-                _ => vec![],
-            };
-            if let Some(urls) = &addresses {
-                if urls.len() != list.len()
-                    || urls.iter().any(|url| {
-                        url.len() > 2048
-                            || url.chars().any(char::is_control)
-                            || !(url.starts_with("https://") || url.starts_with("http://"))
-                    })
-                {
-                    return Err(setup::SetupFailure::new("invalid_input"));
-                }
-            }
-            code.as_deref()
-                .and_then(|code| setup::flow_args(code, &list))
-                .map(|mut args| {
-                    for url in addresses.unwrap_or_default() {
-                        args.extend(["--address".into(), url]);
-                    }
-                    if action == "flows_refresh" {
-                        args.push("--refresh".into());
-                    }
-                    args
-                })
-        } else if matches!(
-            action.as_str(),
-            "change_files" | "change_diff" | "change_diffs"
-        ) {
-            let path = if action == "change_diff" {
-                Some(
-                    path.as_deref()
-                        .ok_or_else(|| setup::SetupFailure::new("invalid_input"))?,
-                )
-            } else {
-                None
-            };
-            code.as_deref().zip(change).and_then(|(code, change)| {
-                setup::diff_args(code, change, path, action == "change_diffs")
-            })
-        } else if action == "build_evidence" {
-            code.as_deref()
-                .zip(job.as_deref())
-                .zip(build)
-                .and_then(|((code, job), build)| setup::build_evidence_args(code, job, build))
-        } else {
-            setup::focus_args(
-                &action,
-                code.as_deref(),
-                change,
-                review.as_deref(),
-                branch.as_deref(),
-                source.as_deref().zip(item.as_deref()),
-            )
-        }
-        .ok_or_else(|| setup::SetupFailure::new("invalid_input"))?;
+        let request = setup::FocusRequest {
+            action: action.clone(),
+            code,
+            job,
+            build,
+            change,
+            review,
+            branch,
+            source,
+            item,
+            path,
+            items,
+            addresses,
+            instance,
+        };
+        let args =
+            setup::route_args(&request).ok_or_else(|| setup::SetupFailure::new("invalid_input"))?;
         let input = match (action.as_str(), &model, &op) {
             ("save" | "preview", Some(model), _) => Some(
                 serde_json::to_vec(model).map_err(|_| setup::SetupFailure::new("invalid_input"))?,

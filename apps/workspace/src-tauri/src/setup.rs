@@ -1344,6 +1344,113 @@ pub fn valid_code(code: &str) -> bool {
             .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
 }
 /// Arguments for `spm focus`; `None` when a value is malformed.
+/// Everything the frontend may pass to the `focus` command, as one request.
+#[derive(Debug, Default, Clone)]
+pub struct FocusRequest {
+    pub action: String,
+    pub code: Option<String>,
+    pub job: Option<String>,
+    pub build: Option<u32>,
+    pub change: Option<u32>,
+    pub review: Option<String>,
+    pub branch: Option<String>,
+    pub source: Option<String>,
+    pub item: Option<String>,
+    pub path: Option<String>,
+    pub items: Option<Vec<String>>,
+    pub addresses: Option<Vec<String>>,
+    /// The source server an item belongs to, e.g. `192.168.11.130:8080`.
+    pub instance: Option<String>,
+}
+
+fn valid_address(url: &str) -> bool {
+    url.len() <= 2048
+        && !url.chars().any(char::is_control)
+        && (url.starts_with("https://") || url.starts_with("http://"))
+}
+/// A source server as SPM names it: host, port and path, no scheme, spaces or options.
+pub fn valid_instance(instance: &str) -> bool {
+    (1..=200).contains(&instance.len())
+        && !instance.starts_with('-')
+        && instance
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b".:/_-".contains(&b))
+}
+
+/// The `spm` arguments for a focus request, or None when the request is not one the
+/// frontend may make. Every action the frontend sends is routed here (tested against
+/// `src/api.ts`).
+pub fn route_args(r: &FocusRequest) -> Option<Vec<String>> {
+    let action = r.action.as_str();
+    let code = r.code.as_deref();
+    match action {
+        "source_fields" | "source_fields_refresh" => {
+            let [address] = r.addresses.as_deref()? else {
+                return None;
+            };
+            source_fields_args(
+                code?,
+                r.item.as_deref()?,
+                address,
+                action == "source_fields_refresh",
+            )
+        }
+        "flow" | "flows" | "flows_refresh" => {
+            let list = match (&r.items, &r.item) {
+                (Some(list), _) if action != "flow" => list.clone(),
+                (_, Some(one)) => vec![one.clone()],
+                _ => vec![],
+            };
+            if let Some(urls) = &r.addresses
+                && (urls.len() != list.len() || !urls.iter().all(|u| valid_address(u)))
+            {
+                return None;
+            }
+            let mut args = flow_args(code?, &list)?;
+            for url in r.addresses.iter().flatten() {
+                args.extend(["--address".into(), url.clone()]);
+            }
+            if action == "flows_refresh" {
+                args.push("--refresh".into());
+            }
+            Some(args)
+        }
+        "change_files" | "change_diff" | "change_diffs" => {
+            let path = if action == "change_diff" {
+                Some(r.path.as_deref()?)
+            } else {
+                None
+            };
+            diff_args(code?, r.change?, path, action == "change_diffs")
+        }
+        "build_evidence" => build_evidence_args(code?, r.job.as_deref()?, r.build?),
+        _ => {
+            let mut args = focus_args(
+                action,
+                code,
+                r.change,
+                r.review.as_deref(),
+                r.branch.as_deref(),
+                r.source.as_deref().zip(r.item.as_deref()),
+            )?;
+            if matches!(action, "annotate" | "history") {
+                if let Some(instance) = r.instance.as_deref() {
+                    if !valid_instance(instance) {
+                        return None;
+                    }
+                    args.extend(["--instance".into(), instance.into()]);
+                }
+                if action == "history"
+                    && let Some(code) = code.filter(|c| valid_code(c))
+                {
+                    args.extend(["--code".into(), code.into()]);
+                }
+            }
+            Some(args)
+        }
+    }
+}
+
 pub fn focus_args(
     action: &str,
     code: Option<&str>,
@@ -1749,6 +1856,81 @@ mod tests {
             }}))
         .unwrap()
     }
+    /// Every action `src/api.ts` lets the frontend send, with plausible arguments.
+    fn sample(action: &str) -> FocusRequest {
+        FocusRequest {
+            action: action.into(),
+            code: Some("E6765GDL".into()),
+            job: Some("folder/model_A16".into()),
+            build: Some(23),
+            change: Some(80481),
+            review: Some("accept".into()),
+            branch: Some("E6765GDL_MP".into()),
+            source: Some(
+                if action.starts_with("flow") {
+                    "meegle"
+                } else {
+                    "jira"
+                }
+                .into(),
+            ),
+            item: Some(
+                if action.starts_with("flow") || action.starts_with("source_fields") {
+                    "7140117552"
+                } else {
+                    "PLV-1509"
+                }
+                .into(),
+            ),
+            path: Some("buildspec/P.spec".into()),
+            items: Some(vec!["7140117552".into(), "7128060102".into()]),
+            addresses: Some(if action == "flow" {
+                vec!["https://project.feishu.cn/efzuhc/wentiguanli/detail/7140117552".into()]
+            } else if action.starts_with("source_fields") {
+                vec!["https://project.feishu.cn/efzuhc/wentiguanli/detail/7140117552".into()]
+            } else {
+                vec![
+                    "https://project.feishu.cn/efzuhc/wentiguanli/detail/7140117552".into(),
+                    "https://project.feishu.cn/efzuhc/wentiguanli/detail/7128060102".into(),
+                ]
+            }),
+            instance: Some("192.168.11.130:8080".into()),
+        }
+    }
+
+    #[test]
+    fn every_focus_action_the_frontend_sends_is_routed() {
+        let api = include_str!("../../src/api.ts");
+        let start = api
+            .find("export async function focus(")
+            .expect("focus in api.ts");
+        let union = &api[start..start + api[start..].find("args:").unwrap()];
+        let actions: Vec<&str> = union.split('"').skip(1).step_by(2).collect();
+        assert!(actions.len() > 20, "found {actions:?}");
+        for action in actions {
+            // save and preview carry their model on stdin; their arguments need nothing else.
+            assert!(
+                route_args(&sample(action)).is_some(),
+                "the frontend sends {action} but the focus command does not route it"
+            );
+        }
+        assert!(route_args(&sample("no_such_action")).is_none());
+    }
+
+    #[test]
+    fn annotate_and_history_carry_the_items_instance() {
+        let args = route_args(&sample("annotate")).unwrap();
+        assert!(
+            args.windows(2)
+                .any(|w| w == ["--instance", "192.168.11.130:8080"])
+        );
+        let mut bad = sample("history");
+        bad.instance = Some("--x".into());
+        assert!(route_args(&bad).is_none());
+        assert!(valid_instance("project.feishu.cn/efzuhc"));
+        assert!(!valid_instance("a b"));
+    }
+
     #[test]
     fn evidence_arguments_are_numeric_and_literal() {
         assert!(build_evidence_args("P6700LV", "folder/model_A16", 23).is_some());
