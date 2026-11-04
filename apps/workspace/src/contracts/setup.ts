@@ -137,7 +137,11 @@ export type IssueLink = { id: string, url: string, resolved: boolean, severe: bo
 export type ModelSummary = { code: string, targets: FocusTargets, issues: number, sources: Array<string>, issue_links?: Array<IssueLink>, measures?: Measures, new_issues: number, days: Array<number>, days_from: string, week_changes: number, week_merged: number, branches: Array<BranchStrip>, flagged: Array<Flagged>, rule_counts: { [key in string]: number }, rules: { [key in string]: string }, freeze?: string, errors: Array<string>, };
 export type FocusSummary = { computed_at?: string, models: Array<ModelSummary>, };
 export type TrackingConfig = { jira_software_field?: string, jira_requirement_jql?: string, jira_software_values?: Array<string>, };
-export type WorkItem = { id: string, display_id: string, title: string, url: string, source: string, scope_id: string, status: string, 
+export type WorkItem = { id: string, 
+/**
+ * The source server the item lives on; empty in reads from before instances.
+ */
+instance: string, display_id: string, title: string, url: string, source: string, scope_id: string, status: string, 
 /**
  * pending, active, review, testing, blocked, done, cancelled or unknown.
  */
@@ -201,7 +205,7 @@ export type FlowEvent = { at: string, by: string, bot: boolean,
  * created, status, assign, field or comment
  */
 kind: string, field: string, from: string, to: string, text: string, };
-export type ItemHistory = { local: LocalLayer | null, events: Array<LocalEvent>, transitions: Array<Transition>, };
+export type ItemHistory = { instance: string, local: LocalLayer | null, events: Array<LocalEvent>, transitions: Array<Transition>, };
 export type LocalEvent = { at: string, 
 /**
  * tags, correct, uncorrect, note, next_check or import

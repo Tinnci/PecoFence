@@ -216,6 +216,7 @@ export async function focus(
     source?: string;
     item?: string;
     op?: Record<string, unknown>;
+    instance?: string;
     path?: string;
     items?: string[];
     addresses?: string[];
@@ -234,6 +235,7 @@ export async function focus(
         source: args.source ?? null,
         item: args.item ?? null,
         op: args.op ?? null,
+        instance: args.instance || null,
         path: args.path ?? null,
         items: args.items ?? null,
         addresses: args.addresses ?? null,

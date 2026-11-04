@@ -208,6 +208,7 @@ async function applyAnnotation(
   const data = await focus("annotate", {
     source: item.source,
     item: item.id,
+    instance: item.instance,
     op,
     code,
   });
@@ -219,7 +220,9 @@ async function applyAnnotation(
       old && {
         ...old,
         items: old.items.map((i) =>
-          i.source === next.item.source && i.id === next.item.id
+          i.source === next.item.source &&
+          i.instance === next.item.instance &&
+          i.id === next.item.id
             ? next.item
             : i,
         ),
@@ -228,7 +231,7 @@ async function applyAnnotation(
 }
 
 const historyKey = (item: WorkItem) =>
-  ["work-item-history", item.source, item.id] as const;
+  ["work-item-history", item.source, item.instance, item.id] as const;
 
 const clock: Intl.DateTimeFormatOptions = {
   month: "2-digit",
@@ -310,8 +313,13 @@ function History({ item, full = false }: { item: WorkItem; full?: boolean }) {
     {
       queryKey: historyKey(item),
       queryFn: async () =>
-        (await focus("history", { source: item.source, item: item.id }))
-          .history ?? null,
+        (
+          await focus("history", {
+            source: item.source,
+            item: item.id,
+            instance: item.instance,
+          })
+        ).history ?? null,
     },
     queryClient,
   );

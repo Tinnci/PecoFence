@@ -928,6 +928,9 @@ pub struct TrackingConfig {
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct WorkItem {
     pub id: String,
+    /// The source server the item lives on; empty in reads from before instances.
+    #[serde(default)]
+    pub instance: String,
     pub display_id: String,
     pub title: String,
     pub url: String,
@@ -1083,6 +1086,8 @@ pub struct AnnotatedItem {
 /// One item's local history: each change to its layer and each status change seen here.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct ItemHistory {
+    #[serde(default)]
+    pub instance: String,
     pub local: Option<LocalLayer>,
     pub events: Vec<LocalEvent>,
     pub transitions: Vec<Transition>,
