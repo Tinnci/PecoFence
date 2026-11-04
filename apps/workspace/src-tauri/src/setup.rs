@@ -952,9 +952,18 @@ pub struct ChangeDiff {
 pub struct ItemFlow {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
+    pub address: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub fetched_at: Option<String>,
     pub item: String,
     pub events: Vec<FlowEvent>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct FlowFailure {
+    pub item: String,
+    pub address: Option<String>,
+    pub code: String,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct FlowEvent {
@@ -1100,6 +1109,9 @@ pub struct FocusData {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub flows: Option<Vec<ItemFlow>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub flow_errors: Option<Vec<FlowFailure>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub models: Option<Vec<FocusModel>>,
@@ -1605,6 +1617,7 @@ pub fn types() -> String {
             ChangeDiff::decl(&config),
             ChangeDiffs::decl(&config),
             ItemFlow::decl(&config),
+            FlowFailure::decl(&config),
             FlowEvent::decl(&config),
             ItemHistory::decl(&config),
             LocalEvent::decl(&config),

@@ -69,6 +69,8 @@ fn desktop() {
         focus_gate: tokio::sync::Semaphore,
         /// Issue and requirement reads: mostly incremental and short, two at a time.
         items_gate: tokio::sync::Semaphore,
+        /// Histories never wait behind a multi-minute summary read.
+        flow_gate: tokio::sync::Semaphore,
         /// Health reads run beside an activation so the page can show its progress.
         service_gate: tokio::sync::Semaphore,
         /// The private template copy and the sha256 of its last plan.
@@ -322,6 +324,7 @@ fn desktop() {
         op: Option<serde_json::Value>,
         path: Option<String>,
         items: Option<Vec<String>>,
+        addresses: Option<Vec<String>>,
         state: tauri::State<'_, State>,
     ) -> Result<setup::FocusData, setup::SetupFailure> {
         let args = if matches!(action.as_str(), "flow" | "flows" | "flows_refresh") {
@@ -330,9 +333,23 @@ fn desktop() {
                 (_, Some(one)) => vec![one.clone()],
                 _ => vec![],
             };
+            if let Some(urls) = &addresses {
+                if urls.len() != list.len()
+                    || urls.iter().any(|url| {
+                        url.len() > 2048
+                            || url.chars().any(char::is_control)
+                            || !(url.starts_with("https://") || url.starts_with("http://"))
+                    })
+                {
+                    return Err(setup::SetupFailure::new("invalid_input"));
+                }
+            }
             code.as_deref()
                 .and_then(|code| setup::flow_args(code, &list))
                 .map(|mut args| {
+                    for url in addresses.unwrap_or_default() {
+                        args.extend(["--address".into(), url]);
+                    }
                     if action == "flows_refresh" {
                         args.push("--refresh".into());
                     }
@@ -398,6 +415,7 @@ fn desktop() {
             "issues" | "requirements" | "issues_full" | "requirements_full" => {
                 Some(&state.items_gate)
             }
+            "flow" | "flows" | "flows_refresh" => Some(&state.flow_gate),
             _ => Some(&state.focus_gate),
         };
         let _permit = match gate {
@@ -535,6 +553,7 @@ fn desktop() {
             discover_gate: tokio::sync::Semaphore::new(1),
             service_gate: tokio::sync::Semaphore::new(1),
             focus_gate: tokio::sync::Semaphore::new(1),
+            flow_gate: tokio::sync::Semaphore::new(1),
             items_gate: tokio::sync::Semaphore::new(2),
             pending: std::sync::Mutex::new(None),
         })

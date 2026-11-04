@@ -1,94 +1,144 @@
 import { queryOptions } from "@tanstack/react-query";
 import type { ItemFlow, WorkItem } from "./contracts/setup";
-import { focus } from "./api";
 import { focusKey, queryClient } from "./focus-cache";
+import {
+  isFlowPrefetch,
+  promoteFlow,
+  readFlow,
+  type FlowPriority,
+  type FlowResource,
+} from "./flow-queue";
 
 const flowKey = (code: string) =>
   [...focusKey, "model", code, "flows"] as const;
-const ttl = (item: WorkItem) =>
-  ["done", "cancelled"].includes(item.group) ? 24 * 60 * 60_000 : 5 * 60_000;
+const resourceOf = (code: string, item: WorkItem): FlowResource => ({
+  code,
+  source: item.source,
+  scope: item.scope_id,
+  item: item.id,
+  address: item.url,
+  updated: item.updated,
+  closed: ["done", "cancelled"].includes(item.group),
+});
+const queryKey = (resource: FlowResource) =>
+  [...flowKey(resource.code), resource] as const;
+const forced = new Set<string>();
+const refreshing = new Map<string, Promise<unknown>>();
+const speculativeOwners = new Map<string, number>();
+const token = (resource: FlowResource) => JSON.stringify(resource);
 
-type Request = {
-  code: string;
-  item: string;
-  force: boolean;
-  resolve: (flow: ItemFlow) => void;
-  reject: (error: unknown) => void;
-};
-const pending: Request[] = [];
-let running = false;
-
-// All consumers share one queue. At most ten source reads are in flight, even
-// when hovering, opening rows and exporting overlap.
-async function drain() {
-  if (running) return;
-  running = true;
-  try {
-    while (pending.length) {
-      const first = pending[0];
-      const batch: Request[] = [];
-      for (let i = 0; i < pending.length && batch.length < 10;) {
-        const request = pending[i];
-        if (request.code === first.code && request.force === first.force) {
-          batch.push(...pending.splice(i, 1));
-        } else i++;
-      }
-      try {
-        const result = await focus(first.force ? "flows_refresh" : "flows", {
-          code: first.code,
-          items: [...new Set(batch.map((r) => r.item))],
-        });
-        // The CLI uses `flow` for a one-item batch and `flows` for several.
-        const flows = result.flows ?? (result.flow ? [result.flow] : []);
-        for (const request of batch) {
-          const flow = flows.find((f) => f.item === request.item);
-          if (flow) request.resolve(flow);
-          else request.reject({ code: "spm_invalid_response" });
-        }
-      } catch (error) {
-        for (const request of batch) request.reject(error);
-      }
-    }
-  } finally {
-    running = false;
-  }
-}
-
-function read(code: string, item: string, force = false) {
-  return new Promise<ItemFlow>((resolve, reject) => {
-    pending.push({ code, item, force, resolve, reject });
-    queueMicrotask(() => void drain());
-  });
-}
-
-export function flowOptions(code: string, item: WorkItem) {
-  return queryOptions({
-    queryKey: [...flowKey(code), item.scope_id, item.id, item.updated],
-    queryFn: () => read(code, item.id),
-    // A disk-cache hit must not acquire another full memory-cache lifetime.
+function options(
+  resource: FlowResource,
+  priority: FlowPriority = "interactive",
+) {
+  const lifetime = resource.closed ? 24 * 60 * 60_000 : 5 * 60_000;
+  return queryOptions<ItemFlow>({
+    queryKey: queryKey(resource),
+    meta: { flowResource: resource },
+    placeholderData: (previous, previousQuery) => {
+      const old = previousQuery?.meta?.flowResource as FlowResource | undefined;
+      return old?.address === resource.address &&
+        old.source === resource.source &&
+        old.scope === resource.scope
+        ? previous
+        : undefined;
+    },
+    queryFn: ({ signal }) =>
+      readFlow(resource, priority, forced.delete(token(resource)), signal),
     staleTime: (query) => {
       const fetched = Date.parse(query.state.data?.fetched_at ?? "");
+      // The disk timestamp retains its original age in memory. Clamp future
+      // timestamps so clock adjustments cannot prolong freshness indefinitely.
       return Number.isFinite(fetched)
-        ? Math.max(0, fetched + ttl(item) - query.state.dataUpdatedAt)
-        : ttl(item);
+        ? Math.max(
+            0,
+            Math.min(fetched, query.state.dataUpdatedAt) +
+              lifetime -
+              query.state.dataUpdatedAt,
+          )
+        : lifetime;
     },
   });
 }
+export function flowOptions(code: string, item: WorkItem) {
+  return options(resourceOf(code, item));
+}
+export function activateFlow(code: string, item: WorkItem) {
+  promoteFlow(resourceOf(code, item), "interactive");
+}
 
 export async function loadFlows(code: string, items: WorkItem[]) {
-  // fetchQuery handles freshness, in-flight deduplication and error state for
-  // each row; the queue handles batching. Export waits for every requested row.
   const results = await Promise.allSettled(
     items
       .filter((item) => item.source === "meegle")
-      .map((item) => queryClient.fetchQuery(flowOptions(code, item))),
+      .map((item) => {
+        const resource = resourceOf(code, item);
+        promoteFlow(resource, "export");
+        return queryClient.fetchQuery(options(resource, "export"));
+      }),
   );
   const failure = results.find((r) => r.status === "rejected");
   if (failure?.status === "rejected") throw failure.reason;
 }
 
+/** Returns a cleanup for abandoned speculative reads. Active rows and promoted
+ * export requests retain ownership; cancellation never evicts last-good data. */
 export function prefetchFlows(code: string, items: WorkItem[]) {
-  void loadFlows(code, items.slice(0, 10)).catch(() => undefined);
+  const resources = items
+    .filter((item) => item.source === "meegle")
+    .slice(0, 10)
+    .map((item) => resourceOf(code, item));
+  for (const resource of resources) {
+    const key = token(resource);
+    speculativeOwners.set(key, (speculativeOwners.get(key) ?? 0) + 1);
+    void queryClient.prefetchQuery(options(resource, "prefetch"));
+  }
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    for (const resource of resources) {
+      const ownerKey = token(resource);
+      const remaining = (speculativeOwners.get(ownerKey) ?? 1) - 1;
+      if (remaining > 0) {
+        speculativeOwners.set(ownerKey, remaining);
+        continue;
+      }
+      speculativeOwners.delete(ownerKey);
+      const key = queryKey(resource);
+      const query = queryClient
+        .getQueryCache()
+        .find({ queryKey: key, exact: true });
+      if (query && !query.isActive() && isFlowPrefetch(resource)) {
+        void queryClient.cancelQueries({ queryKey: key, exact: true });
+      }
+    }
+  };
+}
+
+function refreshResource(resource: FlowResource) {
+  const key = token(resource);
+  const previous = refreshing.get(key);
+  if (previous) return previous;
+  const task = (async () => {
+    // fetchQuery otherwise joins an older in-flight read, defeating force refresh.
+    await queryClient.cancelQueries({
+      queryKey: queryKey(resource),
+      exact: true,
+    });
+    await queryClient.invalidateQueries({
+      queryKey: queryKey(resource),
+      exact: true,
+      refetchType: "none",
+    });
+    forced.add(key);
+    return queryClient.fetchQuery(options(resource));
+  })().finally(() => {
+    forced.delete(key);
+    refreshing.delete(key);
+  });
+  refreshing.set(key, task);
+  return task;
 }
 
 export async function refreshFlows(code: string) {
@@ -96,25 +146,16 @@ export async function refreshFlows(code: string) {
     queryKey: flowKey(code),
     refetchType: "none",
   });
-  // Refresh only visible/open histories; closed rows stay invalidated until used.
   const active = queryClient
     .getQueryCache()
     .findAll({ queryKey: flowKey(code), type: "active" });
   await Promise.allSettled(
-    active.map((query) =>
-      queryClient.fetchQuery({
-        queryKey: query.queryKey,
-        staleTime: 0,
-        queryFn: () => read(code, String(query.queryKey.at(-2)), true),
-      }),
-    ),
+    active.map((query) => {
+      const resource = query.meta?.flowResource as FlowResource | undefined;
+      return resource ? refreshResource(resource) : Promise.resolve();
+    }),
   );
 }
-
 export function refreshFlow(code: string, item: WorkItem) {
-  return queryClient.fetchQuery({
-    ...flowOptions(code, item),
-    staleTime: 0,
-    queryFn: () => read(code, item.id, true),
-  });
+  return refreshResource(resourceOf(code, item));
 }

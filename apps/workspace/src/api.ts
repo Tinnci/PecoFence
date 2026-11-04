@@ -209,6 +209,7 @@ export async function focus(
     op?: Record<string, unknown>;
     path?: string;
     items?: string[];
+    addresses?: string[];
   } = {},
 ): Promise<FocusData> {
   return isTauri()
@@ -226,6 +227,7 @@ export async function focus(
         op: args.op ?? null,
         path: args.path ?? null,
         items: args.items ?? null,
+        addresses: args.addresses ?? null,
       })
     : desktopOnly();
 }

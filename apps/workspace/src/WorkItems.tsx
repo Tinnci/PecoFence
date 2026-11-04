@@ -1185,8 +1185,14 @@ export function WorkItemsTab({
       .filter((i) => i.source === "meegle" && !closed.has(i.group))
       .slice(0, 3);
     if (!top.length) return;
-    const timer = setTimeout(() => prefetchFlows(code, top), 1200);
-    return () => clearTimeout(timer);
+    let cancel = () => {};
+    const timer = setTimeout(() => {
+      cancel = prefetchFlows(code, top);
+    }, 1200);
+    return () => {
+      clearTimeout(timer);
+      cancel();
+    };
   }, [list, code]);
   const origins = useMemo(() => {
     const items = data?.items ?? [];

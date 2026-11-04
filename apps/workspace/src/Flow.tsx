@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { ChevronRight, RefreshCw } from "lucide-react";
@@ -10,7 +10,12 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import type { FlowEvent, WorkItem } from "./contracts/setup";
-import { flowOptions, refreshFlow } from "./flow-cache";
+import {
+  activateFlow,
+  flowOptions,
+  prefetchFlows,
+  refreshFlow,
+} from "./flow-cache";
 import { queryClient } from "./focus-cache";
 import { FailureNote, failureOf } from "./TemplateImport";
 import { OwnerChip } from "./Badges";
@@ -166,6 +171,15 @@ export function ItemFlow({
   const { i18n } = useTranslation();
   const [opened, setOpen] = useState(initiallyOpen);
   const open = opened || expand;
+  const prefetchCleanup = useRef<(() => void) | null>(null);
+  useEffect(() => {
+    if (open) activateFlow(code, item);
+  }, [code, item, open]);
+  useEffect(() => () => prefetchCleanup.current?.(), []);
+  const prefetch = () => {
+    prefetchCleanup.current?.();
+    prefetchCleanup.current = prefetchFlows(code, [item]);
+  };
   const flow = useQuery(
     { ...flowOptions(code, item), enabled: open && item.source === "meegle" },
     queryClient,
@@ -180,9 +194,10 @@ export function ItemFlow({
     <Collapsible open={open} onOpenChange={setOpen} className="item-flow">
       <CollapsibleTrigger
         className="change-files-toggle"
-        onPointerEnter={() =>
-          void queryClient.prefetchQuery(flowOptions(code, item))
-        }
+        onPointerEnter={prefetch}
+        onPointerLeave={() => prefetchCleanup.current?.()}
+        onFocus={prefetch}
+        onBlur={() => prefetchCleanup.current?.()}
       >
         {flow.isFetching ? (
           <Spinner className="size-3" />
