@@ -908,7 +908,7 @@
   "views.title": "视图",
   "views.saved": "已保存的视图",
   "views.saveCurrent": "保存当前视图",
-  "views.saveHint": "保存当前的阶段、需要关注、来源、筛选、分组和排序；只存在本机。",
+  "views.saveHint": "保存当前的搜索、阶段、需要关注、来源、筛选、分组和排序；重启后保留。",
   "views.name": "视图名称",
   "views.save": "保存",
   "views.delete": "删除视图",
@@ -926,5 +926,12 @@
   "flow.expandText": "展开全文",
   "flow.collapseText": "收起全文",
   "work.expandAll": "展开全部",
-  "work.collapseAll": "收起全部"
+  "work.collapseAll": "收起全部",
+  "views.rename": "重命名视图",
+  "views.duplicate": "复制视图",
+  "views.copySuffix": "副本",
+  "views.modified": "已修改",
+  "views.updateCurrent": "更新当前视图",
+  "views.nameExists": "已有同名视图，请使用其他名称。",
+  "views.storageFailed": "视图暂存于本次会话，未能写入本机存储。"
 }

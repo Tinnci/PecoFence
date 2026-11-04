@@ -908,7 +908,7 @@
   "views.title": "Views",
   "views.saved": "Saved views",
   "views.saveCurrent": "Save current view",
-  "views.saveHint": "Saves the stage, attention, origin, filters, grouping and sort; kept on this machine only.",
+  "views.saveHint": "Saves search, stage, attention, origin, filters, grouping and sort on this device across restarts.",
   "views.name": "View name",
   "views.save": "Save",
   "views.delete": "Delete a view",
@@ -926,5 +926,12 @@
   "flow.expandText": "Show full comment",
   "flow.collapseText": "Collapse comment",
   "work.expandAll": "Expand all",
-  "work.collapseAll": "Collapse all"
+  "work.collapseAll": "Collapse all",
+  "views.rename": "Rename view",
+  "views.duplicate": "Duplicate view",
+  "views.copySuffix": "copy",
+  "views.modified": "Modified",
+  "views.updateCurrent": "Update current view",
+  "views.nameExists": "A view with this name already exists.",
+  "views.storageFailed": "View settings are available for this session but could not be saved on this device."
 }

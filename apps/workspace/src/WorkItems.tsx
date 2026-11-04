@@ -57,7 +57,7 @@ import {
 } from "./focus-cache";
 import { since, type FocusState } from "./Focus";
 import { FailureNote, failureOf } from "./TemplateImport";
-import { useModelPreference } from "./model-navigation";
+import { applyWorkView, useModelPreference } from "./model-navigation";
 import { ItemFlow } from "./Flow";
 import { loadFlows, prefetchFlows, refreshFlows } from "./flow-cache";
 import {
@@ -1072,7 +1072,7 @@ export function WorkItemsTab({
   const work = useWorkItems(code, kind);
   const view = useWorkView(code, kind);
   const { stage, setStage, attention, setAttention, origin, setOrigin } = view;
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useModelPreference(code, `${kind}-search`, "");
   const [sortKeys, setSortKeys] = useModelPreference<SortKey[]>(
     code,
     `${kind}-sort`,
@@ -1152,6 +1152,7 @@ export function WorkItemsTab({
       .sort(compareBy(sortKeys, (i, f) => sortValue(i, f, time, lastActivity)));
   }, [scoped, stage, attention, search, sortKeys, now]);
   const currentView = {
+    search,
     filters,
     group,
     sort: sortKeys,
@@ -1307,22 +1308,25 @@ export function WorkItemsTab({
               value={search}
               placeholder={t("work.search")}
               aria-label={t("work.search")}
+              maxLength={200}
               onChange={(e) => setSearch(e.target.value)}
             />
             <FilterAdd items={staged} value={filters} onChange={setFilters} />
             <DisplayMenu group={group} onGroup={setGroup} />
             <SortBuilder value={sortKeys} onChange={setSortKeys} />
             <ViewsMenu
+              key={`${code}:${kind}`}
               code={code}
               kind={kind}
               current={currentView}
               onApply={(v: View) => {
-                setFilters(v.filters ?? {});
-                setGroup(v.group ?? "none");
-                setSortKeys(v.sort?.length ? v.sort : defaultSort);
-                setStage(v.stage ?? "open");
-                setAttention((v.attention ?? "") as Attention);
-                setOrigin(v.origin ?? "all");
+                applyWorkView(code, kind, v);
+                setShown(PAGE);
+                setCollapsed(new Set());
+                setExpansion((previous) => ({
+                  open: false,
+                  revision: previous.revision + 1,
+                }));
               }}
             />
             <button
