@@ -41,6 +41,7 @@ import type {
 } from "./contracts/setup";
 import { activate, discover, draft, remap, serviceStatus } from "./api";
 import { FailureNote, failureOf } from "./TemplateImport";
+import { matchesSearch, normalizeSearch, searchTerms } from "./work-search";
 
 export type Source = "meegle" | "jira";
 export type Step = "project" | "gates" | "confirm" | "collect";
@@ -575,6 +576,7 @@ export function useProjectSetup(
     setShowEmpty,
     picked,
     pick,
+    setPicked,
     project,
     setProject,
     jiraMode,
@@ -802,10 +804,13 @@ function MeeglePicker({ setup }: { setup: ProjectSetup }) {
   const target = group
     ? group.name.replace(/^关联/, "") || group.name
     : t("projectSetup.project");
-  const query = setup.search.trim().toLowerCase();
+  const terms = searchTerms(setup.search);
   const rows = (lists.items ?? []).filter((i) =>
-    i.name.toLowerCase().includes(query),
+    matchesSearch(normalizeSearch(i.name), terms),
   );
+  const allMatched =
+    rows.length > 0 &&
+    rows.every((row) => setup.picked.some((picked) => picked.id === row.id));
   return (
     <>
       <div className="picker-head">
@@ -813,9 +818,10 @@ function MeeglePicker({ setup }: { setup: ProjectSetup }) {
           <Chips
             label={t("projectSetup.group")}
             value={group?.field ?? null}
-            options={lists.groups
-              .slice(0, 4)
-              .map((g) => ({ value: g.field, title: g.name }))}
+            options={lists.groups.map((g) => ({
+              value: g.field,
+              title: g.name,
+            }))}
             onChange={(field) =>
               setup.setGroup(
                 lists.groups?.find((g) => g.field === field) ?? null,
@@ -829,6 +835,31 @@ function MeeglePicker({ setup }: { setup: ProjectSetup }) {
           onChange={setup.setSearch}
         />
       </div>
+      {!setup.showEmpty && terms.length > 0 && rows.length > 0 ? (
+        <div className="pick-match-actions">
+          <span className="quiet">
+            {t("projectSetup.matchingGroups", { count: rows.length })}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const ids = new Set(rows.map((row) => row.id));
+              setup.setPicked((current) =>
+                allMatched
+                  ? current.filter((item) => !ids.has(item.id))
+                  : [...current.filter((item) => !ids.has(item.id)), ...rows],
+              );
+            }}
+          >
+            {t(
+              allMatched
+                ? "projectSetup.unselectMatches"
+                : "projectSetup.selectMatches",
+            )}
+          </Button>
+        </div>
+      ) : null}
       <div className="pick-columns" aria-hidden="true">
         <span>{target}</span>
         <span>{t("focus.issues")}</span>

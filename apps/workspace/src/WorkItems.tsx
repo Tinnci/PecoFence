@@ -8,7 +8,14 @@ import {
 } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { RefreshCw, Tag, ChevronsDownUp, ChevronsUpDown } from "lucide-react";
+import {
+  RefreshCw,
+  Tag,
+  ChevronsDownUp,
+  ChevronsUpDown,
+  Search,
+  X,
+} from "lucide-react";
 import { Toggle } from "@base-ui/react/toggle";
 import { ToggleGroup } from "@base-ui/react/toggle-group";
 import {
@@ -78,6 +85,7 @@ import {
   OwnerChip,
   ReopenedChip,
   SeverityBadge,
+  severityLevel,
 } from "./Badges";
 import {
   SortBuilder,
@@ -107,6 +115,8 @@ import { WorkItemDetails, workItemKey } from "./WorkItemDetails";
 import { normalizeView } from "./view-storage";
 import { refreshSourceFields } from "./source-fields-cache";
 import { uniqueWorkItems } from "./owner-workload";
+import { matchesSearch, searchTerms, workSearchText } from "./work-search";
+import { readableText } from "./work-text";
 
 /** Stages in the order work moves; done and cancelled close the item. */
 export const stages = [
@@ -685,7 +695,7 @@ function Row({
             <span className="quiet">
               {t("work.ago", { count: ageDays(comment.at, now) ?? 0 })}
             </span>
-            <span className="work-comment">{comment.text}</span>
+            <span className="work-comment">{readableText(comment.text)}</span>
             {a.comment_count > 1 ? (
               <span className="quiet">
                 {t("work.commentCount", { count: a.comment_count })}
@@ -695,7 +705,7 @@ function Row({
         ) : a.progress ? (
           <span className="work-activity">
             <strong>{t("work.progress")}</strong>
-            <span className="work-comment">{a.progress}</span>
+            <span className="work-comment">{readableText(a.progress)}</span>
           </span>
         ) : null}
         {item.origin ? (
@@ -1145,8 +1155,12 @@ export function WorkItemsTab({
       .map((a) => [a, count(a)] as const)
       .filter(([, n]) => n > 0);
   }, [scoped, tags, now]);
+  const searchIndex = useMemo(
+    () => new Map(scoped.map((item) => [item, workSearchText(item)])),
+    [scoped],
+  );
   const list = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const terms = searchTerms(search);
     const time = (v: string) => updatedAt(v) ?? 0;
     return scoped
       .filter((i) =>
@@ -1157,15 +1171,9 @@ export function WorkItemsTab({
             : i.group === stage,
       )
       .filter((i) => attends(i, attention, now))
-      .filter(
-        (i) =>
-          !q ||
-          `${i.display_id} ${i.title} ${i.owner} ${i.status} ${(i.local?.tags ?? []).join(" ")}`
-            .toLowerCase()
-            .includes(q),
-      )
+      .filter((i) => matchesSearch(searchIndex.get(i) ?? "", terms))
       .sort(compareBy(sortKeys, (i, f) => sortValue(i, f, time, lastActivity)));
-  }, [scoped, stage, attention, search, sortKeys, now]);
+  }, [scoped, stage, attention, search, searchIndex, sortKeys, now]);
   const currentView = {
     search,
     filters,
@@ -1195,6 +1203,38 @@ export function WorkItemsTab({
     () => staged.filter((i) => matches(i, filters)),
     [staged, filters],
   );
+  const highSeverities = [
+    ...new Set(
+      scoped
+        .filter((item) => (severityLevel(item.severity) ?? 9) <= 1)
+        .map((item) => item.severity),
+    ),
+  ];
+  const highOnly =
+    !!filters.severity?.length &&
+    filters.severity.every((value) => (severityLevel(value) ?? 9) <= 1);
+  const highCount = staged.filter(
+    (item) =>
+      (severityLevel(item.severity) ?? 9) <= 1 &&
+      matches(item, { ...filters, severity: undefined }),
+  ).length;
+  const narrowed =
+    !!search.trim() ||
+    stage !== "all" ||
+    !!attention ||
+    origin !== "all" ||
+    Object.values(filters).some((values) => values?.length);
+  function resetFilters() {
+    setSearch("");
+    setFilters({});
+    setStage("all");
+    setAttention("");
+    setOrigin("all");
+  }
+  useEffect(() => {
+    setShown(PAGE);
+    setCollapsed(new Set());
+  }, [code, kind, search, stage, attention, origin, filters]);
   // The top open 飞书项目 items are the likeliest to be opened: their flows arrive early.
   useEffect(() => {
     const top = list
@@ -1321,13 +1361,45 @@ export function WorkItemsTab({
             </div>
           ) : null}
           <div className="work-filters">
-            <Input
-              value={search}
-              placeholder={t("work.search")}
-              aria-label={t("work.search")}
-              maxLength={200}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+            <div className="work-search">
+              <Search size={15} aria-hidden="true" />
+              <Input
+                value={search}
+                placeholder={t("work.search")}
+                aria-label={t("work.search")}
+                aria-describedby={`work-search-hint-${kind}`}
+                maxLength={200}
+                onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") setSearch("");
+                }}
+              />
+              {search ? (
+                <button
+                  type="button"
+                  className="work-search-clear"
+                  aria-label={t("work.clearSearch")}
+                  onClick={() => setSearch("")}
+                >
+                  <X size={14} aria-hidden="true" />
+                </button>
+              ) : null}
+            </div>
+            {kind === "issues" && highSeverities.length ? (
+              <button
+                type="button"
+                className="filter-add work-high-priority"
+                aria-pressed={highOnly}
+                onClick={() =>
+                  setFilters({
+                    ...filters,
+                    severity: highOnly ? undefined : highSeverities,
+                  })
+                }
+              >
+                {t("work.highPriority")} <strong>{highCount}</strong>
+              </button>
+            ) : null}
             <FilterAdd items={staged} value={filters} onChange={setFilters} />
             <DisplayMenu group={group} onGroup={setGroup} />
             <SortBuilder value={sortKeys} onChange={setSortKeys} />
@@ -1390,8 +1462,21 @@ export function WorkItemsTab({
               fileName={`${code}-${kind}-${new Date().toISOString().slice(0, 10)}`}
             />
             <span className="quiet work-count">
-              {t("work.showing", { count: filtered.length })}
+              {t("work.resultCount", {
+                count: filtered.length,
+                total: scoped.length,
+              })}
             </span>
+          </div>
+          <div className="work-search-summary">
+            <span id={`work-search-hint-${kind}`} className="quiet">
+              {t("work.searchHint")}
+            </span>
+            {narrowed ? (
+              <button type="button" className="link" onClick={resetFilters}>
+                {t("work.resetFilters")}
+              </button>
+            ) : null}
           </div>
           <div ref={exportRef} className="work-export">
             <div className="export-caption" aria-hidden="true">
@@ -1446,7 +1531,15 @@ export function WorkItemsTab({
                 ))}
               </ol>
             ) : (
-              <p className="quiet empty-line">{t("work.none")}</p>
+              <div className="work-empty-search" role="status">
+                <Search size={24} aria-hidden="true" />
+                <p>{t("work.none")}</p>
+                {narrowed ? (
+                  <Button variant="outline" size="sm" onClick={resetFilters}>
+                    {t("work.resetFilters")}
+                  </Button>
+                ) : null}
+              </div>
             )}
             {filtered.length > shown ? (
               <button

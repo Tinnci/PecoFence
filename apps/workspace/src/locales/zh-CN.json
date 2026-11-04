@@ -627,7 +627,7 @@
   "work.split.internet": "其中互联网/运营",
   "work.ofTotal_one": "共 {{count}}",
   "work.ofTotal_other": "共 {{count}}",
-  "work.search": "按单号、标题、负责人或状态查找",
+  "work.search": "搜索单号、标题、负责人、版本或动态",
   "work.staleOnly_one": "{{days}} 天没更新 {{count}}",
   "work.staleOnly_other": "{{days}} 天没更新 {{count}}",
   "work.none": "没有符合条件的条目。",
@@ -1104,5 +1104,13 @@
   "queueEstimate.reason.blocked": "等待前置条件，开始时间待定",
   "queueEstimate.reason.offline": "无匹配的在线槽位",
   "queueEstimate.reason.releaseUnknown": "占用任务释放时间未知，开始时间待定",
-  "queueEstimate.reason.orderUnknown": "入队时间缺失，暂无法模拟顺序"
+  "queueEstimate.reason.orderUnknown": "入队时间缺失，暂无法模拟顺序",
+  "work.clearSearch": "清空搜索",
+  "work.highPriority": "致命 / 严重",
+  "work.resultCount": "{{count}} / {{total}} 条",
+  "work.searchHint": "当前机型已加载单据 · 空格组合关键词，支持版本、最新动态及本地备注",
+  "work.resetFilters": "清除筛选，显示全部",
+  "projectSetup.matchingGroups": "匹配 {{count}} 项",
+  "projectSetup.selectMatches": "全选匹配项",
+  "projectSetup.unselectMatches": "取消选择匹配项"
 }

@@ -627,7 +627,7 @@
   "work.split.internet": "of which internet/ops",
   "work.ofTotal_one": "of {{count}}",
   "work.ofTotal_other": "of {{count}}",
-  "work.search": "Find by ID, title, owner or status",
+  "work.search": "Search ID, title, owner, version or activity",
   "work.staleOnly_one": "No update for {{days}} days: {{count}}",
   "work.staleOnly_other": "No update for {{days}} days: {{count}}",
   "work.none": "Nothing matches.",
@@ -1104,5 +1104,13 @@
   "queueEstimate.reason.blocked": "Waiting for prerequisites; start time pending",
   "queueEstimate.reason.offline": "No matching online slots",
   "queueEstimate.reason.releaseUnknown": "Executor release time unknown; start time pending",
-  "queueEstimate.reason.orderUnknown": "Missing queue time; order cannot be simulated"
+  "queueEstimate.reason.orderUnknown": "Missing queue time; order cannot be simulated",
+  "work.clearSearch": "Clear search",
+  "work.highPriority": "Fatal / severe",
+  "work.resultCount": "{{count}} / {{total}} items",
+  "work.searchHint": "Loaded items in this model · Combine keywords with spaces; includes versions, latest activity and local notes",
+  "work.resetFilters": "Clear filters and show all",
+  "projectSetup.matchingGroups": "{{count}} matches",
+  "projectSetup.selectMatches": "Select all matches",
+  "projectSetup.unselectMatches": "Deselect matches"
 }

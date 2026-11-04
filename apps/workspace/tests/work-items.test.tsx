@@ -23,6 +23,7 @@ import {
   shortVersion,
 } from "../src/WorkItems";
 import { queryClient } from "../src/focus-cache";
+import { normalizeView, saveViewStore } from "../src/view-storage";
 
 const day = 86_400_000;
 const iso = (daysAgo: number) =>
@@ -146,6 +147,8 @@ const issues = () => ({
 
 beforeEach(() => {
   queryClient.clear();
+  for (const kind of ["issues", "requirements"])
+    saveViewStore("P6700LV", kind, { current: normalizeView({}) });
   save.mockClear();
   mocks.focus.mockReset().mockImplementation(async (action: string) => {
     if (action === "annotate") return { local: {} };
