@@ -647,3 +647,25 @@ server. Its synthetic records use a separate `CHECKLIST-DEMO` scope and make no
 source-system requests. Layout and hierarchy draw on
 [Stageshow's craft guidance](https://github.com/benjitaylor/skills/blob/main/stageshow/references/craft.md),
 using the Workspace components and colors.
+
+### Build timing and queue
+
+The build page shows model-scoped queued requests with Jenkins queue IDs,
+waiting reasons, elapsed waits and repeated requests for the same full job.
+Queue reads require complete coverage and retain the server-wide item count.
+Rows sort by waiting time, independently of Jenkins scheduling priorities; start
+estimates remain pending until executor-capacity data is available.
+
+Running builds show elapsed time, an expected remaining range and its basis.
+With at least three successful job-local samples, the range is the 25th–75th
+percentiles and the reference duration is the median. Matching branch inputs and
+node are preferred when each retains three samples; otherwise the job history is
+used. Smaller samples fall back to Jenkins estimatedDuration. Beyond the upper
+reference the bar becomes indeterminate and the UI reports the overrun. No
+pipeline-stage completion is inferred from elapsed time.
+
+The visible build page refreshes every minute, including while idle so newly
+queued requests appear. Running/queued views update their elapsed clock every
+30 seconds; hidden-document source polling is skipped. Queue read failures and
+snapshots older than two minutes remain visible. `/build-insights.html` is an
+isolated development preview using synthetic data.

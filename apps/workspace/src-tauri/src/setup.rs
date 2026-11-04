@@ -771,12 +771,35 @@ pub struct JobView {
     pub error: Option<String>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct QueuedBuild {
+    #[ts(type = "number")]
+    pub id: u64,
+    pub job: String,
+    #[ts(type = "number | null")]
+    pub since: Option<i64>,
+    pub reason: Option<String>,
+    pub blocked: bool,
+    pub buildable: bool,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct BuildQueue {
+    pub server_count: usize,
+    pub observed_at: String,
+    pub items: Vec<QueuedBuild>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct Builds {
     pub code: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub folder: Option<String>,
     pub jobs: Vec<JobView>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub queue: Option<BuildQueue>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub queue_error: Option<String>,
     pub computed_at: String,
     pub errors: Vec<String>,
 }
@@ -1616,6 +1639,8 @@ pub fn types() -> String {
             BuildRun::decl(&config),
             ParamChange::decl(&config),
             JobView::decl(&config),
+            QueuedBuild::decl(&config),
+            BuildQueue::decl(&config),
             Builds::decl(&config),
             BuildEvidence::decl(&config),
             LogWindow::decl(&config),

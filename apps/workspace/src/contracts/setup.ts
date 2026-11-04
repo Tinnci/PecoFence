@@ -120,7 +120,9 @@ export type BuildRun = { number: number, url?: string, result?: string, building
 timestamp: number, duration: number, estimated: number, cause?: string, node?: string, source_parameters?: { [key in string]: string }, };
 export type ParamChange = { build: number, name: string, before: unknown, after: unknown, };
 export type JobView = { job: string, name: string, phase: string, disabled: boolean, builds: Array<BuildRun>, parameters: Record<string, unknown>, changes: Array<ParamChange>, error?: string, };
-export type Builds = { code: string, folder?: string, jobs: Array<JobView>, computed_at: string, errors: Array<string>, };
+export type QueuedBuild = { id: number, job: string, since: number | null, reason: string | null, blocked: boolean, buildable: boolean, };
+export type BuildQueue = { server_count: number, observed_at: string, items: Array<QueuedBuild>, };
+export type Builds = { code: string, folder?: string, jobs: Array<JobView>, queue?: BuildQueue, queue_error?: string, computed_at: string, errors: Array<string>, };
 export type BuildEvidence = { job: string, number: number, inspected_at: string, windows: Array<LogWindow>, total_bytes: number | null, software_number: string | null, system_manifest: string | null, vendor_manifest: string | null, vendor_skipped: boolean, archive_commit: string | null, archive_repository: string | null, };
 export type LogWindow = { start: number, bytes: number, };
 export type Flagged = { number: number, subject: string, project: string, branch: string, owner: string, status: string, created: string, url?: string, rules: Array<string>, issues: Array<string>, tracked: boolean, };

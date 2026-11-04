@@ -1,3 +1,8 @@
+import {
+  BuildActivity,
+  DurationSummary,
+  RunningEstimate,
+} from "./BuildInsights";
 import ReleaseChecklist from "./ReleaseChecklist";
 import {
   sourceBranches,
@@ -224,7 +229,7 @@ const show = (v: unknown) =>
 
 /** A model's Jenkins jobs: the cached read at once, then a fresh one; while any job builds,
  * it rereads every minute. */
-export function useBuilds(code: string, enabled = true) {
+export function useBuilds(code: string, enabled = true, watch = false) {
   const query = useQuery(
     { ...buildsOptions(code), enabled: false },
     queryClient,
@@ -233,16 +238,26 @@ export function useBuilds(code: string, enabled = true) {
   useEffect(() => {
     if (enabled) void prefetchBuilds(code);
   }, [code, enabled]);
-  const building = !!query.data?.jobs.some((job) => job.builds[0]?.building);
+  const building = !!query.data?.jobs.some((job) =>
+    job.builds.some((run) => run.building),
+  );
+  const queued = !!query.data?.queue?.items.length;
   useEffect(() => {
-    if (!enabled || !building) return;
+    if (!enabled || (!building && !queued && !watch)) return;
+    setNow(Date.now());
     const tick = setInterval(() => setNow(Date.now()), 30_000);
-    const refresh = setInterval(() => void query.refetch(), 60_000);
+    const refresh = setInterval(() => {
+      if (
+        !document.hidden &&
+        !queryClient.isFetching({ queryKey: buildsOptions(code).queryKey })
+      )
+        void query.refetch();
+    }, 60_000);
     return () => {
       clearInterval(tick);
       clearInterval(refresh);
     };
-  }, [enabled, building, code, query.refetch]);
+  }, [enabled, building, queued, watch, code, query.refetch]);
   return {
     data: query.data ?? null,
     loading: query.isFetching,
@@ -361,28 +376,22 @@ function RunLine({ job, now }: { job: JobView; now: number }) {
   useTranslation();
   const run = job.builds[0];
   if (!run) return <span className="quiet">{t("model.noRetainedBuilds")}</span>;
-  if (run.building) {
-    const p = progress(run, now);
+  const running = job.builds.filter((r) => r.building);
+  if (running.length)
     return (
-      <div className="run-line building">
-        <Progress
-          value={p.pct}
-          aria-label={t("model.progress", { v0: job.name, v1: run.number })}
-        />
-        <ExternalLink href={run.url} actions={buildContextActions(run)}>
-          {t("model.runningFor", {
-            v0: run.number,
-            v1: span(p.elapsed),
-            v2: p.late
-              ? t("model.longerThanUsual", {
-                  v0: span(p.elapsed - run.estimated),
-                })
-              : t("model.expectedToFinishAt", { v0: clock(p.eta) }),
-          })}
-        </ExternalLink>
-      </div>
+      <>
+        {running.map((r) => (
+          <RunningEstimate
+            key={r.number}
+            job={{
+              ...job,
+              builds: [r, ...job.builds.filter((b) => b.number !== r.number)],
+            }}
+            now={now}
+          />
+        ))}
+      </>
     );
-  }
   return (
     <span className={`run-line run-${runState(run)}`}>
       <ExternalLink href={run.url} actions={buildContextActions(run)}>
@@ -563,6 +572,7 @@ function JobRow({
           ) : (
             <>
               <RunLine job={job} now={now} />
+              <DurationSummary job={job} />
               <div className="job-meta">
                 <History builds={job.builds} now={now} />
                 <span className="quiet">
@@ -623,6 +633,7 @@ function BuildsTab({
           failure={{ code: "source_failed", message: data.errors.join("；") }}
         />
       ) : null}
+      {data ? <BuildActivity data={data} now={now} /> : null}
       {!data ? (
         <div className="job-skeletons" aria-hidden="true">
           {[0, 1, 2].map((i) => (
@@ -1870,6 +1881,7 @@ export function ModelPage({
   const sourceBuilds = useBuilds(
     code,
     tab !== "settings" && tab !== "checklist",
+    tab === "builds",
   );
   const builds = {
     ...sourceBuilds,
@@ -1896,7 +1908,9 @@ export function ModelPage({
     null,
   );
   const running = useMemo(
-    () => builds.data?.jobs.filter((j) => j.builds[0]?.building).length ?? 0,
+    () =>
+      builds.data?.jobs.flatMap((j) => j.builds.filter((r) => r.building))
+        .length ?? 0,
     [builds.data],
   );
   const [issueFilter, setIssueFilter] = useModelPreference<IssueFilter | null>(
