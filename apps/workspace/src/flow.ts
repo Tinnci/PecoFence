@@ -1,3 +1,4 @@
+import { severityLevel } from "./Badges";
 import type { WorkItem } from "./contracts/setup";
 import { updatedAt } from "./work-activity";
 
@@ -258,4 +259,66 @@ export function oldestItems(items: WorkItem[], now = Date.now(), count = 3) {
     .flat()
     .sort((a, b) => (statusAge(b, now) ?? 0) - (statusAge(a, now) ?? 0))
     .slice(0, count);
+}
+
+export type DomainRow = {
+  /** Empty for work its source leaves unclassified. */
+  domain: string;
+  open: number;
+  severe: number;
+  blocked: number;
+  aged: number;
+  resolved: number;
+  /** New work a day, twelve Monday-first weeks. */
+  days: number[];
+};
+
+/** Open and resolved work by product area; work in several areas counts in each. */
+export function domainBreakdown(
+  items: WorkItem[],
+  agedAfter: number,
+  now = Date.now(),
+) {
+  const monday = new Date(now);
+  monday.setHours(0, 0, 0, 0);
+  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+  const from = monday.getTime() - 11 * 7 * DAY;
+  const rows = new Map<string, DomainRow>();
+  for (const item of items) {
+    const domains = item.domains?.length ? item.domains : [""];
+    for (const domain of domains) {
+      const row = rows.get(domain) ?? {
+        domain,
+        open: 0,
+        severe: 0,
+        blocked: 0,
+        aged: 0,
+        resolved: 0,
+        days: new Array<number>(84).fill(0),
+      };
+      rows.set(domain, row);
+      const made = updatedAt(item.activity.created);
+      if (made !== null) {
+        const day = Math.floor((made - from) / DAY);
+        if (day >= 0 && day < 84) row.days[day]++;
+      }
+      if (item.group === "cancelled") continue;
+      if (item.group === "done") {
+        const done = updatedAt(item.activity.status_since);
+        if (done !== null && now - done < 84 * DAY) row.resolved++;
+        continue;
+      }
+      row.open++;
+      const level = severityLevel(item.severity);
+      if (level !== null && level <= 1) row.severe++;
+      if (item.group === "blocked") row.blocked++;
+      if ((statusAge(item, now) ?? 0) > agedAfter) row.aged++;
+    }
+  }
+  return [...rows.values()].sort(
+    (a, b) =>
+      Number(!a.domain) - Number(!b.domain) ||
+      b.open - a.open ||
+      a.domain.localeCompare(b.domain),
+  );
 }

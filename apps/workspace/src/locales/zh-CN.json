@@ -1280,5 +1280,10 @@
   "flow.repo.open": "在审",
   "flow.repo.authors": "作者",
   "flow.repo.flagged": "留意",
-  "flow.repo.weeks": "12 周"
+  "flow.repo.weeks": "12 周",
+  "flow.chart.domains": "按领域，共 {{count}} 个",
+  "flow.domain.open": "未关闭",
+  "flow.domain.severe": "严重",
+  "flow.domain.none": "未分类",
+  "flow.domain.arrived": "新增，12 周"
 }

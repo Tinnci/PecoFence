@@ -5351,3 +5351,10 @@ polyline.flow-line-ideal {
   border-radius: 2px;
   background: var(--chart-1);
 }
+
+.repo-row.is-static {
+  cursor: default;
+}
+.repo-row.is-static:hover {
+  background: none;
+}

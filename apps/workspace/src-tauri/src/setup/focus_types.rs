@@ -469,6 +469,10 @@ pub struct TrackingConfig {
 /// A software issue or requirement in a model's scope.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct WorkItem {
+    /// What part of the product it touches: Jira's 领域, 飞书项目's 组件.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub domains: Option<Vec<String>>,
     pub id: String,
     /// The source server the item lives on; empty in reads from before instances.
     #[serde(default)]

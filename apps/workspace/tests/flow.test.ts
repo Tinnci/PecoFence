@@ -5,6 +5,7 @@ import {
   burndown,
   createdResolved,
   currentIteration,
+  domainBreakdown,
   flowMap,
   flowMetrics,
   iterationProblem,
@@ -178,5 +179,34 @@ describe("flow map", () => {
     const list = [1, 9, 4, 7].map((d) => item("active", 20, d));
     const old = oldestItems(list, now, 2);
     expect(old.map((i) => statusAge(i, now))).toEqual([9, 7]);
+  });
+});
+
+describe("domain breakdown", () => {
+  const tagged = (domains: string[], group: string, severity = "") => ({
+    ...item(group, 30, 20),
+    domains,
+    severity,
+  });
+
+  it("counts work in each of its areas and keeps the unclassified last", () => {
+    const rows = domainBreakdown(
+      [
+        tagged(["Camera", "MMI"], "active", "严重"),
+        tagged(["Camera"], "blocked"),
+        tagged(["MMI"], "done"),
+        tagged(["Camera"], "cancelled"),
+        tagged([], "pending"),
+      ],
+      14,
+      now,
+    );
+    expect(rows.map((r) => r.domain)).toEqual(["Camera", "MMI", ""]);
+    const camera = rows[0];
+    expect([camera.open, camera.severe, camera.blocked, camera.aged]).toEqual([
+      2, 1, 1, 2,
+    ]);
+    expect(rows[1].resolved).toBe(1);
+    expect(camera.days.reduce((sum, n) => sum + n, 0)).toBe(3);
   });
 });

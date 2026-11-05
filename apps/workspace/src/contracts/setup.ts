@@ -141,7 +141,11 @@ export type IssueLink = { id: string, url: string, resolved: boolean, severe: bo
 export type ModelSummary = { code: string, targets: FocusTargets, issues: number, sources: Array<string>, issue_links?: Array<IssueLink>, measures?: Measures, new_issues: number, days: Array<number>, days_from: string, week_changes: number, week_merged: number, branches: Array<BranchStrip>, flagged: Array<Flagged>, rule_counts: { [key in string]: number }, rules: { [key in string]: string }, freeze?: string, errors: Array<string>, };
 export type FocusSummary = { computed_at?: string, models: Array<ModelSummary>, };
 export type TrackingConfig = { jira_software_field?: string, jira_requirement_jql?: string, jira_software_values?: Array<string>, };
-export type WorkItem = { id: string, 
+export type WorkItem = { 
+/**
+ * What part of the product it touches: Jira's 领域, 飞书项目's 组件.
+ */
+domains?: Array<string>, id: string, 
 /**
  * The source server the item lives on; empty in reads from before instances.
  */

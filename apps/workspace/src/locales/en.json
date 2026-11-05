@@ -1280,5 +1280,10 @@
   "flow.repo.open": "Review",
   "flow.repo.authors": "Authors",
   "flow.repo.flagged": "Flagged",
-  "flow.repo.weeks": "12 weeks"
+  "flow.repo.weeks": "12 weeks",
+  "flow.chart.domains": "By area, {{count}}",
+  "flow.domain.open": "Open",
+  "flow.domain.severe": "Severe",
+  "flow.domain.none": "Unclassified",
+  "flow.domain.arrived": "New, 12 weeks"
 }

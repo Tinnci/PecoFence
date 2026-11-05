@@ -20,6 +20,7 @@ import {
   burndown,
   createdResolved,
   currentIteration,
+  domainBreakdown,
   FLOW_COLUMNS,
   flowMap,
   iterationStart,
@@ -436,6 +437,66 @@ function AgingChart({
 
 const REPOS_SHOWN = 8;
 
+/** One row per product area: what is open there, and what needs attention. */
+function DomainTable({
+  items,
+  flow,
+  now,
+}: {
+  items: WorkItem[];
+  flow: FlowMetrics;
+  now: number;
+}) {
+  const [all, setAll] = useState(false);
+  const rows = useMemo(
+    () => domainBreakdown(items, flow.agedAfter, now),
+    [items, flow.agedAfter, now],
+  );
+  if (!rows.some((row) => row.domain)) return null;
+  const top = Math.max(1, ...rows.map((row) => row.open));
+  return (
+    <figure className="flow-chart flow-repos">
+      <figcaption>
+        <strong>{t("flow.chart.domains", { count: rows.length })}</strong>
+      </figcaption>
+      <div className="repo-head" aria-hidden="true">
+        <span />
+        <span>{t("flow.domain.open")}</span>
+        <span>{t("flow.domain.severe")}</span>
+        <span>{t("flow.blocked")}</span>
+        <span>{t("flow.aged")}</span>
+        <span>{t("flow.resolved")}</span>
+        <span>{t("flow.domain.arrived")}</span>
+      </div>
+      <ol>
+        {(all ? rows : rows.slice(0, REPOS_SHOWN)).map((row) => (
+          <li key={row.domain || "none"}>
+            <div className="repo-row is-static">
+              <span className="repo-name">
+                <span>{row.domain || t("flow.domain.none")}</span>
+                <i style={{ width: `${(row.open / top) * 100}%` }} />
+              </span>
+              <strong>{row.open}</strong>
+              <span>{row.severe || ""}</span>
+              <span>{row.blocked || ""}</span>
+              <span className={row.aged ? "short" : undefined}>
+                {row.aged || ""}
+              </span>
+              <span>{row.resolved || ""}</span>
+              <Strip id={`domain:${row.domain}`} days={row.days} />
+            </div>
+          </li>
+        ))}
+      </ol>
+      {rows.length > REPOS_SHOWN ? (
+        <Button variant="ghost" size="sm" onClick={() => setAll(!all)}>
+          {all ? t("mine.less") : t("mine.all", { count: rows.length })}
+        </Button>
+      ) : null}
+    </figure>
+  );
+}
+
 /** One row per repository: what changed there, in review, and what needs a look. */
 function RepoBreakdown({ code }: { code: string }) {
   const [all, setAll] = useState(false);
@@ -638,6 +699,7 @@ export function FlowCharts({
         ]}
       />
       <AgingChart items={items} flow={flow} now={now} onDetails={onDetails} />
+      <DomainTable items={items} flow={flow} now={now} />
       <RepoBreakdown code={code} />
       {dialog && onIterations ? (
         <IterationDialog
