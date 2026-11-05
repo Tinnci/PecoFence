@@ -1608,6 +1608,10 @@ export function SettingsTab({
   const [confirm, setConfirm] = useState(false);
   useEffect(() => setDraft(draftOf(saved)), [saved]);
   const dirty = JSON.stringify(draft) !== JSON.stringify(draftOf(saved));
+  // SPM refuses a source without a branch; say so on the field instead of at save.
+  const sourceMissing = Object.values(draft.job_sources ?? {}).some(
+    (source) => !source.branch,
+  );
   const target = (key: keyof Draft["targets"], max: number) => (
     <Input
       type="number"
@@ -1842,7 +1846,8 @@ export function SettingsTab({
               <Button
                 size="sm"
                 className="bar-save"
-                disabled={saving}
+                disabled={saving || sourceMissing}
+                title={sourceMissing ? t("source.branchRequired") : undefined}
                 onClick={() => void save()}
               >
                 {saving ? (
