@@ -221,6 +221,7 @@ export async function focus(
     op?: Record<string, unknown>;
     instance?: string;
     chip?: string;
+    baseband?: string;
     path?: string;
     items?: string[];
     addresses?: string[];
@@ -241,6 +242,7 @@ export async function focus(
         op: args.op ?? null,
         instance: args.instance || null,
         chip: args.chip ?? null,
+        baseband: args.baseband ?? null,
         path: args.path ?? null,
         items: args.items ?? null,
         addresses: args.addresses ?? null,

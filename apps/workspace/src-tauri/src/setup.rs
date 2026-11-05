@@ -1029,6 +1029,14 @@ pub struct Platform {
     pub code: String,
     pub vendor: String,
     pub chip: String,
+    #[serde(default)]
+    pub baseband: String,
+    #[serde(default)]
+    pub modem: Vec<String>,
+    #[serde(default)]
+    pub modem_repos: Vec<String>,
+    #[serde(default)]
+    pub modem_changes: usize,
     pub android: Vec<String>,
     pub kernel: Vec<String>,
     pub evidence: Vec<String>,
@@ -1446,6 +1454,7 @@ pub struct FocusRequest {
     pub instance: Option<String>,
     /// The chip a model is built on, as the user names it.
     pub chip: Option<String>,
+    pub baseband: Option<String>,
 }
 
 fn valid_address(url: &str) -> bool {
@@ -1512,18 +1521,21 @@ pub fn route_args(r: &FocusRequest) -> Option<Vec<String>> {
         "platforms" => Some(vec!["focus".into(), "platforms".into()]),
         "chip" => {
             let code = code.filter(|c| valid_code(c))?;
-            let chip = r.chip.as_deref()?.trim();
-            if chip.chars().count() > 80 || chip.chars().any(char::is_control) {
+            if r.chip.is_none() && r.baseband.is_none() {
                 return None;
             }
-            // `--chip=…` keeps a name starting with a dash from reading as an option.
-            Some(vec![
-                "focus".into(),
-                "chip".into(),
-                "--code".into(),
-                code.into(),
-                format!("--chip={chip}"),
-            ])
+            let mut args = vec!["focus".into(), "chip".into(), "--code".into(), code.into()];
+            for (flag, value) in [("chip", &r.chip), ("baseband", &r.baseband)] {
+                if let Some(value) = value {
+                    let value = value.trim();
+                    if value.chars().count() > 80 || value.chars().any(char::is_control) {
+                        return None;
+                    }
+                    // Equals keeps names starting with a dash as values.
+                    args.push(format!("--{flag}={value}"));
+                }
+            }
+            Some(args)
         }
         "related" => {
             let (source, item) = (r.source.as_deref()?, r.item.as_deref()?);
@@ -2046,7 +2058,43 @@ mod tests {
             }),
             instance: Some("192.168.11.130:8080".into()),
             chip: Some("MT6769 · Helio G81".into()),
+            baseband: None,
         }
+    }
+
+    #[test]
+    fn platform_updates_preserve_absent_fields_and_validate_both_names() {
+        let mut r = sample("chip");
+        r.chip = None;
+        r.baseband = Some(" MOLY.LR12A.R3.MP ".into());
+        let args = route_args(&r).unwrap();
+        assert!(args.contains(&"--baseband=MOLY.LR12A.R3.MP".into()));
+        assert!(!args.iter().any(|a| a.starts_with("--chip=")));
+        r.chip = Some("-chip".into());
+        r.baseband = Some(String::new());
+        let args = route_args(&r).unwrap();
+        assert!(args.contains(&"--chip=-chip".into()));
+        assert!(args.contains(&"--baseband=".into()));
+        r.baseband = Some("bad\nname".into());
+        assert!(route_args(&r).is_none());
+        r.baseband = Some("x".repeat(81));
+        assert!(route_args(&r).is_none());
+        r.chip = None;
+        r.baseband = None;
+        assert!(route_args(&r).is_none());
+    }
+
+    #[test]
+    fn older_platform_payloads_default_modem_details() {
+        let p: Platform = serde_json::from_value(serde_json::json!({
+            "code": "P6700LV", "vendor": "Unisoc", "chip": "", "android": ["A16"],
+            "kernel": [], "evidence": []
+        }))
+        .unwrap();
+        assert!(p.baseband.is_empty());
+        assert!(p.modem.is_empty());
+        assert!(p.modem_repos.is_empty());
+        assert_eq!(p.modem_changes, 0);
     }
 
     #[test]

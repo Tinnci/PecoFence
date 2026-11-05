@@ -198,7 +198,7 @@ export type ChangeDiff = { change: number, path: string, patch_set: number | nul
 export type ChangeDiffs = { change: number, patch_set: number | null, files: { [key in string]: string }, truncated: boolean, };
 export type ItemFlow = { address?: string, fetched_at?: string, item: string, events: Array<FlowEvent>, };
 export type Related = { platform: Platform | null, item: string, instance: string, changes: Array<RelatedChange>, similar: Array<SimilarItem>, };
-export type Platform = { code: string, vendor: string, chip: string, android: Array<string>, kernel: Array<string>, evidence: Array<string>, };
+export type Platform = { code: string, vendor: string, chip: string, baseband: string, modem: Array<string>, modem_repos: Array<string>, modem_changes: number, android: Array<string>, kernel: Array<string>, evidence: Array<string>, };
 export type RelatedChange = { change: number, 
 /**
  * The model whose summary read the change; None when none did.

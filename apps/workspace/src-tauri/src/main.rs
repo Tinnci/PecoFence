@@ -329,6 +329,7 @@ fn desktop() {
         addresses: Option<Vec<String>>,
         instance: Option<String>,
         chip: Option<String>,
+        baseband: Option<String>,
         state: tauri::State<'_, State>,
     ) -> Result<setup::FocusData, setup::SetupFailure> {
         let request = setup::FocusRequest {
@@ -346,6 +347,7 @@ fn desktop() {
             addresses,
             instance,
             chip,
+            baseband,
         };
         let args =
             setup::route_args(&request).ok_or_else(|| setup::SetupFailure::new("invalid_input"))?;

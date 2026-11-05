@@ -1,3 +1,4 @@
+import { ModelPlatform } from "./Platforms";
 import {
   BuildActivity,
   DurationSummary,
@@ -1922,6 +1923,7 @@ export function ModelPage({
     return (
       <div className="model-page">
         <h1 className="model-code">{saved?.name ?? code}</h1>
+        <ModelPlatform code={code} />
         {state.models && !saved ? (
           <p className="quiet">
             {t("model.youAreNotFollowing", { v0: code })}
@@ -1977,6 +1979,7 @@ export function ModelPage({
           >
             <h1 className="model-code">{saved?.name ?? m.code}</h1>
           </ContextTarget>
+          <ModelPlatform code={code} />
           <p className="quiet">
             {t("model.gerritBranches", {
               v0: sourceText(m.sources),

@@ -685,3 +685,7 @@ windows never become an immediate-start promise while a request remains queued.
 The source projection caches job-duration samples for ten minutes, reads at most
 32 distinct jobs with eight concurrent history reads, and bounds the capacity
 collection to 25 seconds. No queued task is submitted, reprioritized or cancelled.
+
+## Model platform and baseband
+
+Each model header shows its vendor, named chip, Android/kernel versions and named baseband. Home's platform section edits chip and baseband independently on blur or Enter, and lists modem packages, repositories/branches and change counts from SPM. The exact baseband stays a user-entered value. Edits use the owner CLI's partial `focus chip` update and refresh the shared platform query so headers stay current.

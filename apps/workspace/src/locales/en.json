@@ -1137,7 +1137,7 @@
   "related.evidence.field": "Field",
   "related.evidence.flow": "Flow history",
   "platform.title": "Platforms",
-  "platform.hint": "Vendor, Android and kernel come from each model's Gerrit repositories and build parameters; you name the chip. Similar items prefer fixes from the same platform.",
+  "platform.hint": "Vendor, Android, kernel and modem packages come from Gerrit and build parameters. Enter the chip and exact baseband version here.",
   "platform.unknownVendor": "Vendor unknown",
   "platform.chip": "Chip of {{code}}",
   "platform.chipPlaceholder": "Chip, e.g. MT6769 · Helio G81",
@@ -1145,5 +1145,16 @@
   "platform.same.vendor": "Same vendor",
   "platform.same.chip": "Same chip",
   "platform.same.kernel": "Same kernel",
-  "platform.same.android": "Same Android"
+  "platform.same.android": "Same Android",
+  "platform.baseband": "Baseband version for {{code}}",
+  "platform.basebandPlaceholder": "Enter baseband version",
+  "platform.basebandValue": "Baseband {{value}}",
+  "platform.model": "Model",
+  "platform.system": "Android / kernel",
+  "platform.chipColumn": "Chip",
+  "platform.basebandColumn": "Baseband version",
+  "platform.modemPackages": "Modem packages",
+  "platform.modemSources": "Modem repositories / branches",
+  "platform.modemChanges": "{{count}} modem changes",
+  "platform.saveFailed": "Save failed. Please retry."
 }

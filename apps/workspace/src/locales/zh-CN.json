@@ -1137,7 +1137,7 @@
   "related.evidence.field": "字段",
   "related.evidence.flow": "流转记录",
   "platform.title": "平台",
-  "platform.hint": "厂商、安卓与内核版本来自各机型的 Gerrit 仓库和构建参数；芯片由你填写。相似问题会优先同平台的解法。",
+  "platform.hint": "厂商、安卓、内核和基带包信息来自 Gerrit 与构建参数；芯片和确切基带版本由你填写。",
   "platform.unknownVendor": "未识别厂商",
   "platform.chip": "{{code}} 的芯片",
   "platform.chipPlaceholder": "芯片，如 MT6769 · Helio G81",
@@ -1145,5 +1145,16 @@
   "platform.same.vendor": "同厂商",
   "platform.same.chip": "同芯片",
   "platform.same.kernel": "同内核",
-  "platform.same.android": "同安卓版本"
+  "platform.same.android": "同安卓版本",
+  "platform.baseband": "{{code}} 的基带版本",
+  "platform.basebandPlaceholder": "填写基带版本",
+  "platform.basebandValue": "基带 {{value}}",
+  "platform.model": "机型",
+  "platform.system": "安卓 / 内核",
+  "platform.chipColumn": "芯片",
+  "platform.basebandColumn": "基带版本",
+  "platform.modemPackages": "基带包",
+  "platform.modemSources": "基带仓库 / 分支",
+  "platform.modemChanges": "{{count}} 条基带变更",
+  "platform.saveFailed": "保存失败，请重试"
 }

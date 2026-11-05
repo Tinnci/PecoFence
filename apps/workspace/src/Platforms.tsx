@@ -22,11 +22,25 @@ export function platformLabel(p: Platform | null | undefined) {
   return [
     p.vendor,
     p.chip,
-    p.android[0],
+    p.android.join("/"),
     p.kernel.length ? `kernel ${p.kernel.join("/")}` : "",
+    p.baseband ? t("platform.basebandValue", { value: p.baseband }) : "",
   ]
     .filter(Boolean)
     .join(" · ");
+}
+
+/** Shares the same cached facts and edits as the home platform list. */
+export function ModelPlatform({ code }: { code: string }) {
+  useTranslation();
+  const query = useQuery(platformsOptions, queryClient);
+  const platform = query.data?.find((p) => p.code === code);
+  const label = platformLabel(platform);
+  return label ? (
+    <p className="model-platform" title={platform?.evidence.join("\n")}>
+      <Cpu size={14} aria-hidden="true" /> {label}
+    </p>
+  ) : null;
 }
 
 /** Every followed model's platform, grouped by SoC vendor; the chip is named here. */
@@ -57,6 +71,12 @@ export function Platforms({ models }: { models: FocusModel[] | null }) {
             {vendor || t("platform.unknownVendor")}
             <span className="quiet"> {groups.get(vendor)!.length}</span>
           </h3>
+          <div className="platform-columns" aria-hidden="true">
+            <span>{t("platform.model")}</span>
+            <span>{t("platform.system")}</span>
+            <span>{t("platform.chipColumn")}</span>
+            <span>{t("platform.basebandColumn")}</span>
+          </div>
           <ul>
             {groups.get(vendor)!.map((p) => (
               <li key={p.code} title={p.evidence.join("\n")}>
@@ -73,7 +93,38 @@ export function Platforms({ models }: { models: FocusModel[] | null }) {
                     </span>
                   ))}
                 </span>
-                <ChipField code={p.code} chip={p.chip} />
+                <PlatformField
+                  key={`${p.code}:chip:${p.chip}`}
+                  code={p.code}
+                  field="chip"
+                  saved={p.chip}
+                />
+                <PlatformField
+                  key={`${p.code}:baseband:${p.baseband}`}
+                  code={p.code}
+                  field="baseband"
+                  saved={p.baseband ?? ""}
+                />
+                {Boolean(p.modem?.length || p.modem_repos?.length) && (
+                  <div className="platform-modem">
+                    {p.modem?.length ? (
+                      <span>
+                        {t("platform.modemPackages")}: {p.modem.join(" · ")}
+                      </span>
+                    ) : null}
+                    {p.modem_repos?.length ? (
+                      <span>
+                        {t("platform.modemSources")}:{" "}
+                        {p.modem_repos.join(" · ")}
+                      </span>
+                    ) : null}
+                    {p.modem_changes > 0 ? (
+                      <span>
+                        {t("platform.modemChanges", { count: p.modem_changes })}
+                      </span>
+                    ) : null}
+                  </div>
+                )}
               </li>
             ))}
           </ul>
@@ -83,21 +134,29 @@ export function Platforms({ models }: { models: FocusModel[] | null }) {
   );
 }
 
-function ChipField({ code, chip }: { code: string; chip: string }) {
-  const [value, setValue] = useState(chip);
+function PlatformField({
+  code,
+  field,
+  saved,
+}: {
+  code: string;
+  field: "chip" | "baseband";
+  saved: string;
+}) {
+  const [value, setValue] = useState(saved);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
   async function save() {
     const next = value.trim();
-    if (next === chip) return;
+    if (next === saved) return;
     setBusy(true);
     setFailed(false);
     try {
-      const data = await focus("chip", { code, chip: next });
-      if (data.platforms)
-        queryClient.setQueryData(platformsKey, data.platforms);
-      // Rankings weigh shared chips: let open suggestions read again.
-      void queryClient.invalidateQueries({ queryKey: ["related"] });
+      await focus("chip", { code, [field]: next });
+      // Read the latest projection after partial writes, including another field's save.
+      await queryClient.invalidateQueries({ queryKey: platformsKey });
+      if (field === "chip")
+        void queryClient.invalidateQueries({ queryKey: ["related"] });
     } catch {
       setFailed(true);
     } finally {
@@ -110,8 +169,10 @@ function ChipField({ code, chip }: { code: string; chip: string }) {
       value={value}
       maxLength={80}
       disabled={busy}
-      placeholder={t("platform.chipPlaceholder")}
-      aria-label={t("platform.chip", { code })}
+      placeholder={t(`platform.${field}Placeholder`)}
+      aria-label={t(`platform.${field}`, { code })}
+      aria-invalid={failed}
+      title={failed ? t("platform.saveFailed") : undefined}
       onChange={(e) => setValue(e.target.value)}
       onBlur={() => void save()}
       onKeyDown={(e) => {
