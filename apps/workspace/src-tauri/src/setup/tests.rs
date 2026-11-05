@@ -55,6 +55,15 @@ fn sample(action: &str) -> FocusRequest {
 }
 
 #[test]
+fn project_changes_take_only_known_verbs_and_safe_names() {
+    assert!(project_args("remove", "P6700LV", "main").is_some());
+    assert!(project_args("restore", "P6700LV", "main").is_some());
+    assert!(project_args("export", "P6700LV", "main").is_none());
+    assert!(project_args("remove", "../up", "main").is_none());
+    assert!(project_args("remove", "P6700LV", "--apply").is_none());
+}
+
+#[test]
 fn search_takes_words_but_never_an_option() {
     let request = |query: &str| FocusRequest {
         action: "search".into(),

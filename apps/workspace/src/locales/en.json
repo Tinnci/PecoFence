@@ -1195,5 +1195,17 @@
   "search.placeholder": "Issue, requirement or change, by ID or words",
   "search.none": "Nothing found",
   "search.failed": "Search failed",
-  "search.open": "Open in source"
+  "search.open": "Open in source",
+  "backup.export": "Back up local data",
+  "backup.restore": "Restore a backup",
+  "backup.apply": "Restore",
+  "backup.close": "Close",
+  "backup.saved": "Saved {{models}} models and notes on {{items}} items to {{path}}.",
+  "backup.restored": "Restored {{models}} models and notes on {{items}} items.",
+  "backup.plan": "From {{at}}: {{added}} models added, {{replaced}} replaced, {{kept}} left as they are, notes on {{items}} items replaced. The current state is saved first.",
+  "projectSetup.remove": "Remove project",
+  "projectSetup.removeTitle": "Remove {{name}}?",
+  "projectSetup.removeHint": "Its configuration and database leave the list. You can undo this right after, and the last three removed projects are kept.",
+  "projectSetup.removeActive": "The background service runs this project; activate another one first",
+  "projectSetup.removed": "Removed {{name}}"
 }

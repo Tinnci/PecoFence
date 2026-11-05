@@ -77,6 +77,8 @@ fn desktop() {
         source_fields_gate: tokio::sync::Semaphore,
         /// Health reads run beside an activation so the page can show its progress.
         service_gate: tokio::sync::Semaphore,
+        /// The backup last chosen for restore; the page never names a path.
+        backup: std::sync::Mutex<Option<std::path::PathBuf>>,
         /// The private template copy and the sha256 of its last plan.
         pending: std::sync::Mutex<Option<(std::path::PathBuf, String)>>,
     }
@@ -132,6 +134,100 @@ fn desktop() {
         };
         std::fs::write(&path, &png).map_err(|_| setup::SetupFailure::new("export_failed"))?;
         Ok(Some(path.display().to_string()))
+    }
+    /// Takes a project off the list, or brings it back; SPM refuses one the service runs.
+    #[tauri::command]
+    async fn project_change(
+        state: tauri::State<'_, State>,
+        verb: String,
+        project: String,
+        scope: String,
+    ) -> Result<(), setup::SetupFailure> {
+        let args = setup::project_args(&verb, &project, &scope)
+            .ok_or_else(|| setup::SetupFailure::new("invalid_input"))?;
+        let _permit = state
+            .setup_gate
+            .try_acquire()
+            .map_err(|_| setup::SetupFailure::new("setup_busy"))?;
+        let output = process::spm(&spm_exe()?, &args, SETUP_DEADLINE).await?;
+        setup::decode_focus(output.code, &output.stdout).map(|_| ())
+    }
+    /// Saves a backup where the user picks; SPM writes it, so its content never reaches the page.
+    #[tauri::command]
+    async fn backup_export(
+        app: tauri::AppHandle,
+        name: String,
+    ) -> Result<Option<setup::FocusData>, setup::SetupFailure> {
+        use tauri_plugin_dialog::DialogExt;
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        app.dialog()
+            .file()
+            .add_filter("JSON", &["json"])
+            .set_file_name(&name)
+            .save_file(move |path| {
+                let _ = sender.send(path);
+            });
+        let Some(path) = receiver
+            .await
+            .ok()
+            .flatten()
+            .and_then(|p| p.into_path().ok())
+        else {
+            return Ok(None);
+        };
+        let path = template_arg(&path)?;
+        let args = ["focus", "backup", "--output", path];
+        let output = process::spm(&spm_exe()?, &args, SETUP_DEADLINE).await?;
+        setup::decode_focus(output.code, &output.stdout).map(Some)
+    }
+    /// Asks which backup to restore and shows what it would change.
+    #[tauri::command]
+    async fn backup_plan(
+        app: tauri::AppHandle,
+        state: tauri::State<'_, State>,
+    ) -> Result<Option<setup::FocusData>, setup::SetupFailure> {
+        use tauri_plugin_dialog::DialogExt;
+        *state.backup.lock().unwrap() = None;
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        app.dialog()
+            .file()
+            .add_filter("JSON", &["json"])
+            .pick_file(move |path| {
+                let _ = sender.send(path);
+            });
+        let Some(path) = receiver
+            .await
+            .ok()
+            .flatten()
+            .and_then(|p| p.into_path().ok())
+        else {
+            return Ok(None);
+        };
+        let args = ["focus", "backup-restore", "--input", template_arg(&path)?];
+        let output = process::spm(&spm_exe()?, &args, SETUP_DEADLINE).await?;
+        let data = setup::decode_focus(output.code, &output.stdout)?;
+        *state.backup.lock().unwrap() = Some(path);
+        Ok(Some(data))
+    }
+    #[tauri::command]
+    async fn backup_apply(
+        state: tauri::State<'_, State>,
+    ) -> Result<setup::FocusData, setup::SetupFailure> {
+        let path = state
+            .backup
+            .lock()
+            .unwrap()
+            .take()
+            .ok_or_else(|| setup::SetupFailure::new("invalid_input"))?;
+        let _permit = state
+            .focus_gate
+            .acquire()
+            .await
+            .map_err(|_| setup::SetupFailure::new("setup_busy"))?;
+        let path = template_arg(&path)?;
+        let args = ["focus", "backup-restore", "--input", path, "--apply"];
+        let output = process::spm(&spm_exe()?, &args, SETUP_DEADLINE).await?;
+        setup::decode_focus(output.code, &output.stdout)
     }
     #[tauri::command]
     async fn template_plan(
@@ -553,6 +649,13 @@ fn desktop() {
         Err(_) => std::process::exit(2),
     };
     clear_replaced();
+    // What only this machine holds is saved once a day; a failure must not disturb the page.
+    tauri::async_runtime::spawn(async {
+        if let Ok(spm) = spm_exe() {
+            let args = ["focus", "backup", "--daily"];
+            let _ = process::spm(&spm, &args, SETUP_DEADLINE).await;
+        }
+    });
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::Builder::new().build())
@@ -581,6 +684,7 @@ fn desktop() {
             flow_gate: tokio::sync::Semaphore::new(1),
             source_fields_gate: tokio::sync::Semaphore::new(2),
             items_gate: tokio::sync::Semaphore::new(2),
+            backup: std::sync::Mutex::new(None),
             pending: std::sync::Mutex::new(None),
         })
         .setup(move |app| {
@@ -617,7 +721,11 @@ fn desktop() {
             service_status,
             remap,
             focus,
-            save_png
+            save_png,
+            project_change,
+            backup_export,
+            backup_plan,
+            backup_apply
         ])
         .run(tauri::generate_context!())
         .expect("workspace runtime");

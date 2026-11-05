@@ -127,6 +127,9 @@ pub struct ImportedProject {
     pub directory: String,
     #[serde(default)]
     pub check: ProjectCheck,
+    /// The background service runs it, now or at the next logon.
+    #[serde(default)]
+    pub active: bool,
 }
 #[derive(Debug, Serialize, Deserialize, TS)]
 pub struct ProjectStatus {
@@ -533,15 +536,20 @@ pub struct Activation {
     pub waited_secs: Option<u64>,
 }
 /// `spm setup activate` for a drafted project; identifiers are directory-safe.
+fn safe_id(s: &str) -> bool {
+    (1..=64).contains(&s.len())
+        && s.starts_with(|c: char| c.is_ascii_alphanumeric())
+        && s.bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b"._-".contains(&b))
+}
 pub fn activate_args<'a>(project: &'a str, scope: &'a str) -> Option<Vec<&'a str>> {
-    let safe = |s: &str| {
-        (1..=64).contains(&s.len())
-            && s.starts_with(|c: char| c.is_ascii_alphanumeric())
-            && s.bytes()
-                .all(|b| b.is_ascii_alphanumeric() || b"._-".contains(&b))
-    };
-    (safe(project) && safe(scope))
+    (safe_id(project) && safe_id(scope))
         .then(|| vec!["setup", "activate", "--project", project, "--scope", scope])
+}
+/// `spm setup remove` or `restore` for one project.
+pub fn project_args<'a>(verb: &'a str, project: &'a str, scope: &'a str) -> Option<Vec<&'a str>> {
+    (matches!(verb, "remove" | "restore") && safe_id(project) && safe_id(scope))
+        .then(|| vec!["setup", verb, "--project", project, "--scope", scope])
 }
 pub fn decode_activation(code: Option<i32>, stdout: &[u8]) -> Result<Activation, SetupFailure> {
     owner_data(code, stdout)

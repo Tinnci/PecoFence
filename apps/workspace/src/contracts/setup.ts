@@ -20,7 +20,11 @@ workspace?: FocusModel,
 /**
  * Absent when a directory name is not valid UTF-8.
  */
-project: string | null, scope: string | null, directory: string, check: ProjectCheck, };
+project: string | null, scope: string | null, directory: string, check: ProjectCheck, 
+/**
+ * The background service runs it, now or at the next logon.
+ */
+active: boolean, };
 export type ProjectStatus = { config_root: string, projects: Array<ImportedProject>, };
 export type Connection = { 
 /**
@@ -205,6 +209,9 @@ export type LogEntry = { ts: string, level: string, app: string, event: string, 
 run_id: string, };
 export type LogCount = { total: number, problems: number, };
 export type Logs = { entries: Array<LogEntry>, apps: { [key in string]: LogCount }, truncated: boolean, };
+export type BackupSummary = { path: string, models: number, items: number, };
+export type BackupPlan = { created_at: string, added: number, replaced: number, kept: number, items: number, };
+export type BackupRestored = { models: number, items: number, };
 export type SearchHit = { 
 /**
  * item or change
@@ -256,5 +263,5 @@ export type FocusData = { build_evidence?: BuildEvidence, work_items?: WorkItems
 /**
  * After an annotation: the item as the last read shows it, with the new layer.
  */
-work_item?: AnnotatedItem, history?: ItemHistory, change_files?: ChangeFiles, change_diff?: ChangeDiff, change_diffs?: ChangeDiffs, flow?: ItemFlow, related?: Related, platforms?: Array<Platform>, logs?: Logs, search?: SearchResults, flows?: Array<ItemFlow>, flow_errors?: Array<FlowFailure>, source_fields?: SourceFields, models?: Array<FocusModel>, suggestions?: Suggestions, summary?: FocusSummary, preview?: Preview, changes?: Array<Listed>, builds?: Builds, };
+work_item?: AnnotatedItem, history?: ItemHistory, change_files?: ChangeFiles, change_diff?: ChangeDiff, change_diffs?: ChangeDiffs, flow?: ItemFlow, related?: Related, platforms?: Array<Platform>, logs?: Logs, search?: SearchResults, backup?: BackupSummary, backup_plan?: BackupPlan, backup_restored?: BackupRestored, flows?: Array<ItemFlow>, flow_errors?: Array<FlowFailure>, source_fields?: SourceFields, models?: Array<FocusModel>, suggestions?: Suggestions, summary?: FocusSummary, preview?: Preview, changes?: Array<Listed>, builds?: Builds, };
 export type Activation = { health?: ServiceHealth, waited_secs?: number, };

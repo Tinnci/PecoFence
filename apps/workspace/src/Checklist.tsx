@@ -267,6 +267,7 @@ export default function Checklist({
                         <ProjectWorkbenches
                           status={projects}
                           onOpen={onOpenWorkbench}
+                          onChanged={onProjects}
                         />
                       ) : null}
                       {component.id === "spm" && step.id === "project" ? (

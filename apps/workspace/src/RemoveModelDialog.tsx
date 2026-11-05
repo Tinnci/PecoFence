@@ -16,10 +16,14 @@ import { t } from "./i18n";
 
 export function RemoveModelDialog({
   name,
+  title,
+  description,
   onRemove,
   onClose,
 }: {
   name: string;
+  title?: string;
+  description?: string;
   onRemove: () => Promise<void>;
   onClose: () => void;
 }) {
@@ -45,9 +49,10 @@ export function RemoveModelDialog({
       }}
     >
       <DialogContent>
-        <DialogTitle>{t("model.unfollow2", { v0: name })}</DialogTitle>
+        <DialogTitle>{title ?? t("model.unfollow2", { v0: name })}</DialogTitle>
         <DialogDescription>
-          {t("model.itsRulesAcceptedChangesAndTrackingRecordsWillBe")}
+          {description ??
+            t("model.itsRulesAcceptedChangesAndTrackingRecordsWillBe")}
         </DialogDescription>
         {failure ? <FailureNote failure={failure} /> : null}
         <DialogFooter>
@@ -61,7 +66,7 @@ export function RemoveModelDialog({
             onClick={() => void remove()}
           >
             <ActionIcon name="remove" />
-            {t("model.unfollow")}
+            {title ? t("projectSetup.remove") : t("model.unfollow")}
           </Button>
         </DialogFooter>
       </DialogContent>

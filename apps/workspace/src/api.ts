@@ -263,6 +263,34 @@ export async function focus(
     : desktopOnly();
 }
 
+/** `spm setup remove` or `restore`; SPM refuses a project the service runs. */
+export async function projectChange(
+  verb: "remove" | "restore",
+  project: string,
+  scope: string,
+): Promise<void> {
+  return isTauri()
+    ? invoke<void>("project_change", { verb, project, scope })
+    : desktopOnly();
+}
+
+/** Saves a backup where the user picks; null when the dialog was cancelled. */
+export async function backupExport(name: string): Promise<FocusData | null> {
+  return isTauri()
+    ? invoke<FocusData | null>("backup_export", { name })
+    : desktopOnly();
+}
+
+/** What a picked backup would change; null when the dialog was cancelled. */
+export async function backupPlan(): Promise<FocusData | null> {
+  return isTauri() ? invoke<FocusData | null>("backup_plan") : desktopOnly();
+}
+
+/** Restores the backup last planned. */
+export async function backupApply(): Promise<FocusData> {
+  return isTauri() ? invoke<FocusData>("backup_apply") : desktopOnly();
+}
+
 /** Saves an exported PNG where the user picks; the path, or null when cancelled. */
 export async function savePng(
   name: string,

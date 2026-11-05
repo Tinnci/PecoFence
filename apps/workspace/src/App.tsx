@@ -49,7 +49,9 @@ import {
   Plus,
   RefreshCw,
   Pencil,
+  Download,
   Trash2,
+  Upload,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -85,6 +87,7 @@ import type {
 } from "./contracts/setup";
 import { failureOf } from "./TemplateImport";
 import { projectWorkbench } from "./project-workbench";
+import { DataBackup } from "./DataBackup";
 import { RemoveModelDialog } from "./RemoveModelDialog";
 import { RenameModelDialog } from "./RenameModelDialog";
 import { SearchDialog } from "./SearchDialog";
@@ -151,6 +154,7 @@ function Workspace() {
   const focusState = useFocus(desktop());
   const [renamingCode, setRenamingCode] = useState<string | null>(null);
   const [currentTheme, setCurrentTheme] = useState(themePreference);
+  const [backup, setBackup] = useState<"export" | "restore" | null>(null);
   const [version, setVersion] = useState("");
   useEffect(() => {
     if (isTauri()) void getVersion().then(setVersion);
@@ -369,6 +373,17 @@ function Workspace() {
             onClose={() => setRenamingCode(null)}
           />
         ) : null}
+        {backup ? (
+          <DataBackup
+            key={backup}
+            mode={backup}
+            onRestored={async () => {
+              await queryClient.invalidateQueries({ queryKey: focusKey });
+              await focusState.refresh();
+            }}
+            onClose={() => setBackup(null)}
+          />
+        ) : null}
         {removingModel ? (
           <RemoveModelDialog
             key={removingModel.code}
@@ -504,6 +519,14 @@ function Workspace() {
                   {item.title}
                 </DropdownMenuItem>
               ))}
+              <DropdownMenuItem onClick={() => setBackup("export")}>
+                <Download />
+                {t("backup.export")}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setBackup("restore")}>
+                <Upload />
+                {t("backup.restore")}
+              </DropdownMenuItem>
               {version ? (
                 <DropdownMenuLabel className="menu-version">
                   {version}

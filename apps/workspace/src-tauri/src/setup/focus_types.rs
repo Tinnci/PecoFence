@@ -3,6 +3,40 @@ use super::*;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
 #[serde(default)]
+pub struct BackupSummary {
+    pub path: String,
+    #[ts(type = "number")]
+    pub models: u64,
+    #[ts(type = "number")]
+    pub items: u64,
+}
+
+/// What restoring a backup would do; nothing changes until it is applied.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default)]
+pub struct BackupPlan {
+    pub created_at: String,
+    #[ts(type = "number")]
+    pub added: u64,
+    #[ts(type = "number")]
+    pub replaced: u64,
+    #[ts(type = "number")]
+    pub kept: u64,
+    #[ts(type = "number")]
+    pub items: u64,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default)]
+pub struct BackupRestored {
+    #[ts(type = "number")]
+    pub models: u64,
+    #[ts(type = "number")]
+    pub items: u64,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default)]
 pub struct SearchHit {
     /// item or change
     #[serde(rename = "type")]
@@ -750,6 +784,15 @@ pub struct FocusData {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub search: Option<SearchResults>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub backup: Option<BackupSummary>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub backup_plan: Option<BackupPlan>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub backup_restored: Option<BackupRestored>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub flows: Option<Vec<ItemFlow>>,

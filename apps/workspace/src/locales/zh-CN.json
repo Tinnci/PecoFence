@@ -1195,5 +1195,17 @@
   "search.placeholder": "问题、需求或改动，按编号或关键词",
   "search.none": "没有结果",
   "search.failed": "搜索失败",
-  "search.open": "在来源中打开"
+  "search.open": "在来源中打开",
+  "backup.export": "备份本地数据",
+  "backup.restore": "恢复备份",
+  "backup.apply": "恢复",
+  "backup.close": "关闭",
+  "backup.saved": "已把 {{models}} 个机型和 {{items}} 条本地记录保存到 {{path}}。",
+  "backup.restored": "已恢复 {{models}} 个机型和 {{items}} 条本地记录。",
+  "backup.plan": "备份时间 {{at}}：新增 {{added}} 个机型，覆盖 {{replaced}} 个，保留 {{kept}} 个不变，覆盖 {{items}} 条本地记录。恢复前会先保存当前状态。",
+  "projectSetup.remove": "移除项目",
+  "projectSetup.removeTitle": "移除 {{name}}？",
+  "projectSetup.removeHint": "它的配置和数据库会移出列表，之后可以马上撤销，最近移除的三个项目会保留。",
+  "projectSetup.removeActive": "后台服务正在运行这个项目，请先激活其他项目",
+  "projectSetup.removed": "已移除 {{name}}"
 }
