@@ -796,6 +796,8 @@
   "source.remove": "Remove source record",
   "source.add": "Record source routing",
   "source.savedRouting": "Partition by source routing",
+  "source.allExcluded": "Every build job of this model is excluded; restore one to record its source.",
+  "source.restoreJob": "Restore {{job}}",
   "source.chooseJob": "Choose a build job",
   "source.historyTitle": "Historical build assignments · manual",
   "source.rangeStart": "First build",

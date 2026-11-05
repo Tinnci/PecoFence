@@ -1759,6 +1759,13 @@ function SettingsTab({
           jobs={builds.data?.jobs ?? []}
           sources={draft.job_sources ?? {}}
           onChange={(job_sources) => setDraft({ ...draft, job_sources })}
+          ignored={draft.ignored_jobs ?? []}
+          onRestore={(job) =>
+            setDraft({
+              ...draft,
+              ignored_jobs: (draft.ignored_jobs ?? []).filter((j) => j !== job),
+            })
+          }
         />
         {Object.keys(draft.branch_jobs ?? {}).length ? (
           <section

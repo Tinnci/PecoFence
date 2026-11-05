@@ -796,6 +796,8 @@
   "source.remove": "移除来源记录",
   "source.add": "记录源码来源",
   "source.savedRouting": "按来源记录分段",
+  "source.allExcluded": "这个机型的构建任务都被排除了，恢复后才能记录来源。",
+  "source.restoreJob": "恢复 {{job}}",
   "source.chooseJob": "选择构建任务",
   "source.historyTitle": "历史构建分配 · 人工记录",
   "source.rangeStart": "起始构建号",

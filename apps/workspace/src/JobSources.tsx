@@ -119,16 +119,23 @@ export function JobSourcesEditor({
   jobs,
   sources,
   onChange,
+  ignored = [],
+  onRestore,
 }: {
   jobs: JobView[];
   sources: Record<string, JobSource>;
   onChange: (sources: Record<string, JobSource>) => void;
+  /** Excluded jobs: SPM reads no builds for them, so they cannot carry a source. */
+  ignored?: string[];
+  onRestore?: (job: string) => void;
 }) {
   useTranslation();
+  const [restored, setRestored] = useState<string[]>([]);
   const names = [
     ...new Set([
       ...jobs.filter((j) => !j.disabled).map((j) => j.job),
       ...Object.keys(sources),
+      ...restored,
     ]),
   ];
   const [picked, setPicked] = useState("");
@@ -307,6 +314,24 @@ export function JobSourcesEditor({
           </fieldset>
         </div>
       ))}
+      {!names.length && ignored.length ? (
+        <div className="source-excluded" role="status">
+          <p className="quiet">{t("source.allExcluded")}</p>
+          {ignored.map((job) => (
+            <button
+              key={job}
+              type="button"
+              className="link"
+              onClick={() => {
+                onRestore?.(job);
+                setRestored([...restored, job]);
+              }}
+            >
+              {t("source.restoreJob", { job: job.split("/").pop() })}
+            </button>
+          ))}
+        </div>
+      ) : null}
       <div className="source-add-row">
         <Select
           value={selected || null}

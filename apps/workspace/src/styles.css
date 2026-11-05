@@ -4629,3 +4629,10 @@ a .owner-chip { color: inherit; }
 .logs-run { margin-left: 8px; padding: 0; border: 0; background: none; color: var(--brand-2); font: inherit; }
 .logs-run:hover { text-decoration: underline; }
 .logs-detail { color: var(--muted-foreground); overflow-wrap: anywhere; font-family: var(--font-mono, ui-monospace, monospace); }
+
+/* Scroll bars: thin, in the app's colours, stronger under the pointer */
+* { scrollbar-width: thin; scrollbar-color: var(--input) transparent; }
+*:hover { scrollbar-color: var(--faint) transparent; }
+.window-scroll { scrollbar-gutter: stable; }
+.source-excluded { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+.source-excluded p { flex-basis: 100%; margin: 0; }
