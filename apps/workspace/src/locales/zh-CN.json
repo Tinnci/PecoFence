@@ -1272,5 +1272,13 @@
   "flow.chart.map": "工作流",
   "flow.bottleneck": "瓶颈：{{stage}} {{count}} 项",
   "flow.typical": "通常停留 {{count}} 天",
-  "flow.twelveWeeks": "近 12 周"
+  "flow.twelveWeeks": "近 12 周",
+  "flow.chart.repos": "按仓库，共 {{count}} 个",
+  "flow.repoHint": "来自最近一次读取的代码变更",
+  "flow.repo.changes": "变更",
+  "flow.repo.merged": "合入",
+  "flow.repo.open": "在审",
+  "flow.repo.authors": "作者",
+  "flow.repo.flagged": "留意",
+  "flow.repo.weeks": "12 周"
 }

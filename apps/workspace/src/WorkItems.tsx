@@ -1542,6 +1542,7 @@ export function WorkItemsTab({
             <FlowStrip flow={flow} />
             {layout === "charts" ? (
               <FlowCharts
+                code={code}
                 items={scoped}
                 flow={flow}
                 now={now}

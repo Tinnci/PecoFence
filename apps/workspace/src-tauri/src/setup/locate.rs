@@ -157,6 +157,7 @@ pub fn types() -> String {
             MineSource::decl(&config),
             Mine::decl(&config),
             Iteration::decl(&config),
+            RepoRow::decl(&config),
             SearchHit::decl(&config),
             SearchResults::decl(&config),
             Platform::decl(&config),

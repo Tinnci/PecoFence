@@ -483,6 +483,7 @@ fn desktop() {
             | "search"
             | "mine"
             | "mine_cached"
+            | "repos"
             | "chip" => None,
             "issues" | "requirements" | "issues_full" | "requirements_full" => {
                 Some(&state.items_gate)

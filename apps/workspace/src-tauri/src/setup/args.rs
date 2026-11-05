@@ -339,6 +339,7 @@ pub fn focus_args(
             branch.filter(|b| valid_branch(b))?.into(),
         ]),
         "builds" => args.extend(["builds".into(), "--code".into(), code()?]),
+        "repos" => args.extend(["repos".into(), "--code".into(), code()?]),
         "builds_cached" => {
             args.extend(["builds".into(), "--code".into(), code()?, "--cached".into()])
         }

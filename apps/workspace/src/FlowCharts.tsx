@@ -9,7 +9,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { WorkItem } from "./contracts/setup";
+import { useQuery } from "@tanstack/react-query";
+import { focus } from "./api";
+import { gerritSearchUrl, gerritTerm } from "./browser-links";
+import { openContextAction } from "./context-actions";
+import { focusKey, queryClient } from "./focus-cache";
+import { Strip } from "./Focus";
+import type { RepoRow, WorkItem } from "./contracts/setup";
 import {
   burndown,
   createdResolved,
@@ -428,8 +434,81 @@ function AgingChart({
   );
 }
 
+const REPOS_SHOWN = 8;
+
+/** One row per repository: what changed there, in review, and what needs a look. */
+function RepoBreakdown({ code }: { code: string }) {
+  const [all, setAll] = useState(false);
+  const query = useQuery(
+    {
+      queryKey: [...focusKey, "model", code, "repos"],
+      queryFn: async () => (await focus("repos", { code }))?.repos ?? [],
+      staleTime: 60_000,
+    },
+    queryClient,
+  );
+  const rows = query.data ?? [];
+  if (!rows.length) return null;
+  const top = rows[0].changes;
+  const open = (row: RepoRow) => {
+    const url = gerritSearchUrl(
+      row.sample_url,
+      gerritTerm("project", row.project),
+    );
+    void openContextAction(row.project, row.project, url)?.run();
+  };
+  return (
+    <figure className="flow-chart flow-repos">
+      <figcaption>
+        <strong>{t("flow.chart.repos", { count: rows.length })}</strong>
+        <span className="flow-legend">{t("flow.repoHint")}</span>
+      </figcaption>
+      <div className="repo-head" aria-hidden="true">
+        <span />
+        <span>{t("flow.repo.changes")}</span>
+        <span>{t("flow.repo.merged")}</span>
+        <span>{t("flow.repo.open")}</span>
+        <span>{t("flow.repo.authors")}</span>
+        <span>{t("flow.repo.flagged")}</span>
+        <span>{t("flow.repo.weeks")}</span>
+      </div>
+      <ol>
+        {(all ? rows : rows.slice(0, REPOS_SHOWN)).map((row) => (
+          <li key={row.project}>
+            <button
+              type="button"
+              className="repo-row"
+              title={row.project}
+              onClick={() => open(row)}
+            >
+              <span className="repo-name">
+                <span>{row.project}</span>
+                <i style={{ width: `${(row.changes / top) * 100}%` }} />
+              </span>
+              <strong>{row.changes}</strong>
+              <span>{row.merged}</span>
+              <span>{row.open || ""}</span>
+              <span>{row.authors}</span>
+              <span className={row.flagged ? "short" : undefined}>
+                {row.flagged || ""}
+              </span>
+              <Strip id={`repo:${code}:${row.project}`} days={row.days} />
+            </button>
+          </li>
+        ))}
+      </ol>
+      {rows.length > REPOS_SHOWN ? (
+        <Button variant="ghost" size="sm" onClick={() => setAll(!all)}>
+          {all ? t("mine.less") : t("mine.all", { count: rows.length })}
+        </Button>
+      ) : null}
+    </figure>
+  );
+}
+
 /** Created against resolved, the current iteration's burndown, and aging open work. */
 export function FlowCharts({
+  code,
   items,
   flow,
   now,
@@ -437,6 +516,7 @@ export function FlowCharts({
   onIterations,
   onDetails,
 }: {
+  code: string;
   items: WorkItem[];
   flow: FlowMetrics;
   now: number;
@@ -558,6 +638,7 @@ export function FlowCharts({
         ]}
       />
       <AgingChart items={items} flow={flow} now={now} onDetails={onDetails} />
+      <RepoBreakdown code={code} />
       {dialog && onIterations ? (
         <IterationDialog
           editing={dialog === "edit" ? chosen : undefined}

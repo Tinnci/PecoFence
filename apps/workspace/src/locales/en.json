@@ -1272,5 +1272,13 @@
   "flow.chart.map": "Workflow",
   "flow.bottleneck": "Bottleneck: {{stage}}, {{count}} items",
   "flow.typical": "typically {{count}}d here",
-  "flow.twelveWeeks": "last 12 weeks"
+  "flow.twelveWeeks": "last 12 weeks",
+  "flow.chart.repos": "By repository, {{count}}",
+  "flow.repoHint": "Changes from the last summary",
+  "flow.repo.changes": "Changes",
+  "flow.repo.merged": "Merged",
+  "flow.repo.open": "Review",
+  "flow.repo.authors": "Authors",
+  "flow.repo.flagged": "Flagged",
+  "flow.repo.weeks": "12 weeks"
 }

@@ -5297,3 +5297,57 @@ polyline.flow-line-ideal {
   flex-direction: column;
   gap: 12px;
 }
+
+.flow-repos {
+  grid-column: 1 / -1;
+}
+.flow-repos ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.repo-head,
+.repo-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) repeat(5, 44px) minmax(160px, 260px);
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+.repo-head {
+  padding: 0 4px 4px;
+  font-size: 11px;
+  color: var(--muted-foreground);
+  text-align: right;
+}
+.repo-row {
+  width: 100%;
+  padding: 7px 4px;
+  color: var(--foreground);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  background: none;
+  border: 0;
+  border-top: 1px solid var(--line);
+  cursor: pointer;
+}
+.repo-row:hover {
+  background: var(--surface);
+}
+.repo-name {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  text-align: left;
+}
+.repo-name span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.repo-name i {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--chart-1);
+}

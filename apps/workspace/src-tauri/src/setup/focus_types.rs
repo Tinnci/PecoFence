@@ -1,6 +1,25 @@
 //! The shapes `spm focus` returns, shared with the frontend through ts-rs.
 use super::*;
 
+/// One repository's share of a model's changes.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default)]
+pub struct RepoRow {
+    pub project: String,
+    #[ts(type = "number")]
+    pub changes: u64,
+    #[ts(type = "number")]
+    pub merged: u64,
+    #[ts(type = "number")]
+    pub open: u64,
+    #[ts(type = "number")]
+    pub authors: u64,
+    #[ts(type = "number")]
+    pub flagged: u64,
+    pub days: Vec<u32>,
+    pub sample_url: String,
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
 #[serde(default)]
 pub struct MineReason {
@@ -841,6 +860,9 @@ pub struct FocusData {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub mine: Option<Mine>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub repos: Option<Vec<RepoRow>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub backup: Option<BackupSummary>,

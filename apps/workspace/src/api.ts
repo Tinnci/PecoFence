@@ -192,6 +192,7 @@ export async function focus(
     | "search"
     | "mine"
     | "mine_cached"
+    | "repos"
     | "summary"
     | "cached"
     | "refresh"
