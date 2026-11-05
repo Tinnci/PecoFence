@@ -1223,5 +1223,7 @@
   "mine.reason.stale": "No movement",
   "mine.reason.check_due": "Check due",
   "mine.reason.blocked": "Blocked",
-  "mine.reason.new": "New"
+  "mine.reason.new": "New",
+  "mine.reason.customer": "Customer",
+  "mine.reason.reproducible": "Always reproduces"
 }

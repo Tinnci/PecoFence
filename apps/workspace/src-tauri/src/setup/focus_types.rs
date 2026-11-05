@@ -17,6 +17,7 @@ pub struct MyIssue {
     pub title: String,
     pub url: String,
     pub status: String,
+    pub severity: String,
     pub model: String,
     pub followed: bool,
     pub score: u32,

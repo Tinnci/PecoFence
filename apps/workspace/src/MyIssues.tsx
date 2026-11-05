@@ -99,7 +99,9 @@ export function MyIssues({ onModel }: { onModel: (code: string) => void }) {
               <span className="my-issue-reasons">
                 {item.reasons.slice(0, 2).map((r) => (
                   <span key={r.key} className="related-term">
-                    {t(`mine.reason.${r.key}`)}
+                    {r.key === "severity" && item.severity
+                      ? item.severity
+                      : t(`mine.reason.${r.key}`)}
                   </span>
                 ))}
               </span>

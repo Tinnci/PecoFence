@@ -1223,5 +1223,7 @@
   "mine.reason.stale": "长期未动",
   "mine.reason.check_due": "到复查时间",
   "mine.reason.blocked": "阻塞中",
-  "mine.reason.new": "新分配"
+  "mine.reason.new": "新分配",
+  "mine.reason.customer": "客户问题",
+  "mine.reason.reproducible": "必然重现"
 }
