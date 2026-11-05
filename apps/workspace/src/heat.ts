@@ -32,3 +32,14 @@ export function useHeatSweep(id: string) {
   });
   return sweep;
 }
+
+/** The date of a cell in a grid of whole weeks that ends with the current week, Monday first. */
+export function heatDate(index: number, length: number, now = new Date()) {
+  const monday = new Date(now);
+  monday.setHours(12, 0, 0, 0);
+  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+  const day = new Date(monday);
+  day.setDate(monday.getDate() + index - (length - 7));
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${day.getFullYear()}-${pad(day.getMonth() + 1)}-${pad(day.getDate())}`;
+}

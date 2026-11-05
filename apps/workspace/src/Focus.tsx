@@ -1,4 +1,4 @@
-import { heatCell, useHeatSweep } from "./heat";
+import { heatCell, heatDate, useHeatSweep } from "./heat";
 import { MyIssues } from "./MyIssues";
 import { ActionIcon } from "./components/action-icon";
 import { ContextTarget } from "./components/context-menu";
@@ -203,7 +203,7 @@ export const level = (n: number) =>
   n === 0 ? 0 : n <= 2 ? 1 : n <= 5 ? 2 : n <= 15 ? 3 : 4;
 
 /** Twelve Monday-first weeks, one cell per day. */
-function WeekGrid({ id, days }: { id: string; days: number[] }) {
+export function WeekGrid({ id, days }: { id: string; days: number[] }) {
   useTranslation();
   const sweep = useHeatSweep(`week:${id}`);
   const weeks = Math.ceil(days.length / 7);
@@ -216,6 +216,7 @@ function WeekGrid({ id, days }: { id: string; days: number[] }) {
         <span
           key={i}
           style={heatCell(greens[level(n)], Math.floor(i / 7), i % 7, weeks)}
+          title={t("activity.changes", { v0: heatDate(i, days.length), v1: n })}
         />
       ))}
     </div>
@@ -230,7 +231,11 @@ export function Strip({ id, days }: { id: string; days: number[] }) {
       aria-hidden="true"
     >
       {days.map((n, i) => (
-        <span key={i} style={heatCell(greens[level(n)], i, 0, days.length)} />
+        <span
+          key={i}
+          style={heatCell(greens[level(n)], i, 0, days.length)}
+          title={t("activity.changes", { v0: heatDate(i, days.length), v1: n })}
+        />
       ))}
     </div>
   );

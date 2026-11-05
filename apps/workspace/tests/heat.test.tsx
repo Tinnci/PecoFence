@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
 import { renderHook } from "@testing-library/react";
-import { heatDelay, useHeatSweep } from "../src/heat";
+import { heatDate, heatDelay, useHeatSweep } from "../src/heat";
 import { dismissSplash } from "../src/splash";
 
 describe("heatmap sweep", () => {
@@ -16,6 +16,17 @@ describe("heatmap sweep", () => {
     expect(renderHook(() => useHeatSweep("a")).result.current).toBe(true);
     expect(renderHook(() => useHeatSweep("a")).result.current).toBe(false);
     expect(renderHook(() => useHeatSweep("b")).result.current).toBe(true);
+  });
+});
+
+describe("heatmap dates", () => {
+  // Thursday of the last week; the grid runs Monday to Sunday.
+  const now = new Date(2026, 10, 5, 18);
+
+  it("places the current week last and counts back whole weeks", () => {
+    expect(heatDate(83, 84, now)).toBe("2026-11-08");
+    expect(heatDate(77, 84, now)).toBe("2026-11-02");
+    expect(heatDate(0, 84, now)).toBe("2026-08-17");
   });
 });
 
