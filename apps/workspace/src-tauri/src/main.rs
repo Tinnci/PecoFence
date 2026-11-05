@@ -549,6 +549,7 @@ fn desktop() {
         Ok(page) => page,
         Err(_) => std::process::exit(2),
     };
+    clear_replaced();
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::Builder::new().build())
@@ -619,6 +620,31 @@ fn desktop() {
         .expect("workspace runtime");
 }
 
+/// An install that replaced the running exe left it beside the new one as `<exe>.old*`.
+/// The window still running from one keeps it locked, and removal just fails.
+fn clear_replaced() {
+    let Ok(exe) = std::env::current_exe() else {
+        return;
+    };
+    let (Some(dir), Some(name)) = (exe.parent(), exe.file_name().and_then(|n| n.to_str())) else {
+        return;
+    };
+    for path in replaced(dir, name) {
+        let _ = std::fs::remove_file(path);
+    }
+}
+
+fn replaced(dir: &std::path::Path, exe: &str) -> Vec<std::path::PathBuf> {
+    let old = format!("{exe}.old");
+    std::fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter(|f| f.file_name().to_str().is_some_and(|n| n.starts_with(&old)))
+        .map(|f| f.path())
+        .collect()
+}
+
 fn main() {
     if std::env::args().nth(1).as_deref() == Some("--export-types") {
         let contracts = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../src/contracts");
@@ -670,6 +696,22 @@ fn main() {
 }
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn only_replaced_copies_of_this_exe_are_cleared() {
+        let dir = std::env::temp_dir().join(format!("workspace-old-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        for name in ["app.exe", "app.exe.old", "app.exe.old3", "other.exe.old"] {
+            std::fs::write(dir.join(name), b"").unwrap();
+        }
+        let mut found: Vec<_> = super::replaced(&dir, "app.exe")
+            .iter()
+            .map(|p| p.file_name().unwrap().to_owned())
+            .collect();
+        found.sort();
+        assert_eq!(found, ["app.exe.old", "app.exe.old3"]);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
     use super::*;
     #[test]
     fn headless_checks_require_explicit_valid_arguments() {
