@@ -14,6 +14,7 @@ function issue(
     title: id,
     url: "",
     status: "Open",
+    group: "pending",
     severity: "",
     model: "A",
     followed: true,

@@ -1233,5 +1233,19 @@
   "mine.band.urgent": "Urgent",
   "mine.band.high": "High",
   "mine.band.normal": "Normal",
-  "mine.copies": "{{count}} branches"
+  "mine.copies": "{{count}} branches",
+  "flow.layout": "Layout",
+  "flow.list": "List",
+  "flow.board": "Board",
+  "flow.wip": "In progress",
+  "flow.blocked": "Blocked",
+  "flow.aged": "Aged",
+  "flow.cycle": "Median cycle",
+  "flow.p85": "85% within",
+  "flow.trend": "12 weeks: done, arrived",
+  "flow.week": "{{done}} done, {{arrived}} arrived",
+  "flow.days": "{{count}}d",
+  "flow.limit": "Work-in-progress limit for {{column}}",
+  "flow.limitHint": "Work-in-progress limit, kept on this machine",
+  "mine.lens.board": "Board"
 }

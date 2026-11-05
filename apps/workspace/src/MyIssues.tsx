@@ -23,6 +23,7 @@ import {
   groupWork,
   LENSES,
   mergeWork,
+  workColumns,
   type Band,
   type Lens,
   type Work,
@@ -242,7 +243,43 @@ export function MyIssues({ onModel }: { onModel: (code: string) => void }) {
           {t("mine.failed", { source: t(`mine.source.${s.source}`) })}
         </p>
       ))}
-      {lens === "rank" ? (
+      {lens === "board" ? (
+        <div className="work-board">
+          {workColumns(visible).map(([column, list]) => (
+            <section
+              key={column}
+              className="board-column"
+              aria-label={t(`work.stage.${column}`)}
+            >
+              <header>
+                <strong>{t(`work.stage.${column}`)}</strong>
+                <span>{list.length}</span>
+              </header>
+              <ol>
+                {list.map(({ lead }) => (
+                  <li key={`${lead.source}:${lead.id}`}>
+                    <button
+                      type="button"
+                      className="board-card"
+                      onClick={() => open(lead, onModel)}
+                    >
+                      <span className="board-card-title">{lead.title}</span>
+                      <span className="board-card-foot">
+                        <span
+                          className={`my-issue-score band-${bandOf(lead.score)}`}
+                        >
+                          {lead.score}
+                        </span>
+                        <span className="quiet">{lead.display_id}</span>
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ol>
+            </section>
+          ))}
+        </div>
+      ) : lens === "rank" ? (
         <>
           <ol>
             {shown.map((work) => (

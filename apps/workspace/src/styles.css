@@ -5004,3 +5004,126 @@ a .owner-chip { color: inherit; }
     transition: none;
   }
 }
+
+.flow-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px 28px;
+  padding: 12px 0;
+}
+.flow-strip > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.flow-strip strong {
+  font-size: 18px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.flow-strip small {
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+.flow-trend {
+  margin-left: auto;
+}
+.flow-spark {
+  width: 96px;
+  height: 24px;
+  overflow: visible;
+}
+.flow-spark rect {
+  fill: var(--heat-3);
+}
+.flow-spark polyline {
+  fill: none;
+  stroke: var(--sev-severe);
+  stroke-width: 1.5;
+}
+.work-board {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(220px, 1fr);
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+.board-column {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 8px;
+  background: var(--surface);
+}
+.board-column.is-over {
+  box-shadow: inset 0 2px 0 var(--sev-fatal);
+}
+.board-column header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.board-column.is-over header span {
+  color: var(--sev-fatal);
+  font-weight: 600;
+}
+.board-limit {
+  width: 40px;
+  height: 22px;
+  margin-left: auto;
+  padding: 0 4px;
+  font-size: 11px;
+  text-align: center;
+}
+.board-column ol {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 560px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+.board-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  padding: 8px;
+  text-align: left;
+  font-size: 12px;
+  color: var(--foreground);
+  background: var(--background);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: border-color 120ms;
+}
+.board-card:hover {
+  border-color: var(--foreground);
+}
+.board-card-title {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.board-card-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  font-size: 11px;
+}
+.board-card-foot .my-issue-score {
+  text-align: left;
+}
+.board-more {
+  font-size: 11px;
+}

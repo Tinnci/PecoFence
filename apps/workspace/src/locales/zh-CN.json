@@ -1233,5 +1233,19 @@
   "mine.band.urgent": "紧急",
   "mine.band.high": "较高",
   "mine.band.normal": "一般",
-  "mine.copies": "{{count}} 个分支"
+  "mine.copies": "{{count}} 个分支",
+  "flow.layout": "布局",
+  "flow.list": "列表",
+  "flow.board": "看板",
+  "flow.wip": "在制",
+  "flow.blocked": "阻塞",
+  "flow.aged": "超龄",
+  "flow.cycle": "周期中位",
+  "flow.p85": "85% 不超过",
+  "flow.trend": "12 周 完成与新增",
+  "flow.week": "完成 {{done}}，新增 {{arrived}}",
+  "flow.days": "{{count}} 天",
+  "flow.limit": "{{column}} 在制上限",
+  "flow.limitHint": "在制上限，只保存在本机",
+  "mine.lens.board": "看板"
 }

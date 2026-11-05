@@ -1,4 +1,10 @@
 import {
+  ToggleGroup as LayoutToggle,
+  ToggleGroupItem,
+} from "@/components/ui/toggle-group";
+import { flowMetrics } from "./flow";
+import { FlowStrip, WorkBoard } from "./WorkBoard";
+import {
   Fragment,
   useEffect,
   useMemo,
@@ -1064,6 +1070,25 @@ export function attends(
       return !!item.local?.tags.includes(attention.slice(4));
   }
 }
+type Layout = "list" | "board";
+const LAYOUT_KEY = "tinnci.work.layout";
+
+function savedLayout(): Layout {
+  try {
+    return localStorage.getItem(LAYOUT_KEY) === "board" ? "board" : "list";
+  } catch {
+    return "list";
+  }
+}
+
+function saveLayout(layout: Layout) {
+  try {
+    localStorage.setItem(LAYOUT_KEY, layout);
+  } catch {
+    // The layout still changes; it just starts from the list next time.
+  }
+}
+
 /** The per-model view state of 问题 and 需求, shared with 概览's shortcuts. */
 export function useWorkView(code: string, kind: WorkKind) {
   const [stage, setStage] = useModelPreference(code, `${kind}-stage`, "open");
@@ -1124,6 +1149,7 @@ export function WorkItemsTab({
     returnDetails.current = null;
   }, [code, kind]);
   const [now] = useState(() => Date.now());
+  const [layout, setLayout] = useState(savedLayout);
   const data: WorkItems | null = work.data;
   const scoped = useMemo(
     () =>
@@ -1136,6 +1162,7 @@ export function WorkItemsTab({
       ),
     [data, origin],
   );
+  const flow = useMemo(() => flowMetrics(scoped, now), [scoped, now]);
   const tags = useMemo(
     () =>
       [
@@ -1462,6 +1489,22 @@ export function WorkItemsTab({
                 {t(expansion.open ? "work.collapseAll" : "work.expandAll")}
               </DropdownMenuItem>
             </ExportButton>
+            <LayoutToggle
+              variant="outline"
+              size="sm"
+              className="no-export"
+              value={[layout]}
+              aria-label={t("flow.layout")}
+              onValueChange={(next: string[]) => {
+                const value = next[0] as Layout | undefined;
+                if (!value) return;
+                setLayout(value);
+                saveLayout(value);
+              }}
+            >
+              <ToggleGroupItem value="list">{t("flow.list")}</ToggleGroupItem>
+              <ToggleGroupItem value="board">{t("flow.board")}</ToggleGroupItem>
+            </LayoutToggle>
             <span className="quiet work-count">
               {t("work.resultCount", {
                 count: filtered.length,
@@ -1491,7 +1534,16 @@ export function WorkItemsTab({
               </span>
             </div>
             <FilterChips items={staged} value={filters} onChange={setFilters} />
-            {filtered.length ? (
+            <FlowStrip flow={flow} />
+            {layout === "board" ? (
+              <WorkBoard
+                id={`${code}.${kind}`}
+                items={filtered}
+                flow={flow}
+                now={now}
+                onDetails={(item) => setDetails(workItemKey(item))}
+              />
+            ) : filtered.length ? (
               <ol id={`work-items-${kind}`} className="work-list">
                 {groupItems(
                   expandAll ? filtered : filtered.slice(0, shown),
@@ -1542,7 +1594,7 @@ export function WorkItemsTab({
                 ) : null}
               </div>
             )}
-            {filtered.length > shown ? (
+            {layout === "list" && filtered.length > shown ? (
               <button
                 type="button"
                 className="link no-export"
