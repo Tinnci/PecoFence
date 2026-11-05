@@ -21,6 +21,12 @@ fn main() {
             "remap",
             "focus",
             "save_png",
+            "client_error",
+            "show_main",
+            "project_change",
+            "backup_export",
+            "backup_plan",
+            "backup_apply",
         ]),
     ))
     .expect("Tauri build configuration");

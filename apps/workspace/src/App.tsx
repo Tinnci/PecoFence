@@ -528,9 +528,11 @@ function Workspace() {
                 {t("backup.restore")}
               </DropdownMenuItem>
               {version ? (
-                <DropdownMenuLabel className="menu-version">
-                  {version}
-                </DropdownMenuLabel>
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel className="menu-version">
+                    {version}
+                  </DropdownMenuLabel>
+                </DropdownMenuGroup>
               ) : null}
             </DropdownMenuContent>
           </DropdownMenu>
