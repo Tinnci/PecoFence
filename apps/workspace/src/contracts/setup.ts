@@ -205,6 +205,12 @@ export type LogEntry = { ts: string, level: string, app: string, event: string, 
 run_id: string, };
 export type LogCount = { total: number, problems: number, };
 export type Logs = { entries: Array<LogEntry>, apps: { [key in string]: LogCount }, truncated: boolean, };
+export type SearchHit = { 
+/**
+ * item or change
+ */
+type: string, model: string, id: string, title: string, status: string, owner: string, snippet: string, url: string, };
+export type SearchResults = { total: number, results: Array<SearchHit>, };
 export type Platform = { code: string, vendor: string, chip: string, baseband: string, modem: Array<string>, modem_repos: Array<string>, modem_changes: number, android: Array<string>, kernel: Array<string>, evidence: Array<string>, };
 export type RelatedChange = { change: number, 
 /**
@@ -250,5 +256,5 @@ export type FocusData = { build_evidence?: BuildEvidence, work_items?: WorkItems
 /**
  * After an annotation: the item as the last read shows it, with the new layer.
  */
-work_item?: AnnotatedItem, history?: ItemHistory, change_files?: ChangeFiles, change_diff?: ChangeDiff, change_diffs?: ChangeDiffs, flow?: ItemFlow, related?: Related, platforms?: Array<Platform>, logs?: Logs, flows?: Array<ItemFlow>, flow_errors?: Array<FlowFailure>, source_fields?: SourceFields, models?: Array<FocusModel>, suggestions?: Suggestions, summary?: FocusSummary, preview?: Preview, changes?: Array<Listed>, builds?: Builds, };
+work_item?: AnnotatedItem, history?: ItemHistory, change_files?: ChangeFiles, change_diff?: ChangeDiff, change_diffs?: ChangeDiffs, flow?: ItemFlow, related?: Related, platforms?: Array<Platform>, logs?: Logs, search?: SearchResults, flows?: Array<ItemFlow>, flow_errors?: Array<FlowFailure>, source_fields?: SourceFields, models?: Array<FocusModel>, suggestions?: Suggestions, summary?: FocusSummary, preview?: Preview, changes?: Array<Listed>, builds?: Builds, };
 export type Activation = { health?: ServiceHealth, waited_secs?: number, };

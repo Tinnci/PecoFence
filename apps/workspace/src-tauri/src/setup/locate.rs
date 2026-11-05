@@ -149,6 +149,8 @@ pub fn types() -> String {
             LogEntry::decl(&config),
             LogCount::decl(&config),
             Logs::decl(&config),
+            SearchHit::decl(&config),
+            SearchResults::decl(&config),
             Platform::decl(&config),
             RelatedChange::decl(&config),
             LinkEvidence::decl(&config),

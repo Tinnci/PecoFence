@@ -249,6 +249,9 @@ function GateCell({ v, n, target }: { v: number; n: number; target: number }) {
   );
 }
 
+/** While the window is in use, followed models are read again this often. */
+const AUTO_REFRESH_MS = 30 * 60_000;
+
 /** Followed models: the list, the cached summary first, then a fresh read. */
 export function useFocus(enabled: boolean) {
   const modelsQuery = useQuery({ ...modelsOptions, enabled }, queryClient);
@@ -269,8 +272,12 @@ export function useFocus(enabled: boolean) {
   const pendingRefreshes = useRef(0);
   const reviewVersions = useRef(new Map<string, number>());
   const [failure, setFailure] = useState<SetupFailure | null>(null);
+  const [removing, setRemoving] = useState<string | null>(null);
+  const [removed, setRemoved] = useState<FocusModel | null>(null);
+  const lastRead = useRef(0);
   async function refresh(code?: string, force = true) {
     pendingRefreshes.current++;
+    if (!code) lastRead.current = Date.now();
     setRefreshing(true);
     setFailure(null);
     try {
@@ -295,6 +302,20 @@ export function useFocus(enabled: boolean) {
     if (enabled && modelsQuery.isSuccess && summaryQuery.isFetched)
       void refresh(undefined, false);
   }, [enabled, modelsQuery.isSuccess, summaryQuery.isFetched]);
+  useEffect(() => {
+    if (!enabled) return;
+    const check = () => {
+      const due = Date.now() - lastRead.current >= AUTO_REFRESH_MS;
+      if (due && !document.hidden && !pendingRefreshes.current)
+        void refresh(undefined, false);
+    };
+    const tick = setInterval(check, 60_000);
+    window.addEventListener("focus", check);
+    return () => {
+      clearInterval(tick);
+      window.removeEventListener("focus", check);
+    };
+  }, [enabled]);
   async function save(model: FocusModel, refreshSources = true) {
     invalidateModel(model.code);
     await queryClient.cancelQueries({ queryKey: modelsKey });
@@ -315,6 +336,9 @@ export function useFocus(enabled: boolean) {
     queryClient.setQueryData(modelsKey, data.models ?? []);
   }
   async function remove(code: string) {
+    const model = queryClient
+      .getQueryData<FocusModel[]>(modelsKey)
+      ?.find((m) => m.code === code);
     invalidateModel(code);
     await queryClient.cancelQueries({ queryKey: modelsKey });
     const data = await focus("remove", { code });
@@ -325,6 +349,15 @@ export function useFocus(enabled: boolean) {
     }));
     queryClient.removeQueries({ queryKey: [...focusKey, "model", code] });
     queryClient.removeQueries({ queryKey: [...focusKey, "view", code] });
+    setRemoved(model ?? null);
+  }
+  async function undoRemove() {
+    if (!removed) return;
+    const { code } = removed;
+    setRemoved(null);
+    const data = await focus("restore", { code });
+    queryClient.setQueryData(modelsKey, data.models ?? []);
+    await refresh(code);
   }
   async function review(code: string, change: number, action: string) {
     invalidateModel(code);
@@ -388,6 +421,11 @@ export function useFocus(enabled: boolean) {
     save,
     rename,
     remove,
+    removing,
+    requestRemove: setRemoving,
+    removed,
+    dismissRemoved: () => setRemoved(null),
+    undoRemove,
     review,
   };
 }
@@ -455,7 +493,13 @@ export function FocusHome({
                   state.models?.find((model) => model.code === m.code)?.name ??
                   m.code
                 }
-                actions={modelContextActions(m.code, onModel, state.refresh)}
+                actions={modelContextActions(
+                  m.code,
+                  onModel,
+                  state.refresh,
+                  undefined,
+                  state.requestRemove,
+                )}
               >
                 <motion.button
                   layout="position"

@@ -1,6 +1,29 @@
 //! The shapes `spm focus` returns, shared with the frontend through ts-rs.
 use super::*;
 
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default)]
+pub struct SearchHit {
+    /// item or change
+    #[serde(rename = "type")]
+    pub kind: String,
+    pub model: String,
+    pub id: String,
+    pub title: String,
+    pub status: String,
+    pub owner: String,
+    pub snippet: String,
+    pub url: String,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default)]
+pub struct SearchResults {
+    #[ts(type = "number")]
+    pub total: u64,
+    pub results: Vec<SearchHit>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct ReleaseLine {
     pub id: String,
@@ -724,6 +747,9 @@ pub struct FocusData {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub logs: Option<Logs>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub search: Option<SearchResults>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub flows: Option<Vec<ItemFlow>>,

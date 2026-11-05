@@ -68,14 +68,6 @@ import { Tabs } from "@base-ui/react/tabs";
 import { AnimatePresence, m as motion } from "motion/react";
 import { Num } from "@/components/motion";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -1591,7 +1583,6 @@ export function SettingsTab({
   saved,
   state,
   onEdit,
-  onRemoved,
   builds,
 }: {
   m: ModelSummary;
@@ -1599,13 +1590,11 @@ export function SettingsTab({
   builds: BuildsState;
   state: FocusState;
   onEdit: () => void;
-  onRemoved: () => void;
 }) {
   useTranslation();
   const [draft, setDraft] = useState<Draft>(() => draftOf(saved));
   const [saving, setSaving] = useState(false);
   const [failure, setFailure] = useState<SetupFailure | null>(null);
-  const [confirm, setConfirm] = useState(false);
   useEffect(() => setDraft(draftOf(saved)), [saved]);
   const dirty = JSON.stringify(draft) !== JSON.stringify(draftOf(saved));
   // SPM refuses a source without a branch; say so on the field instead of at save.
@@ -1637,15 +1626,6 @@ export function SettingsTab({
       setFailure(failureOf(error));
     } finally {
       setSaving(false);
-    }
-  }
-  async function remove() {
-    setConfirm(false);
-    try {
-      await state.remove(saved.code);
-      onRemoved();
-    } catch (error) {
-      setFailure(failureOf(error));
     }
   }
   return (
@@ -1873,7 +1853,7 @@ export function SettingsTab({
               variant="ghost"
               size="sm"
               className="manage-danger"
-              onClick={() => setConfirm(true)}
+              onClick={() => state.requestRemove(saved.code)}
             >
               <ActionIcon name="remove" />
               {t("model.unfollow")}
@@ -1882,24 +1862,6 @@ export function SettingsTab({
         </section>
       </div>
       <PreviewPanel m={m} saved={saved} draft={draft} dirty={dirty} />
-      <Dialog open={confirm} onOpenChange={setConfirm}>
-        <DialogContent>
-          <DialogTitle>{t("model.unfollow2", { v0: saved.code })}</DialogTitle>
-          <DialogDescription>
-            {t("model.itsRulesAcceptedChangesAndTrackingRecordsWillBe")}
-          </DialogDescription>
-          <DialogFooter>
-            <DialogClose render={<Button variant="ghost" />}>
-              <ActionIcon name="close" />
-              {t("model.cancel")}
-            </DialogClose>
-            <Button variant="destructive" onClick={() => void remove()}>
-              <ActionIcon name="remove" />
-              {t("model.unfollow")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
@@ -1911,14 +1873,12 @@ export function ModelPage({
   tab = "overview",
   onTab = () => {},
   onEdit,
-  onRemoved,
 }: {
   state: FocusState;
   code: string;
   tab?: ModelTab;
   onTab?: (tab: ModelTab) => void;
   onEdit: () => void;
-  onRemoved: () => void;
 }) {
   useTranslation();
   const m = state.summary?.models.find((x) => x.code === code);
@@ -2204,7 +2164,6 @@ export function ModelPage({
               saved={saved}
               state={state}
               onEdit={onEdit}
-              onRemoved={onRemoved}
             />
           ) : null}
         </Tabs.Panel>

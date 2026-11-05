@@ -188,6 +188,8 @@ export async function focus(
     | "suggest"
     | "save"
     | "remove"
+    | "restore"
+    | "search"
     | "summary"
     | "cached"
     | "refresh"
@@ -234,6 +236,7 @@ export async function focus(
     path?: string;
     items?: string[];
     addresses?: string[];
+    query?: string;
   } = {},
 ): Promise<FocusData> {
   return isTauri()
@@ -255,6 +258,7 @@ export async function focus(
         path: args.path ?? null,
         items: args.items ?? null,
         addresses: args.addresses ?? null,
+        query: args.query ?? null,
       })
     : desktopOnly();
 }

@@ -4704,3 +4704,74 @@ a .owner-chip { color: inherit; }
 .release-choices { align-content: start; }
 .branch-binding-settings > .settings-card { padding: 0 14px; }
 .source-history-editor button.link { font-size: 12px; }
+
+.undo-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  font-size: 13px;
+}
+.undo-bar span {
+  margin-right: auto;
+}
+.search-dialog {
+  top: 12vh;
+  translate: -50% 0;
+  max-width: min(640px, calc(100vw - 32px));
+  gap: 8px;
+}
+.search-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 24px;
+}
+.search-results {
+  max-height: 60vh;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.search-results li {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-top: 1px solid var(--line);
+}
+.search-hit {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 4px;
+  text-align: left;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.search-hit:hover {
+  background: var(--surface);
+}
+.search-hit-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.search-hit-head strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.search-hit-snippet {
+  font-size: 12px;
+  color: var(--foreground-soft);
+}
+.menu-version {
+  color: var(--faint);
+  font-size: 11px;
+}

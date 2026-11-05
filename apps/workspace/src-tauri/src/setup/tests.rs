@@ -1,4 +1,3 @@
-
 use super::*;
 fn plan_json(ok: bool) -> Vec<u8> {
     serde_json::to_vec(&serde_json::json!({"schema_version":"1.0","ok":ok,
@@ -51,7 +50,20 @@ fn sample(action: &str) -> FocusRequest {
         instance: Some("192.168.11.130:8080".into()),
         chip: Some("MT6769 · Helio G81".into()),
         baseband: None,
+        query: Some("words".into()),
     }
+}
+
+#[test]
+fn search_takes_words_but_never_an_option() {
+    let request = |query: &str| FocusRequest {
+        action: "search".into(),
+        query: Some(query.into()),
+        ..Default::default()
+    };
+    assert_eq!(route_args(&request(" ESM2-647 ")).unwrap()[2], "ESM2-647");
+    assert!(route_args(&request("--config-root")).is_none());
+    assert!(route_args(&request("  ")).is_none());
 }
 
 #[test]

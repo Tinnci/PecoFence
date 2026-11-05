@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { RemoveModelDialog } from "../src/RemoveModelDialog";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   cleanup,
@@ -278,8 +279,17 @@ function Harness({
           tab={tab}
           onTab={setTab}
           onEdit={() => setOpened("edit")}
-          onRemoved={() => setOpened("removed")}
         />
+        {state.removing ? (
+          <RemoveModelDialog
+            name={state.removing}
+            onRemove={async () => {
+              await state.remove(code);
+              setOpened("removed");
+            }}
+            onClose={() => state.requestRemove(null)}
+          />
+        ) : null}
         <output>{opened}</output>
       </>
     );

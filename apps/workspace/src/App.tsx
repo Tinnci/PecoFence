@@ -49,6 +49,7 @@ import {
   Plus,
   RefreshCw,
   Pencil,
+  Trash2,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -84,7 +85,10 @@ import type {
 } from "./contracts/setup";
 import { failureOf } from "./TemplateImport";
 import { projectWorkbench } from "./project-workbench";
+import { RemoveModelDialog } from "./RemoveModelDialog";
 import { RenameModelDialog } from "./RenameModelDialog";
+import { SearchDialog } from "./SearchDialog";
+import { getVersion } from "@tauri-apps/api/app";
 import type { Component, HubReport, LoadFailure } from "./contracts/hub";
 import {
   attention,
@@ -147,6 +151,13 @@ function Workspace() {
   const focusState = useFocus(desktop());
   const [renamingCode, setRenamingCode] = useState<string | null>(null);
   const [currentTheme, setCurrentTheme] = useState(themePreference);
+  const [version, setVersion] = useState("");
+  useEffect(() => {
+    if (isTauri()) void getVersion().then(setVersion);
+  }, []);
+  const removingModel = focusState.models?.find(
+    (model) => model.code === focusState.removing,
+  );
   const renaming = focusState.models?.find(
     (model) => model.code === renamingCode,
   );
@@ -358,6 +369,17 @@ function Workspace() {
             onClose={() => setRenamingCode(null)}
           />
         ) : null}
+        {removingModel ? (
+          <RemoveModelDialog
+            key={removingModel.code}
+            name={removingModel.name ?? removingModel.code}
+            onRemove={async () => {
+              await focusState.remove(removingModel.code);
+              if (modelCode === removingModel.code) setPage("home");
+            }}
+            onClose={() => focusState.requestRemove(null)}
+          />
+        ) : null}
         <header className="appbar" data-tauri-drag-region>
           <button
             type="button"
@@ -385,9 +407,11 @@ function Workspace() {
                 openModel,
                 focusState.refresh,
                 setRenamingCode,
+                focusState.requestRemove,
               )
             }
           />
+          <SearchDialog onModel={openModel} />
           <Button
             variant="outline"
             className="follow-button"
@@ -414,6 +438,13 @@ function Workspace() {
                   <DropdownMenuItem onClick={() => setRenamingCode(modelCode)}>
                     <Pencil />
                     {t("model.rename")}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    variant="destructive"
+                    onClick={() => focusState.requestRemove(modelCode)}
+                  >
+                    <Trash2 />
+                    {t("model.unfollow")}
                   </DropdownMenuItem>
                 </DropdownMenuGroup>
               ) : null}
@@ -473,10 +504,39 @@ function Workspace() {
                   {item.title}
                 </DropdownMenuItem>
               ))}
+              {version ? (
+                <DropdownMenuLabel className="menu-version">
+                  {version}
+                </DropdownMenuLabel>
+              ) : null}
             </DropdownMenuContent>
           </DropdownMenu>
           {isTauri() ? <WindowControls /> : null}
         </header>
+        {focusState.removed ? (
+          <div className="undo-bar" role="status">
+            <span>
+              {t("model.unfollowed", {
+                v0: focusState.removed.name ?? focusState.removed.code,
+              })}
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => void focusState.undoRemove()}
+            >
+              {t("model.undo")}
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label={t("model.cancel")}
+              onClick={focusState.dismissRemoved}
+            >
+              <ActionIcon name="close" />
+            </Button>
+          </div>
+        ) : null}
         <div className="window-scroll" ref={scroll}>
           <main id="main" className="page-content">
             {page === "model" && modelCode ? (
@@ -490,7 +550,6 @@ function Workspace() {
                   setFollowCode(modelCode);
                   setPage("follow");
                 }}
-                onRemoved={() => setPage("home")}
               />
             ) : page === "follow" ? (
               <FollowPage

@@ -14,6 +14,7 @@ import {
   Bookmark,
   BookmarkX,
   Pencil,
+  Trash2,
 } from "lucide-react";
 import { t } from "./i18n";
 import { browserUrl } from "./browser-urls";
@@ -83,6 +84,7 @@ export function modelContextActions(
   open: (code: string) => void,
   refresh: (code: string) => Promise<unknown>,
   rename?: (code: string) => void,
+  remove?: (code: string) => void,
 ): ContextAction[] {
   const views: [ModelTab, string, ContextAction["icon"]][] = [
     ["overview", t("model.overview"), LayoutDashboard],
@@ -135,6 +137,17 @@ export function modelContextActions(
         ]
       : []),
     copyContextAction("copy-code", t("context.copyModelCode"), code),
+    ...(remove
+      ? [
+          {
+            id: "remove",
+            label: t("model.unfollow"),
+            icon: Trash2,
+            separator: true,
+            run: () => remove(code),
+          },
+        ]
+      : []),
   ];
 }
 

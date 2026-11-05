@@ -118,6 +118,8 @@ pub struct FocusRequest {
     /// The chip a model is built on, as the user names it.
     pub chip: Option<String>,
     pub baseband: Option<String>,
+    /// Words to find in what is cached.
+    pub query: Option<String>,
 }
 
 fn valid_address(url: &str) -> bool {
@@ -182,6 +184,20 @@ pub fn route_args(r: &FocusRequest) -> Option<Vec<String>> {
         }
         "build_evidence" => build_evidence_args(code?, r.job.as_deref()?, r.build?),
         "platforms" => Some(vec!["focus".into(), "platforms".into()]),
+        "search" => {
+            let query = r.query.as_deref().map(str::trim).filter(|q| {
+                (1..=200).contains(&q.chars().count())
+                    && !q.starts_with('-')
+                    && !q.chars().any(char::is_control)
+            })?;
+            Some(
+                [
+                    "focus", "search", query, "--limit", "30", "--format", "json",
+                ]
+                .map(String::from)
+                .to_vec(),
+            )
+        }
         "logs" => Some(
             [
                 "focus", "logs", "--since", "7d", "--limit", "1000", "--format", "json",
@@ -310,6 +326,7 @@ pub fn focus_args(
         "cached" => args.extend(["summary".into(), "--cached".into()]),
         "suggest" => args.extend(["suggest".into(), "--code".into(), code()?]),
         "remove" => args.extend(["remove".into(), "--code".into(), code()?]),
+        "restore" => args.extend(["restore".into(), "--code".into(), code()?]),
         "refresh" => args.extend(["summary".into(), "--code".into(), code()?]),
         "preview" => args.push("preview".into()),
         "changes" => args.extend([
