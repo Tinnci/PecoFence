@@ -10,6 +10,7 @@ import {
   sourceRoutes,
   sourceTimelineJobs,
 } from "./job-sources";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { JobSourcesEditor, SourceRoutingNote } from "./JobSources";
 import {
   buildAssociation,
@@ -1585,7 +1586,7 @@ function PreviewPanel({
 }
 
 /** Rules, freeze date and targets, edited in place, previewed, then saved together. */
-function SettingsTab({
+export function SettingsTab({
   m,
   saved,
   state,
@@ -1646,90 +1647,113 @@ function SettingsTab({
   return (
     <div className="settings-tab">
       <div className="settings-form">
-        <section aria-label={t("focus.rules")}>
+        <nav className="settings-nav" aria-label={t("model.settings")}>
+          {[
+            ["settings-rules", t("focus.rules")],
+            ["settings-targets", t("model.targets")],
+            ["settings-release", t("release.title")],
+            ["settings-sources", t("source.routing")],
+            ["settings-manage", t("model.manage")],
+          ].map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() =>
+                document
+                  .getElementById(id)
+                  ?.scrollIntoView({ behavior: "smooth", block: "start" })
+              }
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+        <section id="settings-rules" aria-label={t("focus.rules")}>
           <div className="column-head">
             <h2>{t("focus.rules")}</h2>
             <span className="quiet">{t("model.matchesOver13Weeks")}</span>
           </div>
-          {ruleOrder.map((r) => (
-            <div className="rule-block" key={r}>
-              <div className="rule-line">
-                <span>
-                  {ruleNames[r]}
-                  <small className="quiet">{ruleHow[r]}</small>
-                </span>
-                <Select
-                  value={draft.rules[r]}
-                  items={actionOptions()}
-                  onValueChange={(a) =>
-                    a &&
-                    setDraft({
-                      ...draft,
-                      rules: { ...draft.rules, [r]: a as string },
-                    })
-                  }
-                >
-                  <SelectTrigger
-                    size="sm"
-                    className={`action-select action-${draft.rules[r]}`}
-                    aria-label={t("model.actionFor", { v0: ruleNames[r] })}
-                  >
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {actionOptions().map((o) => (
-                      <SelectItem key={o.value} value={o.value}>
-                        {o.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <span className="quiet">{m.rule_counts[r] ?? 0}</span>
-              </div>
-              {r === "feature_after_freeze" ? (
-                <label
-                  className={draft.freeze ? "freeze-line" : "freeze-line unset"}
-                >
+          <div className="settings-card">
+            {ruleOrder.map((r) => (
+              <div className="rule-block" key={r}>
+                <div className="rule-line">
                   <span>
-                    {draft.freeze
-                      ? t("focus.mpFreezeDate")
-                      : t("model.setAnMPFreezeDateToEnableThisRule")}
+                    {ruleNames[r]}
+                    <small className="quiet">{ruleHow[r]}</small>
                   </span>
-                  <Input
-                    type="date"
-                    aria-label={t("focus.mpFreezeDate")}
-                    value={draft.freeze}
-                    onChange={(e) =>
-                      setDraft({ ...draft, freeze: e.target.value })
+                  <ToggleGroup
+                    variant="outline"
+                    size="sm"
+                    className="action-choice"
+                    data-action={draft.rules[r]}
+                    value={[draft.rules[r]]}
+                    aria-label={t("model.actionFor", { v0: ruleNames[r] })}
+                    onValueChange={(next: string[]) => {
+                      if (next[0])
+                        setDraft({
+                          ...draft,
+                          rules: { ...draft.rules, [r]: next[0] },
+                        });
+                    }}
+                  >
+                    {actionOptions().map((o) => (
+                      <ToggleGroupItem key={o.value} value={o.value}>
+                        {o.label}
+                      </ToggleGroupItem>
+                    ))}
+                  </ToggleGroup>
+                  <span className="quiet">{m.rule_counts[r] ?? 0}</span>
+                </div>
+                {r === "feature_after_freeze" ? (
+                  <label
+                    className={
+                      draft.freeze ? "freeze-line" : "freeze-line unset"
                     }
-                  />
-                </label>
-              ) : null}
-            </div>
-          ))}
+                  >
+                    <span>
+                      {draft.freeze
+                        ? t("focus.mpFreezeDate")
+                        : t("model.setAnMPFreezeDateToEnableThisRule")}
+                    </span>
+                    <Input
+                      type="date"
+                      aria-label={t("focus.mpFreezeDate")}
+                      value={draft.freeze}
+                      onChange={(e) =>
+                        setDraft({ ...draft, freeze: e.target.value })
+                      }
+                    />
+                  </label>
+                ) : null}
+              </div>
+            ))}
+          </div>
         </section>
-        <section aria-label={t("model.targets")}>
+        <section id="settings-targets" aria-label={t("model.targets")}>
           <div className="column-head">
             <h2>{t("model.targets")}</h2>
           </div>
-          <div className="target-line">
-            <span>{t("model.severeIssueResolutionAtLeast")}</span>
-            {target("severe_pct", 100)}
-            <span className="quiet">%</span>
-          </div>
-          <div className="target-line">
-            <span>{t("model.overallResolutionAtLeast")}</span>
-            {target("overall_pct", 100)}
-            <span className="quiet">%</span>
-          </div>
-          <div className="target-line">
-            <span>{t("model.unresolvedFatalIssuesAtMost")}</span>
-            {target("fatal_max", 9999)}
-            <span className="quiet">{t("model.issues")}</span>
+          <div className="settings-card">
+            <div className="target-line">
+              <span>{t("model.severeIssueResolutionAtLeast")}</span>
+              {target("severe_pct", 100)}
+              <span className="quiet">%</span>
+            </div>
+            <div className="target-line">
+              <span>{t("model.overallResolutionAtLeast")}</span>
+              {target("overall_pct", 100)}
+              <span className="quiet">%</span>
+            </div>
+            <div className="target-line">
+              <span>{t("model.unresolvedFatalIssuesAtMost")}</span>
+              {target("fatal_max", 9999)}
+              <span className="quiet">{t("model.issues")}</span>
+            </div>
           </div>
         </section>
         <ReleaseLinesEditor
           model={saved}
+          refreshing={builds.loading}
           lines={draft.release_lines ?? []}
           ignored={draft.ignored_jobs ?? []}
           jobs={builds.data?.jobs ?? []}
@@ -1773,25 +1797,27 @@ function SettingsTab({
             aria-label={t("association.settings")}
           >
             <h2>{t("association.settings")}</h2>
-            {Object.entries(draft.branch_jobs ?? {}).map(([branch, jobs]) => (
-              <div key={branch}>
-                <p>
-                  <code>{branch}</code> ·{" "}
-                  {jobs.map((j) => j.split("/").pop()).join(", ") || "—"}
-                </p>
-                <button
-                  type="button"
-                  className="link"
-                  onClick={() => {
-                    const branch_jobs = { ...draft.branch_jobs };
-                    delete branch_jobs[branch];
-                    setDraft({ ...draft, branch_jobs });
-                  }}
-                >
-                  {t("association.reset")}
-                </button>
-              </div>
-            ))}
+            <div className="settings-card">
+              {Object.entries(draft.branch_jobs ?? {}).map(([branch, jobs]) => (
+                <div key={branch} className="binding-row">
+                  <p>
+                    <code>{branch}</code> ·{" "}
+                    {jobs.map((j) => j.split("/").pop()).join(", ") || "—"}
+                  </p>
+                  <button
+                    type="button"
+                    className="link"
+                    onClick={() => {
+                      const branch_jobs = { ...draft.branch_jobs };
+                      delete branch_jobs[branch];
+                      setDraft({ ...draft, branch_jobs });
+                    }}
+                  >
+                    {t("association.reset")}
+                  </button>
+                </div>
+              ))}
+            </div>
           </section>
         ) : null}
         {failure ? <FailureNote failure={failure} /> : null}
@@ -1829,19 +1855,25 @@ function SettingsTab({
             </div>
           </div>
         ) : null}
-        <section className="model-manage" aria-label={t("model.manage")}>
-          <button type="button" className="link" onClick={onEdit}>
-            <ActionIcon name="sources" />
-            {t("model.changeIssueSourcesAndBranches")}
-          </button>
-          <button
-            type="button"
-            className="link danger"
-            onClick={() => setConfirm(true)}
-          >
-            <ActionIcon name="remove" />
-            {t("model.unfollow")}
-          </button>
+        <section id="settings-manage" aria-label={t("model.manage")}>
+          <div className="column-head">
+            <h2>{t("model.manage")}</h2>
+          </div>
+          <div className="settings-card model-manage">
+            <Button variant="ghost" size="sm" onClick={onEdit}>
+              <ActionIcon name="sources" />
+              {t("model.changeIssueSourcesAndBranches")}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="manage-danger"
+              onClick={() => setConfirm(true)}
+            >
+              <ActionIcon name="remove" />
+              {t("model.unfollow")}
+            </Button>
+          </div>
         </section>
       </div>
       <PreviewPanel m={m} saved={saved} draft={draft} dirty={dirty} />

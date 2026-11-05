@@ -1,5 +1,6 @@
 import { useState, type ComponentProps } from "react";
 import { Field } from "@base-ui/react/field";
+import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
 import {
   Select,
@@ -144,19 +145,46 @@ export function JobSourcesEditor({
   const update = (job: string, patch: Partial<JobSource>) =>
     onChange({ ...sources, [job]: { ...sources[job], ...patch } });
   return (
-    <section className="job-sources-editor" aria-label={t("source.routing")}>
+    <section
+      id="settings-sources"
+      className="job-sources-editor"
+      aria-label={t("source.routing")}
+    >
       <h2>{t("source.routing")}</h2>
       <p className="quiet">{t("source.editorHelp")}</p>
       {Object.keys(sources).map((job) => (
         <div className="source-editor-job" key={job}>
-          <h3>{job.split("/").pop()}</h3>
+          <div className="source-editor-head">
+            <h3>{job.split("/").pop()}</h3>
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              className="manage-danger"
+              onClick={() => {
+                const next = { ...sources };
+                delete next[job];
+                onChange(next);
+              }}
+            >
+              {t("source.remove")}
+            </Button>
+          </div>
           <fieldset>
-            <SourceField
-              label={t("source.branch")}
-              value={sources[job].branch}
-              maxLength={200}
-              onChange={(e) => update(job, { branch: e.target.value.trim() })}
-            />
+            <Field.Root className="source-field" invalid={!sources[job].branch}>
+              <Field.Label>{t("source.branch")}</Field.Label>
+              <Input
+                value={sources[job].branch}
+                maxLength={200}
+                aria-invalid={!sources[job].branch}
+                onChange={(e) => update(job, { branch: e.target.value.trim() })}
+              />
+              {!sources[job].branch ? (
+                <span className="source-required">
+                  {t("source.branchRequired")}
+                </span>
+              ) : null}
+            </Field.Root>
             <SourceField
               label={t("source.previous")}
               value={sources[job].previous.join(", ")}
@@ -300,17 +328,6 @@ export function JobSourcesEditor({
                 {t("source.addRange")}
               </button>
             </fieldset>
-            <button
-              type="button"
-              className="link"
-              onClick={() => {
-                const next = { ...sources };
-                delete next[job];
-                onChange(next);
-              }}
-            >
-              {t("source.remove")}
-            </button>
           </fieldset>
         </div>
       ))}
@@ -318,17 +335,18 @@ export function JobSourcesEditor({
         <div className="source-excluded" role="status">
           <p className="quiet">{t("source.allExcluded")}</p>
           {ignored.map((job) => (
-            <button
+            <Button
               key={job}
               type="button"
-              className="link"
+              variant="outline"
+              size="xs"
               onClick={() => {
                 onRestore?.(job);
                 setRestored([...restored, job]);
               }}
             >
               {t("source.restoreJob", { job: job.split("/").pop() })}
-            </button>
+            </Button>
           ))}
         </div>
       ) : null}
@@ -352,9 +370,10 @@ export function JobSourcesEditor({
             ))}
           </SelectContent>
         </Select>
-        <button
+        <Button
           type="button"
-          className="link"
+          variant="outline"
+          size="sm"
           disabled={!selected}
           onClick={() => {
             onChange({
@@ -365,7 +384,7 @@ export function JobSourcesEditor({
           }}
         >
           {t("source.add")}
-        </button>
+        </Button>
       </div>
     </section>
   );

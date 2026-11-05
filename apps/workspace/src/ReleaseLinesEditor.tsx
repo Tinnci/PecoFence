@@ -1,3 +1,8 @@
+import { RefreshCw } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Spinner } from "@/components/ui/spinner";
 import {
   Select,
   SelectContent,
@@ -30,6 +35,7 @@ export function ReleaseLinesEditor({
   jobs,
   onChange,
   onRefresh,
+  refreshing = false,
 }: {
   model: FocusModel;
   lines: ReleaseLine[];
@@ -37,6 +43,7 @@ export function ReleaseLinesEditor({
   jobs: JobView[];
   onChange: (lines: ReleaseLine[], ignored: string[]) => void;
   onRefresh?: () => void;
+  refreshing?: boolean;
 }) {
   useTranslation();
   const names = [
@@ -56,113 +63,135 @@ export function ReleaseLinesEditor({
       ? values.filter((v) => v !== value)
       : [...values, value];
   return (
-    <section className="release-editor" aria-label={t("release.title")}>
-      <h2>
-        <GitBranch size={16} aria-hidden="true" />
-        {t("release.title")}
-      </h2>
+    <section
+      id="settings-release"
+      className="release-editor"
+      aria-label={t("release.title")}
+    >
+      <div className="column-head">
+        <h2>{t("release.title")}</h2>
+        {onRefresh ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={refreshing}
+            onClick={onRefresh}
+          >
+            {refreshing ? (
+              <Spinner aria-hidden="true" />
+            ) : (
+              <RefreshCw aria-hidden="true" />
+            )}
+            {t("release.refreshJobs")}
+          </Button>
+        ) : null}
+      </div>
       <p className="quiet">{t("release.help")}</p>
-      {onRefresh ? (
-        <button type="button" className="link" onClick={onRefresh}>
-          {t("release.refreshJobs")}
-        </button>
-      ) : null}
       {lines.map((line, i) => (
         <fieldset className="release-line-editor" key={line.id}>
           <legend>{line.label || t("release.newLine")}</legend>
-          <label>
-            {t("release.label")}
-            <input
-              value={line.label}
-              maxLength={100}
-              onChange={(e) => update(i, { label: e.target.value })}
-            />
-          </label>
-          <div className="release-selects">
-            <label>
-              {t("release.lifecycle")}
-              <Select
-                value={line.lifecycle}
-                items={[
-                  "development",
-                  "maintenance",
-                  "upgrade",
-                  "archived",
-                ].map((value) => ({ value, label: lifecycleName(value) }))}
-                onValueChange={(value) =>
-                  value && update(i, { lifecycle: value })
-                }
-              >
-                <SelectTrigger size="sm" aria-label={t("release.lifecycle")}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {["development", "maintenance", "upgrade", "archived"].map(
-                    (value) => (
-                      <SelectItem key={value} value={value}>
-                        {lifecycleName(value)}
-                      </SelectItem>
-                    ),
-                  )}
-                </SelectContent>
-              </Select>
+          <div className="release-line-head">
+            <label className="release-name">
+              <span>{t("release.label")}</span>
+              <Input
+                value={line.label}
+                maxLength={100}
+                onChange={(e) => update(i, { label: e.target.value })}
+              />
             </label>
-            <label>
-              {t("release.phase")}
-              <Select
-                value={line.phase}
-                items={["main", "ir", "pb", "mp", "old"].map((value) => ({
-                  value,
-                  label: value.toUpperCase(),
-                }))}
-                onValueChange={(value) => value && update(i, { phase: value })}
-              >
-                <SelectTrigger size="sm" aria-label={t("release.phase")}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {["main", "ir", "pb", "mp", "old"].map((value) => (
-                    <SelectItem key={value} value={value}>
-                      {value.toUpperCase()}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </label>
-          </div>
-          <fieldset className="release-choices">
-            <legend>{t("release.branches")}</legend>
-            {model.branches.map((branch) => (
-              <label key={branch}>
-                <input
-                  type="checkbox"
-                  checked={line.branches.includes(branch)}
-                  onChange={() =>
-                    update(i, { branches: toggle(line.branches, branch) })
+            <div className="release-selects">
+              <label>
+                {t("release.lifecycle")}
+                <Select
+                  value={line.lifecycle}
+                  items={[
+                    "development",
+                    "maintenance",
+                    "upgrade",
+                    "archived",
+                  ].map((value) => ({ value, label: lifecycleName(value) }))}
+                  onValueChange={(value) =>
+                    value && update(i, { lifecycle: value })
                   }
-                />
-                {branch}
+                >
+                  <SelectTrigger size="sm" aria-label={t("release.lifecycle")}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {["development", "maintenance", "upgrade", "archived"].map(
+                      (value) => (
+                        <SelectItem key={value} value={value}>
+                          {lifecycleName(value)}
+                        </SelectItem>
+                      ),
+                    )}
+                  </SelectContent>
+                </Select>
               </label>
-            ))}
-          </fieldset>
-          <fieldset className="release-choices">
-            <legend>{t("release.jobs")}</legend>
-            {names
-              .filter((name) => !ignored.includes(name))
-              .map((job) => (
-                <label key={job}>
-                  <input
-                    type="checkbox"
-                    checked={line.jobs.includes(job)}
-                    onChange={() => update(i, { jobs: toggle(line.jobs, job) })}
+              <label>
+                {t("release.phase")}
+                <Select
+                  value={line.phase}
+                  items={["main", "ir", "pb", "mp", "old"].map((value) => ({
+                    value,
+                    label: value.toUpperCase(),
+                  }))}
+                  onValueChange={(value) =>
+                    value && update(i, { phase: value })
+                  }
+                >
+                  <SelectTrigger size="sm" aria-label={t("release.phase")}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {["main", "ir", "pb", "mp", "old"].map((value) => (
+                      <SelectItem key={value} value={value}>
+                        {value.toUpperCase()}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </label>
+            </div>
+          </div>
+          <div className="release-pick">
+            <fieldset className="release-choices">
+              <legend>{t("release.branches")}</legend>
+              {model.branches.map((branch) => (
+                <label key={branch}>
+                  <Checkbox
+                    checked={line.branches.includes(branch)}
+                    onCheckedChange={() =>
+                      update(i, { branches: toggle(line.branches, branch) })
+                    }
                   />
-                  {job.split("/").pop()}
+                  {branch}
                 </label>
               ))}
-          </fieldset>
-          <button
+            </fieldset>
+            <fieldset className="release-choices">
+              <legend>{t("release.jobs")}</legend>
+              {names
+                .filter((name) => !ignored.includes(name))
+                .map((job) => (
+                  <label key={job}>
+                    <Checkbox
+                      checked={line.jobs.includes(job)}
+                      onCheckedChange={() =>
+                        update(i, { jobs: toggle(line.jobs, job) })
+                      }
+                    />
+                    {job.split("/").pop()}
+                  </label>
+                ))}
+            </fieldset>
+          </div>
+          <Button
             type="button"
-            className="link danger"
+            variant="ghost"
+            size="xs"
+            className="manage-danger release-remove"
             onClick={() =>
               onChange(
                 lines.filter((_, n) => n !== i),
@@ -170,14 +199,16 @@ export function ReleaseLinesEditor({
               )
             }
           >
-            <Trash2 size={14} aria-hidden="true" />
+            <Trash2 aria-hidden="true" />
             {t("release.remove")}
-          </button>
+          </Button>
         </fieldset>
       ))}
-      <button
+      <Button
         type="button"
-        className="link"
+        variant="outline"
+        size="sm"
+        className="release-add"
         onClick={() =>
           onChange(
             [
@@ -197,16 +228,15 @@ export function ReleaseLinesEditor({
       >
         <Plus size={14} aria-hidden="true" />
         {t("release.add")}
-      </button>
+      </Button>
       {names.length ? (
         <fieldset className="release-choices">
           <legend>{t("release.ignoredJobs")}</legend>
           {names.map((job) => (
             <label key={job}>
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={ignored.includes(job)}
-                onChange={() =>
+                onCheckedChange={() =>
                   onChange(
                     ignored.includes(job)
                       ? lines
@@ -224,6 +254,7 @@ export function ReleaseLinesEditor({
         </fieldset>
       ) : null}
       <ExternalLink
+        className="release-tool"
         href={branchQueryBrowserUrl(
           jobs.flatMap((j) => j.builds).find((r) => r.url),
         )}
