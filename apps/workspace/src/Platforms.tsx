@@ -281,6 +281,7 @@ export function Platforms({ models }: { models: FocusModel[] | null }) {
                   code={p.code}
                   field="baseband"
                   saved={p.baseband ?? ""}
+                  suggestion={p.modem?.[0]}
                 />
                 {Boolean(p.modem?.length || p.modem_repos?.length) && (
                   <div className="platform-modem">
@@ -315,16 +316,18 @@ function PlatformField({
   code,
   field,
   saved,
+  suggestion,
 }: {
   code: string;
   field: "chip" | "baseband";
   saved: string;
+  /** What the code shows, offered while nothing is named. */
+  suggestion?: string;
 }) {
   const [value, setValue] = useState(saved);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
-  async function save() {
-    const next = value.trim();
+  async function save(next = value.trim()) {
     if (busy || next === saved) return;
     setBusy(true);
     setFailed(false);
@@ -353,6 +356,19 @@ function PlatformField({
           if (e.key === "Enter") (e.target as HTMLInputElement).blur();
         }}
       />
+      {suggestion && !saved && !value && !busy ? (
+        <button
+          type="button"
+          className="platform-suggestion"
+          title={t("platform.useSuggestion", { value: suggestion })}
+          onClick={() => {
+            setValue(suggestion);
+            void save(suggestion);
+          }}
+        >
+          {suggestion}
+        </button>
+      ) : null}
       {busy ? (
         <span className="quiet platform-field-status" role="status">
           {t("platform.saving")}

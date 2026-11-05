@@ -25,11 +25,11 @@
   --muted-foreground: #5f6b62;
   --accent: #ece9df;
   --accent-foreground: #24552b;
-  --destructive: #b4532a;
+  --destructive: #a64a24;
   --border: #dcd8cc;
   --input: #c9c4b6;
   --ring: #6f8f69;
-  --warning: #92733d;
+  --warning: #806431;
   --warning-surface: #fcf5e9;
   --warning-border: #eee0c4;
   --chart-1: oklch(0.87 0 0);
@@ -47,7 +47,7 @@
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
   --foreground-soft: #4a554d;
-  --faint: #8a9183;
+  --faint: #6e7669;
   --on-solid: #ffffff;
   --on-solid-soft: #b8c0b9;
   --on-solid-warm: #f0b896;
@@ -56,7 +56,7 @@
   --line: #e6e2d7;
   --secondary-strong: #c6d8bd;
   --brand: #24552b;
-  --brand-2: #3f7a3c;
+  --brand-2: #38703a;
   --brand-fill: #24552b;
   --brand-2-fill: #3f7a3c;
   --brand-soft: #8fb784;
@@ -71,14 +71,14 @@
   --info-fill: #34406a;
   --info-surface: #e3e6ef;
   --neutral: #9aa39c;
-  --ok: #2b7a3b;
+  --ok: #2a7338;
   --ok-fill: #3f9a50;
   --bad: #b83a2c;
   --bad-fill: #d4604f;
   --bad-solid: #b83a2c;
-  --attention: #8f6410;
+  --attention: #84590c;
   --attention-fill: #c9922e;
-  --blue: #3a6ea5;
+  --blue: #356699;
   --violet: #6f58b0;
   --heat-0: #e2ded2;
   --heat-1: #c6d8bd;
@@ -652,7 +652,7 @@ h1 {
   --warning-surface: #2e2719;
   --warning-border: #4a3f28;
   --foreground-soft: #b9c2ba;
-  --faint: #7d887f;
+  --faint: #8f9a91;
   --on-solid: #ffffff;
   --on-solid-soft: #b8c0b9;
   --on-solid-warm: #f0b896;
@@ -4591,6 +4591,8 @@ a .owner-chip { color: inherit; }
 .platform-editor { gap: 14px; }
 .platform-editor label { font-size: 13px; }
 .platform-field { min-width: 0; }
+.platform-suggestion { display: block; max-width: 100%; margin-top: 4px; padding: 0; border: 0; background: none; color: var(--brand-2); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.platform-suggestion:hover { text-decoration: underline; }
 .platform-field-status { display: block; margin-top: 4px; font-size: 11px; }
 
 /* Keep model overflow inside its strip and reserve the shell/window actions. */

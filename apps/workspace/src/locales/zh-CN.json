@@ -1167,6 +1167,7 @@
   "platform.editHint": "填写芯片与确切基带版本。留空可清除；只保存修改过的字段。",
   "platform.addDetails": "填写平台信息",
   "platform.loadFailed": "平台信息读取失败",
+  "platform.useSuggestion": "填入 {{value}}",
   "platform.saving": "保存中…",
   "modelNav.previous": "向左滚动机型",
   "modelNav.next": "向右滚动机型",

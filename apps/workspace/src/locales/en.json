@@ -1167,6 +1167,7 @@
   "platform.editHint": "Enter the chip and exact baseband version. Leave a value empty to clear it. Only changed fields are saved.",
   "platform.addDetails": "Add platform details",
   "platform.loadFailed": "Could not load platform details",
+  "platform.useSuggestion": "Use {{value}}",
   "platform.saving": "Saving…",
   "modelNav.previous": "Scroll models left",
   "modelNav.next": "Scroll models right",
