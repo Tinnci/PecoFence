@@ -97,3 +97,92 @@ export function boardColumns(items: WorkItem[], now = Date.now()) {
     list.sort((a, b) => (statusAge(b, now) ?? 0) - (statusAge(a, now) ?? 0));
   return columns;
 }
+
+const closedAt = (item: WorkItem) =>
+  item.group === "done" || item.group === "cancelled"
+    ? updatedAt(item.activity.status_since)
+    : null;
+
+/** Running totals of work created and resolved, one point a day, from zero at the start. */
+export function createdResolved(
+  items: WorkItem[],
+  now = Date.now(),
+  days = 84,
+) {
+  const start = now - days * DAY;
+  const created = new Array<number>(days + 1).fill(0);
+  const resolved = new Array<number>(days + 1).fill(0);
+  const add = (at: number | null, into: number[]) => {
+    if (at === null || at > now) return;
+    into[Math.max(0, Math.ceil((at - start) / DAY))]++;
+  };
+  for (const item of items) {
+    const made = updatedAt(item.activity.created);
+    if (made !== null && made >= start) add(made, created);
+    const closed = closedAt(item);
+    if (closed !== null && closed >= start) add(closed, resolved);
+  }
+  for (let i = 1; i <= days; i++) {
+    created[i] += created[i - 1];
+    resolved[i] += resolved[i - 1];
+  }
+  return { start, created, resolved };
+}
+
+export type Burndown = {
+  /** Work open on each day; null for days still to come. */
+  remaining: (number | null)[];
+  /** Everything in the iteration by that day, so added work shows as scope growth. */
+  scope: (number | null)[];
+  ideal: number[];
+};
+
+/** An iteration's burndown. Reopened work counts as open only from its latest status. */
+export function burndown(
+  items: WorkItem[],
+  start: number,
+  days: number,
+  now = Date.now(),
+): Burndown {
+  const end = start + days * DAY;
+  const list = items.filter((item) => {
+    const closed = closedAt(item);
+    return (
+      item.group !== "cancelled" &&
+      (updatedAt(item.activity.created) ?? Infinity) < end &&
+      (closed === null || closed >= start)
+    );
+  });
+  const remaining: (number | null)[] = [];
+  const scope: (number | null)[] = [];
+  for (let day = 0; day <= days; day++) {
+    const at = start + day * DAY;
+    if (at > now + DAY) {
+      remaining.push(null);
+      scope.push(null);
+      continue;
+    }
+    const inScope = list.filter(
+      (i) => (updatedAt(i.activity.created) ?? Infinity) <= at,
+    );
+    scope.push(inScope.length);
+    remaining.push(
+      inScope.filter((i) => {
+        const closed = closedAt(i);
+        return closed === null || closed > at;
+      }).length,
+    );
+  }
+  const first = remaining[0] ?? 0;
+  const ideal = remaining.map((_, day) =>
+    Math.round((first * (days - day)) / days),
+  );
+  return { remaining, scope, ideal };
+}
+
+/** The Monday the current two-week iteration began, counted from a fixed Monday. */
+export function iterationStart(now = Date.now(), weeks = 2) {
+  const anchor = Date.UTC(2024, 0, 1) - 8 * 3_600_000;
+  const span = weeks * 7 * DAY;
+  return anchor + Math.floor((now - anchor) / span) * span;
+}

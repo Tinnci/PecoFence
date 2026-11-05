@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { WorkItem } from "../src/contracts/setup";
-import { boardColumns, flowMetrics, statusAge } from "../src/flow";
+import {
+  boardColumns,
+  burndown,
+  createdResolved,
+  flowMetrics,
+  iterationStart,
+  statusAge,
+} from "../src/flow";
 
 const now = Date.parse("2026-11-05T00:00:00Z");
 const daysAgo = (n: number) => new Date(now - n * 86_400_000).toISOString();
@@ -71,5 +78,54 @@ describe("flow", () => {
       8, 2,
     ]);
     expect(columns.has("done")).toBe(false);
+  });
+});
+
+describe("flow charts", () => {
+  it("runs totals from zero and leaves out work older than the window", () => {
+    const trend = createdResolved(
+      [item("done", 10, 5), item("pending", 3, 3), item("done", 200, 150)],
+      now,
+    );
+    expect(trend.created[0]).toBe(0);
+    expect(trend.created.at(-1)).toBe(2);
+    expect(trend.resolved.at(-1)).toBe(1);
+  });
+
+  it("burns down as work closes, grows with added work and stops at today", () => {
+    const start = now - 5 * 86_400_000;
+    const burn = burndown(
+      [item("done", 20, 3), item("active", 20, 20), item("pending", 2, 2)],
+      start,
+      14,
+      now,
+    );
+    expect(burn.remaining[0]).toBe(2);
+    expect(burn.scope[0]).toBe(2);
+    expect(burn.remaining[2]).toBe(1);
+    expect(burn.remaining[3]).toBe(2);
+    expect(burn.scope[5]).toBe(3);
+    expect(burn.remaining[7]).toBeNull();
+    expect(burn.ideal[14]).toBe(0);
+  });
+
+  it("leaves cancelled work and work closed before the iteration out of it", () => {
+    const start = now - 86_400_000;
+    const burn = burndown(
+      [item("cancelled", 9, 0), item("done", 40, 30)],
+      start,
+      14,
+      now,
+    );
+    expect(burn.scope[0]).toBe(0);
+  });
+
+  it("starts iterations on a fixed Monday every two weeks", () => {
+    const first = iterationStart(now);
+    expect(iterationStart(first + 86_400_000)).toBe(first);
+    expect(iterationStart(first + 14 * 86_400_000)).toBe(
+      first + 14 * 86_400_000,
+    );
+    expect(new Date(first + 8 * 3_600_000).getUTCDay()).toBe(1);
   });
 });

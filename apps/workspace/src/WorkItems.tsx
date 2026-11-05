@@ -3,6 +3,7 @@ import {
   ToggleGroupItem,
 } from "@/components/ui/toggle-group";
 import { flowMetrics } from "./flow";
+import { FlowCharts } from "./FlowCharts";
 import { FlowStrip, WorkBoard } from "./WorkBoard";
 import {
   Fragment,
@@ -1070,12 +1071,13 @@ export function attends(
       return !!item.local?.tags.includes(attention.slice(4));
   }
 }
-type Layout = "list" | "board";
+type Layout = "list" | "board" | "charts";
 const LAYOUT_KEY = "tinnci.work.layout";
 
 function savedLayout(): Layout {
   try {
-    return localStorage.getItem(LAYOUT_KEY) === "board" ? "board" : "list";
+    const saved = localStorage.getItem(LAYOUT_KEY);
+    return saved === "board" || saved === "charts" ? saved : "list";
   } catch {
     return "list";
   }
@@ -1504,6 +1506,9 @@ export function WorkItemsTab({
             >
               <ToggleGroupItem value="list">{t("flow.list")}</ToggleGroupItem>
               <ToggleGroupItem value="board">{t("flow.board")}</ToggleGroupItem>
+              <ToggleGroupItem value="charts">
+                {t("flow.charts")}
+              </ToggleGroupItem>
             </LayoutToggle>
             <span className="quiet work-count">
               {t("work.resultCount", {
@@ -1535,7 +1540,14 @@ export function WorkItemsTab({
             </div>
             <FilterChips items={staged} value={filters} onChange={setFilters} />
             <FlowStrip flow={flow} />
-            {layout === "board" ? (
+            {layout === "charts" ? (
+              <FlowCharts
+                items={scoped}
+                flow={flow}
+                now={now}
+                onDetails={(item) => setDetails(workItemKey(item))}
+              />
+            ) : layout === "board" ? (
               <WorkBoard
                 id={`${code}.${kind}`}
                 items={filtered}

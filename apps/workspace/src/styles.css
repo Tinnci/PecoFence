@@ -84,6 +84,8 @@
   --heat-1: #c6d8bd;
   --heat-2: #8fb784;
   --heat-3: #4f8a4a;
+  --chart-1: #2f6fa3;
+  --chart-2: #c9782e;
   --heat-4: #24552b;
   --sev-fatal: #9a4a33;
   --sev-severe: #b8743f;
@@ -690,6 +692,8 @@ h1 {
   --heat-1: #2f4a33;
   --heat-2: #3f6b42;
   --heat-3: #5f9a5a;
+  --chart-1: #4f92cf;
+  --chart-2: #bb7c3f;
   --heat-4: #9fcb98;
   --sev-fatal: #c9694e;
   --sev-severe: #d0925c;
@@ -5035,11 +5039,11 @@ a .owner-chip { color: inherit; }
   overflow: visible;
 }
 .flow-spark rect {
-  fill: var(--heat-3);
+  fill: var(--chart-1);
 }
 .flow-spark polyline {
   fill: none;
-  stroke: var(--sev-severe);
+  stroke: var(--chart-2);
   stroke-width: 1.5;
 }
 .work-board {
@@ -5126,4 +5130,113 @@ a .owner-chip { color: inherit; }
 }
 .board-more {
   font-size: 11px;
+}
+
+.flow-charts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  gap: 24px;
+  padding: 8px 0;
+}
+.flow-chart {
+  margin: 0;
+  min-width: 0;
+}
+.flow-chart figcaption {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+.flow-legend {
+  display: flex;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+.flow-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.flow-legend i {
+  width: 14px;
+  height: 0;
+  border-top: 2px solid var(--chart-1);
+}
+.flow-legend i.flow-line-b {
+  border-top-color: var(--chart-2);
+}
+.flow-legend i.flow-line-ideal {
+  border-top: 2px dashed var(--muted-foreground);
+}
+.flow-plot {
+  position: relative;
+}
+.flow-plot svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.flow-chart polyline {
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+polyline.flow-line-a {
+  stroke: var(--chart-1);
+}
+polyline.flow-line-b {
+  stroke: var(--chart-2);
+}
+polyline.flow-line-ideal {
+  stroke: var(--muted-foreground);
+  stroke-dasharray: 4 4;
+}
+.flow-axis line {
+  stroke: var(--line);
+}
+.flow-axis text,
+.flow-axis-label {
+  fill: var(--muted-foreground);
+  font-size: 10px;
+}
+.flow-cross {
+  stroke: var(--muted-foreground);
+}
+.flow-limit {
+  stroke: var(--foreground);
+  stroke-dasharray: 2 3;
+}
+.flow-dot {
+  fill: var(--chart-1);
+  stroke: var(--background);
+  stroke-width: 1.5;
+  cursor: pointer;
+}
+.flow-dot.is-aged {
+  fill: var(--chart-2);
+}
+.flow-dot:hover {
+  r: 6px;
+}
+.flow-tip {
+  position: absolute;
+  top: 4px;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 220px;
+  padding: 6px 8px;
+  font-size: 11px;
+  color: var(--foreground);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  transform: translateX(-50%);
+  pointer-events: none;
 }

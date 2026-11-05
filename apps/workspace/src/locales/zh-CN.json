@@ -1247,5 +1247,14 @@
   "flow.days": "{{count}} 天",
   "flow.limit": "{{column}} 在制上限",
   "flow.limitHint": "在制上限，只保存在本机",
-  "mine.lens.board": "看板"
+  "mine.lens.board": "看板",
+  "flow.charts": "图表",
+  "flow.chart.createdResolved": "创建与解决，12 周",
+  "flow.chart.burndown": "当前迭代燃尽图",
+  "flow.chart.aging": "在制老化，当前状态停留天数",
+  "flow.resolved": "解决",
+  "flow.remaining": "剩余",
+  "flow.scope": "范围",
+  "flow.ideal": "理想",
+  "flow.agedLine": "虚线：超过 {{count}} 天算超龄"
 }

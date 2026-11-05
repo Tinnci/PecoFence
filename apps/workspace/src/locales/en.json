@@ -1247,5 +1247,14 @@
   "flow.days": "{{count}}d",
   "flow.limit": "Work-in-progress limit for {{column}}",
   "flow.limitHint": "Work-in-progress limit, kept on this machine",
-  "mine.lens.board": "Board"
+  "mine.lens.board": "Board",
+  "flow.charts": "Charts",
+  "flow.chart.createdResolved": "Created vs resolved, 12 weeks",
+  "flow.chart.burndown": "Current iteration burndown",
+  "flow.chart.aging": "Aging open work, days in status",
+  "flow.resolved": "Resolved",
+  "flow.remaining": "Remaining",
+  "flow.scope": "Scope",
+  "flow.ideal": "Ideal",
+  "flow.agedLine": "Line: aged after {{count}} days"
 }
