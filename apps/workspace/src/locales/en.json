@@ -1156,5 +1156,12 @@
   "platform.modemPackages": "Modem packages",
   "platform.modemSources": "Modem repositories / branches",
   "platform.modemChanges": "{{count}} modem changes",
-  "platform.saveFailed": "Save failed. Please retry."
+  "platform.saveFailed": "Save failed. Please retry.",
+  "platform.refresh": "Reload platform details",
+  "platform.editFor": "Platform details for {{code}}",
+  "platform.editTitle": "Platform details · {{code}}",
+  "platform.editHint": "Enter the chip and exact baseband version. Leave a value empty to clear it. Only changed fields are saved.",
+  "platform.addDetails": "Add platform details",
+  "platform.loadFailed": "Could not load platform details",
+  "platform.saving": "Saving…"
 }

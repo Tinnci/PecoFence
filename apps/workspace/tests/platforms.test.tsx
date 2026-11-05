@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import {
   cleanup,
@@ -71,4 +72,56 @@ it("keeps a failed edit available for retry and supports clearing a value", asyn
     baseband: "",
   });
   expect((field as HTMLInputElement).value).toBe("");
+});
+
+it("edits from the model header and preserves untouched fields after a refresh", async () => {
+  queryClient.setQueryData(platformsKey, [platform]);
+  mocks.focus.mockImplementation(async (action) =>
+    action === "chip"
+      ? {}
+      : {
+          platforms: [
+            { ...platform, chip: "NEW CHIP", baseband: "NEW BASEBAND" },
+          ],
+        },
+  );
+  const user = userEvent.setup();
+  render(<ModelPlatform code="P6700LV" />);
+  await user.click(screen.getByRole("button", { name: "P6700LV 的平台信息" }));
+  // A concurrent refresh must not make the untouched input overwrite newer data.
+  queryClient.setQueryData(platformsKey, [{ ...platform, chip: "NEW CHIP" }]);
+  await user.type(
+    screen.getByRole("textbox", { name: "基带版本" }),
+    "NEW BASEBAND",
+  );
+  await user.click(screen.getByRole("button", { name: "保存" }));
+  await waitFor(() =>
+    expect(mocks.focus).toHaveBeenCalledWith("chip", {
+      code: "P6700LV",
+      baseband: "NEW BASEBAND",
+    }),
+  );
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+});
+it("cancels header edits without persisting them", async () => {
+  queryClient.setQueryData(platformsKey, [platform]);
+  const user = userEvent.setup();
+  render(<ModelPlatform code="P6700LV" />);
+  await user.click(screen.getByRole("button", { name: "P6700LV 的平台信息" }));
+  await user.type(screen.getByRole("textbox", { name: "基带版本" }), "UNSAVED");
+  await user.click(screen.getByRole("button", { name: "取消" }));
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(mocks.focus.mock.calls.some(([action]) => action === "chip")).toBe(
+    false,
+  );
+});
+it("reloads platform facts explicitly from the header", async () => {
+  queryClient.setQueryData(platformsKey, [platform]);
+  mocks.focus.mockResolvedValue({
+    platforms: [{ ...platform, chip: "UPDATED CHIP" }],
+  });
+  render(<ModelPlatform code="P6700LV" />);
+  fireEvent.click(screen.getByRole("button", { name: "重新读取平台信息" }));
+  await screen.findByText(/UPDATED CHIP/);
+  expect(mocks.focus).toHaveBeenCalledWith("platforms");
 });

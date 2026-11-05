@@ -1,8 +1,16 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { Cpu } from "lucide-react";
+import { Cpu, RefreshCw } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import type { FocusModel, Platform } from "./contracts/setup";
 import { focus } from "./api";
 import { queryClient } from "./focus-cache";
@@ -30,17 +38,182 @@ export function platformLabel(p: Platform | null | undefined) {
     .join(" · ");
 }
 
+async function savePlatform(
+  code: string,
+  values: { chip?: string; baseband?: string },
+) {
+  await focus("chip", { code, ...values });
+  await queryClient.invalidateQueries({ queryKey: platformsKey });
+  if (values.chip !== undefined)
+    void queryClient.invalidateQueries({ queryKey: ["related"] });
+}
+
+function PlatformRefresh({
+  busy,
+  onRefresh,
+}: {
+  busy: boolean;
+  onRefresh: () => void;
+}) {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon-xs"
+      disabled={busy}
+      aria-label={t("platform.refresh")}
+      title={t("platform.refresh")}
+      onClick={onRefresh}
+    >
+      {busy ? <Spinner aria-hidden="true" /> : <RefreshCw aria-hidden="true" />}
+    </Button>
+  );
+}
+
 /** Shares the same cached facts and edits as the home platform list. */
 export function ModelPlatform({ code }: { code: string }) {
   useTranslation();
   const query = useQuery(platformsOptions, queryClient);
+  const [editingCode, setEditingCode] = useState<string | null>(null);
   const platform = query.data?.find((p) => p.code === code);
   const label = platformLabel(platform);
-  return label ? (
-    <p className="model-platform" title={platform?.evidence.join("\n")}>
-      <Cpu size={14} aria-hidden="true" /> {label}
-    </p>
-  ) : null;
+  if (!platform && !query.error) return null;
+  return (
+    <>
+      <div className="model-platform">
+        {platform ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="platform-edit-trigger"
+            aria-label={t("platform.editFor", { code })}
+            title={platform.evidence.join("\n")}
+            onClick={() => setEditingCode(code)}
+          >
+            <Cpu size={14} aria-hidden="true" />{" "}
+            {label || t("platform.addDetails")}
+          </Button>
+        ) : null}
+        <PlatformRefresh
+          busy={query.isFetching}
+          onRefresh={() => void query.refetch()}
+        />
+        {query.error ? (
+          <span className="short" role="alert">
+            {t("platform.loadFailed")}
+          </span>
+        ) : null}
+      </div>
+      {platform && editingCode === code ? (
+        <PlatformEditor
+          key={code}
+          platform={platform}
+          onClose={() => setEditingCode(null)}
+        />
+      ) : null}
+    </>
+  );
+}
+
+function PlatformEditor({
+  platform,
+  onClose,
+}: {
+  platform: Platform;
+  onClose: () => void;
+}) {
+  const [initial] = useState({
+    chip: platform.chip,
+    baseband: platform.baseband ?? "",
+  });
+  const [chip, setChip] = useState(initial.chip);
+  const [baseband, setBaseband] = useState(initial.baseband);
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const values: { chip?: string; baseband?: string } = {};
+  if (chip.trim() !== initial.chip) values.chip = chip.trim();
+  if (baseband.trim() !== initial.baseband) values.baseband = baseband.trim();
+  const invalid = [chip, baseband].some(
+    (v) => [...v].length > 80 || /[\u0000-\u001f\u007f]/.test(v),
+  );
+  async function save() {
+    if (busy || invalid || !Object.keys(values).length) return;
+    setBusy(true);
+    setFailed(false);
+    try {
+      await savePlatform(platform.code, values);
+      onClose();
+    } catch {
+      setFailed(true);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open && !busy) onClose();
+      }}
+    >
+      <DialogContent className="local-dialog">
+        <DialogTitle>
+          {t("platform.editTitle", { code: platform.code })}
+        </DialogTitle>
+        <DialogDescription>{t("platform.editHint")}</DialogDescription>
+        <form
+          className="platform-editor"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void save();
+          }}
+        >
+          <label>
+            {t("platform.chipColumn")}
+            <Input
+              autoFocus
+              value={chip}
+              maxLength={80}
+              disabled={busy}
+              onChange={(e) => setChip(e.target.value)}
+            />
+          </label>
+          <label>
+            {t("platform.basebandColumn")}
+            <Input
+              value={baseband}
+              maxLength={80}
+              disabled={busy}
+              onChange={(e) => setBaseband(e.target.value)}
+            />
+          </label>
+          {failed ? (
+            <p className="short" role="alert">
+              {t("platform.saveFailed")}
+            </p>
+          ) : null}
+          <div className="local-row">
+            <Button
+              type="submit"
+              disabled={busy || invalid || !Object.keys(values).length}
+            >
+              {busy ? <Spinner aria-hidden="true" /> : null}
+              {t("views.save")}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busy}
+              onClick={onClose}
+            >
+              {t("model.cancel")}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 /** Every followed model's platform, grouped by SoC vendor; the chip is named here. */
@@ -62,6 +235,10 @@ export function Platforms({ models }: { models: FocusModel[] | null }) {
       <h2>
         <Cpu size={16} aria-hidden="true" />
         {t("platform.title")}
+        <PlatformRefresh
+          busy={query.isFetching}
+          onRefresh={() => void query.refetch()}
+        />
       </h2>
       <p className="quiet">{t("platform.hint")}</p>
       {query.error ? <FailureNote failure={failureOf(query.error)} /> : null}
@@ -148,15 +325,11 @@ function PlatformField({
   const [failed, setFailed] = useState(false);
   async function save() {
     const next = value.trim();
-    if (next === saved) return;
+    if (busy || next === saved) return;
     setBusy(true);
     setFailed(false);
     try {
-      await focus("chip", { code, [field]: next });
-      // Read the latest projection after partial writes, including another field's save.
-      await queryClient.invalidateQueries({ queryKey: platformsKey });
-      if (field === "chip")
-        void queryClient.invalidateQueries({ queryKey: ["related"] });
+      await savePlatform(code, { [field]: next });
     } catch {
       setFailed(true);
     } finally {
@@ -164,20 +337,32 @@ function PlatformField({
     }
   }
   return (
-    <Input
-      className={`platform-chip${failed ? " is-failed" : ""}`}
-      value={value}
-      maxLength={80}
-      disabled={busy}
-      placeholder={t(`platform.${field}Placeholder`)}
-      aria-label={t(`platform.${field}`, { code })}
-      aria-invalid={failed}
-      title={failed ? t("platform.saveFailed") : undefined}
-      onChange={(e) => setValue(e.target.value)}
-      onBlur={() => void save()}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-      }}
-    />
+    <div className="platform-field" aria-busy={busy}>
+      <Input
+        className={`platform-chip${failed ? " is-failed" : ""}`}
+        value={value}
+        maxLength={80}
+        disabled={busy}
+        placeholder={t(`platform.${field}Placeholder`)}
+        aria-label={t(`platform.${field}`, { code })}
+        aria-invalid={failed}
+        title={failed ? t("platform.saveFailed") : undefined}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={() => void save()}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+        }}
+      />
+      {busy ? (
+        <span className="quiet platform-field-status" role="status">
+          {t("platform.saving")}
+        </span>
+      ) : null}
+      {failed ? (
+        <span className="short platform-field-status" role="alert">
+          {t("platform.saveFailed")}
+        </span>
+      ) : null}
+    </div>
   );
 }

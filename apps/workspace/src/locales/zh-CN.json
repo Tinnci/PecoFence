@@ -1156,5 +1156,12 @@
   "platform.modemPackages": "基带包",
   "platform.modemSources": "基带仓库 / 分支",
   "platform.modemChanges": "{{count}} 条基带变更",
-  "platform.saveFailed": "保存失败，请重试"
+  "platform.saveFailed": "保存失败，请重试",
+  "platform.refresh": "重新读取平台信息",
+  "platform.editFor": "{{code}} 的平台信息",
+  "platform.editTitle": "平台信息 · {{code}}",
+  "platform.editHint": "填写芯片与确切基带版本。留空可清除；只保存修改过的字段。",
+  "platform.addDetails": "填写平台信息",
+  "platform.loadFailed": "平台信息读取失败",
+  "platform.saving": "保存中…"
 }

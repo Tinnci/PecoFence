@@ -4495,3 +4495,10 @@ a .owner-chip { color: inherit; }
 .model-head.compact .model-platform { flex-basis: 100%; }
 @media (max-width: 850px) { .platform-group li { grid-template-columns: minmax(100px, 1fr) minmax(0, 1fr); } .platform-columns { display: none; } }
 @media (max-width: 640px) { .platform-group li { grid-template-columns: 1fr; } }
+
+.platform-edit-trigger { min-width: 0; flex-shrink: 1; overflow-wrap: anywhere; height: auto; min-height: 24px; padding: 0 4px; white-space: normal; text-align: left; justify-content: flex-start; font-size: inherit; color: inherit; }
+.platform-editor, .platform-editor label { display: flex; flex-direction: column; gap: 6px; }
+.platform-editor { gap: 14px; }
+.platform-editor label { font-size: 13px; }
+.platform-field { min-width: 0; }
+.platform-field-status { display: block; margin-top: 4px; font-size: 11px; }
