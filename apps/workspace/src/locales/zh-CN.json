@@ -1163,5 +1163,12 @@
   "platform.editHint": "填写芯片与确切基带版本。留空可清除；只保存修改过的字段。",
   "platform.addDetails": "填写平台信息",
   "platform.loadFailed": "平台信息读取失败",
-  "platform.saving": "保存中…"
+  "platform.saving": "保存中…",
+  "modelNav.previous": "向左滚动机型",
+  "modelNav.next": "向右滚动机型",
+  "modelNav.all": "全部机型（{{count}}）",
+  "modelNav.title": "切换机型",
+  "modelNav.hint": "按名称或代号搜索，选择要打开的机型。",
+  "modelNav.search": "搜索机型名称或代号",
+  "modelNav.empty": "没有匹配的机型"
 }

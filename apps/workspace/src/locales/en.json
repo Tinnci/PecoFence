@@ -1163,5 +1163,12 @@
   "platform.editHint": "Enter the chip and exact baseband version. Leave a value empty to clear it. Only changed fields are saved.",
   "platform.addDetails": "Add platform details",
   "platform.loadFailed": "Could not load platform details",
-  "platform.saving": "Saving…"
+  "platform.saving": "Saving…",
+  "modelNav.previous": "Scroll models left",
+  "modelNav.next": "Scroll models right",
+  "modelNav.all": "All models ({{count}})",
+  "modelNav.title": "Switch model",
+  "modelNav.hint": "Search by name or code, then choose a model to open.",
+  "modelNav.search": "Search model name or code",
+  "modelNav.empty": "No matching models"
 }

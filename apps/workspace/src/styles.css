@@ -1743,7 +1743,7 @@ button.pick-row[aria-selected="true"] .pick-bar span {
   min-width: 0;
   overflow-x: auto;
 }
-.model-tabs .tab {
+.model-navigation .tab {
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -1753,10 +1753,10 @@ button.pick-row[aria-selected="true"] .pick-bar span {
   font-size: 13px;
   white-space: nowrap;
 }
-.model-tabs .tab:hover {
+.model-navigation .tab:hover {
   color: var(--foreground);
 }
-.model-tabs .tab[aria-current="page"] {
+.model-navigation .tab[aria-current="page"] {
   color: var(--foreground);
   font-weight: 600;
 }
@@ -3069,7 +3069,7 @@ button.ledger-row:hover {
 }
 
 /* 当前标签的下划线在标签之间滑动（motion layoutId） */
-.model-tabs .tab,
+.model-navigation .tab,
 .model-subnav button {
   position: relative;
 }
@@ -3138,7 +3138,7 @@ number-flow-react {
 }
 :root[data-inactive] .window-controls svg,
 :root[data-inactive] .wordmark,
-:root[data-inactive] .model-tabs {
+:root[data-inactive] .model-navigation {
   opacity: 0.55;
 }
 
@@ -4502,3 +4502,23 @@ a .owner-chip { color: inherit; }
 .platform-editor label { font-size: 13px; }
 .platform-field { min-width: 0; }
 .platform-field-status { display: block; margin-top: 4px; font-size: 11px; }
+
+/* Keep model overflow inside its strip and reserve the shell/window actions. */
+.appbar > .wordmark, .appbar > button, .appbar > [data-slot="dropdown-menu-trigger"] { flex-shrink: 0; }
+.model-navigation { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1; height: 48px; }
+.model-tabs-home { flex-shrink: 0; height: 100%; margin-right: 8px; position: relative; }
+.model-navigation .model-tabs { height: 100%; overflow-y: hidden; gap: 0; scrollbar-width: none; overscroll-behavior-x: contain; }
+.model-tabs::-webkit-scrollbar { display: none; }
+.model-tabs-track { position: relative; display: flex; align-items: stretch; gap: 18px; width: max-content; min-width: 100%; height: 100%; }
+.model-tabs-track > .tab { position: relative; flex-shrink: 0; min-width: 0; }
+.model-navigation .dot { flex-shrink: 0; }
+.model-navigation .model-tab-name { max-width: clamp(100px, 14vw, 180px); }
+.model-picker-trigger { flex-shrink: 0; gap: 4px; font-variant-numeric: tabular-nums; }
+.model-picker-results { max-height: min(55vh, 440px); overflow-y: auto; min-width: 0; }
+.model-picker-item { display: flex; width: 100%; align-items: center; gap: 10px; padding: 9px 8px; border-radius: 6px; text-align: left; }
+.model-picker-item:hover, .model-picker-item[aria-current="page"] { background: var(--muted); }
+.model-picker-item:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+.model-picker-item > span { min-width: 0; flex: 1; overflow-wrap: anywhere; }
+.model-picker-item strong { display: block; font-size: 13px; font-weight: 500; }
+.model-picker-item small { display: block; color: var(--muted-foreground); font-size: 11px; }
+@media (max-width: 900px) { .appbar { gap: 12px; padding-left: 12px; } .wordmark-label { display: none; } .model-tabs-track { gap: 12px; } .model-navigation .model-tab-name { max-width: 128px; } }

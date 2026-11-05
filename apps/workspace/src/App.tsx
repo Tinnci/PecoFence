@@ -1,5 +1,6 @@
+import { ModelNavigation } from "./ModelNavigation";
 import { ActionIcon, ComponentIcon } from "./components/action-icon";
-import { ContextMenuProvider, ContextTarget } from "./components/context-menu";
+import { ContextMenuProvider } from "./components/context-menu";
 import { modelContextActions } from "./context-actions";
 import { useTranslation } from "react-i18next";
 import {
@@ -59,7 +60,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { FocusHome, FollowPage, shortfall, useFocus } from "./Focus";
-import { ModelPage, TabLine } from "./Model";
+import { ModelPage } from "./Model";
 import { WindowControls } from "@/components/window-controls";
 import { isTauri } from "@tauri-apps/api/core";
 import {
@@ -355,72 +356,32 @@ function Workspace() {
           <button
             type="button"
             className="wordmark"
+            aria-label={t("app.workspace")}
             onClick={() => {
               setSelected(null);
               setPage("home");
             }}
           >
             <BrandMark busy={focusState.refreshing} />
-            {t("app.workspace")}
+            <span className="wordmark-label">{t("app.workspace")}</span>
           </button>
-          <nav
-            aria-label={t("app.mainNavigation")}
-            className="model-tabs"
-            data-tauri-drag-region
-          >
-            <button
-              type="button"
-              className="tab"
-              aria-current={page === "home" ? "page" : undefined}
-              onClick={() => setPage("home")}
-            >
-              <ActionIcon name="follow" />
-              {t("app.following")}
-              {page === "home" ? <TabLine id="appbar" /> : null}
-            </button>
-            {tabs.map((t) => (
-              <ContextTarget
-                key={t.code}
-                title={t.name}
-                actions={modelContextActions(
-                  t.code,
-                  openModel,
-                  focusState.refresh,
-                  setRenamingCode,
-                )}
-              >
-                <button
-                  type="button"
-                  className="tab"
-                  aria-current={
-                    page === "model" && modelCode === t.code
-                      ? "page"
-                      : undefined
-                  }
-                  onClick={() => openModel(t.code)}
-                  onMouseEnter={() => warmModel(t.code)}
-                  onMouseLeave={cancelPrefetch}
-                  onFocus={() => void prefetchBuilds(t.code)}
-                >
-                  <i
-                    className={
-                      t.short === null
-                        ? "dot"
-                        : t.short
-                          ? "dot short"
-                          : "dot ok"
-                    }
-                  />
-                  <span className="model-tab-name" title={t.code}>
-                    {t.name}
-                  </span>
-                  {page === "model" && modelCode === t.code ? (
-                    <TabLine id="appbar" />
-                  ) : null}
-                </button>
-              </ContextTarget>
-            ))}
-          </nav>
+          <ModelNavigation
+            models={tabs}
+            activeCode={page === "model" ? modelCode : null}
+            homeActive={page === "home"}
+            onHome={() => setPage("home")}
+            onModel={openModel}
+            onWarm={warmModel}
+            onCancelWarm={cancelPrefetch}
+            actions={(code) =>
+              modelContextActions(
+                code,
+                openModel,
+                focusState.refresh,
+                setRenamingCode,
+              )
+            }
+          />
           <Button
             variant="outline"
             className="follow-button"
