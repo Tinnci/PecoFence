@@ -1,5 +1,7 @@
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 mod hub;
+#[cfg_attr(not(windows), allow(dead_code))]
+mod logbook;
 mod process;
 mod setup;
 #[cfg(any(windows, test))]
@@ -379,6 +381,7 @@ fn desktop() {
             | "history"
             | "related"
             | "platforms"
+            | "logs"
             | "chip" => None,
             "issues" | "requirements" | "issues_full" | "requirements_full" => {
                 Some(&state.items_gate)
@@ -410,8 +413,44 @@ fn desktop() {
             "issues" | "requirements" | "issues_full" | "requirements_full" => 300,
             _ => 30,
         });
-        let output = process::spm_with(&spm_exe()?, &args, input.as_deref(), deadline).await?;
-        setup::decode_focus(output.code, &output.stdout)
+        let started = std::time::Instant::now();
+        let result = match process::spm_with(&spm_exe()?, &args, input.as_deref(), deadline).await {
+            Ok(output) => setup::decode_focus(output.code, &output.stdout),
+            Err(failure) => Err(failure),
+        };
+        note_focus(&action, started.elapsed(), &result);
+        result
+    }
+    /// Failures always; successes only when slow, so the log stays readable.
+    fn note_focus(
+        action: &str,
+        took: std::time::Duration,
+        result: &Result<setup::FocusData, setup::SetupFailure>,
+    ) {
+        let ms = took.as_millis() as u64;
+        match result {
+            Err(failure) => logbook::record(
+                "warn",
+                "focus.failed",
+                serde_json::json!({ "action": action, "ms": ms, "code": failure.code }),
+            ),
+            Ok(_) if ms >= 3000 => logbook::record(
+                "info",
+                "focus.slow",
+                serde_json::json!({ "action": action, "ms": ms }),
+            ),
+            Ok(_) => {}
+        }
+    }
+    /// A frontend error: where it happened and a short message, kept in the shared log.
+    #[tauri::command]
+    fn client_error(kind: String, message: String) {
+        let bounded = |text: &str, length: usize| text.chars().take(length).collect::<String>();
+        logbook::record(
+            "error",
+            "client.error",
+            serde_json::json!({ "kind": bounded(&kind, 40), "message": bounded(&message, 300) }),
+        );
     }
     /// Adds stage mappings for values that appeared after creation.
     #[tauri::command]
@@ -536,7 +575,11 @@ fn desktop() {
         .setup(move |app| {
             #[cfg(windows)]
             if let Err(error) = snap::install(app.handle()) {
-                eprintln!("{{\"event\":\"snap_overlay_unavailable\",\"error\":{error:?}}}");
+                logbook::record(
+                    "warn",
+                    "snap.overlay_unavailable",
+                    serde_json::json!({ "error": format!("{error:?}") }),
+                );
             }
             if let Some(ms) = smoke_ms {
                 let handle = app.handle().clone();
@@ -551,6 +594,7 @@ fn desktop() {
             load_hub,
             launch_target,
             first_frame,
+            client_error,
             template_plan,
             template_apply,
             project_status,
@@ -605,7 +649,15 @@ fn main() {
         return;
     }
     #[cfg(windows)]
-    desktop();
+    {
+        logbook::watch_panics();
+        logbook::record(
+            "info",
+            "app.started",
+            serde_json::json!({ "version": env!("CARGO_PKG_VERSION") }),
+        );
+        desktop();
+    }
     #[cfg(not(windows))]
     eprintln!("The desktop shell requires Windows; use npm run dev for the frontend.");
 }

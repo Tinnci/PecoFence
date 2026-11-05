@@ -4614,3 +4614,16 @@ a .owner-chip { color: inherit; }
 .model-picker-item strong { display: block; font-size: 13px; font-weight: 500; }
 .model-picker-item small { display: block; color: var(--muted-foreground); font-size: 11px; }
 @media (max-width: 900px) { .appbar { gap: 12px; padding-left: 12px; } .wordmark-label { display: none; } .model-tabs-track { gap: 12px; } .model-navigation .model-tab-name { max-width: 128px; } }
+
+/* The shared log */
+.logs-page { display: grid; gap: 12px; min-width: 0; }
+.logs-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.logs-search { flex: 1 1 180px; max-width: 280px; height: 30px; }
+.logs-problems { margin-left: 4px; color: var(--bad); font-weight: 600; }
+.logs-list { display: grid; margin: 0; padding: 0; list-style: none; font-size: 12px; }
+.logs-list li { display: grid; grid-template-columns: 96px 76px minmax(120px, max-content) minmax(0, 1fr); gap: 12px; padding: 5px 8px; border-bottom: 1px solid var(--line); border-left: 2px solid transparent; }
+.logs-list li.log-warn { border-left-color: var(--attention-fill); }
+.logs-list li.log-error { border-left-color: var(--bad-fill); }
+.logs-list time, .logs-app { color: var(--muted-foreground); }
+.logs-list .log-error .logs-event { color: var(--bad); font-weight: 500; }
+.logs-detail { color: var(--muted-foreground); overflow-wrap: anywhere; font-family: var(--font-mono, ui-monospace, monospace); }

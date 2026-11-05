@@ -1023,6 +1023,27 @@ pub struct ChangeDiff {
     pub diff: String,
     pub truncated: bool,
 }
+/// One line of the shared log.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct LogEntry {
+    pub ts: String,
+    pub level: String,
+    pub app: String,
+    pub event: String,
+    pub detail: String,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct LogCount {
+    pub total: u32,
+    pub problems: u32,
+}
+/// Every tool's log merged, newest first.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct Logs {
+    pub entries: Vec<LogEntry>,
+    pub apps: std::collections::BTreeMap<String, LogCount>,
+    pub truncated: bool,
+}
 /// A model's platform: vendor, Android and kernel from its code, the chip as named.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct Platform {
@@ -1288,6 +1309,9 @@ pub struct FocusData {
     pub platforms: Option<Vec<Platform>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
+    pub logs: Option<Logs>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub flows: Option<Vec<ItemFlow>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
@@ -1519,6 +1543,13 @@ pub fn route_args(r: &FocusRequest) -> Option<Vec<String>> {
         }
         "build_evidence" => build_evidence_args(code?, r.job.as_deref()?, r.build?),
         "platforms" => Some(vec!["focus".into(), "platforms".into()]),
+        "logs" => Some(
+            [
+                "focus", "logs", "--since", "7d", "--limit", "1000", "--format", "json",
+            ]
+            .map(String::from)
+            .to_vec(),
+        ),
         "chip" => {
             let code = code.filter(|c| valid_code(c))?;
             if r.chip.is_none() && r.baseband.is_none() {
@@ -1959,6 +1990,9 @@ pub fn types() -> String {
             ChangeDiffs::decl(&config),
             ItemFlow::decl(&config),
             Related::decl(&config),
+            LogEntry::decl(&config),
+            LogCount::decl(&config),
+            Logs::decl(&config),
             Platform::decl(&config),
             RelatedChange::decl(&config),
             LinkEvidence::decl(&config),

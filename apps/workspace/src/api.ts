@@ -15,14 +15,22 @@ import type {
   ServiceHealth,
 } from "./contracts/setup";
 export type Page =
-  "home" | "setup" | "health" | "project" | "activity" | "model" | "follow";
+  | "home"
+  | "setup"
+  | "health"
+  | "project"
+  | "activity"
+  | "logs"
+  | "model"
+  | "follow";
 export function isPage(value: unknown): value is Page {
   return (
     value === "home" ||
     value === "setup" ||
     value === "health" ||
     value === "project" ||
-    value === "activity"
+    value === "activity" ||
+    value === "logs"
   );
 }
 export async function loadHub(
@@ -199,6 +207,7 @@ export async function focus(
     | "history"
     | "related"
     | "platforms"
+    | "logs"
     | "chip"
     | "change_files"
     | "change_diff"

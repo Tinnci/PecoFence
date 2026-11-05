@@ -63,6 +63,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { FocusHome, FollowPage, shortfall, useFocus } from "./Focus";
 import { ModelPage } from "./Model";
+import { LogsPage } from "./Logs";
 import { WindowControls } from "@/components/window-controls";
 import { isTauri } from "@tauri-apps/api/core";
 import {
@@ -324,6 +325,7 @@ function Workspace() {
       t("app.fromChoosingAScopeToYourFirstData"),
     ],
     activity: [t("app.codeActivity"), t("app.gerritChangesDayByDay")],
+    logs: [t("logs.title"), ""],
     model: [t("app.model"), ""],
     follow: [t("app.followAModel"), ""],
   };
@@ -342,6 +344,7 @@ function Workspace() {
     { id: "setup", title: t("app.setupChecklist") },
     { id: "health", title: t("app.health") },
     { id: "activity", title: t("app.codeActivity") },
+    { id: "logs", title: t("logs.title") },
     { id: "project", title: t("app.newSPMProject") },
   ] as const;
   return (
@@ -591,6 +594,8 @@ function Workspace() {
                       />
                     ) : page === "activity" ? (
                       <ActivityPage />
+                    ) : page === "logs" ? (
+                      <LogsPage />
                     ) : page === "project" ? (
                       <ProjectWizard
                         setup={projectSetup}
