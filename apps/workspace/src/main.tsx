@@ -5,13 +5,19 @@ import { isTauri, invoke } from "@tauri-apps/api/core";
 import App from "./App";
 import { MotionRoot } from "./components/motion";
 import "./styles.css";
-function reportError(kind: string, message: unknown) {
+// Only the error's type and place reach the log: its message can hold anything.
+function reportError(kind: string, error: unknown, at = "") {
+  const name = error instanceof Error ? error.name : "unknown";
   if (isTauri())
-    void invoke("client_error", { kind, message: String(message) }).catch(
-      () => {},
-    );
+    void invoke("client_error", { kind, name, at }).catch(() => {});
 }
-window.addEventListener("error", (e) => reportError("error", e.message));
+window.addEventListener("error", (e) =>
+  reportError(
+    "error",
+    e.error,
+    `${e.filename.split("/").pop() ?? ""}:${e.lineno}`,
+  ),
+);
 window.addEventListener("unhandledrejection", (e) =>
   reportError("rejection", e.reason),
 );

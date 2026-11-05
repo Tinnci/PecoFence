@@ -1031,6 +1031,8 @@ pub struct LogEntry {
     pub app: String,
     pub event: String,
     pub detail: String,
+    /// Ties the entries of one user action together; empty for plain text logs.
+    pub run_id: String,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct LogCount {

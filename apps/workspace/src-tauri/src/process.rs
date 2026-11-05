@@ -29,7 +29,7 @@ async fn capture(
     args: &[&str],
     deadline: Duration,
 ) -> Result<Output, String> {
-    capture_with(program, args, None, deadline).await
+    capture_with(program, args, None, None, deadline).await
 }
 
 /// `input`, when given, is written to stdin and closed; otherwise stdin is null.
@@ -37,9 +37,13 @@ async fn capture_with(
     program: impl AsRef<std::ffi::OsStr>,
     args: &[&str],
     input: Option<&[u8]>,
+    run_id: Option<&str>,
     deadline: Duration,
 ) -> Result<Output, String> {
     let mut command = Command::new(program);
+    if let Some(run_id) = run_id {
+        command.env("TINNCI_RUN_ID", run_id);
+    }
     command
         .args(args)
         .stdin(if input.is_some() {
@@ -110,7 +114,7 @@ pub async fn spm(
 ) -> Result<Output, crate::setup::SetupFailure> {
     spm_with(program, args, None, deadline).await
 }
-/// As `spm`, with a JSON document on stdin (`setup draft`, `discover count`).
+/// As `spm_run`, under a run of its own.
 #[cfg(windows)]
 pub async fn spm_with(
     program: &std::path::Path,
@@ -118,7 +122,26 @@ pub async fn spm_with(
     input: Option<&[u8]>,
     deadline: Duration,
 ) -> Result<Output, crate::setup::SetupFailure> {
-    capture_with(program, args, input, deadline)
+    spm_run(
+        program,
+        args,
+        input,
+        &crate::logbook::new_run_id(),
+        deadline,
+    )
+    .await
+}
+/// As `spm`, with a JSON document on stdin (`setup draft`, `discover count`) and the run the
+/// shared log files this call under.
+#[cfg(windows)]
+pub async fn spm_run(
+    program: &std::path::Path,
+    args: &[&str],
+    input: Option<&[u8]>,
+    run_id: &str,
+    deadline: Duration,
+) -> Result<Output, crate::setup::SetupFailure> {
+    capture_with(program, args, input, Some(run_id), deadline)
         .await
         .map_err(|code| {
             crate::setup::SetupFailure::new(match code.as_str() {
@@ -490,6 +513,7 @@ mod tests {
             "sh",
             &["-c", "cat; echo done"],
             Some("{\"project\":\"E6767SM\"}".as_bytes()),
+            None,
             Duration::from_secs(5),
         )
         .await

@@ -414,16 +414,20 @@ fn desktop() {
             _ => 30,
         });
         let started = std::time::Instant::now();
-        let result = match process::spm_with(&spm_exe()?, &args, input.as_deref(), deadline).await {
+        let run_id = logbook::new_run_id();
+        let spm = spm_exe()?;
+        let result = match process::spm_run(&spm, &args, input.as_deref(), &run_id, deadline).await
+        {
             Ok(output) => setup::decode_focus(output.code, &output.stdout),
             Err(failure) => Err(failure),
         };
-        note_focus(&action, started.elapsed(), &result);
+        note_focus(&action, &run_id, started.elapsed(), &result);
         result
     }
     /// Failures always; successes only when slow, so the log stays readable.
     fn note_focus(
         action: &str,
+        run_id: &str,
         took: std::time::Duration,
         result: &Result<setup::FocusData, setup::SetupFailure>,
     ) {
@@ -432,24 +436,27 @@ fn desktop() {
             Err(failure) => logbook::record(
                 "warn",
                 "focus.failed",
-                serde_json::json!({ "action": action, "ms": ms, "code": failure.code }),
+                serde_json::json!({ "action": action, "ms": ms, "code": failure.code, "run_id": run_id }),
             ),
             Ok(_) if ms >= 3000 => logbook::record(
                 "info",
                 "focus.slow",
-                serde_json::json!({ "action": action, "ms": ms }),
+                serde_json::json!({ "action": action, "ms": ms, "run_id": run_id }),
             ),
             Ok(_) => {}
         }
     }
-    /// A frontend error: where it happened and a short message, kept in the shared log.
+    /// A frontend error: its type and where it happened. Its message can hold anything.
     #[tauri::command]
-    fn client_error(kind: String, message: String) {
-        let bounded = |text: &str, length: usize| text.chars().take(length).collect::<String>();
+    fn client_error(kind: String, name: String, at: String) {
         logbook::record(
             "error",
             "client.error",
-            serde_json::json!({ "kind": bounded(&kind, 40), "message": bounded(&message, 300) }),
+            serde_json::json!({
+                "kind": logbook::plain(&kind),
+                "name": logbook::plain(&name),
+                "at": logbook::plain(&at),
+            }),
         );
     }
     /// Adds stage mappings for values that appeared after creation.

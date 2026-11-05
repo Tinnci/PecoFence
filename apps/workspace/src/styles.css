@@ -4626,4 +4626,6 @@ a .owner-chip { color: inherit; }
 .logs-list li.log-error { border-left-color: var(--bad-fill); }
 .logs-list time, .logs-app { color: var(--muted-foreground); }
 .logs-list .log-error .logs-event { color: var(--bad); font-weight: 500; }
+.logs-run { margin-left: 8px; padding: 0; border: 0; background: none; color: var(--brand-2); font: inherit; }
+.logs-run:hover { text-decoration: underline; }
 .logs-detail { color: var(--muted-foreground); overflow-wrap: anywhere; font-family: var(--font-mono, ui-monospace, monospace); }

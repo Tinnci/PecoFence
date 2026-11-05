@@ -4,10 +4,12 @@
 use serde_json::{Map, Value, json};
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const KEEP_DAYS: i64 = 14;
 const DAY_LIMIT: u64 = 20 * 1024 * 1024;
+const FOLDER_LIMIT: u64 = 200 * 1024 * 1024;
 
 /// Days since 1970 to year, month, day (Howard Hinnant's civil_from_days).
 fn civil(days: i64) -> (i64, u32, u32) {
@@ -44,18 +46,50 @@ fn directory() -> Option<PathBuf> {
     Some(PathBuf::from(base).join("Tinnci").join("logs"))
 }
 
+/// Past days older than `KEEP_DAYS` go, then the oldest until the folder fits `FOLDER_LIMIT`.
+/// The folder is shared, so this counts every tool's files, as `spm` does.
 fn prune(dir: &Path, today: i64) {
-    let oldest = day_name(today - KEEP_DAYS);
+    let (oldest, current) = (day_name(today - KEEP_DAYS), day_name(today));
+    let mut days = vec![];
     for file in std::fs::read_dir(dir).into_iter().flatten().flatten() {
         let name = file.file_name();
         let day = name
             .to_str()
-            .and_then(|n| n.strip_prefix("workspace-"))
-            .and_then(|n| n.strip_suffix(".jsonl"));
-        if day.is_some_and(|d| d.len() == 8 && d < oldest.as_str()) {
-            let _ = std::fs::remove_file(file.path());
+            .and_then(|n| n.strip_suffix(".jsonl"))
+            .and_then(|n| n.rsplit('-').next())
+            .filter(|d| d.len() == 8)
+            .map(str::to_owned);
+        if let (Some(day), Ok(meta)) = (day, file.metadata()) {
+            days.push((day, meta.len(), file.path()));
         }
     }
+    days.sort();
+    let mut total: u64 = days.iter().map(|d| d.1).sum();
+    for (day, length, path) in days {
+        if day < oldest || (total > FOLDER_LIMIT && day < current) {
+            total -= length;
+            let _ = std::fs::remove_file(path);
+        }
+    }
+}
+
+/// A new id for one call, handed to `spm` so both sides share it.
+pub fn new_run_id() -> String {
+    static NEXT: AtomicU32 = AtomicU32::new(0);
+    let millis = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |now| now.as_millis());
+    let turn = NEXT.fetch_add(1, Ordering::Relaxed);
+    format!("{millis:x}-{:x}-{turn:x}", std::process::id())
+}
+
+/// A name from the frontend, or `unknown`: no free text reaches the log.
+pub fn plain(text: &str) -> String {
+    let fine = (1..=80).contains(&text.len())
+        && text
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b"._-:".contains(&b));
+    if fine { text } else { "unknown" }.to_owned()
 }
 
 fn line(ts: &str, level: &str, event: &str, fields: Value) -> String {
@@ -83,6 +117,7 @@ fn append(
     let today = seconds.div_euclid(86_400);
     let path = dir.join(format!("workspace-{}.jsonl", day_name(today)));
     match std::fs::metadata(&path) {
+        Ok(meta) if meta.len() > DAY_LIMIT * 2 => return Ok(()),
         Ok(meta) if meta.len() > DAY_LIMIT && level == "info" => return Ok(()),
         Ok(_) => {}
         Err(_) => {
@@ -154,6 +189,10 @@ mod tests {
         assert_eq!(entry["app"], "workspace");
         assert_eq!(entry["event"], "focus.failed");
         assert_eq!(entry["action"], "flows");
+        assert_eq!(plain("TypeError"), "TypeError");
+        assert_eq!(plain("index-abc.js:12"), "index-abc.js:12");
+        assert_eq!(plain("token=abc\nfake"), "unknown");
+        assert_ne!(new_run_id(), new_run_id());
         std::fs::remove_dir_all(dir).unwrap();
     }
 }

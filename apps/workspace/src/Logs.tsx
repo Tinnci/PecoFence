@@ -37,7 +37,9 @@ export function LogsPage() {
         (app === "all" || e.app === app) &&
         (level === "all" || e.level === "warn" || e.level === "error") &&
         (!words ||
-          `${e.app} ${e.event} ${e.detail}`.toLowerCase().includes(words)),
+          `${e.app} ${e.event} ${e.detail} ${e.run_id}`
+            .toLowerCase()
+            .includes(words)),
     );
   }, [log, app, level, search]);
   const apps = Object.entries(log?.apps ?? {});
@@ -116,7 +118,23 @@ export function LogsPage() {
               <time dateTime={e.ts}>{shortTime(e.ts)}</time>
               <span className="logs-app">{e.app}</span>
               <span className="logs-event">{e.event}</span>
-              <span className="logs-detail">{e.detail}</span>
+              <span className="logs-detail">
+                {e.detail}
+                {e.run_id ? (
+                  <button
+                    type="button"
+                    className="logs-run"
+                    title={t("logs.showRun")}
+                    onClick={() => {
+                      setApp("all");
+                      setLevel("all");
+                      setSearch(e.run_id);
+                    }}
+                  >
+                    {e.run_id.slice(-8)}
+                  </button>
+                ) : null}
+              </span>
             </li>
           ))}
         </ol>

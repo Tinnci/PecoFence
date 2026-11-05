@@ -513,6 +513,7 @@
   "theme.label": "Appearance",
   "theme.light": "Light",
   "theme.dark": "Dark",
+  "logs.showRun": "Show everything from this action",
   "logs.title": "Logs",
   "logs.app": "Tool",
   "logs.level": "Level",
