@@ -33,7 +33,9 @@ import {
 } from "@/components/ui/dialog";
 import { ExternalLink } from "@/components/external-link";
 import { copyText } from "./clipboard";
-import { t, locale } from "./i18n";
+import { t } from "./i18n";
+import { shortTime } from "./time-format";
+import { Textarea } from "./components/ui/textarea";
 import {
   checkCounts,
   checkTemplates,
@@ -501,7 +503,7 @@ export default function ReleaseChecklist({
                           : "releaseCheck.note",
                       )}
                     </span>
-                    <textarea
+                    <Textarea
                       rows={3}
                       maxLength={12000}
                       value={draft.note}
@@ -514,7 +516,7 @@ export default function ReleaseChecklist({
                       <Link2 size={13} />
                       {t("releaseCheck.evidence")}
                     </span>
-                    <textarea
+                    <Textarea
                       rows={2}
                       maxLength={2000}
                       value={draft.evidence}
@@ -540,15 +542,7 @@ export default function ReleaseChecklist({
                         ? t("releaseCheck.unsaved")
                         : entry.updatedAt
                           ? t("releaseCheck.savedAt", {
-                              time: new Date(entry.updatedAt).toLocaleString(
-                                locale(),
-                                {
-                                  month: "2-digit",
-                                  day: "2-digit",
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                },
-                              ),
+                              time: shortTime(entry.updatedAt),
                             })
                           : t("releaseCheck.notChecked")}
                     </span>
@@ -626,7 +620,7 @@ export default function ReleaseChecklist({
             </label>
             <label className="release-field">
               <span>{t("releaseCheck.branch")}</span>
-              <textarea
+              <Textarea
                 rows={2}
                 name="branch"
                 required

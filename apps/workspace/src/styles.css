@@ -4472,7 +4472,7 @@ a .owner-chip { color: inherit; }
 
 /* Platforms: models grouped by SoC vendor, each with its versions and named chip. */
 .platforms { margin-top: 28px; display: flex; flex-direction: column; gap: 8px; }
-.platforms h2 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 16px; }
+.platforms h2 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 17px; }
 .platforms > .quiet { margin: 0; font-size: 12px; }
 .platform-group h3 { margin: 10px 0 4px; font-size: 13px; }
 .platform-group ul { list-style: none; margin: 0; padding: 0; }

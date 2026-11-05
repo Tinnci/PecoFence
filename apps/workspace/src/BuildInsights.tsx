@@ -5,7 +5,8 @@ import { ExternalLink } from "@/components/external-link";
 import type { Builds, JobView } from "./contracts/setup";
 import { forecastQueue } from "./queue-estimate";
 import { durationHistory, runtimeEstimate } from "./build-estimate";
-import { t, locale } from "./i18n";
+import { t } from "./i18n";
+import { shortTime } from "./time-format";
 import { jobBrowserUrl } from "./browser-links";
 import "./build-insights.css";
 
@@ -22,13 +23,7 @@ function range(low: number, high: number) {
     ? buildDuration(high)
     : `${buildDuration(low)} – ${buildDuration(high)}`;
 }
-const time = (ms: number) =>
-  new Date(ms).toLocaleString(locale(), {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+const time = (ms: number) => shortTime(ms);
 export function RunningEstimate({ job, now }: { job: JobView; now: number }) {
   useTranslation();
   const run = job.builds[0];

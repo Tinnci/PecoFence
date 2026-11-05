@@ -95,6 +95,7 @@ import {
   type SortKey,
 } from "./WorkSort";
 import { t } from "./i18n";
+import { shortTime } from "./time-format";
 import {
   ageDays,
   updatedAt,
@@ -233,15 +234,9 @@ async function applyAnnotation(
 const historyKey = (item: WorkItem) =>
   ["work-item-history", item.source, item.instance, item.id] as const;
 
-const clock: Intl.DateTimeFormatOptions = {
-  month: "2-digit",
-  day: "2-digit",
-  hour: "2-digit",
-  minute: "2-digit",
-};
 function when(value: string) {
   const at = updatedAt(value);
-  return at === null ? value : new Date(at).toLocaleString(undefined, clock);
+  return at === null ? value : shortTime(at);
 }
 
 type Entry = { at: number; text: string; quiet?: string };
@@ -331,9 +326,7 @@ function History({ item, full = false }: { item: WorkItem; full?: boolean }) {
       <ol className="local-notes local-history">
         {list.slice(0, full ? list.length : 30).map((e, i) => (
           <li key={i}>
-            <span className="quiet">
-              {new Date(e.at).toLocaleString(undefined, clock)}
-            </span>
+            <span className="quiet">{shortTime(e.at)}</span>
             <span>
               {e.text}
               {e.quiet ? <span className="quiet"> · {e.quiet}</span> : null}
@@ -1494,7 +1487,7 @@ export function WorkItemsTab({
               <span>{exportSummary}</span>
               <span>
                 {t("work.showing", { count: filtered.length })} ·{" "}
-                {new Date().toLocaleString()}
+                {shortTime(Date.now())}
               </span>
             </div>
             <FilterChips items={staged} value={filters} onChange={setFilters} />

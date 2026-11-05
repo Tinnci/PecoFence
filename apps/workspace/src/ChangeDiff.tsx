@@ -21,6 +21,7 @@ import { focus } from "./api";
 import { queryClient } from "./focus-cache";
 import { FailureNote, failureOf } from "./TemplateImport";
 import { t } from "./i18n";
+import { shortTime } from "./time-format";
 
 /** Gerrit's status as a pill: merged, open for review, abandoned, or the raw value. */
 export function ChangeStatus({ status }: { status: string }) {
@@ -176,13 +177,6 @@ export function ChangeFiles({
   );
 }
 
-const clock: Intl.DateTimeFormatOptions = {
-  month: "2-digit",
-  day: "2-digit",
-  hour: "2-digit",
-  minute: "2-digit",
-};
-
 /** Gerrit's review history: who uploaded, voted, merged or abandoned, and when. */
 function TimelineRow({ events }: { events: ChangeEvent[] }) {
   const closing = [...events]
@@ -201,7 +195,7 @@ function TimelineRow({ events }: { events: ChangeEvent[] }) {
               {" "}
               · {t("gerrit.steps", { count: people })}
               {closing
-                ? ` · ${t(`gerrit.${closing.kind}`)} ${new Date(closing.at).toLocaleString(undefined, clock)}`
+                ? ` · ${t(`gerrit.${closing.kind}`)} ${shortTime(closing.at)}`
                 : ""}
             </span>
           </span>
@@ -213,9 +207,7 @@ function TimelineRow({ events }: { events: ChangeEvent[] }) {
                 key={i}
                 className={`gerrit-event event-${e.kind}${e.bot ? " event-bot" : ""}`}
               >
-                <time dateTime={e.at}>
-                  {new Date(e.at).toLocaleString(undefined, clock)}
-                </time>
+                <time dateTime={e.at}>{shortTime(e.at)}</time>
                 <span className="event-dot" aria-hidden="true" />
                 <div className="event-body">
                   <span className="event-head">

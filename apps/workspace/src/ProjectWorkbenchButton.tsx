@@ -6,6 +6,8 @@ import { Button } from "./components/ui/button";
 import { Spinner } from "./components/ui/spinner";
 import { Alert, AlertDescription } from "./components/ui/alert";
 import { t } from "./i18n";
+import type { SetupFailure } from "./contracts/setup";
+import { FailureNote, failureOf } from "./TemplateImport";
 
 export type OpenProjectWorkbench = (seed: FocusModel) => Promise<void>;
 
@@ -19,13 +21,20 @@ export function ProjectWorkbenchButton({
   useTranslation();
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  // SPM failures carry a code the workspace already has words for.
+  const [coded, setCoded] = useState<SetupFailure | null>(null);
   async function open() {
     if (busy) return;
     setBusy(true);
     setFailure(null);
+    setCoded(null);
     try {
       await onOpen(seed);
     } catch (error) {
+      if (error && typeof error === "object" && "code" in error) {
+        setCoded(failureOf(error));
+        return;
+      }
       const detail =
         error &&
         typeof error === "object" &&
@@ -52,6 +61,7 @@ export function ProjectWorkbenchButton({
         )}
         {t("projectSetup.openWorkbench")}
       </Button>
+      {coded ? <FailureNote failure={coded} /> : null}
       {failure ? (
         <Alert className="alert-warning">
           <AlertDescription>{failure}</AlertDescription>

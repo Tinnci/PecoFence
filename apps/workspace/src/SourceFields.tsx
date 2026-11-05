@@ -14,6 +14,7 @@ import { FailureNote, failureOf } from "./TemplateImport";
 import { Linked } from "./ChangeDiff";
 import { readableText } from "./work-text";
 import { t } from "./i18n";
+import { shortTime } from "./time-format";
 
 export function SourceFields({ code, item }: { code: string; item: WorkItem }) {
   useTranslation();
@@ -99,7 +100,7 @@ export function SourceFields({ code, item }: { code: string; item: WorkItem }) {
           ) : null}
           <p className="quiet work-source-read">
             {t("work.sourceReadAt", {
-              time: new Date(query.data.fetched_at).toLocaleString(),
+              time: shortTime(query.data.fetched_at),
             })}
           </p>
         </>

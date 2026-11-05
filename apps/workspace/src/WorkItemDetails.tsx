@@ -17,6 +17,7 @@ import { isDue, updatedAt } from "./work-activity";
 import { ownerScope, ownerScopeLabel } from "./owner-workload";
 import { t } from "./i18n";
 import { SourceFields } from "./SourceFields";
+import { shortTime } from "./time-format";
 import { Related } from "./Related";
 
 export const workItemKey = (item: WorkItem) =>
@@ -24,7 +25,7 @@ export const workItemKey = (item: WorkItem) =>
 function date(value: string) {
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
   const time = updatedAt(value);
-  return time === null ? "—" : new Date(time).toLocaleString();
+  return time === null ? "—" : shortTime(time);
 }
 function Text({ value }: { value: string }) {
   return (

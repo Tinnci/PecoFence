@@ -9,8 +9,9 @@
     justify-content: space-between;
     gap: 16px;
   }
+  /* Section headings keep the workspace's own size. */
   .release-heading h2 {
-    font-size: 20px;
+    font-size: 17px;
   }
   .release-heading p {
     color: var(--muted-foreground);

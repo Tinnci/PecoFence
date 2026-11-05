@@ -21,18 +21,10 @@ import { FailureNote, failureOf } from "./TemplateImport";
 import { OwnerChip } from "./Badges";
 import { Linked } from "./ChangeDiff";
 import { t } from "./i18n";
+import { shortTime } from "./time-format";
 import { readableText } from "./work-text";
 
-const clock: Intl.DateTimeFormatOptions = {
-  month: "2-digit",
-  day: "2-digit",
-  hour: "2-digit",
-  minute: "2-digit",
-};
-const when = (at: string) => {
-  const d = new Date(at);
-  return Number.isNaN(d.getTime()) ? at : d.toLocaleString(undefined, clock);
-};
+const when = (at: string) => shortTime(at);
 
 // 飞书项目 records every field a transition form touches, and its workflow keeps internal
 // fields of its own. What a reader needs: moves with the form filled for them, people
@@ -225,7 +217,7 @@ function FlowRow({
   const long = e.text.length > 160 || e.text.split("\n").length > 3;
   return (
     <li className={`gerrit-event event-${e.kind}${e.bot ? " event-bot" : ""}`}>
-      <time dateTime={e.at} title={new Date(e.at).toLocaleString()}>
+      <time dateTime={e.at} title={e.at}>
         {when(e.at)}
       </time>
       <span className="event-dot" aria-hidden="true" />
