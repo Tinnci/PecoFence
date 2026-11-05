@@ -1,0 +1,63 @@
+html,
+body {
+  background: #f4f2ec;
+}
+html.dark,
+html.dark body {
+  background: #171a18;
+}
+#splash {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  background: #f4f2ec;
+  color: #1b2420;
+  font:
+    700 19px/1 Georgia,
+    "Noto Serif SC",
+    "Microsoft YaHei",
+    serif;
+  letter-spacing: 0.06em;
+  transition: opacity 0.2s ease-out;
+}
+html.dark #splash {
+  background: #171a18;
+  color: #e8e6df;
+}
+#splash.done {
+  opacity: 0;
+  pointer-events: none;
+}
+#splash rect[style] {
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+  animation: splash-cell 1.5s cubic-bezier(0.2, 0.8, 0.2, 1) infinite both;
+}
+@keyframes splash-cell {
+  0% {
+    opacity: 0.15;
+    transform: scale(0.55);
+  }
+  35%,
+  70% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0.15;
+    transform: scale(0.55);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  #splash rect[style] {
+    animation: none;
+  }
+  #splash {
+    transition: none;
+  }
+}
