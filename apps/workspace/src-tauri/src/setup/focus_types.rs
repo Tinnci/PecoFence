@@ -3,6 +3,46 @@ use super::*;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
 #[serde(default)]
+pub struct MineReason {
+    pub key: String,
+    pub points: u32,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default)]
+pub struct MyIssue {
+    pub source: String,
+    pub id: String,
+    pub display_id: String,
+    pub title: String,
+    pub url: String,
+    pub status: String,
+    pub model: String,
+    pub followed: bool,
+    pub score: u32,
+    pub reasons: Vec<MineReason>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default)]
+pub struct MineSource {
+    pub source: String,
+    #[ts(type = "number")]
+    pub count: u64,
+    pub error: String,
+}
+
+/// What is assigned to the signed-in user, most urgent first.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default)]
+pub struct Mine {
+    pub computed_at: String,
+    pub sources: Vec<MineSource>,
+    pub items: Vec<MyIssue>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default)]
 pub struct BackupSummary {
     pub path: String,
     #[ts(type = "number")]
@@ -784,6 +824,9 @@ pub struct FocusData {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub search: Option<SearchResults>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub mine: Option<Mine>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub backup: Option<BackupSummary>,

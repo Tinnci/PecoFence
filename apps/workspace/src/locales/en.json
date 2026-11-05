@@ -1207,5 +1207,21 @@
   "projectSetup.removeTitle": "Remove {{name}}?",
   "projectSetup.removeHint": "Its configuration and database leave the list. You can undo this right after, and the last three removed projects are kept.",
   "projectSetup.removeActive": "The background service runs this project; activate another one first",
-  "projectSetup.removed": "Removed {{name}}"
+  "projectSetup.removed": "Removed {{name}}",
+  "mine.title": "My issues",
+  "mine.refresh": "Read again",
+  "mine.failed": "{{source}} could not be read",
+  "mine.source.jira": "Jira",
+  "mine.source.meegle": "Feishu Project",
+  "mine.all": "All {{count}}",
+  "mine.less": "Show fewer",
+  "mine.reason.severity": "Severity",
+  "mine.reason.overdue": "Overdue",
+  "mine.reason.due_soon": "Due soon",
+  "mine.reason.gate": "Gate at risk",
+  "mine.reason.reopened": "Reopened",
+  "mine.reason.stale": "No movement",
+  "mine.reason.check_due": "Check due",
+  "mine.reason.blocked": "Blocked",
+  "mine.reason.new": "New"
 }

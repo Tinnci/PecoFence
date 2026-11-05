@@ -184,6 +184,8 @@ pub fn route_args(r: &FocusRequest) -> Option<Vec<String>> {
         }
         "build_evidence" => build_evidence_args(code?, r.job.as_deref()?, r.build?),
         "platforms" => Some(vec!["focus".into(), "platforms".into()]),
+        "mine" => Some(vec!["focus".into(), "mine".into()]),
+        "mine_cached" => Some(vec!["focus".into(), "mine".into(), "--cached".into()]),
         "search" => {
             let query = r.query.as_deref().map(str::trim).filter(|q| {
                 (1..=200).contains(&q.chars().count())

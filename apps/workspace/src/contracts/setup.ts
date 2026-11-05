@@ -212,6 +212,10 @@ export type Logs = { entries: Array<LogEntry>, apps: { [key in string]: LogCount
 export type BackupSummary = { path: string, models: number, items: number, };
 export type BackupPlan = { created_at: string, added: number, replaced: number, kept: number, items: number, };
 export type BackupRestored = { models: number, items: number, };
+export type MineReason = { key: string, points: number, };
+export type MyIssue = { source: string, id: string, display_id: string, title: string, url: string, status: string, model: string, followed: boolean, score: number, reasons: Array<MineReason>, };
+export type MineSource = { source: string, count: number, error: string, };
+export type Mine = { computed_at: string, sources: Array<MineSource>, items: Array<MyIssue>, };
 export type SearchHit = { 
 /**
  * item or change
@@ -263,5 +267,5 @@ export type FocusData = { build_evidence?: BuildEvidence, work_items?: WorkItems
 /**
  * After an annotation: the item as the last read shows it, with the new layer.
  */
-work_item?: AnnotatedItem, history?: ItemHistory, change_files?: ChangeFiles, change_diff?: ChangeDiff, change_diffs?: ChangeDiffs, flow?: ItemFlow, related?: Related, platforms?: Array<Platform>, logs?: Logs, search?: SearchResults, backup?: BackupSummary, backup_plan?: BackupPlan, backup_restored?: BackupRestored, flows?: Array<ItemFlow>, flow_errors?: Array<FlowFailure>, source_fields?: SourceFields, models?: Array<FocusModel>, suggestions?: Suggestions, summary?: FocusSummary, preview?: Preview, changes?: Array<Listed>, builds?: Builds, };
+work_item?: AnnotatedItem, history?: ItemHistory, change_files?: ChangeFiles, change_diff?: ChangeDiff, change_diffs?: ChangeDiffs, flow?: ItemFlow, related?: Related, platforms?: Array<Platform>, logs?: Logs, search?: SearchResults, mine?: Mine, backup?: BackupSummary, backup_plan?: BackupPlan, backup_restored?: BackupRestored, flows?: Array<ItemFlow>, flow_errors?: Array<FlowFailure>, source_fields?: SourceFields, models?: Array<FocusModel>, suggestions?: Suggestions, summary?: FocusSummary, preview?: Preview, changes?: Array<Listed>, builds?: Builds, };
 export type Activation = { health?: ServiceHealth, waited_secs?: number, };

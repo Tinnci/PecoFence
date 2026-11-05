@@ -4775,3 +4775,64 @@ a .owner-chip { color: inherit; }
   color: var(--faint);
   font-size: 11px;
 }
+
+.my-issues {
+  margin-bottom: 24px;
+}
+.my-issues h2 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.my-issues ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.my-issues li {
+  border-top: 1px solid var(--line);
+}
+.my-issue {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 8px 4px;
+  text-align: left;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.my-issue:hover {
+  background: var(--surface);
+}
+.my-issue-score {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  text-align: right;
+}
+.my-issue-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.my-issue-text strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+.my-issue-reasons {
+  display: flex;
+  gap: 4px;
+}
+@media (max-width: 640px) {
+  .my-issue-reasons {
+    display: none;
+  }
+  .my-issue {
+    grid-template-columns: 32px minmax(0, 1fr);
+  }
+}

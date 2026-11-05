@@ -1,3 +1,4 @@
+import { MyIssues } from "./MyIssues";
 import { ActionIcon } from "./components/action-icon";
 import { ContextTarget } from "./components/context-menu";
 import { modelContextActions } from "./context-actions";
@@ -476,6 +477,7 @@ export function FocusHome({
         )}
       </section>
       {state.failure ? <FailureNote failure={state.failure} /> : null}
+      <MyIssues onModel={onModel} />
       <section className="ledger" aria-label={t("focus.followedModels2")}>
         <div className="ledger-head" aria-hidden="true">
           <span>{t("app.model")}</span>

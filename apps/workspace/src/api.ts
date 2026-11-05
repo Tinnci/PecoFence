@@ -190,6 +190,8 @@ export async function focus(
     | "remove"
     | "restore"
     | "search"
+    | "mine"
+    | "mine_cached"
     | "summary"
     | "cached"
     | "refresh"

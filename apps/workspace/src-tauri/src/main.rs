@@ -481,6 +481,8 @@ fn desktop() {
             | "platforms"
             | "logs"
             | "search"
+            | "mine"
+            | "mine_cached"
             | "chip" => None,
             "issues" | "requirements" | "issues_full" | "requirements_full" => {
                 Some(&state.items_gate)
