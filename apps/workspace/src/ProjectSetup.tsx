@@ -124,10 +124,10 @@ const severityNames: Record<string, string> = {
 };
 const severityOrder = ["Fatal", "Severe", "Normal", "Hint"];
 const severityColors: Record<string, string> = {
-  Fatal: "#9a4a33",
-  Severe: "#b8743f",
-  Normal: "#8fa889",
-  Hint: "#d5dccd",
+  Fatal: "var(--sev-fatal)",
+  Severe: "var(--sev-severe)",
+  Normal: "var(--sev-normal)",
+  Hint: "var(--sev-hint)",
 };
 /** Jira grouping: the whole project, an affected version, a starred filter or JQL. */
 export type JiraMode = "all" | "versions" | "filters" | "jql";

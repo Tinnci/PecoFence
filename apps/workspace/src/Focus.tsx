@@ -190,7 +190,13 @@ export function lede(models: ModelSummary[]) {
   return parts.join(t("format.sentenceSeparator"));
 }
 
-export const greens = ["#e2ded2", "#c6d8bd", "#8fb784", "#4f8a4a", "#24552b"];
+export const greens = [
+  "var(--heat-0)",
+  "var(--heat-1)",
+  "var(--heat-2)",
+  "var(--heat-3)",
+  "var(--heat-4)",
+];
 export const level = (n: number) =>
   n === 0 ? 0 : n <= 2 ? 1 : n <= 5 ? 2 : n <= 15 ? 3 : 4;
 

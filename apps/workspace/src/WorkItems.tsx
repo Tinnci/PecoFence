@@ -7,6 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { useTranslation } from "react-i18next";
 import {
   RefreshCw,
@@ -1419,39 +1420,6 @@ export function WorkItemsTab({
                 }));
               }}
             />
-            <button
-              type="button"
-              className="filter-add"
-              aria-expanded={expansion.open}
-              aria-controls={`work-items-${kind}`}
-              disabled={!filtered.length || expandAll}
-              onClick={() => {
-                const open = !expansion.open;
-                if (open) {
-                  shownBeforeExpand.current = shown;
-                  setShown(filtered.length);
-                  setCollapsed(new Set());
-                } else {
-                  setShown(shownBeforeExpand.current);
-                  setCollapsed(
-                    group === "none"
-                      ? new Set()
-                      : new Set(groupItems(filtered, group).map((g) => g.key)),
-                  );
-                }
-                setExpansion((previous) => ({
-                  open,
-                  revision: previous.revision + 1,
-                }));
-              }}
-            >
-              {expansion.open ? (
-                <ChevronsDownUp aria-hidden="true" />
-              ) : (
-                <ChevronsUpDown aria-hidden="true" />
-              )}
-              {t(expansion.open ? "work.collapseAll" : "work.expandAll")}
-            </button>
             <ExportButton
               prepare={async (expanded) => {
                 if (!expanded) return () => {};
@@ -1461,7 +1429,39 @@ export function WorkItemsTab({
               }}
               target={exportRef}
               fileName={`${code}-${kind}-${new Date().toISOString().slice(0, 10)}`}
-            />
+            >
+              <DropdownMenuItem
+                disabled={!filtered.length || expandAll}
+                onClick={() => {
+                  const open = !expansion.open;
+                  if (open) {
+                    shownBeforeExpand.current = shown;
+                    setShown(filtered.length);
+                    setCollapsed(new Set());
+                  } else {
+                    setShown(shownBeforeExpand.current);
+                    setCollapsed(
+                      group === "none"
+                        ? new Set()
+                        : new Set(
+                            groupItems(filtered, group).map((g) => g.key),
+                          ),
+                    );
+                  }
+                  setExpansion((previous) => ({
+                    open,
+                    revision: previous.revision + 1,
+                  }));
+                }}
+              >
+                {expansion.open ? (
+                  <ChevronsDownUp aria-hidden="true" />
+                ) : (
+                  <ChevronsUpDown aria-hidden="true" />
+                )}
+                {t(expansion.open ? "work.collapseAll" : "work.expandAll")}
+              </DropdownMenuItem>
+            </ExportButton>
             <span className="quiet work-count">
               {t("work.resultCount", {
                 count: filtered.length,

@@ -1,5 +1,13 @@
-import { useState, type RefObject } from "react";
-import { Bookmark, Check, Copy, ImageDown, Pencil, Trash2 } from "lucide-react";
+import { type ReactNode, useState, type RefObject } from "react";
+import {
+  Bookmark,
+  Check,
+  Copy,
+  Ellipsis,
+  ImageDown,
+  Pencil,
+  Trash2,
+} from "lucide-react";
 import { toPng } from "html-to-image";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { Button } from "@/components/ui/button";
@@ -269,7 +277,10 @@ export function ExportButton({
   target,
   fileName,
   prepare,
+  children,
 }: {
+  /** Other actions on the list, above the export options. */
+  children?: ReactNode;
   target: RefObject<HTMLElement | null>;
   fileName: string;
   /** Gets the page ready (expanded or not) and returns how to put it back. */
@@ -329,25 +340,28 @@ export function ExportButton({
     <>
       <DropdownMenu>
         <DropdownMenuTrigger
-          className="filter-add"
+          className="filter-add filter-more"
           disabled={busy}
-          title={t("views.export")}
+          aria-label={t("work.more")}
+          title={t("work.more")}
         >
           {busy ? (
             <Spinner className="size-3.5" />
           ) : (
-            <ImageDown size={14} aria-hidden="true" />
+            <Ellipsis size={14} aria-hidden="true" />
           )}
-          {t("views.exportShort")}
         </DropdownMenuTrigger>
         <DropdownMenuContent className="filter-menu" align="end">
+          {children}
           <DropdownMenuItem onClick={() => void run(false)}>
+            <ImageDown aria-hidden="true" />
             <span className="export-option">
               <span>{t("views.exportAsShown")}</span>
               <span className="quiet">{t("views.exportAsShownHint")}</span>
             </span>
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => void run(true)}>
+            <ImageDown aria-hidden="true" />
             <span className="export-option">
               <span>{t("views.exportExpanded")}</span>
               <span className="quiet">{t("views.exportExpandedHint")}</span>

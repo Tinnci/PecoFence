@@ -926,6 +926,7 @@
   "flow.expandText": "Show full comment",
   "flow.collapseText": "Collapse comment",
   "work.expandAll": "Expand all",
+  "work.more": "More",
   "work.collapseAll": "Collapse all",
   "views.rename": "Rename view",
   "views.duplicate": "Duplicate view",

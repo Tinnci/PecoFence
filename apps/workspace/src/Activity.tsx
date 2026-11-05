@@ -14,7 +14,13 @@ import { discover } from "./api";
 import { FailureNote, failureOf } from "./TemplateImport";
 
 const REPO_KEY = "workspace.activity.repo";
-const levels = ["#edf0e8", "#c9dcc0", "#9cbd8f", "#6f9466", "#405b3e"];
+const levels = [
+  "var(--heat-0)",
+  "var(--heat-1)",
+  "var(--heat-2)",
+  "var(--heat-3)",
+  "var(--heat-4)",
+];
 const weekdays = () => [
   t("activity.mon"),
   "",
