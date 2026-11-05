@@ -4208,9 +4208,8 @@ a.external-link.bar { text-decoration: none; }
 
 /* Multi-level sort, 飞书项目 style: numbered conditions, each with its own direction. */
 .sort-builder { display: contents; }
-.sort-toggle { display: inline-flex; align-items: center; gap: 6px; max-width: 320px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--background); color: var(--foreground); font: inherit; font-size: 13px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sort-toggle[data-panel-open] { border-color: var(--ring, var(--foreground)); }
-.sort-panel { flex-basis: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--card, var(--background)); }
+/* The sort conditions float under their button instead of pushing the list down. */
+.sort-panel { z-index: 50; width: min(560px, calc(100vw - 32px)); padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--popover, var(--card)); box-shadow: 0 10px 30px rgb(27 36 32 / 0.12); }
 .sort-title { margin: 0 0 8px; font-size: 12px; color: var(--muted-foreground); }
 .sort-panel ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .sort-panel li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -4284,8 +4283,13 @@ a .owner-chip { color: inherit; }
 .filter-chip-body:hover .filter-values { background: var(--muted); }
 .filter-chip-remove { border: 0; border-left: 1px solid var(--border); background: none; padding: 0 6px; color: var(--muted-foreground); cursor: pointer; }
 .filter-chip-remove:hover { color: var(--foreground); background: var(--muted); }
-.filter-add { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px dashed var(--border); border-radius: 6px; background: none; color: var(--muted-foreground); font: inherit; font-size: 13px; cursor: pointer; }
-.filter-add:hover, .filter-add[data-popup-open] { color: var(--foreground); border-style: solid; }
+/* Every list control (filter, group, sort, views, export) is the same quiet button; an open
+   one keeps its outline. */
+.filter-add { display: inline-flex; align-items: center; gap: 6px; height: 30px; max-width: 320px; padding: 0 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--background); color: var(--foreground); font: inherit; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.filter-add svg { flex: none; color: var(--muted-foreground); }
+.filter-add:hover { background: var(--muted); }
+.filter-add[data-popup-open] { border-color: var(--ring, var(--foreground)); background: var(--muted); }
+.filter-add:disabled { opacity: .6; cursor: default; }
 .filter-menu { min-width: 220px; max-height: 360px; overflow-y: auto; }
 .filter-option { display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; }
 .filter-option > :first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

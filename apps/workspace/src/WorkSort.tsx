@@ -1,10 +1,6 @@
 import { ArrowDownUp, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+import { Popover } from "@base-ui/react/popover";
 import {
   Select,
   SelectContent,
@@ -153,8 +149,8 @@ export function SortBuilder({
   const set = (i: number, key: SortKey) =>
     onChange(value.map((k, j) => (j === i ? key : k)));
   return (
-    <Collapsible className="sort-builder">
-      <CollapsibleTrigger className="sort-toggle">
+    <Popover.Root>
+      <Popover.Trigger className="filter-add sort-toggle">
         <ArrowDownUp size={14} aria-hidden="true" />
         {value
           .map(
@@ -162,86 +158,93 @@ export function SortBuilder({
               `${t(`work.sortField.${k.field}`)} ${dirLabel(k.field, k.dir)}`,
           )
           .join(" · ") || t("work.sort")}
-      </CollapsibleTrigger>
-      <CollapsibleContent className="sort-panel">
-        <p className="sort-title">{t("work.sortConditions")}</p>
-        <ol>
-          {value.map((k, i) => (
-            <li key={k.field}>
-              <span className="sort-rank">{i + 1}</span>
-              <Select
-                value={k.field}
-                items={[k.field, ...free].map((f) => ({
-                  value: f,
-                  label: t(`work.sortField.${f}`),
-                }))}
-                onValueChange={(f) =>
-                  f &&
-                  set(i, {
-                    field: f as SortField,
-                    dir: timed.has(f as SortField) ? "desc" : "asc",
-                  })
-                }
-              >
-                <SelectTrigger size="sm" aria-label={t("work.sortField")}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {[k.field, ...free].map((f) => (
-                    <SelectItem key={f} value={f}>
-                      {t(`work.sortField.${f}`)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <div className="sort-dir" role="group">
-                {(["asc", "desc"] as const).map((d) => (
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Positioner side="bottom" align="start" sideOffset={6}>
+          <Popover.Popup className="sort-panel">
+            <p className="sort-title">{t("work.sortConditions")}</p>
+            <ol>
+              {value.map((k, i) => (
+                <li key={k.field}>
+                  <span className="sort-rank">{i + 1}</span>
+                  <Select
+                    value={k.field}
+                    items={[k.field, ...free].map((f) => ({
+                      value: f,
+                      label: t(`work.sortField.${f}`),
+                    }))}
+                    onValueChange={(f) =>
+                      f &&
+                      set(i, {
+                        field: f as SortField,
+                        dir: timed.has(f as SortField) ? "desc" : "asc",
+                      })
+                    }
+                  >
+                    <SelectTrigger size="sm" aria-label={t("work.sortField")}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[k.field, ...free].map((f) => (
+                        <SelectItem key={f} value={f}>
+                          {t(`work.sortField.${f}`)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <div className="sort-dir" role="group">
+                    {(["asc", "desc"] as const).map((d) => (
+                      <button
+                        type="button"
+                        key={d}
+                        aria-pressed={k.dir === d}
+                        onClick={() => set(i, { ...k, dir: d })}
+                      >
+                        {dirLabel(k.field, d)}
+                      </button>
+                    ))}
+                  </div>
                   <button
                     type="button"
-                    key={d}
-                    aria-pressed={k.dir === d}
-                    onClick={() => set(i, { ...k, dir: d })}
+                    className="sort-remove"
+                    aria-label={t("work.sortRemove")}
+                    disabled={value.length === 1}
+                    onClick={() => onChange(value.filter((_, j) => j !== i))}
                   >
-                    {dirLabel(k.field, d)}
+                    <X size={14} aria-hidden="true" />
                   </button>
-                ))}
-              </div>
+                </li>
+              ))}
+            </ol>
+            <div className="sort-actions">
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={!free.length}
+                onClick={() =>
+                  onChange([
+                    ...value,
+                    {
+                      field: free[0],
+                      dir: timed.has(free[0]) ? "desc" : "asc",
+                    },
+                  ])
+                }
+              >
+                <Plus size={14} aria-hidden="true" />
+                {t("work.sortAdd")}
+              </Button>
               <button
                 type="button"
-                className="sort-remove"
-                aria-label={t("work.sortRemove")}
-                disabled={value.length === 1}
-                onClick={() => onChange(value.filter((_, j) => j !== i))}
+                className="link"
+                onClick={() => onChange(defaultSort)}
               >
-                <X size={14} aria-hidden="true" />
+                {t("work.sortReset")}
               </button>
-            </li>
-          ))}
-        </ol>
-        <div className="sort-actions">
-          <Button
-            size="sm"
-            variant="ghost"
-            disabled={!free.length}
-            onClick={() =>
-              onChange([
-                ...value,
-                { field: free[0], dir: timed.has(free[0]) ? "desc" : "asc" },
-              ])
-            }
-          >
-            <Plus size={14} aria-hidden="true" />
-            {t("work.sortAdd")}
-          </Button>
-          <button
-            type="button"
-            className="link"
-            onClick={() => onChange(defaultSort)}
-          >
-            {t("work.sortReset")}
-          </button>
-        </div>
-      </CollapsibleContent>
-    </Collapsible>
+            </div>
+          </Popover.Popup>
+        </Popover.Positioner>
+      </Popover.Portal>
+    </Popover.Root>
   );
 }
