@@ -622,6 +622,7 @@ fn desktop() {
 
 /// An install that replaced the running exe left it beside the new one as `<exe>.old*`.
 /// The window still running from one keeps it locked, and removal just fails.
+#[cfg_attr(not(windows), allow(dead_code))]
 fn clear_replaced() {
     let Ok(exe) = std::env::current_exe() else {
         return;
@@ -634,6 +635,7 @@ fn clear_replaced() {
     }
 }
 
+#[cfg_attr(not(windows), allow(dead_code))]
 fn replaced(dir: &std::path::Path, exe: &str) -> Vec<std::path::PathBuf> {
     let old = format!("{exe}.old");
     std::fs::read_dir(dir)
