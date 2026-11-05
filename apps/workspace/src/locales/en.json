@@ -1225,5 +1225,13 @@
   "mine.reason.blocked": "Blocked",
   "mine.reason.new": "New",
   "mine.reason.customer": "Customer",
-  "mine.reason.reproducible": "Always reproduces"
+  "mine.reason.reproducible": "Always reproduces",
+  "mine.lens": "Group by",
+  "mine.lens.rank": "Ranked",
+  "mine.lens.model": "Model",
+  "mine.lens.reason": "Reason",
+  "mine.band.urgent": "Urgent",
+  "mine.band.high": "High",
+  "mine.band.normal": "Normal",
+  "mine.copies": "{{count}} branches"
 }

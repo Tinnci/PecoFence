@@ -1225,5 +1225,13 @@
   "mine.reason.blocked": "阻塞中",
   "mine.reason.new": "新分配",
   "mine.reason.customer": "客户问题",
-  "mine.reason.reproducible": "必然重现"
+  "mine.reason.reproducible": "必然重现",
+  "mine.lens": "分组方式",
+  "mine.lens.rank": "排名",
+  "mine.lens.model": "机型",
+  "mine.lens.reason": "原因",
+  "mine.band.urgent": "紧急",
+  "mine.band.high": "较高",
+  "mine.band.normal": "一般",
+  "mine.copies": "{{count}} 个分支"
 }
