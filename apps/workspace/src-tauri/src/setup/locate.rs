@@ -156,6 +156,7 @@ pub fn types() -> String {
             MyIssue::decl(&config),
             MineSource::decl(&config),
             Mine::decl(&config),
+            Iteration::decl(&config),
             SearchHit::decl(&config),
             SearchResults::decl(&config),
             Platform::decl(&config),

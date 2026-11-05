@@ -93,7 +93,7 @@ export type FocusTargets = { severe_pct: number, overall_pct: number, fatal_max:
 export type ReleaseLine = { id: string, label: string, lifecycle: string, phase: string, branches: Array<string>, jobs: Array<string>, };
 export type JobSource = { history?: Array<SourceSegment>, branch: string, previous: Array<string>, since_build?: number, note: string, };
 export type SourceSegment = { branch: string, first_build: number, last_build: number, note: string, };
-export type FocusModel = { name?: string, job_sources?: { [key in string]: JobSource }, branch_jobs?: { [key in string]: Array<string> }, release_lines?: Array<ReleaseLine>, ignored_jobs?: Array<string>, tracking?: TrackingConfig, code: string, issues: Array<ScopeQuery>, branches: Array<string>, 
+export type FocusModel = { iterations?: Array<Iteration>, name?: string, job_sources?: { [key in string]: JobSource }, branch_jobs?: { [key in string]: Array<string> }, release_lines?: Array<ReleaseLine>, ignored_jobs?: Array<string>, tracking?: TrackingConfig, code: string, issues: Array<ScopeQuery>, branches: Array<string>, 
 /**
  * Jenkins jobs by full name; empty reads the model's Project_Daily_Build folder.
  */
@@ -216,6 +216,7 @@ export type MineReason = { key: string, points: number, };
 export type MyIssue = { source: string, id: string, display_id: string, title: string, url: string, status: string, group: string, severity: string, model: string, followed: boolean, score: number, reasons: Array<MineReason>, };
 export type MineSource = { source: string, count: number, error: string, };
 export type Mine = { computed_at: string, sources: Array<MineSource>, items: Array<MyIssue>, };
+export type Iteration = { name: string, start: string, end: string, };
 export type SearchHit = { 
 /**
  * item or change

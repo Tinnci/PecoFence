@@ -1256,5 +1256,21 @@
   "flow.remaining": "剩余",
   "flow.scope": "范围",
   "flow.ideal": "理想",
-  "flow.agedLine": "虚线：超过 {{count}} 天算超龄"
+  "flow.agedLine": "虚线：超过 {{count}} 天算超龄",
+  "iteration.add": "新增迭代",
+  "iteration.edit": "编辑迭代",
+  "iteration.delete": "删除",
+  "iteration.pick": "迭代",
+  "iteration.cadence": "两周节奏",
+  "iteration.hint": "随机型保存，也会进入备份。这些日期内该机型的全部工作都计入迭代。",
+  "iteration.name": "名称",
+  "iteration.start": "开始",
+  "iteration.end": "结束",
+  "iteration.problem.name": "请填写迭代名称",
+  "iteration.problem.dates": "开始日期要早于结束日期",
+  "iteration.problem.overlap": "这些日期和其他迭代重叠",
+  "flow.chart.map": "工作流",
+  "flow.bottleneck": "瓶颈：{{stage}} {{count}} 项",
+  "flow.typical": "通常停留 {{count}} 天",
+  "flow.twelveWeeks": "近 12 周"
 }

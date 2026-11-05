@@ -186,3 +186,76 @@ export function iterationStart(now = Date.now(), weeks = 2) {
   const span = weeks * 7 * DAY;
   return anchor + Math.floor((now - anchor) / span) * span;
 }
+
+export type IterationDates = { name: string; start: string; end: string };
+export type IterationWindow = { start: number; days: number };
+
+const localDay = (date: string) => new Date(`${date}T00:00:00`).getTime();
+
+/** Whole days from the morning of the first date to the night of the last. */
+export function iterationWindow(iteration: IterationDates): IterationWindow {
+  const start = localDay(iteration.start);
+  return {
+    start,
+    days: Math.round((localDay(iteration.end) - start) / DAY) + 1,
+  };
+}
+
+/** The named iteration that holds today, if any. */
+export function currentIteration(list: IterationDates[], now = Date.now()) {
+  return list.find((iteration) => {
+    const { start, days } = iterationWindow(iteration);
+    return now >= start && now < start + days * DAY;
+  });
+}
+
+/** Why an iteration cannot be saved beside the others; spm holds the same rule. */
+export function iterationProblem(
+  draft: IterationDates,
+  others: IterationDates[],
+) {
+  if (!draft.name.trim()) return "name";
+  if (!draft.start || !draft.end || draft.start >= draft.end) return "dates";
+  if (others.some((o) => draft.start <= o.end && o.start <= draft.end))
+    return "overlap";
+  return null;
+}
+
+export type FlowStage = {
+  column: (typeof FLOW_COLUMNS)[number];
+  count: number;
+  /** Typical days in this status, null for an empty stage. */
+  medianAge: number | null;
+};
+
+/** The workflow as stages with what sits in each, and where work piles up. */
+export function flowMap(items: WorkItem[], now = Date.now()) {
+  const columns = boardColumns(items, now);
+  const stages: FlowStage[] = FLOW_COLUMNS.map((column) => {
+    const ages = (columns.get(column) ?? [])
+      .map((item) => statusAge(item, now))
+      .filter((age): age is number => age !== null)
+      .sort((a, b) => a - b);
+    return {
+      column,
+      count: columns.get(column)?.length ?? 0,
+      medianAge: percentile(ages, 0.5),
+    };
+  });
+  // Waiting to start is a backlog, not a bottleneck.
+  const bottleneck = stages
+    .filter((s) => s.column !== "pending" && s.count > 0)
+    .reduce<FlowStage | null>(
+      (top, s) => (!top || s.count > top.count ? s : top),
+      null,
+    );
+  return { stages, bottleneck };
+}
+
+/** The items that have waited longest; a chart marks only these. */
+export function oldestItems(items: WorkItem[], now = Date.now(), count = 3) {
+  return [...boardColumns(items, now).values()]
+    .flat()
+    .sort((a, b) => (statusAge(b, now) ?? 0) - (statusAge(a, now) ?? 0))
+    .slice(0, count);
+}

@@ -131,9 +131,21 @@ pub struct JobSource {
     pub note: String,
 }
 /// A followed model as `spm focus` stores it; SPM validates every value.
+/// A named sprint with its own dates, both YYYY-MM-DD and inclusive.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+pub struct Iteration {
+    pub name: String,
+    pub start: String,
+    pub end: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(deny_unknown_fields)]
 pub struct FocusModel {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub iterations: Option<Vec<Iteration>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub name: Option<String>,

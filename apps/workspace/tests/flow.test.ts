@@ -4,8 +4,13 @@ import {
   boardColumns,
   burndown,
   createdResolved,
+  currentIteration,
+  flowMap,
   flowMetrics,
+  iterationProblem,
   iterationStart,
+  iterationWindow,
+  oldestItems,
   statusAge,
 } from "../src/flow";
 
@@ -127,5 +132,51 @@ describe("flow charts", () => {
       first + 14 * 86_400_000,
     );
     expect(new Date(first + 8 * 3_600_000).getUTCDay()).toBe(1);
+  });
+});
+
+describe("named iterations", () => {
+  const first = { name: "S1", start: "2026-11-02", end: "2026-11-15" };
+  const second = { name: "S2", start: "2026-11-16", end: "2026-11-29" };
+
+  it("counts both end dates and finds the one holding today", () => {
+    expect(iterationWindow(first).days).toBe(14);
+    const noon = new Date(2026, 10, 15, 12).getTime();
+    expect(currentIteration([first, second], noon)?.name).toBe("S1");
+    expect(currentIteration([second], noon)).toBeUndefined();
+  });
+
+  it("names what stops an iteration being saved", () => {
+    expect(iterationProblem({ ...first, name: " " }, [])).toBe("name");
+    expect(iterationProblem({ ...first, end: first.start }, [])).toBe("dates");
+    expect(iterationProblem({ ...second, start: "2026-11-15" }, [first])).toBe(
+      "overlap",
+    );
+    expect(iterationProblem(second, [first])).toBeNull();
+  });
+});
+
+describe("flow map", () => {
+  it("finds the stage where work piles up, not the backlog", () => {
+    const { bottleneck, stages } = flowMap(
+      [
+        item("pending", 9, 9),
+        item("pending", 9, 8),
+        item("pending", 9, 7),
+        item("testing", 9, 4),
+        item("testing", 9, 6),
+        item("active", 9, 1),
+      ],
+      now,
+    );
+    expect(bottleneck?.column).toBe("testing");
+    expect(stages.find((s) => s.column === "testing")?.medianAge).toBe(4);
+    expect(flowMap([item("pending", 1, 1)], now).bottleneck).toBeNull();
+  });
+
+  it("marks only the longest waiting work", () => {
+    const list = [1, 9, 4, 7].map((d) => item("active", 20, d));
+    const old = oldestItems(list, now, 2);
+    expect(old.map((i) => statusAge(i, now))).toEqual([9, 7]);
   });
 });

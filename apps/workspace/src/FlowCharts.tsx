@@ -1,20 +1,37 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
+import { Pencil, Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { WorkItem } from "./contracts/setup";
 import {
   burndown,
   createdResolved,
+  currentIteration,
   FLOW_COLUMNS,
+  flowMap,
   iterationStart,
+  iterationWindow,
+  oldestItems,
   statusAge,
   type FlowMetrics,
+  type IterationDates,
 } from "./flow";
 import { t } from "./i18n";
+import { IterationDialog } from "./IterationDialog";
 
 const W = 520;
 const H = 200;
 const PAD = { top: 12, right: 12, bottom: 22, left: 34 };
 const DAY = 86_400_000;
+/** The fixed two-week rhythm, used until a named iteration holds today. */
+const CADENCE = "\u0000cadence";
 const shortDate = (at: number) => {
   const d = new Date(at);
   return `${d.getMonth() + 1}/${d.getDate()}`;
@@ -34,12 +51,14 @@ type Series = {
 /** A one-axis line chart with a crosshair and a tooltip for the day under the pointer. */
 function LineChart({
   title,
-  start,
+  dateOf,
   series,
+  controls,
 }: {
   title: string;
-  start: number;
+  dateOf: (index: number) => number;
   series: Series[];
+  controls?: ReactNode;
 }) {
   const [hover, setHover] = useState<number | null>(null);
   const days = series[0].values.length;
@@ -56,6 +75,7 @@ function LineChart({
     <figure className="flow-chart">
       <figcaption>
         <strong>{title}</strong>
+        {controls}
         <span className="flow-legend">
           {series.map((s) => (
             <span key={s.key}>
@@ -101,7 +121,7 @@ function LineChart({
               y={H - 6}
               textAnchor={i ? "end" : "start"}
             >
-              {shortDate(start + i * DAY)}
+              {shortDate(dateOf(i))}
             </text>
           ))}
           {series.map((s) => (
@@ -127,7 +147,7 @@ function LineChart({
             style={{ left: `${(x(hover) / W) * 100}%` }}
             role="status"
           >
-            <strong>{shortDate(start + hover * DAY)}</strong>
+            <strong>{shortDate(dateOf(hover))}</strong>
             {series.map((s) => (
               <span key={s.key}>
                 {s.label} {s.values[hover] ?? "–"}
@@ -136,6 +156,147 @@ function LineChart({
           </div>
         ) : null}
       </div>
+    </figure>
+  );
+}
+
+const MAP_W = 1040;
+const MAP_H = 118;
+const STAGE_W = 168;
+const STAGE_H = 58;
+/** Left-to-right order of the work; blocked hangs off it, as nothing passes through it. */
+const ROUTE = ["pending", "active", "review", "testing"] as const;
+
+/** The workflow as a phase map: what sits in each stage, one bottleneck marked. */
+function FlowMap({
+  items,
+  flow,
+  now,
+}: {
+  items: WorkItem[];
+  flow: FlowMetrics;
+  now: number;
+}) {
+  const { stages, bottleneck } = useMemo(
+    () => flowMap(items, now),
+    [items, now],
+  );
+  const gap = (MAP_W - STAGE_W * 5) / 4;
+  const left = (i: number) => i * (STAGE_W + gap);
+  const stage = (column: string) => stages.find((s) => s.column === column);
+  const finished = flow.finished.reduce((sum, n) => sum + n, 0);
+  const box = (
+    key: string,
+    x: number,
+    y: number,
+    label: string,
+    value: number,
+    note: string,
+    focal: boolean,
+  ) => (
+    <g key={key} className={focal ? "map-stage is-focal" : "map-stage"}>
+      <rect x={x} y={y} width={STAGE_W} height={STAGE_H} rx={6} />
+      <text className="map-label" x={x + 12} y={y + 22}>
+        {label}
+      </text>
+      <text
+        className="map-value"
+        x={x + STAGE_W - 12}
+        y={y + 26}
+        textAnchor="end"
+      >
+        {value}
+      </text>
+      <text className="map-note" x={x + 12} y={y + 44}>
+        {note}
+      </text>
+    </g>
+  );
+  const age = (days: number | null | undefined) =>
+    days === null || days === undefined
+      ? ""
+      : t("flow.typical", { count: days });
+  const blockedX = left(2);
+  const blocked = stage("blocked");
+  return (
+    <figure className="flow-chart flow-map">
+      <figcaption>
+        <strong>{t("flow.chart.map")}</strong>
+        {bottleneck ? (
+          <span className="flow-legend">
+            {t("flow.bottleneck", {
+              stage: t(`work.stage.${bottleneck.column}`),
+              count: bottleneck.count,
+            })}
+          </span>
+        ) : null}
+      </figcaption>
+      <svg
+        viewBox={`0 0 ${MAP_W} ${MAP_H + 16}`}
+        role="img"
+        aria-label={t("flow.chart.map")}
+      >
+        <defs>
+          <marker
+            id="map-arrow"
+            viewBox="0 0 8 8"
+            refX="7"
+            refY="4"
+            markerWidth="7"
+            markerHeight="7"
+            orient="auto"
+          >
+            <path d="M0 0 8 4 0 8z" className="map-head" />
+          </marker>
+        </defs>
+        {[0, 1, 2, 3].map((i) => (
+          <line
+            key={i}
+            className="map-link"
+            x1={left(i) + STAGE_W + 4}
+            x2={left(i + 1) - 6}
+            y1={STAGE_H / 2 + 1}
+            y2={STAGE_H / 2 + 1}
+            markerEnd="url(#map-arrow)"
+          />
+        ))}
+        <line
+          className="map-link is-side"
+          x1={blockedX + STAGE_W / 2}
+          x2={blockedX + STAGE_W / 2}
+          y1={STAGE_H + 2}
+          y2={MAP_H - STAGE_H + 12}
+        />
+        {ROUTE.map((column, i) =>
+          box(
+            column,
+            left(i),
+            1,
+            t(`work.stage.${column}`),
+            stage(column)?.count ?? 0,
+            age(stage(column)?.medianAge),
+            bottleneck?.column === column,
+          ),
+        )}
+        {box(
+          "done",
+          left(4),
+          1,
+          t("work.stage.done"),
+          finished,
+          t("flow.twelveWeeks"),
+          false,
+        )}
+        {box(
+          "blocked",
+          blockedX,
+          MAP_H - STAGE_H + 15,
+          t("work.stage.blocked"),
+          blocked?.count ?? 0,
+          age(blocked?.medianAge),
+          bottleneck?.column === "blocked",
+        )}
+      </svg>
     </figure>
   );
 }
@@ -164,6 +325,10 @@ function AgingChart({
     [items, now],
   );
   const [hover, setHover] = useState<(typeof points)[number] | null>(null);
+  const oldest = useMemo(
+    () => new Set(oldestItems(items, now).map((item) => item.id)),
+    [items, now],
+  );
   const top = niceTop(Math.max(flow.agedAfter, ...points.map((p) => p.age)));
   const band = (W - PAD.left - PAD.right) / FLOW_COLUMNS.length;
   const y = (v: number) => PAD.top + (1 - v / top) * (H - PAD.top - PAD.bottom);
@@ -220,7 +385,7 @@ function AgingChart({
             <circle
               key={`${p.item.source}:${p.item.id}`}
               className={
-                p.age > flow.agedAfter ? "flow-dot is-aged" : "flow-dot"
+                oldest.has(p.item.id) ? "flow-dot is-focal" : "flow-dot"
               }
               cx={x(p, i)}
               cy={y(p.age)}
@@ -230,6 +395,20 @@ function AgingChart({
               onClick={() => onDetails(p.item)}
             />
           ))}
+          {points.flatMap((p, i) =>
+            oldest.has(p.item.id)
+              ? [
+                  <text
+                    key={p.item.id}
+                    className="flow-dot-label"
+                    x={x(p, i) + 7}
+                    y={y(p.age) + (i % 2 ? 11 : -3)}
+                  >
+                    {p.item.display_id}
+                  </text>,
+                ]
+              : [],
+          )}
         </svg>
         {hover ? (
           <div
@@ -254,25 +433,45 @@ export function FlowCharts({
   items,
   flow,
   now,
+  iterations,
+  onIterations,
   onDetails,
 }: {
   items: WorkItem[];
   flow: FlowMetrics;
   now: number;
+  iterations: IterationDates[];
+  /** Saves the list; absent when the model cannot be edited from here. */
+  onIterations?: (next: IterationDates[]) => Promise<void>;
   onDetails: (item: WorkItem) => void;
 }) {
   useTranslation();
   const trend = useMemo(() => createdResolved(items, now), [items, now]);
-  const start = iterationStart(now);
+  const [picked, setPicked] = useState<string | null>(null);
+  const [dialog, setDialog] = useState<"add" | "edit" | null>(null);
+  const chosen =
+    iterations.find((i) => i.name === picked) ??
+    (picked === CADENCE ? undefined : currentIteration(iterations, now));
+  const { start, days } = chosen
+    ? iterationWindow(chosen)
+    : { start: iterationStart(now), days: 14 };
   const burn = useMemo(
-    () => burndown(items, start, 14, now),
-    [items, start, now],
+    () => burndown(items, start, days, now),
+    [items, start, days, now],
+  );
+  const options = [
+    { value: CADENCE, label: t("iteration.cadence") },
+    ...iterations.map((i) => ({ value: i.name, label: i.name })),
+  ];
+  const others = iterations.filter(
+    (i) => dialog !== "edit" || i.name !== chosen?.name,
   );
   return (
     <div className="flow-charts">
+      <FlowMap items={items} flow={flow} now={now} />
       <LineChart
         title={t("flow.chart.createdResolved")}
-        start={trend.start}
+        dateOf={(i) => trend.start + i * DAY}
         series={[
           {
             key: "created",
@@ -290,7 +489,53 @@ export function FlowCharts({
       />
       <LineChart
         title={t("flow.chart.burndown")}
-        start={start}
+        dateOf={(i) => start + Math.max(0, i - 1) * DAY}
+        controls={
+          <span className="iteration-controls">
+            <Select
+              value={chosen?.name ?? CADENCE}
+              items={options}
+              onValueChange={(value) => setPicked(value as string)}
+            >
+              <SelectTrigger size="sm" aria-label={t("iteration.pick")}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {options.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {onIterations ? (
+              <>
+                {chosen ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label={t("iteration.edit")}
+                    title={t("iteration.edit")}
+                    onClick={() => setDialog("edit")}
+                  >
+                    <Pencil aria-hidden="true" />
+                  </Button>
+                ) : null}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={t("iteration.add")}
+                  title={t("iteration.add")}
+                  onClick={() => setDialog("add")}
+                >
+                  <Plus aria-hidden="true" />
+                </Button>
+              </>
+            ) : null}
+          </span>
+        }
         series={[
           {
             key: "scope",
@@ -313,6 +558,21 @@ export function FlowCharts({
         ]}
       />
       <AgingChart items={items} flow={flow} now={now} onDetails={onDetails} />
+      {dialog && onIterations ? (
+        <IterationDialog
+          editing={dialog === "edit" ? chosen : undefined}
+          others={others}
+          onClose={() => setDialog(null)}
+          onSave={async (iteration) => {
+            await onIterations(
+              [...others, ...(iteration ? [iteration] : [])].sort((a, b) =>
+                a.start.localeCompare(b.start),
+              ),
+            );
+            setPicked(iteration?.name ?? null);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

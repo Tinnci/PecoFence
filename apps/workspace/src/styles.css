@@ -5212,13 +5212,58 @@ polyline.flow-line-ideal {
   stroke-dasharray: 2 3;
 }
 .flow-dot {
-  fill: var(--chart-1);
+  fill: var(--muted-foreground);
+  fill-opacity: 0.45;
   stroke: var(--background);
   stroke-width: 1.5;
   cursor: pointer;
 }
-.flow-dot.is-aged {
+.flow-dot.is-focal {
   fill: var(--chart-2);
+  fill-opacity: 1;
+}
+.flow-dot-label {
+  fill: var(--foreground);
+  font-size: 10px;
+}
+.flow-map {
+  grid-column: 1 / -1;
+}
+.flow-map svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.map-stage rect {
+  fill: var(--card);
+  stroke: var(--line);
+}
+.map-stage.is-focal rect {
+  stroke: var(--chart-2);
+  stroke-width: 2;
+}
+.map-label {
+  fill: var(--foreground);
+  font-size: 13px;
+}
+.map-value {
+  fill: var(--foreground);
+  font-size: 20px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.map-note {
+  fill: var(--muted-foreground);
+  font-size: 11px;
+}
+.map-link {
+  stroke: var(--muted-foreground);
+}
+.map-link.is-side {
+  stroke-dasharray: 3 3;
+}
+.map-head {
+  fill: var(--muted-foreground);
 }
 .flow-dot:hover {
   r: 6px;
@@ -5239,4 +5284,16 @@ polyline.flow-line-ideal {
   border-radius: 6px;
   transform: translateX(-50%);
   pointer-events: none;
+}
+
+.iteration-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-right: auto;
+}
+.iteration-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }

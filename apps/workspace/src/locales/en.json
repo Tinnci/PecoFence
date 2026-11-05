@@ -1256,5 +1256,21 @@
   "flow.remaining": "Remaining",
   "flow.scope": "Scope",
   "flow.ideal": "Ideal",
-  "flow.agedLine": "Line: aged after {{count}} days"
+  "flow.agedLine": "Line: aged after {{count}} days",
+  "iteration.add": "Add iteration",
+  "iteration.edit": "Edit iteration",
+  "iteration.delete": "Delete",
+  "iteration.pick": "Iteration",
+  "iteration.cadence": "Two-week rhythm",
+  "iteration.hint": "Saved with the model and included in backups. All of the model's work in these dates counts toward it.",
+  "iteration.name": "Name",
+  "iteration.start": "Start",
+  "iteration.end": "End",
+  "iteration.problem.name": "Name the iteration",
+  "iteration.problem.dates": "The start must come before the end",
+  "iteration.problem.overlap": "These dates overlap another iteration",
+  "flow.chart.map": "Workflow",
+  "flow.bottleneck": "Bottleneck: {{stage}}, {{count}} items",
+  "flow.typical": "typically {{count}}d here",
+  "flow.twelveWeeks": "last 12 weeks"
 }

@@ -1545,6 +1545,13 @@ export function WorkItemsTab({
                 items={scoped}
                 flow={flow}
                 now={now}
+                iterations={saved?.iterations ?? []}
+                onIterations={
+                  saved
+                    ? (iterations) =>
+                        state.save({ ...saved, iterations }, false)
+                    : undefined
+                }
                 onDetails={(item) => setDetails(workItemKey(item))}
               />
             ) : layout === "board" ? (
