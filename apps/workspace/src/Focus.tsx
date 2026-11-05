@@ -1,3 +1,4 @@
+import { heatCell, useHeatSweep } from "./heat";
 import { MyIssues } from "./MyIssues";
 import { ActionIcon } from "./components/action-icon";
 import { ContextTarget } from "./components/context-menu";
@@ -202,22 +203,34 @@ export const level = (n: number) =>
   n === 0 ? 0 : n <= 2 ? 1 : n <= 5 ? 2 : n <= 15 ? 3 : 4;
 
 /** Twelve Monday-first weeks, one cell per day. */
-function WeekGrid({ days }: { days: number[] }) {
+function WeekGrid({ id, days }: { id: string; days: number[] }) {
   useTranslation();
+  const sweep = useHeatSweep(`week:${id}`);
+  const weeks = Math.ceil(days.length / 7);
   return (
-    <div className="week-grid" aria-hidden="true">
+    <div
+      className={sweep ? "week-grid heat-sweep" : "week-grid"}
+      aria-hidden="true"
+    >
       {days.map((n, i) => (
-        <span key={i} style={{ background: greens[level(n)] }} />
+        <span
+          key={i}
+          style={heatCell(greens[level(n)], Math.floor(i / 7), i % 7, weeks)}
+        />
       ))}
     </div>
   );
 }
-export function Strip({ days }: { days: number[] }) {
+export function Strip({ id, days }: { id: string; days: number[] }) {
   useTranslation();
+  const sweep = useHeatSweep(`strip:${id}`);
   return (
-    <div className="day-strip" aria-hidden="true">
+    <div
+      className={sweep ? "day-strip heat-sweep" : "day-strip"}
+      aria-hidden="true"
+    >
       {days.map((n, i) => (
-        <span key={i} style={{ background: greens[level(n)] }} />
+        <span key={i} style={heatCell(greens[level(n)], i, 0, days.length)} />
       ))}
     </div>
   );
@@ -555,7 +568,7 @@ export function FocusHome({
                       {m.errors[0] ?? t("focus.noIssueSources")}
                     </span>
                   )}
-                  <WeekGrid days={m.days} />
+                  <WeekGrid id={m.code} days={m.days} />
                   <span className="ledger-week">
                     <span>
                       <strong>{m.new_issues ? `+${m.new_issues}` : "0"}</strong>

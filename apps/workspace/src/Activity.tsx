@@ -1,3 +1,4 @@
+import { heatCell, useHeatSweep } from "./heat";
 import { ActionIcon } from "./components/action-icon";
 import { ContextTarget } from "./components/context-menu";
 import { ExternalLink } from "./components/external-link";
@@ -124,6 +125,9 @@ function nextDay(date: string) {
   return day.toISOString().slice(0, 10);
 }
 function Grid({ activity }: { activity: Activity }) {
+  const sweep = useHeatSweep(
+    `activity:${activity.project}:${activity.branch ?? ""}`,
+  );
   useTranslation();
   const [hover, setHover] = useState<DayActivity | null>(null);
   const columns = useMemo(() => weeks(activity.days), [activity]);
@@ -148,7 +152,7 @@ function Grid({ activity }: { activity: Activity }) {
             <span key={i}>{d}</span>
           ))}
         </div>
-        <div className="grid-cells">
+        <div className={sweep ? "grid-cells heat-sweep" : "grid-cells"}>
           {columns.map((week, i) => (
             <div className="grid-week" key={i}>
               {week.map((day, j) =>
@@ -160,7 +164,12 @@ function Grid({ activity }: { activity: Activity }) {
                     )}
                     key={day.date}
                     className="grid-cell"
-                    style={{ background: levels[level(day.created, cuts)] }}
+                    style={heatCell(
+                      levels[level(day.created, cuts)],
+                      i,
+                      j,
+                      columns.length,
+                    )}
                     title={t("activity.changes", {
                       v0: day.date,
                       v1: day.created,

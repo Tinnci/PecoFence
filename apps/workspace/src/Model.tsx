@@ -912,7 +912,7 @@ function BranchesTab({
                       <span className="short">{b.flagged}</span>
                     ) : null}
                   </span>
-                  <Strip days={b.days} />
+                  <Strip id={`${m.code}:${b.branch}`} days={b.days} />
                 </button>
               </ContextTarget>
             ))}
@@ -1290,7 +1290,7 @@ function Overview({
                     <span>{b.branch}</span>
                     <span className="quiet">{b.total}</span>
                   </div>
-                  <Strip days={b.days} />
+                  <Strip id={`${m.code}:${b.branch}`} days={b.days} />
                 </button>
               ))}
             </div>

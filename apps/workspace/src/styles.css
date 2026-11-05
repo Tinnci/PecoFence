@@ -4939,3 +4939,26 @@ a .owner-chip { color: inherit; }
     flex-wrap: wrap;
   }
 }
+
+.week-grid span,
+.day-strip span,
+.grid-cell {
+  transition: background-color 300ms ease-out;
+}
+.heat-sweep > span,
+.heat-sweep .grid-cell {
+  animation: heat-in 320ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+  animation-delay: var(--heat-delay, 0ms);
+}
+@keyframes heat-in {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .heat-sweep > span,
+  .heat-sweep .grid-cell {
+    animation: none;
+  }
+}

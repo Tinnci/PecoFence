@@ -618,6 +618,11 @@ fn desktop() {
         )
         .map_err(hub::LoadFailure::new)
     }
+    /// The page's first script calls this once it can paint the splash in the saved theme.
+    #[tauri::command]
+    fn show_main(window: tauri::WebviewWindow) {
+        let _ = window.show();
+    }
     #[tauri::command]
     fn launch_target(state: tauri::State<'_, State>) -> String {
         state.target.lock().unwrap().clone()
@@ -690,6 +695,14 @@ fn desktop() {
             pending: std::sync::Mutex::new(None),
         })
         .setup(move |app| {
+            // A page that fails to load must not leave the window hidden.
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
+                if let Some(window) = handle.get_webview_window("main") {
+                    let _ = window.show();
+                }
+            });
             #[cfg(windows)]
             if let Err(error) = snap::install(app.handle()) {
                 logbook::record(
@@ -711,6 +724,7 @@ fn desktop() {
             load_hub,
             launch_target,
             first_frame,
+            show_main,
             client_error,
             template_plan,
             template_apply,
