@@ -9,6 +9,7 @@ import {
   type LanguagePreference,
 } from "./i18n";
 import { t } from "./i18n";
+import { setTheme, themePreference, type Theme } from "./theme";
 import { useModelPreference } from "./model-navigation";
 import { prefetchBuilds, queryClient, focusKey } from "./focus-cache";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -44,6 +45,7 @@ import {
   ChevronDown,
   LayoutDashboard,
   Menu,
+  Palette,
   Plus,
   RefreshCw,
   Pencil,
@@ -143,6 +145,7 @@ function Workspace() {
   const [followCode, setFollowCode] = useState<string | undefined>(undefined);
   const focusState = useFocus(desktop());
   const [renamingCode, setRenamingCode] = useState<string | null>(null);
+  const [currentTheme, setCurrentTheme] = useState(themePreference);
   const renaming = focusState.models?.find(
     (model) => model.code === renamingCode,
   );
@@ -431,6 +434,26 @@ function Workspace() {
                   </DropdownMenuRadioItem>
                   <DropdownMenuRadioItem closeOnClick value="en">
                     English
+                  </DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+              </DropdownMenuGroup>
+              <DropdownMenuGroup>
+                <DropdownMenuLabel>
+                  <Palette aria-hidden="true" />
+                  {t("theme.label")}
+                </DropdownMenuLabel>
+                <DropdownMenuRadioGroup
+                  value={currentTheme}
+                  onValueChange={(value) => {
+                    setTheme(value as Theme);
+                    setCurrentTheme(value as Theme);
+                  }}
+                >
+                  <DropdownMenuRadioItem closeOnClick value="light">
+                    {t("theme.light")}
+                  </DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem closeOnClick value="dark">
+                    {t("theme.dark")}
                   </DropdownMenuRadioItem>
                 </DropdownMenuRadioGroup>
               </DropdownMenuGroup>
