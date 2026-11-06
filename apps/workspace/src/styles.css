@@ -4580,7 +4580,16 @@ a .owner-chip { color: inherit; }
 .profile-aliases { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; }
 .profile-aliases form { flex: 1 1 180px; }
 .profile-aliases .related-term button { padding: 0; border: 0; background: none; color: inherit; vertical-align: -2px; margin-left: 4px; }
-.phase-chip { flex-shrink: 0; padding: 1px 6px; border: 1px solid var(--border); border-radius: 999px; font-size: 11px; }
+.phase-chip { flex-shrink: 0; padding: 1px 8px; border: 1px solid var(--border); border-radius: 999px; background: none; color: var(--foreground); font: inherit; font-size: 11px; }
+button.phase-chip:hover { background: var(--muted); }
+.ota-next { margin-bottom: 12px; }
+.tab-more { opacity: .62; }
+.tab-more:hover, .tab-more[data-active] { opacity: 1; }
+.rail-phase { margin-top: 8px; padding: 0 10px 2px; color: var(--muted-foreground); font-size: 11px; }
+.rail-phase-rule { margin: 6px 10px; border: 0; border-top: 1px solid var(--border); }
+.ledger-phase { display: flex; align-items: baseline; gap: 8px; margin: 18px 0 4px; font-size: 14px; font-weight: 600; }
+.ledger-phase .quiet { font-weight: 400; }
+.gate-cell [data-slot="progress"] { margin-top: 4px; }
 .ota-page, .ota-model { display: flex; flex-direction: column; gap: 12px; }
 .ota-title-row { display: flex; align-items: center; gap: 8px; }
 .ota-title-row h1 { margin: 0; }

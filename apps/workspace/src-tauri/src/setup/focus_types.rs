@@ -170,6 +170,9 @@ pub struct FocusModel {
     pub aliases: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
+    pub phase: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub iterations: Option<Vec<Iteration>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
@@ -772,9 +775,12 @@ pub struct ModelProfile {
     pub suggested_aliases: Vec<String>,
     pub platform: Platform,
     pub fields: Vec<ProfileField>,
-    /// development, release, ota or maintenance; empty when no source says.
+    /// development, release, ota or maintenance.
     #[serde(default)]
     pub phase: String,
+    /// you, board, plan or code.
+    #[serde(default)]
+    pub phase_from: String,
     pub read_at: String,
 }
 /// One item on its way into an OTA.

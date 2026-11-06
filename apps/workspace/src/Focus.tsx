@@ -1,3 +1,8 @@
+import { profilesKey } from "./focus-cache";
+import { Progress } from "@/components/ui/progress";
+import { nextPlan, otaOptions } from "./Ota";
+import { profilesOptions } from "./Platforms";
+import { RUNNING, type Phase } from "./phase";
 import { heatCell, heatDate, useHeatSweep } from "./heat";
 import { ActionIcon } from "./components/action-icon";
 import { ContextTarget } from "./components/context-menu";
@@ -376,6 +381,27 @@ export function useFocus(enabled: boolean) {
     for (const part of ["forecasts", "needs", "mine"])
       void queryClient.invalidateQueries({ queryKey: [...focusKey, part] });
   }
+  /** Your word on a model's phase; `auto` hands it back to the sources. */
+  async function setPhase(code: string, phase: Phase | "auto") {
+    const current = (await focus("list")).models?.find(
+      (model) => model.code === code,
+    );
+    if (!current) throw new Error("model is no longer followed");
+    const data = await focus("save", {
+      model: {
+        ...current,
+        legacy: phase === "maintenance",
+        phase: phase === "auto" || phase === "maintenance" ? undefined : phase,
+      },
+    });
+    queryClient.setQueryData(modelsKey, data.models ?? []);
+    await queryClient.invalidateQueries({
+      queryKey: profilesKey,
+      exact: true,
+    });
+    for (const part of ["forecasts", "needs", "mine"])
+      void queryClient.invalidateQueries({ queryKey: [...focusKey, part] });
+  }
   async function remove(code: string) {
     const model = queryClient
       .getQueryData<FocusModel[]>(modelsKey)
@@ -455,6 +481,7 @@ export function useFocus(enabled: boolean) {
     legacy: ordered.filter((m) => isLegacy(m.code)),
     isLegacy,
     setLegacy,
+    setPhase,
     refreshing,
     failure:
       failure ??
@@ -518,7 +545,61 @@ export function FocusHome({
     day: "numeric",
     weekday: "long",
   });
-  const ledgerRow = (m: ModelSummary) => (
+  const profiles = useQuery(profilesOptions, queryClient).data;
+  const ota = useQuery(otaOptions, queryClient).data;
+  const phaseOf = (code: string) =>
+    profiles?.find((p) => p.code === code)?.phase;
+  const unplaced = active.filter(
+    (m) => !RUNNING.some((phase) => phase === phaseOf(m.code)),
+  );
+  const head = (carrying: boolean) => (
+    <div className="ledger-head" aria-hidden="true">
+      <span>{t("app.model")}</span>
+      <span>
+        {carrying ? t("phase.nextOta") : t("focus.severeIssueResolution")}
+      </span>
+      <span>{carrying ? t("ota.mergedOf") : t("focus.overallResolution")}</span>
+      <span>
+        {carrying ? t("ota.must") : t("focus.fatalIssuesUnresolved2")}
+      </span>
+      <span>{t("focus.codeChangesOver12Weeks")}</span>
+      <span>{t("focus.thisWeek")}</span>
+    </div>
+  );
+  /** An OTA row's three figures, in the columns gates take elsewhere. */
+  const otaCells = (code: string) => {
+    const plan = nextPlan(ota?.models.find((o) => o.code === code));
+    if (!plan)
+      return <span className="ledger-missing">{t("phase.noOtaPlanned")}</span>;
+    return (
+      <>
+        <span className="gate-cell">
+          <strong>{plan.version}</strong>
+          <small>
+            {plan.pre1
+              ? `${t("ota.pre1")} ${plan.pre1.slice(5)}`
+              : plan.official.slice(5)}
+          </small>
+        </span>
+        <span className="gate-cell">
+          <strong>
+            {plan.merged}/{plan.total}
+          </strong>
+          <Progress
+            value={plan.total ? (plan.merged / plan.total) * 100 : 0}
+            aria-hidden="true"
+          />
+        </span>
+        <span className="gate-cell">
+          <strong className={plan.late ? "short" : ""}>{plan.must_open}</strong>
+          <small className={plan.late ? "short" : ""}>
+            {t("ota.lateCount", { count: plan.late })}
+          </small>
+        </span>
+      </>
+    );
+  };
+  const ledgerRow = (m: ModelSummary, carrying = false) => (
     <ContextTarget
       key={m.code}
       title={
@@ -553,11 +634,15 @@ export function FocusHome({
           <small>
             {sourceText(m.sources) || t("focus.noIssueSourcesConfigured")}
           </small>
-          <LedgerForecast
-            forecast={forecasts?.find((f) => f.code === m.code)}
-          />
+          {carrying ? null : (
+            <LedgerForecast
+              forecast={forecasts?.find((f) => f.code === m.code)}
+            />
+          )}
         </span>
-        {m.measures ? (
+        {carrying ? (
+          otaCells(m.code)
+        ) : m.measures ? (
           <>
             <GateCell
               v={m.measures.severe_resolved}
@@ -626,17 +711,31 @@ export function FocusHome({
         )}
       </section>
       {state.failure ? <FailureNote failure={state.failure} /> : null}
-      <section className="ledger" aria-label={t("focus.followedModels2")}>
-        <div className="ledger-head" aria-hidden="true">
-          <span>{t("app.model")}</span>
-          <span>{t("focus.severeIssueResolution")}</span>
-          <span>{t("focus.overallResolution")}</span>
-          <span>{t("focus.fatalIssuesUnresolved2")}</span>
-          <span>{t("focus.codeChangesOver12Weeks")}</span>
-          <span>{t("focus.thisWeek")}</span>
-        </div>
+      {RUNNING.map((phase) => {
+        const rows = active.filter((m) => phaseOf(m.code) === phase);
+        return rows.length ? (
+          <section
+            key={phase}
+            className="ledger"
+            aria-label={t(`profile.phase.${phase}`)}
+          >
+            <h2 className="ledger-phase">
+              {t(`profile.phase.${phase}`)}
+              <span className="quiet">{rows.length}</span>
+            </h2>
+            {head(phase === "ota")}
+            {rows.map((m) => ledgerRow(m, phase === "ota"))}
+          </section>
+        ) : null;
+      })}
+      <section
+        className="ledger"
+        aria-label={t("focus.followedModels2")}
+        hidden={ordered.length > 0 && !unplaced.length}
+      >
+        {head(false)}
         {ordered.length
-          ? active.map(ledgerRow)
+          ? unplaced.map((m) => ledgerRow(m))
           : (state.models ?? []).map((m) => (
               <div className="ledger-row" key={m.code} aria-hidden="true">
                 <span className="ledger-model">
@@ -658,7 +757,9 @@ export function FocusHome({
             <span className="quiet">{legacy.length}</span>
           </CollapsibleTrigger>
           <CollapsibleContent>
-            <section className="ledger">{legacy.map(ledgerRow)}</section>
+            <section className="ledger">
+              {legacy.map((m) => ledgerRow(m))}
+            </section>
           </CollapsibleContent>
         </Collapsible>
       ) : null}

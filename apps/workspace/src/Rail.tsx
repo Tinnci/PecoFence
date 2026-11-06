@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ContextTarget, type ContextAction } from "./components/context-menu";
 import { Fragment } from "react";
+import { RUNNING } from "./phase";
 import { TabLine } from "./Model";
 import { prefetchBuilds } from "./focus-cache";
 import { t } from "./i18n";
@@ -36,6 +37,7 @@ export type ModelNavItem = {
   name: string;
   short: boolean | null;
   legacy?: boolean;
+  phase?: string;
 };
 
 const COLLAPSED_KEY = "workspace-rail-collapsed";
@@ -263,7 +265,22 @@ export function Rail({
         )}
       </div>
       <div className="rail-models">
-        {active.map(modelRow)}
+        {active
+          .filter((m) => !RUNNING.some((phase) => phase === m.phase))
+          .map(modelRow)}
+        {RUNNING.map((phase) => {
+          const rows = active.filter((m) => m.phase === phase);
+          return rows.length ? (
+            <Fragment key={phase}>
+              {collapsed ? (
+                <hr className="rail-phase-rule" />
+              ) : (
+                <div className="rail-phase">{t(`profile.phase.${phase}`)}</div>
+              )}
+              {rows.map(modelRow)}
+            </Fragment>
+          ) : null;
+        })}
         {legacy.length ? (
           <>
             <button

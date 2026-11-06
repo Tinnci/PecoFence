@@ -93,7 +93,7 @@ export type FocusTargets = { severe_pct: number, overall_pct: number, fatal_max:
 export type ReleaseLine = { id: string, label: string, lifecycle: string, phase: string, branches: Array<string>, jobs: Array<string>, };
 export type JobSource = { history?: Array<SourceSegment>, branch: string, previous: Array<string>, since_build?: number, note: string, };
 export type SourceSegment = { branch: string, first_build: number, last_build: number, note: string, };
-export type FocusModel = { legacy?: boolean, aliases?: Array<string>, iterations?: Array<Iteration>, name?: string, job_sources?: { [key in string]: JobSource }, branch_jobs?: { [key in string]: Array<string> }, release_lines?: Array<ReleaseLine>, ignored_jobs?: Array<string>, tracking?: TrackingConfig, code: string, issues: Array<ScopeQuery>, branches: Array<string>, 
+export type FocusModel = { legacy?: boolean, aliases?: Array<string>, phase?: string, iterations?: Array<Iteration>, name?: string, job_sources?: { [key in string]: JobSource }, branch_jobs?: { [key in string]: Array<string> }, release_lines?: Array<ReleaseLine>, ignored_jobs?: Array<string>, tracking?: TrackingConfig, code: string, issues: Array<ScopeQuery>, branches: Array<string>, 
 /**
  * Jenkins jobs by full name; empty reads the model's Project_Daily_Build folder.
  */
@@ -272,9 +272,13 @@ export type ProfileValue = { value: string, origins: Array<CalOrigin>, };
 export type ProfileField = { field: string, value: string, values: Array<ProfileValue>, conflict: boolean, };
 export type ModelProfile = { code: string, aliases: Array<string>, suggested_aliases: Array<string>, platform: Platform, fields: Array<ProfileField>, 
 /**
- * development, release, ota or maintenance; empty when no source says.
+ * development, release, ota or maintenance.
  */
-phase: string, read_at: string, };
+phase: string, 
+/**
+ * you, board, plan or code.
+ */
+phase_from: string, read_at: string, };
 export type OtaItem = { id: string, display_id: string, source: string, instance: string, kind: string, title: string, url: string, status: string, owner: string, severity: string, labels: Array<string>, tags: Array<string>, stage: string, must: boolean, customer: boolean, late: boolean, reason: string, };
 export type OtaPlan = { version: string, pre1: string, pre2: string, official: string, rollout: string, state: string, total: number, merged: number, verified: number, late: number, must_open: number, items: Array<OtaItem>, };
 export type ModelOta = { code: string, plans: Array<OtaPlan>, undecided: Array<OtaItem>, left_out: Array<OtaItem>, };

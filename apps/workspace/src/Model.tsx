@@ -1,5 +1,6 @@
 import { ModelPlatform, profilesOptions } from "./Platforms";
-import { ModelOtaTab, OtaLead } from "./Ota";
+import { ModelOtaTab, nextPlan, otaOptions, OtaNext } from "./Ota";
+import { daysUntil, layoutOf } from "./phase";
 import {
   BuildActivity,
   DurationSummary,
@@ -1872,31 +1873,89 @@ export function SettingsTab({
 }
 
 /** 机型: the head with its gates, then 概览, 分支, 构建 and 设置. */
-/** What the overview leads with depends on where the model is in its life. */
-function PhaseLead({
+/** The header's figures outside release: what this stage of its life is measured by. */
+function PhaseFigures({
+  phase,
   code,
-  openRequirements,
-  onTab,
+  m,
+  freeze,
+  requirements,
 }: {
+  phase: string;
   code: string;
-  openRequirements: number;
-  onTab: (tab: ModelTab) => void;
+  m: ModelSummary;
+  freeze?: string | null;
+  requirements: WorkItems | null;
 }) {
-  const profiles = useQuery(profilesOptions, queryClient).data;
-  const phase = profiles?.find((p) => p.code === code)?.phase;
-  if (phase === "ota")
-    return <OtaLead code={code} onOpen={() => onTab("ota")} />;
-  if (phase === "development" && openRequirements)
+  const report = useQuery(otaOptions, queryClient).data;
+  const figure = (
+    label: string,
+    value: string | number,
+    note: string,
+    short = false,
+  ) => (
+    <div>
+      <span>{label}</span>
+      <strong className={short ? "short" : ""}>{value}</strong>
+      <small className={short ? "short" : ""}>{note}</small>
+    </div>
+  );
+  if (phase === "ota") {
+    const plan = nextPlan(report?.models.find((o) => o.code === code));
+    if (!plan) return figure(t("phase.nextOta"), "—", t("phase.noOtaPlanned"));
+    const left = plan.pre1 ? daysUntil(plan.pre1) : null;
     return (
-      <button
-        type="button"
-        className="ota-lead"
-        onClick={() => onTab("requirements")}
-      >
-        {t("profile.openRequirements", { count: openRequirements })}
-      </button>
+      <>
+        {figure(
+          t("phase.nextOta"),
+          plan.version,
+          left === null
+            ? plan.official
+            : left >= 0
+              ? t("phase.daysToPre1", { count: left })
+              : t("phase.pre1Passed"),
+        )}
+        {figure(
+          t("ota.mergedOf"),
+          `${plan.merged}/${plan.total}`,
+          t("phase.leftToMerge", { count: plan.total - plan.merged }),
+          plan.late > 0,
+        )}
+        {figure(
+          t("ota.must"),
+          plan.must_open,
+          t("ota.lateCount", { count: plan.late }),
+          plan.late > 0,
+        )}
+      </>
     );
-  return null;
+  }
+  if (phase === "development") {
+    const items = requirements?.items ?? [];
+    const done = items.filter((i) => i.group === "done").length;
+    const left = freeze ? daysUntil(freeze) : null;
+    return (
+      <>
+        {figure(
+          t("phase.requirementsDone"),
+          `${done}/${items.length}`,
+          t("profile.openRequirements", { count: items.length - done }),
+        )}
+        {figure(
+          t("phase.toFreeze"),
+          left === null ? "—" : left,
+          freeze ?? t("model.noMPFreezeDateSet"),
+          left !== null && left < 0,
+        )}
+      </>
+    );
+  }
+  return figure(
+    t("focus.fatalIssuesUnresolved2"),
+    m.measures?.fatal_open ?? 0,
+    t("focus.limit", { v0: m.targets.fatal_max }),
+    (m.measures?.fatal_open ?? 0) > m.targets.fatal_max,
+  );
 }
 
 export function ModelPage({
@@ -1915,6 +1974,10 @@ export function ModelPage({
   useTranslation();
   const m = state.summary?.models.find((x) => x.code === code);
   const saved = state.models?.find((x) => x.code === code);
+  const phase = useQuery(profilesOptions, queryClient).data?.find(
+    (p) => p.code === code,
+  )?.phase;
+  const layout = layoutOf(phase);
   const forecasts = useForecasts(state.summary?.computed_at);
   const sourceBuilds = useBuilds(
     code,
@@ -2029,7 +2092,7 @@ export function ModelPage({
           >
             <h1 className="model-code">{saved?.name ?? m.code}</h1>
           </ContextTarget>
-          <ModelPlatform code={code} />
+          <ModelPlatform code={code} onPhase={state.setPhase} />
           <p className="quiet">
             {t("model.gerritBranches", {
               v0: sourceText(m.sources),
@@ -2041,7 +2104,16 @@ export function ModelPage({
           </p>
         </div>
         <div className="model-figures">
-          {sev ? (
+          {!layout.gates ? (
+            <PhaseFigures
+              phase={phase ?? ""}
+              code={code}
+              m={m}
+              freeze={saved?.freeze}
+              requirements={requirementWork.data}
+            />
+          ) : null}
+          {layout.gates && sev ? (
             <ContextTarget
               actions={[
                 {
@@ -2071,7 +2143,7 @@ export function ModelPage({
               </button>
             </ContextTarget>
           ) : null}
-          {all ? (
+          {layout.gates && all ? (
             <ContextTarget
               actions={[
                 {
@@ -2124,8 +2196,12 @@ export function ModelPage({
           className="model-subnav"
           aria-label={t("model.pages", { v0: m.code })}
         >
-          {(Object.keys(tabNames) as ModelTab[]).map((tabKey) => (
-            <Tabs.Tab key={tabKey} value={tabKey}>
+          {[...layout.tabs, ...layout.more].map((tabKey) => (
+            <Tabs.Tab
+              key={tabKey}
+              value={tabKey}
+              className={layout.more.includes(tabKey) ? "tab-more" : undefined}
+            >
               <ActionIcon name={tabKey} />
               {tabNames[tabKey]}
               {tabKey === "overview" && m.flagged.length ? (
@@ -2158,14 +2234,10 @@ export function ModelPage({
               failure={{ code: "source_failed", message: m.errors.join("；") }}
             />
           ) : null}
-          {tab === "overview" ? (
-            <PhaseLead
-              code={code}
-              openRequirements={requirementWork.openCount ?? 0}
-              onTab={onTab}
-            />
+          {tab === "overview" && phase === "ota" ? (
+            <OtaNext code={code} />
           ) : null}
-          {tab === "overview" ? (
+          {tab === "overview" && layout.forecast ? (
             <ModelForecast
               forecast={
                 saved?.legacy

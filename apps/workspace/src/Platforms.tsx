@@ -21,6 +21,15 @@ import { focus } from "./api";
 import { ContextTarget, type ContextAction } from "./components/context-menu";
 import { openContextAction } from "./context-actions";
 import { originPlace } from "./Calendar";
+import { RUNNING, type Phase } from "./phase";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { calendarKey, profilesKey, queryClient } from "./focus-cache";
 import { FailureNote, failureOf } from "./TemplateImport";
 import { t } from "./i18n";
@@ -160,8 +169,65 @@ function PlatformRefresh({
   );
 }
 
+/** Where the model is in its life, what says so, and your own word on it. */
+function PhaseChip({
+  profile,
+  onPhase,
+}: {
+  profile: ModelProfile;
+  onPhase?: (code: string, phase: Phase | "auto") => Promise<void>;
+}) {
+  const name = t(`profile.phase.${profile.phase}`);
+  const from = t(`profile.phaseFrom.${profile.phase_from}`);
+  if (!onPhase)
+    return (
+      <span className="phase-chip" title={from}>
+        {name}
+      </span>
+    );
+  const value = profile.phase_from === "you" ? profile.phase : "auto";
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <button
+            type="button"
+            className="phase-chip"
+            title={from}
+            aria-label={t("profile.phaseFor", { code: profile.code })}
+          >
+            {name}
+          </button>
+        }
+      />
+      <DropdownMenuContent align="start">
+        <DropdownMenuGroup>
+          <DropdownMenuRadioGroup
+            value={value}
+            onValueChange={(next) =>
+              void onPhase(profile.code, next as Phase | "auto")
+            }
+          >
+            {(["auto", ...RUNNING, "maintenance"] as const).map((choice) => (
+              <DropdownMenuRadioItem key={choice} value={choice}>
+                {t(`profile.phase.${choice}`)}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 /** Shares the same cached facts and edits as the home platform list. */
-export function ModelPlatform({ code }: { code: string }) {
+export function ModelPlatform({
+  code,
+  onPhase,
+}: {
+  code: string;
+  onPhase?: (code: string, phase: Phase | "auto") => Promise<void>;
+}) {
   useTranslation();
   const query = useQuery(platformsOptions, queryClient);
   const profiles = useQuery(profilesOptions, queryClient);
@@ -175,9 +241,7 @@ export function ModelPlatform({ code }: { code: string }) {
     <>
       <div className="model-platform">
         {profile?.phase ? (
-          <span className="phase-chip">
-            {t(`profile.phase.${profile.phase}`)}
-          </span>
+          <PhaseChip profile={profile} onPhase={onPhase} />
         ) : null}
         {platform ? (
           <ContextTarget actions={sourceActions(profile)}>

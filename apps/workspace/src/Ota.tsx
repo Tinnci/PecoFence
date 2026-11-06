@@ -336,26 +336,16 @@ export function ModelOtaTab({ code }: { code: string }) {
   );
 }
 
-/** The overview's first line for a model in its OTA phase. */
-export function OtaLead({
-  code,
-  onOpen,
-}: {
-  code: string;
-  onOpen: () => void;
-}) {
+/** What an OTA-phase overview opens with: the coming OTA and everything in it. */
+export function OtaNext({ code }: { code: string }) {
   useTranslation();
   const report = useQuery(otaOptions, queryClient).data;
   const plan = nextPlan(report?.models.find((m) => m.code === code));
-  if (!plan) return null;
-  return (
-    <button type="button" className="ota-lead" onClick={onOpen}>
-      <strong>{plan.version}</strong>
-      <Dates plan={plan} />
-      <Meter plan={plan} />
-      <Flags plan={plan} />
-    </button>
-  );
+  return plan ? (
+    <div className="ota-next">
+      <Card plan={plan} code={code} start />
+    </div>
+  ) : null;
 }
 
 /** Every model's OTAs, soonest first: the week's view across the portfolio. */

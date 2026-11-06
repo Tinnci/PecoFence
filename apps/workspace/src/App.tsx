@@ -348,6 +348,7 @@ function Workspace() {
       name: m.name ?? m.code,
       short: summary ? shortfall(summary) > 0 : null,
       legacy: m.legacy ?? false,
+      phase: profiles.data?.find((p) => p.code === m.code)?.phase,
     };
   });
   const logView = page === "logs" || page === "traces";

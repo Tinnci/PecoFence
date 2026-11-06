@@ -161,6 +161,7 @@ const open: ModelProfile = {
   platform: { ...platform, chip: "" },
   read_at: "",
   phase: "",
+  phase_from: "",
   fields: [
     {
       field: "chip",
