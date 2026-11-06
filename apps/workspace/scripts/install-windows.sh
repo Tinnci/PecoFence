@@ -7,6 +7,11 @@ cd "$(dirname "$0")/.."
 ROOT=/mnt/c/Users/Administrator/AppData/Local/Tinnci/Workspace/versions
 TARGET="${1:-$ROOT/$(ls -t "$ROOT" | head -1)}/tinnci-workspace.exe"
 BUILT=src-tauri/target/x86_64-pc-windows-msvc/release/tinnci-workspace.exe
+# An install copies a build, so a build older than the source would ship the old program.
+if [ -n "$(find src src-tauri/src index.html -newer "$BUILT" -print -quit)" ]; then
+  echo "$BUILT is older than the source: run scripts/build-windows.sh first" >&2
+  exit 1
+fi
 if ! cp "$BUILT" "$TARGET" 2>/dev/null; then
   rm -f "$TARGET.old"
   [ -e "$TARGET.old" ] && mv "$TARGET.old" "$TARGET.old$(date +%s)"
