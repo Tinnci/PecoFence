@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Activity,
+  ChevronRight,
   Gauge,
   Inbox,
   MoreHorizontal,
@@ -32,6 +33,7 @@ export type ModelNavItem = {
   code: string;
   name: string;
   short: boolean | null;
+  legacy?: boolean;
 };
 
 const COLLAPSED_KEY = "workspace-rail-collapsed";
@@ -179,9 +181,9 @@ export function Rail({
   const [chosen, setChosen] = useState(savedCollapsed);
   const narrow = useNarrow();
   const collapsed = chosen || narrow;
-  const active = useRef<HTMLButtonElement>(null);
+  const current = useRef<HTMLButtonElement>(null);
   useLayoutEffect(() => {
-    active.current?.scrollIntoView?.({ block: "nearest" });
+    current.current?.scrollIntoView?.({ block: "nearest" });
   }, [activeCode, collapsed]);
   const link = (target: Page, icon: LucideIcon, label: string, on: boolean) => (
     <RailLink
@@ -191,6 +193,44 @@ export function Rail({
       collapsed={collapsed}
       onClick={() => onPage(target)}
     />
+  );
+  const active = models.filter((m) => !m.legacy);
+  const legacy = models.filter((m) => m.legacy);
+  const [openLegacy, setOpenLegacy] = useState(false);
+  const showLegacy = openLegacy || legacy.some((m) => m.code === activeCode);
+  const modelRow = (model: ModelNavItem) => (
+    <div className="rail-model" key={model.code}>
+      <ContextTarget title={model.name} actions={actions(model.code)}>
+        <button
+          type="button"
+          className="rail-model-open"
+          ref={activeCode === model.code ? current : undefined}
+          aria-label={model.name}
+          title={
+            model.name === model.code
+              ? model.name
+              : `${model.name}\n${model.code}`
+          }
+          aria-current={activeCode === model.code ? "page" : undefined}
+          onClick={() => {
+            onCancelWarm();
+            onModel(model.code);
+          }}
+          onMouseEnter={() => onWarm(model.code)}
+          onMouseLeave={onCancelWarm}
+          onFocus={() => void prefetchBuilds(model.code)}
+        >
+          <i
+            aria-hidden="true"
+            className={dotClass(model.legacy ? null : model.short)}
+          />
+          <span>{collapsed ? model.name.slice(-4) : model.name}</span>
+        </button>
+      </ContextTarget>
+      {collapsed ? null : (
+        <ModelActions name={model.name} actions={actions(model.code)} />
+      )}
+    </div>
   );
   return (
     <nav
@@ -221,37 +261,23 @@ export function Rail({
         )}
       </div>
       <div className="rail-models">
-        {models.map((model) => (
-          <div className="rail-model" key={model.code}>
-            <ContextTarget title={model.name} actions={actions(model.code)}>
-              <button
-                type="button"
-                className="rail-model-open"
-                ref={activeCode === model.code ? active : undefined}
-                aria-label={model.name}
-                title={
-                  model.name === model.code
-                    ? model.name
-                    : `${model.name}\n${model.code}`
-                }
-                aria-current={activeCode === model.code ? "page" : undefined}
-                onClick={() => {
-                  onCancelWarm();
-                  onModel(model.code);
-                }}
-                onMouseEnter={() => onWarm(model.code)}
-                onMouseLeave={onCancelWarm}
-                onFocus={() => void prefetchBuilds(model.code)}
-              >
-                <i aria-hidden="true" className={dotClass(model.short)} />
-                <span>{collapsed ? model.name.slice(-4) : model.name}</span>
-              </button>
-            </ContextTarget>
-            {collapsed ? null : (
-              <ModelActions name={model.name} actions={actions(model.code)} />
-            )}
-          </div>
-        ))}
+        {active.map(modelRow)}
+        {legacy.length ? (
+          <>
+            <button
+              type="button"
+              className="rail-legacy"
+              aria-expanded={showLegacy}
+              title={t("legacy.title")}
+              onClick={() => setOpenLegacy(!showLegacy)}
+            >
+              <ChevronRight aria-hidden="true" />
+              {collapsed ? null : <span>{t("legacy.title")}</span>}
+              <span className="quiet">{legacy.length}</span>
+            </button>
+            {showLegacy ? legacy.map(modelRow) : null}
+          </>
+        ) : null}
       </div>
       <div className="rail-foot">
         {link("activity", Activity, t("nav.activity"), page === "activity")}

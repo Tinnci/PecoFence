@@ -164,6 +164,9 @@ pub struct Iteration {
 pub struct FocusModel {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
+    pub legacy: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub iterations: Option<Vec<Iteration>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]

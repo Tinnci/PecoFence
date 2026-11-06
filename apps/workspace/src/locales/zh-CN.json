@@ -1345,5 +1345,9 @@
   "forecast.freeze": "冻结",
   "forecast.gapThen": "还差 {{gap}} 个",
   "forecast.chart": "近 12 周门槛差距，当前 {{gap}} 个，含预计达成时间",
-  "nav.waiting": "{{count}} 项等你处理"
+  "nav.waiting": "{{count}} 项等你处理",
+  "legacy.title": "维护中",
+  "legacy.mark": "转为维护",
+  "legacy.restore": "恢复跟进",
+  "legacy.note": "维护中：不提示门槛、不做预测，打开时才读取"
 }

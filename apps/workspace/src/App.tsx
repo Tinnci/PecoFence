@@ -338,6 +338,7 @@ function Workspace() {
       code: m.code,
       name: m.name ?? m.code,
       short: summary ? shortfall(summary) > 0 : null,
+      legacy: m.legacy ?? false,
     };
   });
   const logView = page === "logs" || page === "traces";
@@ -541,6 +542,11 @@ function Workspace() {
                 focusState.refresh,
                 setRenamingCode,
                 focusState.requestRemove,
+                {
+                  on: focusState.isLegacy(code),
+                  toggle: (c) =>
+                    void focusState.setLegacy(c, !focusState.isLegacy(c)),
+                },
               )
             }
           />

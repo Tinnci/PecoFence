@@ -78,6 +78,34 @@ it("folds, and stays folded next time", async () => {
   expect(screen.getByRole("button", { name: "展开侧栏" })).toBeTruthy();
 });
 
+it("folds legacy models away until one is open", async () => {
+  const user = userEvent.setup();
+  const models = [
+    { code: "NEW", name: "新机型", short: true },
+    { code: "OLD", name: "老机型", short: true, legacy: true },
+  ];
+  const props = {
+    models,
+    page: "home" as Page,
+    waiting: 0,
+    onPage,
+    onModel,
+    onFollow,
+    onSettings: vi.fn(),
+    onWarm: vi.fn(),
+    onCancelWarm: vi.fn(),
+    actions: () => [],
+  };
+  const { rerender } = render(<Rail {...props} activeCode={null} />);
+  expect(screen.queryByRole("button", { name: "老机型" })).toBeNull();
+  await user.click(screen.getByRole("button", { name: /维护中/ }));
+  const old = screen.getByRole("button", { name: "老机型" });
+  expect(old.querySelector("i")?.className).toBe("dot");
+  await user.click(screen.getByRole("button", { name: /维护中/ }));
+  rerender(<Rail {...props} activeCode="OLD" />);
+  expect(screen.getByRole("button", { name: "老机型" })).toBeTruthy();
+});
+
 it("counts the project wizard as part of System", () => {
   expect(isSystem("project")).toBe(true);
   expect(isSystem("logs")).toBe(true);

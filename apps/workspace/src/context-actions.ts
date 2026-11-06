@@ -15,6 +15,7 @@ import {
   BookmarkX,
   Pencil,
   Trash2,
+  Archive,
 } from "lucide-react";
 import { t } from "./i18n";
 import { browserUrl } from "./browser-urls";
@@ -85,6 +86,7 @@ export function modelContextActions(
   refresh: (code: string) => Promise<unknown>,
   rename?: (code: string) => void,
   remove?: (code: string) => void,
+  legacy?: { on: boolean; toggle: (code: string) => void },
 ): ContextAction[] {
   const views: [ModelTab, string, ContextAction["icon"]][] = [
     ["overview", t("model.overview"), LayoutDashboard],
@@ -133,6 +135,16 @@ export function modelContextActions(
             label: t("model.rename"),
             icon: Pencil,
             run: () => rename(code),
+          },
+        ]
+      : []),
+    ...(legacy
+      ? [
+          {
+            id: "legacy",
+            label: t(legacy.on ? "legacy.restore" : "legacy.mark"),
+            icon: Archive,
+            run: () => legacy.toggle(code),
           },
         ]
       : []),

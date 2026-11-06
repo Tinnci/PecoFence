@@ -20,7 +20,12 @@ import {
   focusKey,
 } from "./focus-cache";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, RefreshCw } from "lucide-react";
+import { ArrowLeft, ChevronDown, RefreshCw } from "lucide-react";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { BrandMark } from "@/components/brand-mark";
 import { Num } from "@/components/motion";
 import { m as motion } from "motion/react";
@@ -303,7 +308,12 @@ export function useFocus(enabled: boolean) {
     try {
       const current = queryClient.getQueryData<FocusModel[]>(modelsKey) ?? [];
       const errors: unknown[] = [];
-      for (const target of code ? [code] : current.map((model) => model.code)) {
+      // A legacy model is read when opened; an all-models refresh passes it by.
+      const read = queryClient.getQueryData<FocusSummary>(summaryKey)?.models;
+      const routine = current.filter(
+        (m) => !m.legacy || !read?.some((x) => x.code === m.code),
+      );
+      for (const target of code ? [code] : routine.map((model) => model.code)) {
         try {
           await refreshModel(target, force);
         } catch (error) {
@@ -354,6 +364,17 @@ export function useFocus(enabled: boolean) {
       model: { ...current, name: value === code ? undefined : value },
     });
     queryClient.setQueryData(modelsKey, data.models ?? []);
+  }
+  async function setLegacy(code: string, legacy: boolean) {
+    const current = (await focus("list")).models?.find(
+      (model) => model.code === code,
+    );
+    if (!current) throw new Error("model is no longer followed");
+    const data = await focus("save", { model: { ...current, legacy } });
+    queryClient.setQueryData(modelsKey, data.models ?? []);
+    // What a legacy model raises changes everywhere it is counted.
+    for (const part of ["forecasts", "needs", "mine"])
+      void queryClient.invalidateQueries({ queryKey: [...focusKey, part] });
   }
   async function remove(code: string) {
     const model = queryClient
@@ -424,10 +445,16 @@ export function useFocus(enabled: boolean) {
         : [],
     [summary],
   );
+  const isLegacy = (code: string) =>
+    models?.some((m) => m.code === code && m.legacy) ?? false;
   return {
     models,
     summary,
     ordered,
+    active: ordered.filter((m) => !isLegacy(m.code)),
+    legacy: ordered.filter((m) => isLegacy(m.code)),
+    isLegacy,
+    setLegacy,
     refreshing,
     failure:
       failure ??
@@ -460,7 +487,7 @@ export function since(at?: string) {
 }
 
 function LedgerForecast({ forecast }: { forecast: Forecast | undefined }) {
-  if (!forecast || forecast.state === "no_data" || forecast.state === "met")
+  if (!forecast || ["no_data", "met", "legacy"].includes(forecast.state))
     return null;
   return (
     <small
@@ -484,13 +511,99 @@ export function FocusHome({
   onModel: (code: string) => void;
 }) {
   useTranslation();
-  const { ordered, summary } = state;
+  const { ordered, active, legacy, summary } = state;
   const forecasts = useForecasts(summary?.computed_at);
   const today = new Date().toLocaleDateString(locale(), {
     month: "long",
     day: "numeric",
     weekday: "long",
   });
+  const ledgerRow = (m: ModelSummary) => (
+    <ContextTarget
+      key={m.code}
+      title={
+        state.models?.find((model) => model.code === m.code)?.name ?? m.code
+      }
+      actions={modelContextActions(
+        m.code,
+        onModel,
+        state.refresh,
+        undefined,
+        state.requestRemove,
+        {
+          on: state.isLegacy(m.code),
+          toggle: (code) => void state.setLegacy(code, !state.isLegacy(code)),
+        },
+      )}
+    >
+      <motion.button
+        layout="position"
+        type="button"
+        className="ledger-row"
+        aria-label={
+          state.models?.find((model) => model.code === m.code)?.name ?? m.code
+        }
+        onClick={() => onModel(m.code)}
+      >
+        <span className="ledger-model">
+          <strong>
+            {state.models?.find((model) => model.code === m.code)?.name ??
+              m.code}
+          </strong>
+          <small>
+            {sourceText(m.sources) || t("focus.noIssueSourcesConfigured")}
+          </small>
+          <LedgerForecast
+            forecast={forecasts?.find((f) => f.code === m.code)}
+          />
+        </span>
+        {m.measures ? (
+          <>
+            <GateCell
+              v={m.measures.severe_resolved}
+              n={m.measures.severe_total}
+              target={m.targets.severe_pct}
+            />
+            <GateCell
+              v={m.measures.overall_resolved}
+              n={m.measures.overall_total}
+              target={m.targets.overall_pct}
+            />
+            <span className="gate-cell">
+              <strong
+                className={
+                  m.measures.fatal_open > m.targets.fatal_max ? "short" : ""
+                }
+              >
+                {m.measures.fatal_open}
+              </strong>
+              <small>{t("focus.limit", { v0: m.targets.fatal_max })}</small>
+            </span>
+          </>
+        ) : (
+          <span className="ledger-missing">
+            {m.errors[0] ?? t("focus.noIssueSources")}
+          </span>
+        )}
+        <WeekGrid id={m.code} days={m.days} />
+        <span className="ledger-week">
+          <span>
+            <strong>{m.new_issues ? `+${m.new_issues}` : "0"}</strong>
+            {t("focus.newIssues")}
+          </span>
+          <span>
+            <strong>{m.week_changes}</strong>{" "}
+            {t("focus.changesMerged", { v0: m.week_merged })}
+          </span>
+          {m.flagged.length ? (
+            <span className="short">
+              {t("focus.needAttention", { v0: m.flagged.length })}
+            </span>
+          ) : null}
+        </span>
+      </motion.button>
+    </ContextTarget>
+  );
   return (
     <div className="focus-home">
       <section className="lede">
@@ -505,7 +618,7 @@ export function FocusHome({
           })}
         </span>
         {ordered.length ? (
-          <h1>{lede(ordered)}</h1>
+          <h1>{lede(active)}</h1>
         ) : (
           <h1 className="lede-loading">
             <BrandMark size={44} busy /> {t("focus.loadingFollowedModels")}
@@ -523,95 +636,7 @@ export function FocusHome({
           <span>{t("focus.thisWeek")}</span>
         </div>
         {ordered.length
-          ? ordered.map((m) => (
-              <ContextTarget
-                key={m.code}
-                title={
-                  state.models?.find((model) => model.code === m.code)?.name ??
-                  m.code
-                }
-                actions={modelContextActions(
-                  m.code,
-                  onModel,
-                  state.refresh,
-                  undefined,
-                  state.requestRemove,
-                )}
-              >
-                <motion.button
-                  layout="position"
-                  type="button"
-                  className="ledger-row"
-                  aria-label={
-                    state.models?.find((model) => model.code === m.code)
-                      ?.name ?? m.code
-                  }
-                  onClick={() => onModel(m.code)}
-                >
-                  <span className="ledger-model">
-                    <strong>
-                      {state.models?.find((model) => model.code === m.code)
-                        ?.name ?? m.code}
-                    </strong>
-                    <small>
-                      {sourceText(m.sources) ||
-                        t("focus.noIssueSourcesConfigured")}
-                    </small>
-                    <LedgerForecast
-                      forecast={forecasts?.find((f) => f.code === m.code)}
-                    />
-                  </span>
-                  {m.measures ? (
-                    <>
-                      <GateCell
-                        v={m.measures.severe_resolved}
-                        n={m.measures.severe_total}
-                        target={m.targets.severe_pct}
-                      />
-                      <GateCell
-                        v={m.measures.overall_resolved}
-                        n={m.measures.overall_total}
-                        target={m.targets.overall_pct}
-                      />
-                      <span className="gate-cell">
-                        <strong
-                          className={
-                            m.measures.fatal_open > m.targets.fatal_max
-                              ? "short"
-                              : ""
-                          }
-                        >
-                          {m.measures.fatal_open}
-                        </strong>
-                        <small>
-                          {t("focus.limit", { v0: m.targets.fatal_max })}
-                        </small>
-                      </span>
-                    </>
-                  ) : (
-                    <span className="ledger-missing">
-                      {m.errors[0] ?? t("focus.noIssueSources")}
-                    </span>
-                  )}
-                  <WeekGrid id={m.code} days={m.days} />
-                  <span className="ledger-week">
-                    <span>
-                      <strong>{m.new_issues ? `+${m.new_issues}` : "0"}</strong>
-                      {t("focus.newIssues")}
-                    </span>
-                    <span>
-                      <strong>{m.week_changes}</strong>{" "}
-                      {t("focus.changesMerged", { v0: m.week_merged })}
-                    </span>
-                    {m.flagged.length ? (
-                      <span className="short">
-                        {t("focus.needAttention", { v0: m.flagged.length })}
-                      </span>
-                    ) : null}
-                  </span>
-                </motion.button>
-              </ContextTarget>
-            ))
+          ? active.map(ledgerRow)
           : (state.models ?? []).map((m) => (
               <div className="ledger-row" key={m.code} aria-hidden="true">
                 <span className="ledger-model">
@@ -625,6 +650,18 @@ export function FocusHome({
               </div>
             ))}
       </section>
+      {legacy.length ? (
+        <Collapsible className="my-group ledger-legacy is-legacy">
+          <CollapsibleTrigger className="my-group-head">
+            <ChevronDown aria-hidden="true" />
+            <strong>{t("legacy.title")}</strong>
+            <span className="quiet">{legacy.length}</span>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <section className="ledger">{legacy.map(ledgerRow)}</section>
+          </CollapsibleContent>
+        </Collapsible>
+      ) : null}
       <Platforms models={state.models ?? null} />
     </div>
   );

@@ -1345,5 +1345,9 @@
   "forecast.freeze": "Freeze",
   "forecast.gapThen": "{{gap}} short",
   "forecast.chart": "Gap to the gate over 12 weeks, now {{gap}}, with its projected close",
-  "nav.waiting": "{{count}} waiting on you"
+  "nav.waiting": "{{count}} waiting on you",
+  "legacy.title": "Maintenance",
+  "legacy.mark": "Move to maintenance",
+  "legacy.restore": "Back to active",
+  "legacy.note": "In maintenance: no gate alarms or forecast, and read when opened"
 }

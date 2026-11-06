@@ -170,13 +170,19 @@ function Plot({ forecast }: { forecast: Forecast }) {
 /** When this model reaches its gates at its recent pace, and whether that beats the freeze. */
 export function ModelForecast({
   forecast,
+  quiet,
   onSettings,
+  onLegacy,
 }: {
   forecast: Forecast | undefined;
+  /** No code has moved lately, so this may be a model to set aside. */
+  quiet: boolean;
   onSettings: () => void;
+  onLegacy: () => void;
 }) {
   useTranslation();
-  if (!forecast || forecast.state === "no_data") return null;
+  if (!forecast || forecast.state === "no_data" || forecast.state === "legacy")
+    return null;
   return (
     <section className="forecast" aria-label={t("forecast.title")}>
       <header>
@@ -190,7 +196,11 @@ export function ModelForecast({
         >
           {forecastLine(forecast)}
         </strong>
-        {!forecast.freeze && forecast.state !== "met" ? (
+        {quiet && forecast.state !== "met" ? (
+          <Button variant="outline" size="xs" onClick={onLegacy}>
+            {t("legacy.mark")}
+          </Button>
+        ) : !forecast.freeze && forecast.state !== "met" ? (
           <Button variant="outline" size="xs" onClick={onSettings}>
             {t("forecast.setFreeze")}
           </Button>

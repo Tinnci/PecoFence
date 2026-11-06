@@ -63,7 +63,7 @@ import {
   changesOptions,
 } from "./focus-cache";
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { Info, RefreshCw } from "lucide-react";
+import { Archive, Info, RefreshCw } from "lucide-react";
 import { ModelForecast, useForecasts } from "./Forecast";
 import { Tabs } from "@base-ui/react/tabs";
 import { AnimatePresence, m as motion } from "motion/react";
@@ -1959,7 +1959,20 @@ export function ModelPage({
       )
     : null;
   return (
-    <div className="model-page">
+    <div className={saved?.legacy ? "model-page is-legacy" : "model-page"}>
+      {saved?.legacy ? (
+        <div className="legacy-note">
+          <Archive aria-hidden="true" />
+          <span>{t("legacy.note")}</span>
+          <Button
+            variant="ghost"
+            size="xs"
+            onClick={() => void state.setLegacy(code, false)}
+          >
+            {t("legacy.restore")}
+          </Button>
+        </div>
+      ) : null}
       <IssueBrowser
         issues={m.issue_links ?? []}
         open={issueFilter}
@@ -2098,7 +2111,7 @@ export function ModelPage({
                   {t("model.building2", { count: running })}
                 </span>
               ) : null}
-              {tabKey === "settings" && !saved?.freeze ? (
+              {tabKey === "settings" && !saved?.freeze && !saved?.legacy ? (
                 <span
                   className="tab-dot"
                   aria-label={t("model.noFreezeDateSet")}
@@ -2116,8 +2129,14 @@ export function ModelPage({
           ) : null}
           {tab === "overview" ? (
             <ModelForecast
-              forecast={forecasts?.find((f) => f.code === code)}
+              forecast={
+                saved?.legacy
+                  ? undefined
+                  : forecasts?.find((f) => f.code === code)
+              }
+              quiet={!m.days.slice(-28).some(Boolean)}
               onSettings={() => onTab("settings")}
+              onLegacy={() => void state.setLegacy(code, true)}
             />
           ) : null}
           {tab === "overview" ? (
