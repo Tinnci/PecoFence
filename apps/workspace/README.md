@@ -1,17 +1,17 @@
-<img src="icons/banner.svg" alt="望 · Tinnci Lune" width="800">
+<img src="icons/banner.svg" alt="Maon · Tinnci" width="800">
 
-# Tinnci Lune · 望
+# Maon
 
 An independent Windows window for discovering the local tool ecosystem and
 understanding first-time setup. Version 0.3 added first-launch prerequisite diagnosis and recovery; 0.4 imports SPM project templates; 0.5 connects sources; 0.6 creates an SPM project from discovery; 0.7 makes it one page that ends with collection running; 0.8 adds 代码活动; 0.9 centres the window on followed models; 0.10 gives each model 概览, 分支, 构建 and 设置. PecoFence and spmd keep their own lifetimes.
-Closing Lune leaves both running.
+Closing Maon leaves both running.
 
 This first increment provides Home, a per-component setup checklist and Health.
 All cards and steps come from `dev-cli hub --json`; no project or account fixture
 is bundled. Opening Home reads inventory without running checks. Each checkable component can also be checked on its own; other observations and their timestamps are preserved. “检查状态” runs
 `hub --check`, with the CLI's read-only check policy. The SPM template step imports
 a project through the owner CLI (0.4); other unimplemented steps remain “待支持”, and
-Lune accepts no tokens.
+Maon accepts no tokens.
 Board, timeline, issues, CI and accounts pages follow in later increments.
 
 ## Run and build
@@ -26,7 +26,7 @@ The backend asks WSL for `HOME` and `PATH`, then resolves `.local/bin/dev-cli`.
 It prepends the CLI directory and the user tool directory to the child
 process PATH, so non-interactive WSL can discover and run installed tools. A nonstandard
 installation can set the Windows user environment variable `TINNCI_DEV_CLI_WSL`
-to its absolute Linux executable path before starting Lune. It never runs
+to its absolute Linux executable path before starting Maon. It never runs
 a login shell or accepts arbitrary commands from the frontend.
 
 From this directory on Windows:
@@ -53,8 +53,8 @@ To install for the current user, run from Windows (WSL paths via `wslpath -w`):
 
 It copies the executable to `%LOCALAPPDATA%\Tinnci\Workspace\versions\<version>-<sha256
 prefix>` after a checksum check and leaves earlier versions in place. It writes Start menu
-shortcuts under `Tinnci`: 望 Lune, 望 · 设置清单 (`--open setup`) and 望 · 运行状况
-(`--open health`), plus a desktop 望 Lune unless `-NoDesktop`. Rerunning with a new build
+shortcuts under `Tinnci`: Maon, Maon · 设置清单 (`--open setup`) and Maon · 运行状况
+(`--open health`), plus a desktop Maon unless `-NoDesktop`. Rerunning with a new build
 repoints every shortcut. `-DryRun` prints the target and shortcut paths.
 
 For browser development on WSL:
@@ -113,7 +113,7 @@ or malformed scoped response leaves the previous inventory intact.
 
 ## Native measurement
 
-Run with no other Lune instance open, from Windows or WSL:
+Run with no other Maon instance open, from Windows or WSL:
 
 ```sh
 python scripts/measure.py src-tauri/target/release/lune.exe
@@ -134,7 +134,7 @@ Local x64 release observation, 2026-10-31, executable on WSL storage:
 | App + WebView2 summed working set | 479.20 MiB | 471.75 MiB |
 | App + WebView2 private working set | 135.49 MiB | 145.00 MiB |
 | Second launch / timed exit | exit 0 / exit 0 | exit 0 / exit 0 |
-| Lune instances after second launch | 1 | 1 |
+| Maon instances after second launch | 1 | 1 |
 
 The callback runs after two animation frames of the initial shell. It measures
 shell presentation; inventory loading finishes separately. Summed working sets
@@ -192,7 +192,7 @@ changed by verification.
 
 SPM setup follows [ADR-0004](../../../tooling/docs/ADR-0004-guided-project-setup.md):
 连接来源 → 选择项目 → 设置门槛 → 确认并开始采集. Each source keeps the login of the tool that
-owns it; Lune never handles a token.
+owns it; Maon never handles a token.
 
 连接来源 runs `spm connections` through the native `connections` command and lists
 飞书项目 and Jira as issue sources, Gerrit and Jenkins as code and build sources. Each row
@@ -384,7 +384,7 @@ Jenkins reads need jenkins-bridge 0.5 and the Windows cdp-forwarder reachable fr
 
 The SPM checklist's template step lists imported projects and imports one more:
 
-1. **选择项目模板…** opens the native file dialog from Rust. Lune copies the
+1. **选择项目模板…** opens the native file dialog from Rust. Maon copies the
    chosen file (at most 1 MiB) to its cache and runs
    `spm.exe setup import-template <copy>`, which validates and plans without writing.
 2. The plan shows template, project, scope and each file's action. A conflict
@@ -407,7 +407,7 @@ writers. Imports use live mode; historical imports stay in the CLI.
 
 ## Icon
 
-The name is 望: to watch, and the full moon. `icons/lune.svg` is the Windows app icon: weeks
+Maon takes its name from the Shanghainese reading of 望: to watch, and the full moon. `icons/lune.svg` is the Windows app icon: weeks
 of code activity shaped as a disc, dim to bright, in paper on an ink tile.
 `icons/lune-small.svg` (a fuller tile, fewer cells) supplies the 16, 24 and 32 px sizes used
 by the title bar, tray and small taskbar. `scripts/icons.sh` regenerates `src-tauri/icons`

@@ -1,4 +1,4 @@
-﻿# Per-user install of Lune with Start menu and desktop shortcuts.
+﻿# Per-user install of Maon with Start menu and desktop shortcuts.
 # Copies the executable into versions\<version>-<sha256 prefix>; earlier versions stay.
 [CmdletBinding()]
 param(
@@ -16,12 +16,12 @@ $directory = Join-Path $InstallRoot "versions\$Version-$($hash.Substring(0, 12))
 $target = Join-Path $directory 'lune.exe'
 $programs = Join-Path ([Environment]::GetFolderPath('Programs')) 'Tinnci'
 $shortcuts = @(
-  @{ Path = Join-Path $programs '望 Lune.lnk'; Arguments = '' },
-  @{ Path = Join-Path $programs '望 · 设置清单.lnk'; Arguments = '--open setup' },
-  @{ Path = Join-Path $programs '望 · 运行状况.lnk'; Arguments = '--open health' }
+  @{ Path = Join-Path $programs 'Maon.lnk'; Arguments = '' },
+  @{ Path = Join-Path $programs 'Maon · 设置清单.lnk'; Arguments = '--open setup' },
+  @{ Path = Join-Path $programs 'Maon · 运行状况.lnk'; Arguments = '--open health' }
 )
 if (-not $NoDesktop) {
-  $shortcuts += @{ Path = Join-Path ([Environment]::GetFolderPath('Desktop')) '望 Lune.lnk'; Arguments = '' }
+  $shortcuts += @{ Path = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Maon.lnk'; Arguments = '' }
 }
 if ($DryRun) {
   [ordered]@{ target = $target; sha256 = $hash; shortcuts = $shortcuts.Path } | ConvertTo-Json
@@ -41,11 +41,13 @@ if (Test-Path -LiteralPath $target) {
   Move-Item -LiteralPath "$target.partial" -Destination $target
 }
 New-Item -ItemType Directory -Force -Path $programs | Out-Null
-# Shortcuts from before the app was named 望.
-foreach ($name in '工作台.lnk', '工作台 · 设置清单.lnk', '工作台 · 运行状况.lnk') {
-  Remove-Item -LiteralPath (Join-Path $programs $name) -ErrorAction SilentlyContinue
+# Remove shortcuts made under the former application names.
+foreach ($folder in @($programs, [Environment]::GetFolderPath('Desktop'))) {
+  foreach ($name in '工作台.lnk', '工作台 · 设置清单.lnk', '工作台 · 运行状况.lnk',
+                    '望 Lune.lnk', '望 · 设置清单.lnk', '望 · 运行状况.lnk') {
+    Remove-Item -LiteralPath (Join-Path $folder $name) -ErrorAction SilentlyContinue
+  }
 }
-Remove-Item -LiteralPath (Join-Path ([Environment]::GetFolderPath('Desktop')) '工作台.lnk') -ErrorAction SilentlyContinue
 $shell = New-Object -ComObject WScript.Shell
 foreach ($entry in $shortcuts) {
   $link = $shell.CreateShortcut($entry.Path)
@@ -53,7 +55,7 @@ foreach ($entry in $shortcuts) {
   $link.Arguments = $entry.Arguments
   $link.WorkingDirectory = $directory
   $link.IconLocation = "$target,0"
-  $link.Description = '望 Lune · 关注的机型、变更和构建'
+  $link.Description = 'Maon · 关注的机型、变更和构建'
   $link.Save()
 }
 [ordered]@{ target = $target; sha256 = $hash; shortcuts = $shortcuts.Path } | ConvertTo-Json

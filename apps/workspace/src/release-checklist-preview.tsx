@@ -68,7 +68,7 @@ async function preview() {
       <header className="appbar" style={{ justifyContent: "space-between" }}>
         <span className="wordmark">
           <BrandMark />
-          望
+          Maon
         </span>
         <Badge variant="outline">交互预览 · 示例数据</Badge>
       </header>

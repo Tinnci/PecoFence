@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
-  <title>望 Lune</title>
+  <title>Maon</title>
   <style>
     .k { animation: k 2.4s ease-in-out infinite both; }
     @keyframes k { 0%, 100% { opacity: .2; } 45% { opacity: 1; } }

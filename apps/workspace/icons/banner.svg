@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 400" width="1600" height="400">
-  <title>望 · Tinnci Lune</title>
+  <title>Maon · Tinnci</title>
   <style>
     .c { animation: in 360ms cubic-bezier(.2,.8,.2,1) both; transform-box: fill-box; transform-origin: 50% 100%; }
     @keyframes in { from { opacity: 0; transform: scaleY(.2); } }
@@ -43,8 +43,8 @@
   <rect x="156" y="268" width="24" height="24" rx="5" fill="#d4d5d3"/>
   <rect x="184" y="268" width="24" height="24" rx="5" fill="#5b5f69"/>
   <rect x="212" y="268" width="24" height="24" rx="5" fill="#16181d"/>
-  <text x="372" y="228" font-family="'Noto Serif SC','Source Han Serif SC','Songti SC',Georgia,serif" font-size="112" font-weight="700" fill="#16181d">望</text>
-  <text x="376" y="290" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="28" letter-spacing="6" fill="#5b5f69">TINNCI LUNE</text>
+  <text x="372" y="228" font-family="'Noto Serif SC','Source Han Serif SC','Songti SC',Georgia,serif" font-size="112" font-weight="700" fill="#16181d">Maon</text>
+  <text x="376" y="290" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="28" letter-spacing="6" fill="#5b5f69">TINNCI MAON</text>
     <rect class="c" style="animation-delay:0ms" x="820" y="96" width="28" height="28" rx="5" fill="#e4e4e0"/>
   <rect class="c" style="animation-delay:12ms" x="820" y="130" width="28" height="28" rx="5" fill="#e4e4e0"/>
   <rect class="c" style="animation-delay:24ms" x="820" y="164" width="28" height="28" rx="5" fill="#bcbfc8"/>

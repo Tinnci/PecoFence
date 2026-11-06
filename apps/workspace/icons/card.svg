@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
-  <title>望 · Tinnci Lune</title>
+  <title>Maon · Tinnci</title>
   <rect width="1200" height="630" fill="#f6f6f3"/>
   <rect x="146" y="96" width="22" height="22" rx="4" fill="#d4d5d3"/>
   <rect x="171" y="96" width="22" height="22" rx="4" fill="#5b5f69"/>
@@ -38,8 +38,8 @@
   <rect x="146" y="246" width="22" height="22" rx="4" fill="#d4d5d3"/>
   <rect x="171" y="246" width="22" height="22" rx="4" fill="#5b5f69"/>
   <rect x="196" y="246" width="22" height="22" rx="4" fill="#16181d"/>
-  <text x="340" y="196" font-family="'Noto Serif SC','Source Han Serif SC','Songti SC',Georgia,serif" font-size="96" font-weight="700" fill="#16181d">望</text>
-  <text x="344" y="252" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="24" letter-spacing="5" fill="#5b5f69">TINNCI LUNE</text>
+  <text x="340" y="196" font-family="'Noto Serif SC','Source Han Serif SC','Songti SC',Georgia,serif" font-size="96" font-weight="700" fill="#16181d">Maon</text>
+  <text x="344" y="252" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="24" letter-spacing="5" fill="#5b5f69">TINNCI MAON</text>
   <text x="96" y="380" font-family="'Noto Serif SC','Source Han Serif SC',Georgia,serif" font-size="34" fill="#16181d">关注的机型、开发的变更和构建，放在一处。</text>
     <rect x="96" y="440" width="28" height="28" rx="5" fill="#bcbfc8"/>
   <rect x="96" y="474" width="28" height="28" rx="5" fill="#bcbfc8"/>

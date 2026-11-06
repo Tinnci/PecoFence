@@ -64,7 +64,7 @@ $private = @(Get-CimInstance Win32_PerfFormattedData_PerfProc_Process | Where-Ob
                 **memory,
             }, indent=2))
         except (queue.Empty, ValueError) as exc:
-            raise SystemExit("No first-frame signal; close any existing Lune instance and retry") from exc
+            raise SystemExit("No first-frame signal; close any existing Maon instance and retry") from exc
 
 
 if __name__ == "__main__":
