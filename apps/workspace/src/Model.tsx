@@ -64,6 +64,7 @@ import {
 } from "./focus-cache";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { Info, RefreshCw } from "lucide-react";
+import { ModelForecast, useForecasts } from "./Forecast";
 import { Tabs } from "@base-ui/react/tabs";
 import { AnimatePresence, m as motion } from "motion/react";
 import { Num } from "@/components/motion";
@@ -1883,6 +1884,7 @@ export function ModelPage({
   useTranslation();
   const m = state.summary?.models.find((x) => x.code === code);
   const saved = state.models?.find((x) => x.code === code);
+  const forecasts = useForecasts(state.summary?.computed_at);
   const sourceBuilds = useBuilds(
     code,
     tab !== "settings" && tab !== "checklist",
@@ -2110,6 +2112,12 @@ export function ModelPage({
           {m.errors.length ? (
             <FailureNote
               failure={{ code: "source_failed", message: m.errors.join("；") }}
+            />
+          ) : null}
+          {tab === "overview" ? (
+            <ModelForecast
+              forecast={forecasts?.find((f) => f.code === code)}
+              onSettings={() => onTab("settings")}
             />
           ) : null}
           {tab === "overview" ? (

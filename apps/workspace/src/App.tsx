@@ -69,6 +69,7 @@ import { RemoveModelDialog } from "./RemoveModelDialog";
 import { RenameModelDialog } from "./RenameModelDialog";
 import { CommandPalette } from "./CommandPalette";
 import { MyIssues } from "./MyIssues";
+import { hardNeeds, NeedsYou, useNeeds } from "./NeedsYou";
 import { SettingsDialog } from "./SettingsDialog";
 import type { Command } from "./palette";
 import { getVersion } from "@tauri-apps/api/app";
@@ -132,6 +133,7 @@ function Workspace() {
   const [modelCode, setModelCode] = useState<string | null>(null);
   const [followCode, setFollowCode] = useState<string | undefined>(undefined);
   const focusState = useFocus(desktop());
+  const needs = useNeeds();
   const [renamingCode, setRenamingCode] = useState<string | null>(null);
   const [currentTheme, setCurrentTheme] = useState(themePreference);
   const [backup, setBackup] = useState<"export" | "restore" | null>(null);
@@ -525,6 +527,7 @@ function Workspace() {
             models={tabs}
             page={page}
             activeCode={page === "model" ? modelCode : null}
+            waiting={hardNeeds(needs?.items ?? []).length}
             onPage={go}
             onModel={openModel}
             onFollow={follow}
@@ -545,9 +548,7 @@ function Workspace() {
             <main id="main" className="page-content">
               {page === "mine" ? (
                 <div className="focus-home">
-                  <div className="page-heading">
-                    <h1>{t("nav.mine")}</h1>
-                  </div>
+                  <NeedsYou onModel={openModel} />
                   <MyIssues onModel={openModel} />
                 </div>
               ) : page === "model" && modelCode ? (

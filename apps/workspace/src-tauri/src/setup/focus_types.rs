@@ -592,6 +592,49 @@ pub struct Logs {
     pub apps: std::collections::BTreeMap<String, LogCount>,
     pub truncated: bool,
 }
+/// One thing waiting on the signed-in user.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct NeedItem {
+    pub kind: String,
+    pub title: String,
+    pub model: String,
+    pub id: String,
+    pub url: String,
+    pub since: String,
+}
+/// The queue of what cannot move until the user does.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct Needs {
+    pub computed_at: String,
+    pub items: Vec<NeedItem>,
+    pub error: String,
+}
+/// When one release gate closes at the recent pace.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct GateForecast {
+    pub gate: String,
+    pub target_pct: u32,
+    pub gap: u32,
+    pub resolved_per_week: f64,
+    pub arrived_per_week: f64,
+    pub state: String,
+    pub likely: Option<String>,
+    pub safe: Option<String>,
+    /// The gap at each week's end, oldest first; the last is now.
+    pub history: Vec<i32>,
+}
+/// When a model reaches its gates, against its freeze date.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct Forecast {
+    pub code: String,
+    pub freeze: Option<String>,
+    pub state: String,
+    pub limiting: String,
+    pub likely: Option<String>,
+    pub safe: Option<String>,
+    pub late_days: Option<i32>,
+    pub gates: Vec<GateForecast>,
+}
 /// One timed step of an action.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct TraceSpan {
@@ -904,6 +947,12 @@ pub struct FocusData {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub mine: Option<Mine>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub needs: Option<Needs>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub forecasts: Option<Vec<Forecast>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub repos: Option<Vec<RepoRow>>,

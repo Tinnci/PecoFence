@@ -5,6 +5,7 @@ import { modelContextActions } from "./context-actions";
 import { useTranslation } from "react-i18next";
 import { t, locale } from "./i18n";
 import { Platforms } from "./Platforms";
+import { forecastLine, useForecasts } from "./Forecast";
 import { useQuery } from "@tanstack/react-query";
 import {
   queryClient,
@@ -28,6 +29,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import type {
+  Forecast,
   Candidate,
   FocusModel,
   FocusSummary,
@@ -457,6 +459,22 @@ export function since(at?: string) {
   });
 }
 
+function LedgerForecast({ forecast }: { forecast: Forecast | undefined }) {
+  if (!forecast || forecast.state === "no_data" || forecast.state === "met")
+    return null;
+  return (
+    <small
+      className={
+        (forecast.late_days ?? 0) > 0 || forecast.state === "not_converging"
+          ? "short"
+          : undefined
+      }
+    >
+      {forecastLine(forecast)}
+    </small>
+  );
+}
+
 /** 关注: one ledger row per followed model, most behind first. */
 export function FocusHome({
   state,
@@ -467,6 +485,7 @@ export function FocusHome({
 }) {
   useTranslation();
   const { ordered, summary } = state;
+  const forecasts = useForecasts(summary?.computed_at);
   const today = new Date().toLocaleDateString(locale(), {
     month: "long",
     day: "numeric",
@@ -538,6 +557,9 @@ export function FocusHome({
                       {sourceText(m.sources) ||
                         t("focus.noIssueSourcesConfigured")}
                     </small>
+                    <LedgerForecast
+                      forecast={forecasts?.find((f) => f.code === m.code)}
+                    />
                   </span>
                   {m.measures ? (
                     <>

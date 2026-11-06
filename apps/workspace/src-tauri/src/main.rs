@@ -484,6 +484,9 @@ fn desktop() {
             | "search"
             | "mine"
             | "mine_cached"
+            | "needs"
+            | "needs_cached"
+            | "forecast"
             | "repos"
             | "chip" => None,
             "issues" | "requirements" | "issues_full" | "requirements_full" => {

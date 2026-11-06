@@ -239,6 +239,14 @@ export type MineReason = { key: string, points: number, };
 export type MyIssue = { source: string, id: string, display_id: string, title: string, url: string, status: string, group: string, severity: string, model: string, followed: boolean, score: number, reasons: Array<MineReason>, };
 export type MineSource = { source: string, count: number, error: string, };
 export type Mine = { computed_at: string, sources: Array<MineSource>, items: Array<MyIssue>, };
+export type NeedItem = { kind: string, title: string, model: string, id: string, url: string, since: string, };
+export type Needs = { computed_at: string, items: Array<NeedItem>, error: string, };
+export type GateForecast = { gate: string, target_pct: number, gap: number, resolved_per_week: number, arrived_per_week: number, state: string, likely: string | null, safe: string | null, 
+/**
+ * The gap at each week's end, oldest first; the last is now.
+ */
+history: Array<number>, };
+export type Forecast = { code: string, freeze: string | null, state: string, limiting: string, likely: string | null, safe: string | null, late_days: number | null, gates: Array<GateForecast>, };
 export type Iteration = { name: string, start: string, end: string, };
 export type RepoRow = { project: string, changes: number, merged: number, open: number, authors: number, flagged: number, days: Array<number>, sample_url: string, };
 export type SearchHit = { 
@@ -292,5 +300,5 @@ export type FocusData = { build_evidence?: BuildEvidence, work_items?: WorkItems
 /**
  * After an annotation: the item as the last read shows it, with the new layer.
  */
-work_item?: AnnotatedItem, history?: ItemHistory, change_files?: ChangeFiles, change_diff?: ChangeDiff, change_diffs?: ChangeDiffs, flow?: ItemFlow, related?: Related, platforms?: Array<Platform>, logs?: Logs, traces?: Traces, search?: SearchResults, mine?: Mine, repos?: Array<RepoRow>, backup?: BackupSummary, backup_plan?: BackupPlan, backup_restored?: BackupRestored, flows?: Array<ItemFlow>, flow_errors?: Array<FlowFailure>, source_fields?: SourceFields, models?: Array<FocusModel>, suggestions?: Suggestions, summary?: FocusSummary, preview?: Preview, changes?: Array<Listed>, builds?: Builds, };
+work_item?: AnnotatedItem, history?: ItemHistory, change_files?: ChangeFiles, change_diff?: ChangeDiff, change_diffs?: ChangeDiffs, flow?: ItemFlow, related?: Related, platforms?: Array<Platform>, logs?: Logs, traces?: Traces, search?: SearchResults, mine?: Mine, needs?: Needs, forecasts?: Array<Forecast>, repos?: Array<RepoRow>, backup?: BackupSummary, backup_plan?: BackupPlan, backup_restored?: BackupRestored, flows?: Array<ItemFlow>, flow_errors?: Array<FlowFailure>, source_fields?: SourceFields, models?: Array<FocusModel>, suggestions?: Suggestions, summary?: FocusSummary, preview?: Preview, changes?: Array<Listed>, builds?: Builds, };
 export type Activation = { health?: ServiceHealth, waited_secs?: number, };

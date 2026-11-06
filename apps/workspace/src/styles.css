@@ -4658,6 +4658,42 @@ a .owner-chip { color: inherit; }
   }
 }
 
+/* Needs you and the forecast: accent only on what is late or broken. */
+.rail-count { flex: none; min-width: 18px; margin-left: auto; padding: 0 5px; border-radius: 9px; background: var(--bad-solid); color: var(--on-solid); font-size: 11px; font-weight: 600; line-height: 18px; text-align: center; }
+.rail[data-collapsed="true"] .rail-link { position: relative; }
+.rail[data-collapsed="true"] .rail-count { position: absolute; top: 1px; right: 2px; min-width: 15px; padding: 0 3px; font-size: 10px; line-height: 15px; }
+.needs { display: grid; gap: 6px; margin-bottom: 32px; }
+.needs header, .forecast header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; }
+.needs h2, .forecast h2 { margin: 0; font-size: 15px; font-weight: 600; }
+.needs ol { display: grid; margin: 0; padding: 0; border-top: 1px solid var(--line); list-style: none; }
+.needs li { border-bottom: 1px solid var(--line); }
+.needs li button { display: grid; grid-template-columns: 16px 76px minmax(0, 1fr) auto; align-items: center; gap: 10px; width: 100%; min-height: 40px; padding: 6px 8px; border: 0; background: none; color: inherit; font: inherit; font-size: 13px; text-align: left; }
+.needs li button:hover { background: var(--muted); }
+.need-icon { width: 15px; height: 15px; color: var(--muted-foreground); }
+.need-build_failed, .need-overdue { color: var(--bad); }
+.need-kind { color: var(--muted-foreground); font-size: 12px; white-space: nowrap; }
+.need-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.needs li .quiet { font-size: 12px; white-space: nowrap; }
+.forecast { display: grid; gap: 10px; margin-bottom: 32px; }
+.forecast header strong { font-size: 14px; font-weight: 600; }
+.forecast header [data-slot="button"] { margin-left: auto; }
+.forecast-gates { display: flex; flex-wrap: wrap; gap: 8px 40px; margin: 0; font-size: 13px; }
+.forecast-gates dt { color: var(--muted-foreground); font-size: 12px; }
+.forecast-gates dd { margin: 0; font-variant-numeric: tabular-nums; }
+.forecast-gates dd.quiet { font-size: 12px; }
+.forecast-plot { position: relative; margin: 0; }
+.forecast-plot svg { display: block; width: 100%; height: auto; max-height: 220px; }
+.forecast-plot figcaption { position: absolute; top: 0; right: 0; font-size: 12px; }
+.forecast-plot .chart-grid { stroke: var(--line); stroke-width: 1; }
+.forecast-plot .chart-axis { fill: var(--muted-foreground); font-size: 11px; }
+.forecast-gap { fill: none; stroke: var(--chart-1); stroke-width: 2; stroke-linejoin: round; }
+.forecast-now { fill: var(--chart-1); stroke: var(--background); stroke-width: 2; }
+.forecast-pace { stroke: var(--chart-1); stroke-width: 2; stroke-dasharray: 5 4; }
+.forecast-range { fill: var(--chart-1); opacity: 0.16; }
+.forecast-freeze line { stroke: var(--foreground); stroke-width: 1; }
+.forecast-freeze text { fill: var(--foreground); font-size: 11px; }
+.ledger-model small + small { display: block; margin-top: 2px; }
+
 /* The shared log */
 .logs-page { display: grid; gap: 12px; min-width: 0; }
 .logs-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }

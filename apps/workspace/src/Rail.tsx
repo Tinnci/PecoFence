@@ -78,11 +78,14 @@ function RailLink({
   label,
   current,
   collapsed,
+  count,
   onClick,
 }: {
   icon: LucideIcon;
   label: string;
   current?: boolean;
+  /** What is waiting here; the name says so to a screen reader. */
+  count?: number;
   collapsed: boolean;
   onClick: () => void;
 }) {
@@ -92,11 +95,13 @@ function RailLink({
       className="rail-link"
       aria-current={current ? "page" : undefined}
       aria-label={label}
+      aria-description={count ? t("nav.waiting", { count }) : undefined}
       title={collapsed ? label : undefined}
       onClick={onClick}
     >
       <Icon aria-hidden="true" />
       {collapsed ? null : <span>{label}</span>}
+      {count ? <b className="rail-count">{count}</b> : null}
     </button>
   );
 }
@@ -149,6 +154,7 @@ export function Rail({
   models,
   page,
   activeCode,
+  waiting,
   onPage,
   onModel,
   onFollow,
@@ -160,6 +166,7 @@ export function Rail({
   models: ModelNavItem[];
   page: Page;
   activeCode: string | null;
+  waiting: number;
   onPage: (page: Page) => void;
   onModel: (code: string) => void;
   onFollow: () => void;
@@ -191,7 +198,14 @@ export function Rail({
       data-collapsed={collapsed}
       aria-label={t("app.mainNavigation")}
     >
-      {link("mine", Inbox, t("nav.mine"), page === "mine")}
+      <RailLink
+        icon={Inbox}
+        label={t("nav.mine")}
+        current={page === "mine"}
+        collapsed={collapsed}
+        count={waiting}
+        onClick={() => onPage("mine")}
+      />
       <div className="rail-group">
         {link("home", Smartphone, t("nav.models"), page === "home")}
         {collapsed ? null : (

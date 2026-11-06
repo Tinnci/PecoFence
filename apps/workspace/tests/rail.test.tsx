@@ -21,6 +21,7 @@ function rail(page: Page = "home", activeCode: string | null = null) {
       }))}
       page={page}
       activeCode={activeCode}
+      waiting={3}
       onPage={onPage}
       onModel={onModel}
       onFollow={onFollow}
@@ -49,6 +50,13 @@ it("goes to each area and marks where you are", async () => {
   expect(onModel).toHaveBeenCalledWith("MODEL_29");
   await user.click(screen.getByRole("button", { name: "关注机型" }));
   expect(onFollow).toHaveBeenCalled();
+});
+
+it("shows what is waiting beside my work", () => {
+  render(rail());
+  const mine = screen.getByRole("button", { name: "我的工作" });
+  expect(mine.textContent).toContain("3");
+  expect(mine.getAttribute("aria-description")).toBe("3 项等你处理");
 });
 
 it("reaches a model's actions without the right mouse button", async () => {
