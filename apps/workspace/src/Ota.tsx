@@ -43,10 +43,15 @@ export function useOta() {
 }
 
 const shipping = (plan: OtaPlan) => plan.official || plan.rollout || plan.pre1;
-/** Worth looking at now: still ahead, or labelled and unfinished with no date. */
+/** How long an OTA that left items behind stays in view after it ships. */
+const MISSED_DAYS = 60;
+const daysSince = (day: string) => (Date.now() - Date.parse(day)) / 86_400_000;
+
+/** Worth looking at now: still ahead, unplanned and unfinished, or just shipped without something. */
 const live = (plan: OtaPlan) =>
   plan.state === "upcoming" ||
-  (plan.state === "undated" && plan.verified < plan.total);
+  (plan.state === "undated" && plan.verified < plan.total) ||
+  (plan.late > 0 && daysSince(shipping(plan)) <= MISSED_DAYS);
 
 /** The OTA a model is working towards. */
 export function nextPlan(ota: ModelOta | undefined) {
@@ -268,7 +273,11 @@ function Waiting({ ota, plans }: { ota: ModelOta; plans?: OtaPlan[] }) {
   return (
     <>
       {ota.undecided.length ? (
-        <Fold title={t("ota.undecided")} count={ota.undecided.length} start>
+        <Fold
+          title={t("ota.undecided")}
+          count={ota.undecided.length}
+          start={ota.undecided.length <= 10}
+        >
           <ul className="ota-items">
             {ota.undecided.map((item) => (
               <Row

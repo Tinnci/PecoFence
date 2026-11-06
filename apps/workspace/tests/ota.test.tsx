@@ -96,7 +96,7 @@ it("lists every model's coming OTA and opens it on the model", async () => {
   render(
     <OtaPage models={[{ code: "E6765GDL", name: "GDL" }]} onModel={onModel} />,
   );
-  await user.click(screen.getByRole("button", { name: /^GDL OTA1/ }));
+  await user.click(screen.getByRole("button", { name: /^GDLOTA1/ }));
   expect(onModel).toHaveBeenCalledWith("E6765GDL", "ota");
 });
 
