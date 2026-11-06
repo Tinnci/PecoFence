@@ -2,7 +2,8 @@ import { profilesKey } from "./focus-cache";
 import { Progress } from "@/components/ui/progress";
 import { nextPlan, otaOptions } from "./Ota";
 import { profilesOptions } from "./Platforms";
-import { RUNNING, type Phase } from "./phase";
+import { daysUntil, RUNNING, type Phase } from "./phase";
+import type { OtaReport } from "./contracts/setup";
 import { heatCell, heatDate, useHeatSweep } from "./heat";
 import { ActionIcon } from "./components/action-icon";
 import { ContextTarget } from "./components/context-menu";
@@ -529,6 +530,35 @@ function LedgerForecast({ forecast }: { forecast: Forecast | undefined }) {
   );
 }
 
+/** The headline while models are shipping OTAs: the soonest one with work still to merge. */
+export function otaLede(models: ModelSummary[], ota?: OtaReport | null) {
+  const coming = models
+    .map((m) => ({
+      code: m.code,
+      plan: nextPlan(ota?.models.find((o) => o.code === m.code)),
+    }))
+    .flatMap(({ code, plan }) =>
+      plan && plan.total > plan.merged ? [{ code, plan }] : [],
+    )
+    .sort((a, b) =>
+      (a.plan.pre1 || a.plan.official).localeCompare(
+        b.plan.pre1 || b.plan.official,
+      ),
+    );
+  const first = coming[0];
+  if (!first) return null;
+  const { code, plan } = first;
+  const days = plan.pre1 ? daysUntil(plan.pre1) : null;
+  const names = {
+    model: code,
+    version: plan.version,
+    left: plan.total - plan.merged,
+  };
+  return days === null || days < 0
+    ? t("phase.otaLedeLate", names)
+    : t("phase.otaLede", { ...names, days });
+}
+
 /** 关注: one ledger row per followed model, most behind first. */
 export function FocusHome({
   state,
@@ -566,6 +596,11 @@ export function FocusHome({
       <span>{t("focus.thisWeek")}</span>
     </div>
   );
+  /** Soonest OTA first; a model with none planned sorts last. */
+  const shipsBy = (m: ModelSummary) => {
+    const plan = nextPlan(ota?.models.find((o) => o.code === m.code));
+    return plan?.pre1 || plan?.official || "9999";
+  };
   /** An OTA row's three figures, in the columns gates take elsewhere. */
   const otaCells = (code: string) => {
     const plan = nextPlan(ota?.models.find((o) => o.code === code));
@@ -703,7 +738,12 @@ export function FocusHome({
           })}
         </span>
         {ordered.length ? (
-          <h1>{lede(active)}</h1>
+          <h1>
+            {otaLede(
+              active.filter((m) => phaseOf(m.code) === "ota"),
+              ota,
+            ) ?? lede(active.filter((m) => phaseOf(m.code) !== "ota"))}
+          </h1>
         ) : (
           <h1 className="lede-loading">
             <BrandMark size={44} busy /> {t("focus.loadingFollowedModels")}
@@ -713,6 +753,8 @@ export function FocusHome({
       {state.failure ? <FailureNote failure={state.failure} /> : null}
       {RUNNING.map((phase) => {
         const rows = active.filter((m) => phaseOf(m.code) === phase);
+        if (phase === "ota")
+          rows.sort((a, b) => shipsBy(a).localeCompare(shipsBy(b)));
         return rows.length ? (
           <section
             key={phase}

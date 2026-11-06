@@ -1224,6 +1224,8 @@
   "phase.leftToMerge": "{{count}} left to merge",
   "phase.requirementsDone": "Requirements done",
   "phase.toFreeze": "Days to MP freeze",
+  "phase.otaLede": "{{model}} {{version}}: {{days}} days to Pre1, {{left}} left to merge.",
+  "phase.otaLedeLate": "{{model}} {{version}}: {{left}} still to merge.",
   "profile.field.vendor": "Vendor",
   "profile.field.chip": "Chip",
   "profile.field.android": "Android",

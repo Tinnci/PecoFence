@@ -1224,6 +1224,8 @@
   "phase.leftToMerge": "还有 {{count}} 项未合入",
   "phase.requirementsDone": "需求完成",
   "phase.toFreeze": "距 MP 冻结（天）",
+  "phase.otaLede": "{{model}} {{version}} 距 Pre1 还有 {{days}} 天，{{left}} 项未合入。",
+  "phase.otaLedeLate": "{{model}} {{version}} 还有 {{left}} 项未合入。",
   "profile.field.vendor": "厂商",
   "profile.field.chip": "芯片",
   "profile.field.android": "Android",

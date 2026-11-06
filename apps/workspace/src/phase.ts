@@ -63,5 +63,9 @@ export const layoutOf = (phase?: string): Layout =>
   layouts[phase as Phase] ?? undecided;
 
 /** Whole days until a YYYY-MM-DD day; negative once it has passed. */
-export const daysUntil = (day: string, now = Date.now()) =>
-  Math.ceil((Date.parse(`${day}T23:59:59`) - now) / 86_400_000);
+export const daysUntil = (day: string, now = new Date()) => {
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.round(
+    (Date.parse(`${day}T00:00:00`) - today.getTime()) / 86_400_000,
+  );
+};
