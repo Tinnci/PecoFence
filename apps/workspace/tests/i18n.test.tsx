@@ -175,17 +175,20 @@ describe("workspace languages", () => {
       ).toBeNull(),
     );
     const calls = mocks.focus.mock.calls.length;
-    await user.click(screen.getByRole("button", { name: "更多" }));
+    await user.click(screen.getByRole("button", { name: "设置" }));
     await user.click(
-      await screen.findByRole("menuitemradio", { name: "English" }),
+      within(await screen.findByRole("dialog")).getByRole("button", {
+        name: "English",
+      }),
     );
+    await user.keyboard("{Escape}");
     await screen.findByRole("tab", { name: "Settings" });
     expect(
       screen
         .getByRole("tab", { name: "Settings" })
         .getAttribute("aria-selected"),
     ).toBe("true");
-    expect(screen.getByRole("button", { name: "More" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Settings" })).toBeTruthy();
     expect(screen.getByRole("region", { name: "Rules" }).textContent).toContain(
       "Features entering MP after freeze",
     );

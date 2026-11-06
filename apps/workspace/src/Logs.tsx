@@ -15,38 +15,26 @@ import { shortTime } from "./time-format";
 import { TracesPanel } from "./Traces";
 
 const levels = ["problems", "all"] as const;
-const views = ["events", "traces"] as const;
 
-/** What every tool did: as one list of events, or as a live waterfall per action. */
-export function LogsPage() {
+/** What every tool did: one list of events, or a live waterfall per action. */
+export function LogsPage({
+  view,
+  onView,
+}: {
+  view: "logs" | "traces";
+  onView: (view: "logs" | "traces") => void;
+}) {
   useTranslation();
-  const [view, setView] = useState<(typeof views)[number]>("events");
   const [search, setSearch] = useState("");
   return (
-    <section className="logs-page" aria-label={t("logs.title")}>
-      <ToggleGroup
-        variant="outline"
-        size="sm"
-        className="chips"
-        value={[view]}
-        onValueChange={(next: string[]) => {
-          if (next[0]) setView(next[0] as (typeof views)[number]);
-        }}
-        aria-label={t("logs.view")}
-      >
-        {views.map((v) => (
-          <ToggleGroupItem key={v} value={v}>
-            {t(`logs.${v}`)}
-          </ToggleGroupItem>
-        ))}
-      </ToggleGroup>
+    <section className="logs-page" aria-label={t(`nav.${view}`)}>
       {view === "traces" ? (
         <TracesPanel
           search={search}
           onSearch={setSearch}
           onShowLog={(runId) => {
             setSearch(runId);
-            setView("events");
+            onView("logs");
           }}
         />
       ) : (
@@ -55,7 +43,7 @@ export function LogsPage() {
           onSearch={setSearch}
           onShowRun={(runId) => {
             setSearch(runId);
-            setView("traces");
+            onView("traces");
           }}
         />
       )}

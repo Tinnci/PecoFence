@@ -1,13 +1,8 @@
-import { ModelNavigation } from "./ModelNavigation";
+import { isSystem, Rail, SystemTabs } from "./Rail";
 import { ActionIcon, ComponentIcon } from "./components/action-icon";
 import { ContextMenuProvider } from "./components/context-menu";
 import { modelContextActions } from "./context-actions";
 import { useTranslation } from "react-i18next";
-import {
-  languagePreference,
-  setLanguage,
-  type LanguagePreference,
-} from "./i18n";
 import { t } from "./i18n";
 import { setTheme, themePreference, type Theme } from "./theme";
 import { useModelPreference } from "./model-navigation";
@@ -44,26 +39,8 @@ import {
   ArrowRight,
   ChevronDown,
   LayoutDashboard,
-  Menu,
-  Palette,
-  Plus,
   RefreshCw,
-  Pencil,
-  Download,
-  Trash2,
-  Upload,
 } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuGroup,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { FocusHome, FollowPage, shortfall, useFocus } from "./Focus";
 import { ModelPage } from "./Model";
 import { LogsPage } from "./Logs";
@@ -90,7 +67,10 @@ import { projectWorkbench } from "./project-workbench";
 import { DataBackup } from "./DataBackup";
 import { RemoveModelDialog } from "./RemoveModelDialog";
 import { RenameModelDialog } from "./RenameModelDialog";
-import { SearchDialog } from "./SearchDialog";
+import { CommandPalette } from "./CommandPalette";
+import { MyIssues } from "./MyIssues";
+import { SettingsDialog } from "./SettingsDialog";
+import type { Command } from "./palette";
 import { getVersion } from "@tauri-apps/api/app";
 import type { Component, HubReport, LoadFailure } from "./contracts/hub";
 import {
@@ -155,6 +135,7 @@ function Workspace() {
   const [renamingCode, setRenamingCode] = useState<string | null>(null);
   const [currentTheme, setCurrentTheme] = useState(themePreference);
   const [backup, setBackup] = useState<"export" | "restore" | null>(null);
+  const [settings, setSettings] = useState(false);
   const [version, setVersion] = useState("");
   useEffect(() => {
     if (isTauri()) void getVersion().then(setVersion);
@@ -341,6 +322,8 @@ function Workspace() {
     ],
     activity: [t("app.codeActivity"), t("app.gerritChangesDayByDay")],
     logs: [t("logs.title"), ""],
+    traces: [t("nav.traces"), ""],
+    mine: [t("nav.mine"), ""],
     model: [t("app.model"), ""],
     follow: [t("app.followAModel"), ""],
   };
@@ -355,13 +338,104 @@ function Workspace() {
       short: summary ? shortfall(summary) > 0 : null,
     };
   });
-  const more = [
-    { id: "setup", title: t("app.setupChecklist") },
-    { id: "health", title: t("app.health") },
-    { id: "activity", title: t("app.codeActivity") },
-    { id: "logs", title: t("logs.title") },
-    { id: "project", title: t("app.newSPMProject") },
-  ] as const;
+  const logView = page === "logs" || page === "traces";
+  function follow() {
+    setFollowCode(undefined);
+    setPage("follow");
+  }
+  function go(target: Page) {
+    setSelected(null);
+    setPage(target);
+  }
+  function chooseTheme(theme: Theme) {
+    setTheme(theme);
+    setCurrentTheme(theme);
+  }
+  const pageCommand = (
+    target: Page,
+    label: string,
+    words: string,
+  ): Command => ({
+    id: target,
+    label,
+    words,
+    run: () => go(target),
+  });
+  const openTabs: Command[] =
+    page === "model" && modelCode
+      ? (
+          [
+            ["overview", t("model.overview")],
+            ["issues", t("focus.issues")],
+            ["builds", t("model.builds")],
+            ["branches", t("model.branches")],
+            ["settings", t("model.settings")],
+          ] as const
+        ).map(([tab, label]) => ({
+          id: `tab-${tab}`,
+          label: `${modelCode} · ${label}`,
+          words: tab,
+          typed: true,
+          run: () => setModelTab(tab),
+        }))
+      : [];
+  const commands: Command[] = [
+    pageCommand("mine", t("nav.mine"), "my work assigned"),
+    pageCommand("home", t("nav.models"), "models home"),
+    pageCommand("activity", t("nav.activity"), "activity gerrit"),
+    pageCommand("health", t("nav.health"), "health status"),
+    pageCommand("setup", t("nav.setup"), "setup checklist"),
+    pageCommand("logs", t("nav.logs"), "logs events"),
+    pageCommand("traces", t("nav.traces"), "traces waterfall live"),
+    {
+      id: "follow",
+      label: t("app.followAModel"),
+      words: "follow",
+      run: follow,
+    },
+    {
+      id: "settings",
+      label: t("nav.settings"),
+      words: "settings",
+      run: () => setSettings(true),
+    },
+    {
+      id: "backup",
+      label: t("backup.export"),
+      words: "backup export",
+      typed: true,
+      run: () => setBackup("export"),
+    },
+    {
+      id: "restore",
+      label: t("backup.restore"),
+      words: "backup restore",
+      typed: true,
+      run: () => setBackup("restore"),
+    },
+    {
+      id: "project",
+      label: t("app.newSPMProject"),
+      words: "project",
+      typed: true,
+      run: () => go("project"),
+    },
+    {
+      id: "theme",
+      label: t(currentTheme === "dark" ? "theme.light" : "theme.dark"),
+      words: "theme",
+      typed: true,
+      run: () => chooseTheme(currentTheme === "dark" ? "light" : "dark"),
+    },
+    ...openTabs,
+    ...tabs.map((m) => ({
+      id: `model-${m.code}`,
+      label: m.name,
+      words: m.code,
+      typed: true,
+      run: () => openModel(m.code),
+    })),
+  ];
   return (
     <TooltipProvider>
       <div className="app-shell">
@@ -373,6 +447,15 @@ function Workspace() {
             onClose={() => setRenamingCode(null)}
           />
         ) : null}
+        <SettingsDialog
+          open={settings}
+          version={version}
+          theme={currentTheme}
+          onOpenChange={setSettings}
+          onTheme={chooseTheme}
+          onBackup={setBackup}
+          onNewProject={() => go("project")}
+        />
         {backup ? (
           <DataBackup
             key={backup}
@@ -408,134 +491,9 @@ function Workspace() {
             <BrandMark busy={focusState.refreshing} />
             <span className="wordmark-label">{t("app.workspace")}</span>
           </button>
-          <ModelNavigation
-            models={tabs}
-            activeCode={page === "model" ? modelCode : null}
-            homeActive={page === "home"}
-            onHome={() => setPage("home")}
-            onModel={openModel}
-            onWarm={warmModel}
-            onCancelWarm={cancelPrefetch}
-            actions={(code) =>
-              modelContextActions(
-                code,
-                openModel,
-                focusState.refresh,
-                setRenamingCode,
-                focusState.requestRemove,
-              )
-            }
-          />
-          <SearchDialog onModel={openModel} />
-          <Button
-            variant="outline"
-            className="follow-button"
-            onClick={() => {
-              setFollowCode(undefined);
-              setPage("follow");
-            }}
-          >
-            <Plus /> {t("app.followAModel2")}
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <Button variant="ghost" aria-label={t("app.more")}>
-                  <Menu />
-                </Button>
-              }
-            />
-            <DropdownMenuContent align="end" className="workspace-menu">
-              {page === "model" &&
-              modelCode &&
-              focusState.models?.some((model) => model.code === modelCode) ? (
-                <DropdownMenuGroup>
-                  <DropdownMenuItem onClick={() => setRenamingCode(modelCode)}>
-                    <Pencil />
-                    {t("model.rename")}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    variant="destructive"
-                    onClick={() => focusState.requestRemove(modelCode)}
-                  >
-                    <Trash2 />
-                    {t("model.unfollow")}
-                  </DropdownMenuItem>
-                </DropdownMenuGroup>
-              ) : null}
-
-              <DropdownMenuGroup>
-                <DropdownMenuLabel>
-                  <ActionIcon name="language" responsive={false} />
-                  {t("language.label")}
-                </DropdownMenuLabel>
-                <DropdownMenuRadioGroup
-                  value={languagePreference()}
-                  onValueChange={(value) =>
-                    void setLanguage(value as LanguagePreference)
-                  }
-                >
-                  <DropdownMenuRadioItem closeOnClick value="system">
-                    {t("language.system")}
-                  </DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem closeOnClick value="zh-CN">
-                    简体中文
-                  </DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem closeOnClick value="en">
-                    English
-                  </DropdownMenuRadioItem>
-                </DropdownMenuRadioGroup>
-              </DropdownMenuGroup>
-              <DropdownMenuGroup>
-                <DropdownMenuLabel>
-                  <Palette aria-hidden="true" />
-                  {t("theme.label")}
-                </DropdownMenuLabel>
-                <DropdownMenuRadioGroup
-                  value={currentTheme}
-                  onValueChange={(value) => {
-                    setTheme(value as Theme);
-                    setCurrentTheme(value as Theme);
-                  }}
-                >
-                  <DropdownMenuRadioItem closeOnClick value="light">
-                    {t("theme.light")}
-                  </DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem closeOnClick value="dark">
-                    {t("theme.dark")}
-                  </DropdownMenuRadioItem>
-                </DropdownMenuRadioGroup>
-              </DropdownMenuGroup>
-              <DropdownMenuSeparator />
-              {more.map((item) => (
-                <DropdownMenuItem
-                  key={item.id}
-                  onClick={() => {
-                    setSelected(null);
-                    setPage(item.id);
-                  }}
-                >
-                  <ActionIcon name={item.id} responsive={false} />
-                  {item.title}
-                </DropdownMenuItem>
-              ))}
-              <DropdownMenuItem onClick={() => setBackup("export")}>
-                <Download />
-                {t("backup.export")}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setBackup("restore")}>
-                <Upload />
-                {t("backup.restore")}
-              </DropdownMenuItem>
-              {version ? (
-                <DropdownMenuGroup>
-                  <DropdownMenuLabel className="menu-version">
-                    {version}
-                  </DropdownMenuLabel>
-                </DropdownMenuGroup>
-              ) : null}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <div className="appbar-center" data-tauri-drag-region>
+            <CommandPalette commands={commands} onModel={openModel} />
+          </div>
           {isTauri() ? <WindowControls /> : null}
         </header>
         {focusState.removed ? (
@@ -562,163 +520,201 @@ function Workspace() {
             </Button>
           </div>
         ) : null}
-        <div className="window-scroll" ref={scroll}>
-          <main id="main" className="page-content">
-            {page === "model" && modelCode ? (
-              <ModelPage
-                key={modelCode}
-                state={focusState}
-                code={modelCode}
-                tab={modelTab}
-                onTab={setModelTab}
-                onEdit={() => {
-                  setFollowCode(modelCode);
-                  setPage("follow");
-                }}
-              />
-            ) : page === "follow" ? (
-              <FollowPage
-                key={followCode ?? "new"}
-                state={focusState}
-                initial={followCode}
-                onDone={openModel}
-                onCancel={() => setPage(followCode ? "model" : "home")}
-              />
-            ) : page === "home" && followed ? (
-              <FocusHome state={focusState} onModel={openModel} />
-            ) : (
-              <>
-                <div className="page-heading" hidden={page === "project"}>
-                  <h1>{headings[page][0]}</h1>
-                  <p>{headings[page][1]}</p>
-                  <Button
-                    variant="outline"
-                    hidden={page === "activity"}
-                    disabled={busy}
-                    onClick={() => void refresh(true)}
-                  >
-                    {busy ? <Spinner aria-hidden="true" /> : <RefreshCw />}
-                    {busy
-                      ? lastRequest.current.check
-                        ? t("app.checking")
-                        : t("app.loading")
-                      : t("app.checkStatus")}
-                  </Button>
-                </div>
-                {page === "home" ? (
-                  <section className="follow-invite">
-                    <div>
-                      <h2>{t("app.startByFollowingAModel")}</h2>
-                      <p>
-                        {t("app.chooseAModelYouOwnTheWorkspaceBringsTogether")}
-                      </p>
-                    </div>
-                    <Button
-                      onClick={() => {
-                        setFollowCode(undefined);
-                        setPage("follow");
-                      }}
-                    >
-                      {t("app.followAModel3")}
-                      <ArrowRight />
-                    </Button>
-                  </section>
-                ) : null}
-                <div aria-live="polite">
-                  {error ? (
-                    <LoadFailurePanel
-                      failure={error}
-                      busy={busy}
-                      retained={!!report}
-                      onRetry={() =>
-                        void refresh(
-                          lastRequest.current.check,
-                          lastRequest.current.component,
-                        )
-                      }
-                    />
-                  ) : null}
-                </div>
-                {!report && !error ? (
-                  <div className="loading" role="status">
-                    <Spinner aria-hidden="true" />{" "}
-                    {t("app.discoveringLocalComponents")}
+        <div className="app-body">
+          <Rail
+            models={tabs}
+            page={page}
+            activeCode={page === "model" ? modelCode : null}
+            onPage={go}
+            onModel={openModel}
+            onFollow={follow}
+            onSettings={() => setSettings(true)}
+            onWarm={warmModel}
+            onCancelWarm={cancelPrefetch}
+            actions={(code) =>
+              modelContextActions(
+                code,
+                openModel,
+                focusState.refresh,
+                setRenamingCode,
+                focusState.requestRemove,
+              )
+            }
+          />
+          <div className="window-scroll" ref={scroll}>
+            <main id="main" className="page-content">
+              {page === "mine" ? (
+                <div className="focus-home">
+                  <div className="page-heading">
+                    <h1>{t("nav.mine")}</h1>
                   </div>
-                ) : null}
-                {report ? (
-                  <>
-                    {page === "home" ? (
-                      <HomeOverview
-                        report={report}
-                        totals={totals}
-                        next={next}
-                        checkedCount={checkedCount}
-                        active={active}
-                        openSetup={openSetup}
-                      />
-                    ) : page === "setup" ? (
-                      <Checklist
-                        key={selected}
-                        report={report}
-                        selected={selected}
-                        busy={busy}
-                        busyComponent={busyComponent}
-                        onCheck={(id) => void refresh(true, id)}
-                        onOpen={openSetup}
-                        projects={projects}
-                        projectsFailure={projectsFailure}
-                        onProjects={loadProjects}
-                        onOpenWorkbench={openProjectWorkbench}
-                        connections={connections}
-                        connectionsFailure={connectionsFailure}
-                        onConnections={loadConnections}
-                        onConnectionReport={setConnections}
-                        projectSetup={projectSetup}
-                        onOpenProject={() => setPage("project")}
-                      />
-                    ) : page === "activity" ? (
-                      <ActivityPage />
-                    ) : page === "logs" ? (
-                      <LogsPage />
-                    ) : page === "project" ? (
-                      <ProjectWizard
-                        setup={projectSetup}
-                        projects={projects}
-                        onOpenWorkbench={openProjectWorkbench}
-                        onExit={() => openSetup("spm")}
-                      />
-                    ) : (
-                      <Health
-                        report={report}
-                        busy={busy}
-                        busyComponent={busyComponent}
-                        onCheck={(id) => void refresh(true, id)}
-                        onOpen={openSetup}
-                      />
-                    )}
-                    <footer
-                      className="page-footer"
+                  <MyIssues onModel={openModel} />
+                </div>
+              ) : page === "model" && modelCode ? (
+                <ModelPage
+                  key={modelCode}
+                  state={focusState}
+                  code={modelCode}
+                  tab={modelTab}
+                  onTab={setModelTab}
+                  onEdit={() => {
+                    setFollowCode(modelCode);
+                    setPage("follow");
+                  }}
+                />
+              ) : page === "follow" ? (
+                <FollowPage
+                  key={followCode ?? "new"}
+                  state={focusState}
+                  initial={followCode}
+                  onDone={openModel}
+                  onCancel={() => setPage(followCode ? "model" : "home")}
+                />
+              ) : page === "home" && followed ? (
+                <FocusHome state={focusState} onModel={openModel} />
+              ) : (
+                <>
+                  {isSystem(page) && page !== "project" ? (
+                    <SystemTabs page={page} onPage={go} />
+                  ) : null}
+                  <div
+                    className="page-heading"
+                    hidden={page === "project" || logView}
+                  >
+                    <h1>{headings[page][0]}</h1>
+                    <p>{headings[page][1]}</p>
+                    <Button
+                      variant="outline"
                       hidden={page === "activity"}
+                      disabled={busy}
+                      onClick={() => void refresh(true)}
                     >
-                      <span>
-                        {report.checked
-                          ? t("app.lastFullCheck")
-                          : t("app.lastLoaded")}{" "}
-                        · {new Date(report.observed_at).toLocaleString("zh-CN")}
-                      </span>
-                      {report.unmanifested.length ? (
+                      {busy ? <Spinner aria-hidden="true" /> : <RefreshCw />}
+                      {busy
+                        ? lastRequest.current.check
+                          ? t("app.checking")
+                          : t("app.loading")
+                        : t("app.checkStatus")}
+                    </Button>
+                  </div>
+                  {page === "home" ? (
+                    <section className="follow-invite">
+                      <div>
+                        <h2>{t("app.startByFollowingAModel")}</h2>
+                        <p>
+                          {t(
+                            "app.chooseAModelYouOwnTheWorkspaceBringsTogether",
+                          )}
+                        </p>
+                      </div>
+                      <Button
+                        onClick={() => {
+                          setFollowCode(undefined);
+                          setPage("follow");
+                        }}
+                      >
+                        {t("app.followAModel3")}
+                        <ArrowRight />
+                      </Button>
+                    </section>
+                  ) : null}
+                  <div aria-live="polite">
+                    {error ? (
+                      <LoadFailurePanel
+                        failure={error}
+                        busy={busy}
+                        retained={!!report}
+                        onRetry={() =>
+                          void refresh(
+                            lastRequest.current.check,
+                            lastRequest.current.component,
+                          )
+                        }
+                      />
+                    ) : null}
+                  </div>
+                  {!report && !error ? (
+                    <div className="loading" role="status">
+                      <Spinner aria-hidden="true" />{" "}
+                      {t("app.discoveringLocalComponents")}
+                    </div>
+                  ) : null}
+                  {report ? (
+                    <>
+                      {page === "home" ? (
+                        <HomeOverview
+                          report={report}
+                          totals={totals}
+                          next={next}
+                          checkedCount={checkedCount}
+                          active={active}
+                          openSetup={openSetup}
+                        />
+                      ) : page === "setup" ? (
+                        <Checklist
+                          key={selected}
+                          report={report}
+                          selected={selected}
+                          busy={busy}
+                          busyComponent={busyComponent}
+                          onCheck={(id) => void refresh(true, id)}
+                          onOpen={openSetup}
+                          projects={projects}
+                          projectsFailure={projectsFailure}
+                          onProjects={loadProjects}
+                          onOpenWorkbench={openProjectWorkbench}
+                          connections={connections}
+                          connectionsFailure={connectionsFailure}
+                          onConnections={loadConnections}
+                          onConnectionReport={setConnections}
+                          projectSetup={projectSetup}
+                          onOpenProject={() => setPage("project")}
+                        />
+                      ) : page === "activity" ? (
+                        <ActivityPage />
+                      ) : page === "logs" || page === "traces" ? (
+                        <LogsPage view={page} onView={go} />
+                      ) : page === "project" ? (
+                        <ProjectWizard
+                          setup={projectSetup}
+                          projects={projects}
+                          onOpenWorkbench={openProjectWorkbench}
+                          onExit={() => openSetup("spm")}
+                        />
+                      ) : (
+                        <Health
+                          report={report}
+                          busy={busy}
+                          busyComponent={busyComponent}
+                          onCheck={(id) => void refresh(true, id)}
+                          onOpen={openSetup}
+                        />
+                      )}
+                      <footer
+                        className="page-footer"
+                        hidden={page === "activity" || logView}
+                      >
                         <span>
-                          {t("app.componentsHaveNoSetupInstructionsYet", {
-                            v0: report.unmanifested.length,
-                          })}
+                          {report.checked
+                            ? t("app.lastFullCheck")
+                            : t("app.lastLoaded")}{" "}
+                          ·{" "}
+                          {new Date(report.observed_at).toLocaleString("zh-CN")}
                         </span>
-                      ) : null}
-                    </footer>
-                  </>
-                ) : null}
-              </>
-            )}
-          </main>
+                        {report.unmanifested.length ? (
+                          <span>
+                            {t("app.componentsHaveNoSetupInstructionsYet", {
+                              v0: report.unmanifested.length,
+                            })}
+                          </span>
+                        ) : null}
+                      </footer>
+                    </>
+                  ) : null}
+                </>
+              )}
+            </main>
+          </div>
         </div>
       </div>
     </TooltipProvider>

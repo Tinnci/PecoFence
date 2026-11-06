@@ -21,6 +21,8 @@ export type Page =
   | "project"
   | "activity"
   | "logs"
+  | "traces"
+  | "mine"
   | "model"
   | "follow";
 export function isPage(value: unknown): value is Page {
@@ -30,7 +32,9 @@ export function isPage(value: unknown): value is Page {
     value === "health" ||
     value === "project" ||
     value === "activity" ||
-    value === "logs"
+    value === "logs" ||
+    value === "traces" ||
+    value === "mine"
   );
 }
 export async function loadHub(
