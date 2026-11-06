@@ -1,0 +1,170 @@
+{
+  "schema_version": 1,
+  "country": "IN",
+  "subdivision": "HR",
+  "year": 2026,
+  "timezone": "Asia/Kolkata",
+  "weekdays": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "source": "vacanza/holidays",
+  "source_url": "https://github.com/vacanza/holidays",
+  "revision": "holidays-0.108",
+  "status": "calculated",
+  "days": [
+    {
+      "date": "2026-01-23",
+      "name": "Sir Chottu Ram's Birthday",
+      "is_off_day": true
+    },
+    {
+      "date": "2026-01-26",
+      "name": "Republic Day",
+      "is_off_day": true
+    },
+    {
+      "date": "2026-03-04",
+      "name": "Holi",
+      "is_off_day": true
+    },
+    {
+      "date": "2026-03-21",
+      "name": "Eid al-Fitr",
+      "is_off_day": true
+    },
+    {
+      "date": "2026-03-23",
+      "name": "Shaheed-e-Azam Bhagat Singh, Sukhdev and Rajguru's Martyrdom Day",
+      "is_off_day": true
+    },
+    {
+      "date": "2026-03-26",
+      "name": "Ram Navami",
+      "is_off_day": true
+    },
+    {
+      "date": "2026-03-31",
+      "name": "Mahavira's Birthday",
+      "is_off_day": true
+    },
+    {
+      "date": "2026-04-03",
+      "name": "Good Friday",
+      "is_off_day": true
+    },
+    {
+      "date": "2026-04-14",
+      "name": "Dr. B. R. Ambedkar's Birthday; Vaisakhi",
+      "is_off_day": true
+    },
+    {
+      "date": "2026-04-19",
+      "name": "Akshay Tritiya; Lord Shri Parshuram's Birthday",
+      "is_off_day": true
+    },
+    {
+      "date": "2026-05-01",
+      "name": "Buddha Purnima",
+      "is_off_day": true
+    },
+    {
+      "date": "2026-05-27",
+      "name": "Eid al-Adha",
+      "is_off_day": true
+    },
+    {
+      "date": "2026-06-17",
+      "name": "Maharana Pratap's Birthday",
+      "is_off_day": true
+    },
+    {
+      "date": "2026-06-26",
+      "name": "Ashura",
+      "is_off_day": true
+    },
+    {
+      "date": "2026-06-29",
+      "name": "Sant Kabir's Birthday",
+      "is_off_day": true
+    },
+    {
+      "date": "2026-07-31",
+      "name": "Shaheed Udham Singh's Martyrdom Day",
+      "is_off_day": true
+    },
+    {
+      "date": "2026-08-15",
+      "name": "Independence Day",
+      "is_off_day": true
+    },
+    {
+      "date": "2026-08-26",
+      "name": "Prophet's Birthday",
+      "is_off_day": true
+    },
+    {
+      "date": "2026-08-28",
+      "name": "Raksha Bandhan",
+      "is_off_day": true
+    },
+    {
+      "date": "2026-09-04",
+      "name": "Janmashtami (Vaishnava)",
+      "is_off_day": true
+    },
+    {
+      "date": "2026-09-23",
+      "name": "Haryana War Heroes' Martyrdom Day",
+      "is_off_day": true
+    },
+    {
+      "date": "2026-10-02",
+      "name": "Mahatma Gandhi's Birthday",
+      "is_off_day": true
+    },
+    {
+      "date": "2026-10-11",
+      "name": "Maharaj Agrasen's Birthday",
+      "is_off_day": true
+    },
+    {
+      "date": "2026-10-20",
+      "name": "Dussehra",
+      "is_off_day": true
+    },
+    {
+      "date": "2026-10-26",
+      "name": "Maharishi Valmiki's Birthday",
+      "is_off_day": true
+    },
+    {
+      "date": "2026-11-01",
+      "name": "Haryana Day",
+      "is_off_day": true
+    },
+    {
+      "date": "2026-11-08",
+      "name": "Diwali",
+      "is_off_day": true
+    },
+    {
+      "date": "2026-11-10",
+      "name": "Vishwakarma Day",
+      "is_off_day": true
+    },
+    {
+      "date": "2026-11-24",
+      "name": "Guru Nanak's Birthday",
+      "is_off_day": true
+    },
+    {
+      "date": "2026-12-25",
+      "name": "Christmas",
+      "is_off_day": true
+    }
+  ]
+}

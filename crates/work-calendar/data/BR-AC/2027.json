@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "country": "BR",
+  "subdivision": "AC",
+  "year": 2027,
+  "timezone": "America/Sao_Paulo",
+  "weekdays": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "source": "vacanza/holidays",
+  "source_url": "https://github.com/vacanza/holidays",
+  "revision": "holidays-0.108",
+  "status": "calculated",
+  "days": [
+    {
+      "date": "2027-01-01",
+      "name": "Universal Fraternization Day",
+      "is_off_day": true
+    },
+    {
+      "date": "2027-01-23",
+      "name": "Evangelical Day",
+      "is_off_day": true
+    },
+    {
+      "date": "2027-03-08",
+      "name": "International Women's Day",
+      "is_off_day": true
+    },
+    {
+      "date": "2027-03-26",
+      "name": "Good Friday",
+      "is_off_day": true
+    },
+    {
+      "date": "2027-04-21",
+      "name": "Tiradentes' Day",
+      "is_off_day": true
+    },
+    {
+      "date": "2027-05-01",
+      "name": "Worker's Day",
+      "is_off_day": true
+    },
+    {
+      "date": "2027-06-15",
+      "name": "Founding of Acre",
+      "is_off_day": true
+    },
+    {
+      "date": "2027-09-05",
+      "name": "Amazonia Day",
+      "is_off_day": true
+    },
+    {
+      "date": "2027-09-07",
+      "name": "Independence Day",
+      "is_off_day": true
+    },
+    {
+      "date": "2027-10-12",
+      "name": "Our Lady of Aparecida",
+      "is_off_day": true
+    },
+    {
+      "date": "2027-11-02",
+      "name": "All Souls' Day",
+      "is_off_day": true
+    },
+    {
+      "date": "2027-11-15",
+      "name": "Republic Proclamation Day",
+      "is_off_day": true
+    },
+    {
+      "date": "2027-11-19",
+      "name": "Signing of the Petropolis Treaty",
+      "is_off_day": true
+    },
+    {
+      "date": "2027-11-20",
+      "name": "National Day of Zumbi and Black Awareness",
+      "is_off_day": true
+    },
+    {
+      "date": "2027-12-25",
+      "name": "Christmas Day",
+      "is_off_day": true
+    }
+  ]
+}

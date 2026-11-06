@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+work-calendar = { path = "../work-calendar" }
 pecofence-plugin-api = { path = "../plugin-api" }
 chrono.workspace = true
 chinese-lunisolar-calendar = { version = "0.2.5", default-features = false }

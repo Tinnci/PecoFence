@@ -441,6 +441,7 @@ dependencies = [
  "pecofence-render",
  "serde",
  "serde_json",
+ "work-calendar",
 ]
 
 [[package]]
@@ -1149,6 +1150,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b1d48f56961ae40c65db3a0ea0076a0b100f4c46ba21d78af97bd8b77e924a82"
 dependencies = [
  "windows-core 0.100.0",
+]
+
+[[package]]
+name = "work-calendar"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

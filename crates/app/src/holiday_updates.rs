@@ -161,7 +161,7 @@ mod tests {
         let dir =
             std::env::temp_dir().join(format!("pecofence-holiday-cache-{}", uuid::Uuid::new_v4()));
         let path = dir.join("2026.json");
-        let bytes = include_bytes!("../../plugin-widgets/data/holidays/2026.json");
+        let bytes = include_bytes!("../../work-calendar/data/china/2026.json");
         write_cache(&path, bytes).unwrap();
         assert!(read_cache(&path, 2026).is_ok());
         assert!(read_cache(&path, 2027).is_err());

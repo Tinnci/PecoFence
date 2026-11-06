@@ -1,0 +1,140 @@
+{
+  "schema_version": 1,
+  "country": "IN",
+  "subdivision": "HP",
+  "year": 2025,
+  "timezone": "Asia/Kolkata",
+  "weekdays": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "source": "vacanza/holidays",
+  "source_url": "https://github.com/vacanza/holidays",
+  "revision": "holidays-0.108",
+  "status": "calculated",
+  "days": [
+    {
+      "date": "2025-01-25",
+      "name": "Statehood Day",
+      "is_off_day": true
+    },
+    {
+      "date": "2025-01-26",
+      "name": "Republic Day",
+      "is_off_day": true
+    },
+    {
+      "date": "2025-02-12",
+      "name": "Guru Ravi Das's Birthday",
+      "is_off_day": true
+    },
+    {
+      "date": "2025-02-26",
+      "name": "Maha Shivaratri",
+      "is_off_day": true
+    },
+    {
+      "date": "2025-03-14",
+      "name": "Holi",
+      "is_off_day": true
+    },
+    {
+      "date": "2025-03-31",
+      "name": "Eid al-Fitr",
+      "is_off_day": true
+    },
+    {
+      "date": "2025-04-10",
+      "name": "Mahavira's Birthday",
+      "is_off_day": true
+    },
+    {
+      "date": "2025-04-14",
+      "name": "Dr. B. R. Ambedkar's Birthday",
+      "is_off_day": true
+    },
+    {
+      "date": "2025-04-15",
+      "name": "Himachal Day",
+      "is_off_day": true
+    },
+    {
+      "date": "2025-04-18",
+      "name": "Good Friday",
+      "is_off_day": true
+    },
+    {
+      "date": "2025-04-29",
+      "name": "Lord Shri Parshuram's Birthday",
+      "is_off_day": true
+    },
+    {
+      "date": "2025-05-12",
+      "name": "Buddha Purnima",
+      "is_off_day": true
+    },
+    {
+      "date": "2025-05-29",
+      "name": "Maharana Pratap's Birthday",
+      "is_off_day": true
+    },
+    {
+      "date": "2025-06-07",
+      "name": "Eid al-Adha",
+      "is_off_day": true
+    },
+    {
+      "date": "2025-06-11",
+      "name": "Sant Kabir's Birthday",
+      "is_off_day": true
+    },
+    {
+      "date": "2025-07-06",
+      "name": "Ashura",
+      "is_off_day": true
+    },
+    {
+      "date": "2025-08-15",
+      "name": "Independence Day",
+      "is_off_day": true
+    },
+    {
+      "date": "2025-08-16",
+      "name": "Janmashtami (Vaishnava)",
+      "is_off_day": true
+    },
+    {
+      "date": "2025-09-05",
+      "name": "Prophet's Birthday",
+      "is_off_day": true
+    },
+    {
+      "date": "2025-10-02",
+      "name": "Dussehra; Mahatma Gandhi's Birthday",
+      "is_off_day": true
+    },
+    {
+      "date": "2025-10-07",
+      "name": "Maharishi Valmiki's Birthday",
+      "is_off_day": true
+    },
+    {
+      "date": "2025-10-20",
+      "name": "Diwali",
+      "is_off_day": true
+    },
+    {
+      "date": "2025-11-05",
+      "name": "Guru Nanak's Birthday",
+      "is_off_day": true
+    },
+    {
+      "date": "2025-12-25",
+      "name": "Christmas",
+      "is_off_day": true
+    }
+  ]
+}

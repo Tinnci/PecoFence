@@ -1,0 +1,110 @@
+{
+  "schema_version": 1,
+  "country": "BD",
+  "subdivision": null,
+  "year": 2027,
+  "timezone": "Asia/Dhaka",
+  "weekdays": [
+    0,
+    1,
+    2,
+    3,
+    6
+  ],
+  "source": "vacanza/holidays",
+  "source_url": "https://github.com/vacanza/holidays",
+  "revision": "holidays-0.108",
+  "status": "calculated",
+  "days": [
+    {
+      "date": "2027-01-24",
+      "name": "Mid-Sha'ban (estimated)",
+      "is_off_day": true
+    },
+    {
+      "date": "2027-02-21",
+      "name": "Martyrs' Day and International Mother Language Day",
+      "is_off_day": true
+    },
+    {
+      "date": "2027-03-05",
+      "name": "Jumu'atul-Wida (estimated)",
+      "is_off_day": true
+    },
+    {
+      "date": "2027-03-07",
+      "name": "Laylat al-Qadr (estimated)",
+      "is_off_day": true
+    },
+    {
+      "date": "2027-03-10",
+      "name": "Eid al-Fitr (estimated)",
+      "is_off_day": true
+    },
+    {
+      "date": "2027-03-11",
+      "name": "Eid al-Fitr (estimated)",
+      "is_off_day": true
+    },
+    {
+      "date": "2027-03-12",
+      "name": "Eid al-Fitr (estimated)",
+      "is_off_day": true
+    },
+    {
+      "date": "2027-03-26",
+      "name": "Independence Day",
+      "is_off_day": true
+    },
+    {
+      "date": "2027-04-14",
+      "name": "Bengali New Year's Day",
+      "is_off_day": true
+    },
+    {
+      "date": "2027-05-01",
+      "name": "May Day",
+      "is_off_day": true
+    },
+    {
+      "date": "2027-05-17",
+      "name": "Eid al-Adha (estimated)",
+      "is_off_day": true
+    },
+    {
+      "date": "2027-05-18",
+      "name": "Eid al-Adha (estimated)",
+      "is_off_day": true
+    },
+    {
+      "date": "2027-05-19",
+      "name": "Eid al-Adha (estimated)",
+      "is_off_day": true
+    },
+    {
+      "date": "2027-06-16",
+      "name": "Ashura (estimated)",
+      "is_off_day": true
+    },
+    {
+      "date": "2027-08-05",
+      "name": "July Mass Uprising Day",
+      "is_off_day": true
+    },
+    {
+      "date": "2027-08-15",
+      "name": "Prophet's Birthday (estimated)",
+      "is_off_day": true
+    },
+    {
+      "date": "2027-12-16",
+      "name": "Victory Day",
+      "is_off_day": true
+    },
+    {
+      "date": "2027-12-25",
+      "name": "Christmas Day",
+      "is_off_day": true
+    }
+  ]
+}

@@ -1009,11 +1009,7 @@ impl App {
         );
 
         let holiday_updates = crate::holiday_updates::Updater::start(
-            state
-                .config_path()
-                .parent()
-                .unwrap_or_else(|| Path::new("."))
-                .join("holiday-cache"),
+            pecofence_plugin_widgets::holidays::shared_cache_directory().unwrap_or_else(|| state.config_path().parent().unwrap_or_else(|| Path::new(".")).join("holiday-cache")),
             control.hwnd(),
             args.test_script.is_none()
                 && pecofence_core::brand::var_os("PECOFENCE_HOLIDAY_OFFLINE").is_none(),

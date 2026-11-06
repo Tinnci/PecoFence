@@ -1,0 +1,110 @@
+{
+  "schema_version": 1,
+  "country": "IN",
+  "subdivision": "NL",
+  "year": 2026,
+  "timezone": "Asia/Kolkata",
+  "weekdays": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "source": "vacanza/holidays",
+  "source_url": "https://github.com/vacanza/holidays",
+  "revision": "holidays-0.108",
+  "status": "calculated",
+  "days": [
+    {
+      "date": "2026-01-26",
+      "name": "Republic Day",
+      "is_off_day": true
+    },
+    {
+      "date": "2026-03-04",
+      "name": "Holi",
+      "is_off_day": true
+    },
+    {
+      "date": "2026-03-21",
+      "name": "Eid al-Fitr",
+      "is_off_day": true
+    },
+    {
+      "date": "2026-03-26",
+      "name": "Ram Navami",
+      "is_off_day": true
+    },
+    {
+      "date": "2026-03-31",
+      "name": "Mahavira's Birthday",
+      "is_off_day": true
+    },
+    {
+      "date": "2026-04-03",
+      "name": "Good Friday",
+      "is_off_day": true
+    },
+    {
+      "date": "2026-04-14",
+      "name": "Dr. B. R. Ambedkar's Birthday",
+      "is_off_day": true
+    },
+    {
+      "date": "2026-05-01",
+      "name": "Buddha Purnima",
+      "is_off_day": true
+    },
+    {
+      "date": "2026-05-27",
+      "name": "Eid al-Adha",
+      "is_off_day": true
+    },
+    {
+      "date": "2026-06-26",
+      "name": "Ashura",
+      "is_off_day": true
+    },
+    {
+      "date": "2026-08-15",
+      "name": "Independence Day",
+      "is_off_day": true
+    },
+    {
+      "date": "2026-08-26",
+      "name": "Prophet's Birthday",
+      "is_off_day": true
+    },
+    {
+      "date": "2026-09-04",
+      "name": "Janmashtami (Vaishnava)",
+      "is_off_day": true
+    },
+    {
+      "date": "2026-10-02",
+      "name": "Mahatma Gandhi's Birthday",
+      "is_off_day": true
+    },
+    {
+      "date": "2026-10-20",
+      "name": "Dussehra",
+      "is_off_day": true
+    },
+    {
+      "date": "2026-11-08",
+      "name": "Diwali",
+      "is_off_day": true
+    },
+    {
+      "date": "2026-11-24",
+      "name": "Guru Nanak's Birthday",
+      "is_off_day": true
+    },
+    {
+      "date": "2026-12-25",
+      "name": "Christmas",
+      "is_off_day": true
+    }
+  ]
+}

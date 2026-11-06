@@ -1,0 +1,125 @@
+{
+  "schema_version": 1,
+  "country": "IN",
+  "subdivision": "MP",
+  "year": 2027,
+  "timezone": "Asia/Kolkata",
+  "weekdays": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "source": "vacanza/holidays",
+  "source_url": "https://github.com/vacanza/holidays",
+  "revision": "holidays-0.108",
+  "status": "calculated",
+  "days": [
+    {
+      "date": "2027-01-26",
+      "name": "Republic Day",
+      "is_off_day": true
+    },
+    {
+      "date": "2027-03-06",
+      "name": "Maha Shivaratri",
+      "is_off_day": true
+    },
+    {
+      "date": "2027-03-10",
+      "name": "Eid al-Fitr (estimated)",
+      "is_off_day": true
+    },
+    {
+      "date": "2027-03-20",
+      "name": "Veerangana Avantibai's Martyrdom Day",
+      "is_off_day": true
+    },
+    {
+      "date": "2027-03-22",
+      "name": "Holi",
+      "is_off_day": true
+    },
+    {
+      "date": "2027-03-26",
+      "name": "Good Friday",
+      "is_off_day": true
+    },
+    {
+      "date": "2027-04-14",
+      "name": "Dr. B. R. Ambedkar's Birthday",
+      "is_off_day": true
+    },
+    {
+      "date": "2027-04-15",
+      "name": "Ram Navami",
+      "is_off_day": true
+    },
+    {
+      "date": "2027-04-18",
+      "name": "Mahavira's Birthday",
+      "is_off_day": true
+    },
+    {
+      "date": "2027-05-17",
+      "name": "Eid al-Adha (estimated)",
+      "is_off_day": true
+    },
+    {
+      "date": "2027-05-20",
+      "name": "Buddha Purnima",
+      "is_off_day": true
+    },
+    {
+      "date": "2027-06-16",
+      "name": "Ashura (estimated)",
+      "is_off_day": true
+    },
+    {
+      "date": "2027-08-15",
+      "name": "Independence Day; Prophet's Birthday (estimated)",
+      "is_off_day": true
+    },
+    {
+      "date": "2027-08-17",
+      "name": "Raksha Bandhan",
+      "is_off_day": true
+    },
+    {
+      "date": "2027-08-25",
+      "name": "Janmashtami (Vaishnava)",
+      "is_off_day": true
+    },
+    {
+      "date": "2027-10-02",
+      "name": "Mahatma Gandhi's Birthday",
+      "is_off_day": true
+    },
+    {
+      "date": "2027-10-09",
+      "name": "Dussehra",
+      "is_off_day": true
+    },
+    {
+      "date": "2027-10-29",
+      "name": "Diwali",
+      "is_off_day": true
+    },
+    {
+      "date": "2027-10-30",
+      "name": "Govardhan Puja",
+      "is_off_day": true
+    },
+    {
+      "date": "2027-11-14",
+      "name": "Guru Nanak's Birthday",
+      "is_off_day": true
+    },
+    {
+      "date": "2027-12-25",
+      "name": "Christmas",
+      "is_off_day": true
+    }
+  ]
+}

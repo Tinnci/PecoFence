@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "country": "BD",
+  "subdivision": null,
+  "year": 2025,
+  "timezone": "Asia/Dhaka",
+  "weekdays": [
+    0,
+    1,
+    2,
+    3,
+    6
+  ],
+  "source": "vacanza/holidays",
+  "source_url": "https://github.com/vacanza/holidays",
+  "revision": "holidays-0.108",
+  "status": "calculated",
+  "days": [
+    {
+      "date": "2025-02-15",
+      "name": "Mid-Sha'ban",
+      "is_off_day": true
+    },
+    {
+      "date": "2025-02-21",
+      "name": "Martyrs' Day and International Mother Language Day",
+      "is_off_day": true
+    },
+    {
+      "date": "2025-03-26",
+      "name": "Independence Day",
+      "is_off_day": true
+    },
+    {
+      "date": "2025-03-28",
+      "name": "Jumu'atul-Wida; Laylat al-Qadr",
+      "is_off_day": true
+    },
+    {
+      "date": "2025-03-31",
+      "name": "Eid al-Fitr",
+      "is_off_day": true
+    },
+    {
+      "date": "2025-04-01",
+      "name": "Eid al-Fitr",
+      "is_off_day": true
+    },
+    {
+      "date": "2025-04-02",
+      "name": "Eid al-Fitr",
+      "is_off_day": true
+    },
+    {
+      "date": "2025-04-14",
+      "name": "Bengali New Year's Day",
+      "is_off_day": true
+    },
+    {
+      "date": "2025-05-01",
+      "name": "May Day",
+      "is_off_day": true
+    },
+    {
+      "date": "2025-06-07",
+      "name": "Eid al-Adha",
+      "is_off_day": true
+    },
+    {
+      "date": "2025-06-08",
+      "name": "Eid al-Adha",
+      "is_off_day": true
+    },
+    {
+      "date": "2025-06-09",
+      "name": "Eid al-Adha",
+      "is_off_day": true
+    },
+    {
+      "date": "2025-07-06",
+      "name": "Ashura",
+      "is_off_day": true
+    },
+    {
+      "date": "2025-08-05",
+      "name": "July Mass Uprising Day",
+      "is_off_day": true
+    },
+    {
+      "date": "2025-09-06",
+      "name": "Prophet's Birthday",
+      "is_off_day": true
+    },
+    {
+      "date": "2025-12-16",
+      "name": "Victory Day",
+      "is_off_day": true
+    },
+    {
+      "date": "2025-12-25",
+      "name": "Christmas Day",
+      "is_off_day": true
+    }
+  ]
+}

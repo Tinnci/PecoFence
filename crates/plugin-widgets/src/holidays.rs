@@ -1,96 +1,15 @@
 //! Mainland China holiday exceptions. Annual government arrangements are data,
 //! independent of the lunar calendar. Rendering reads immutable snapshots only.
 use chrono::{Datelike, NaiveDate};
-use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock, RwLock};
 
-pub const MAX_BYTES: usize = 256 * 1024;
-pub const SOURCE: &str = "https://github.com/NateScarlet/holiday-cn";
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Day {
-    pub name: String,
-    pub is_off_day: bool,
+pub fn shared_cache_directory() -> Option<std::path::PathBuf> {
+    work_calendar::cache_directory().map(|p| p.join("CN"))
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct YearSchedule {
-    pub year: i32,
-    pub papers: Vec<String>,
-    pub checked_on: Option<NaiveDate>,
-    days: BTreeMap<NaiveDate, Day>,
-}
-
-#[derive(Deserialize)]
-struct Document {
-    year: i32,
-    papers: Vec<String>,
-    days: Vec<Entry>,
-}
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct Entry {
-    date: String,
-    name: String,
-    is_off_day: bool,
-}
-
-impl YearSchedule {
-    pub fn parse(
-        bytes: &[u8],
-        expected_year: i32,
-        checked_on: Option<NaiveDate>,
-    ) -> Result<Self, String> {
-        if bytes.len() > MAX_BYTES {
-            return Err("holiday document is too large".into());
-        }
-        let doc: Document = serde_json::from_slice(bytes).map_err(|e| e.to_string())?;
-        if doc.year != expected_year || !(1900..=2200).contains(&doc.year) {
-            return Err("holiday year mismatch".into());
-        }
-        if doc.papers.is_empty() || doc.days.is_empty() {
-            return Err("annual arrangement has not been published".into());
-        }
-        if doc.papers.len() > 16
-            || doc.days.len() > 400
-            || doc.papers.iter().any(|url| {
-                !url.starts_with("https://www.gov.cn/") || url.chars().any(char::is_control)
-            })
-        {
-            return Err("invalid holiday announcement sources".into());
-        }
-        let mut days = BTreeMap::new();
-        for entry in doc.days {
-            let date =
-                NaiveDate::parse_from_str(&entry.date, "%Y-%m-%d").map_err(|e| e.to_string())?;
-            if date.to_string() != entry.date
-                || (date.year() - doc.year).abs() > 1
-                || entry.name.trim().is_empty()
-                || entry.name.chars().count() > 40
-                || entry.name.chars().any(char::is_control)
-            {
-                return Err("invalid holiday date or name".into());
-            }
-            let day = Day {
-                name: entry.name,
-                is_off_day: entry.is_off_day,
-            };
-            if let Some(previous) = days.insert(date, day.clone())
-                && previous != day
-            {
-                return Err("conflicting holiday dates".into());
-            }
-        }
-        Ok(Self {
-            year: doc.year,
-            papers: doc.papers,
-            days,
-            checked_on,
-        })
-    }
-}
+pub use work_calendar::china::{Day, MAX_BYTES, SOURCE, YearSchedule};
 
 #[derive(Clone, Debug, Default)]
 pub struct CalendarData {
@@ -100,14 +19,8 @@ impl CalendarData {
     pub fn bundled() -> Self {
         let mut result = Self::default();
         for (year, bytes) in [
-            (
-                2025,
-                include_bytes!("../data/holidays/2025.json").as_slice(),
-            ),
-            (
-                2026,
-                include_bytes!("../data/holidays/2026.json").as_slice(),
-            ),
+            (2025, work_calendar::china::bundled(2025).unwrap()),
+            (2026, work_calendar::china::bundled(2026).unwrap()),
         ] {
             let schedule =
                 YearSchedule::parse(bytes, year, None).expect("validated bundled holidays");
@@ -123,7 +36,7 @@ impl CalendarData {
         self.years
             .iter()
             .rev()
-            .find_map(|(_, schedule)| schedule.days.get(&date))
+            .find_map(|(_, schedule)| schedule.day(date))
     }
     pub fn description(&self, date: NaiveDate, chinese: bool) -> String {
         if let Some(day) = self.day(date) {
