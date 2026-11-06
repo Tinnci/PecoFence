@@ -13,7 +13,20 @@ import type {
   FocusModel,
   ProjectStatus,
   ServiceHealth,
+  LoggingSettings,
+  LogPolicy,
 } from "./contracts/setup";
+export function loggingSettings(
+  action: "show" | "set" | "reset",
+  policy?: LogPolicy,
+): Promise<LoggingSettings> {
+  return isTauri()
+    ? invoke<LoggingSettings>("logging_settings", {
+        action,
+        policy: policy ?? null,
+      })
+    : desktopOnly();
+}
 export type Page =
   | "home"
   | "setup"

@@ -7,6 +7,8 @@ mod args;
 pub use args::*;
 mod locate;
 pub use locate::*;
+mod logging;
+pub use logging::*;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -49,6 +51,7 @@ impl SetupFailure {
             "TEMPLATE_INVALID" => "template_invalid",
             "IMPORT_CONFLICT" => "import_conflict",
             "IMPORT_IO" => "import_io",
+            "LOG_SETTINGS_IO" => "log_settings_io",
             "SIGN_IN_HOST_UNKNOWN" => "sign_in_host_unknown",
             "SIGN_IN_FAILED" => "sign_in_failed",
             "SIGN_IN_UNSUPPORTED" => "sign_in_unsupported",

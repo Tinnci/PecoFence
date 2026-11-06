@@ -4,6 +4,9 @@ export type SetupFailure = { code: string,
  * Owner's message for template and import errors; absent for runtime failures.
  */
 message?: string, };
+export type LogPolicy = { schema_version: number, retention_days: number, max_total_mib: number, daily_info_mib: number, daily_max_mib: number, daemon_file_mib: number, daemon_files_per_stream: number, };
+export type LogUsage = { files: number, bytes: number, };
+export type LoggingSettings = { policy: LogPolicy, defaults: LogPolicy, settings_path: string, directory: string, daemon_directory: string, usage: LogUsage, daemon_usage: LogUsage, };
 export type TemplateInfo = { id: string, version: string, title: string, sha256: string, };
 export type PlanFile = { role: string, path: string, 
 /**

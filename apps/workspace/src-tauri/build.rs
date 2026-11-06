@@ -13,6 +13,7 @@ fn main() {
             "template_apply",
             "project_status",
             "connections",
+            "logging_settings",
             "connection_sign_in",
             "discover",
             "draft",

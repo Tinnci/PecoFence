@@ -32,6 +32,9 @@ import type {
 import { applyTemplate, planTemplate } from "./api";
 
 const failures: Record<string, string> = {
+  get log_settings_io() {
+    return t("logging.ioFailed");
+  },
   get export_failed() {
     return t("views.exportFailed");
   },

@@ -691,3 +691,19 @@ Each model header shows its vendor, named chip, Android/kernel versions and name
 The model header platform line opens an editor for the chip and baseband. It saves only fields changed since opening, so a background refresh cannot overwrite untouched values. Home and model headers have an explicit platform reload action; inline edits expose saving and failure states.
 
 The title bar keeps Following and window controls visible while model tabs scroll independently. Long names truncate with full-name tooltips; arrows and the mouse wheel move the strip. The model-count button opens a searchable switcher matching names and codes. Switching or resizing reveals the active model without scrolling the page.
+
+### Logging settings
+
+Open **Settings → Logs & diagnostics** for retention days, the shared JSON log budget,
+current disk usage and log folder paths. Advanced controls set per-app informational and
+maximum daily sizes, plus the daemon's per-file size and retained files per stream.
+Save and Restore defaults call `spm settings logging set/reset`; the GUI and Windows CLI
+use `%LOCALAPPDATA%\Tinnci\logging.json`. Settings are independent of projects and databases.
+
+Defaults are 14 UTC dates including today, a 200 MiB shared JSON budget, 20 MiB of
+informational entries and a 40 MiB daily maximum per app. Daemon stdout/stderr each
+retain at most fourteen 20 MiB files. Shared cleanup runs at most once a minute while
+logging, removes older dates first and preserves today's files. The supervisor reloads
+settings and cleans inactive text logs every 30 seconds. Full text logs receive a
+truncation marker while their pipes continue to drain. Existing file contents are
+preserved when limits are lowered; unreadable policy files suspend automatic cleanup.

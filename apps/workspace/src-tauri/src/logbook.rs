@@ -7,9 +7,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-const KEEP_DAYS: i64 = 14;
-const DAY_LIMIT: u64 = 20 * 1024 * 1024;
-const FOLDER_LIMIT: u64 = 200 * 1024 * 1024;
+const MIB: u64 = 1024 * 1024;
 
 /// Days since 1970 to year, month, day (Howard Hinnant's civil_from_days).
 fn civil(days: i64) -> (i64, u32, u32) {
@@ -48,8 +46,11 @@ fn directory() -> Option<PathBuf> {
 
 /// Past days older than `KEEP_DAYS` go, then the oldest until the folder fits `FOLDER_LIMIT`.
 /// The folder is shared, so this counts every tool's files, as `spm` does.
-fn prune(dir: &Path, today: i64) {
-    let (oldest, current) = (day_name(today - KEEP_DAYS), day_name(today));
+fn prune(dir: &Path, today: i64, policy: &crate::setup::LogPolicy) {
+    let (oldest, current) = (
+        day_name(today - i64::from(policy.retention_days) + 1),
+        day_name(today),
+    );
     let mut days = vec![];
     for file in std::fs::read_dir(dir).into_iter().flatten().flatten() {
         let name = file.file_name();
@@ -60,15 +61,22 @@ fn prune(dir: &Path, today: i64) {
             .filter(|d| d.len() == 8)
             .map(str::to_owned);
         if let (Some(day), Ok(meta)) = (day, file.metadata()) {
+            if !file.file_type().is_ok_and(|t| t.is_file())
+                || !day.bytes().all(|b| b.is_ascii_digit())
+            {
+                continue;
+            }
             days.push((day, meta.len(), file.path()));
         }
     }
     days.sort();
     let mut total: u64 = days.iter().map(|d| d.1).sum();
     for (day, length, path) in days {
-        if day < oldest || (total > FOLDER_LIMIT && day < current) {
-            total -= length;
-            let _ = std::fs::remove_file(path);
+        if (day < oldest || total > u64::from(policy.max_total_mib) * MIB)
+            && day < current
+            && std::fs::remove_file(path).is_ok()
+        {
+            total = total.saturating_sub(length);
         }
     }
 }
@@ -116,20 +124,35 @@ fn append(
 ) -> std::io::Result<()> {
     let today = seconds.div_euclid(86_400);
     let path = dir.join(format!("workspace-{}.jsonl", day_name(today)));
-    match std::fs::metadata(&path) {
-        Ok(meta) if meta.len() > DAY_LIMIT * 2 => return Ok(()),
-        Ok(meta) if meta.len() > DAY_LIMIT && level == "info" => return Ok(()),
-        Ok(_) => {}
-        Err(_) => {
-            std::fs::create_dir_all(dir)?;
-            prune(dir, today);
+    std::fs::create_dir_all(dir)?;
+    let configured = crate::setup::local_log_policy(dir);
+    if let Some(policy) = &configured {
+        let marker = dir.join(".retention-checked");
+        let previous = std::fs::read_to_string(&marker)
+            .ok()
+            .and_then(|s| s.parse::<i64>().ok());
+        if previous.is_none_or(|at| !(0..60).contains(&(seconds - at))) {
+            prune(dir, today, policy);
+            let _ = std::fs::write(marker, seconds.to_string());
         }
     }
-    std::fs::OpenOptions::new()
+    let policy = configured.unwrap_or_default();
+    let text = line(&timestamp(seconds, millis), level, event, fields);
+    let mut file = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
-        .open(path)?
-        .write_all(line(&timestamp(seconds, millis), level, event, fields).as_bytes())
+        .open(path)?;
+    file.try_lock().map_err(std::io::Error::other)?;
+    let size = file.metadata()?.len();
+    let limit = if level == "info" {
+        policy.daily_info_mib
+    } else {
+        policy.daily_max_mib
+    };
+    if size.saturating_add(text.len() as u64) > u64::from(limit) * MIB {
+        return Ok(());
+    }
+    file.write_all(text.as_bytes())
 }
 
 /// Best effort: a log that cannot be written never fails the work it describes.
@@ -162,6 +185,46 @@ pub fn watch_panics() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn custom_policy_is_reloaded_and_cleanup_continues_after_the_first_daily_append() {
+        let root =
+            std::env::temp_dir().join(format!("workspace-log-policy-{}", std::process::id()));
+        let dir = root.join("logs");
+        std::fs::create_dir_all(&dir).unwrap();
+        let seconds = 1_793_858_987;
+        let path = root.join("logging.json");
+        let mut policy = crate::setup::LogPolicy {
+            retention_days: 2,
+            daily_info_mib: 1,
+            daily_max_mib: 2,
+            ..Default::default()
+        };
+        std::fs::write(&path, serde_json::to_vec(&policy).unwrap()).unwrap();
+        append(&dir, seconds, 0, "info", "first", json!({})).unwrap();
+        let old = dir.join("workspace-20261102.jsonl");
+        std::fs::write(&old, "old").unwrap();
+        append(&dir, seconds + 61, 0, "info", "later", json!({})).unwrap();
+        assert!(!old.exists());
+        let today = dir.join("workspace-20261105.jsonl");
+        std::fs::File::options()
+            .write(true)
+            .open(&today)
+            .unwrap()
+            .set_len(MIB)
+            .unwrap();
+        append(&dir, seconds + 62, 0, "info", "skip", json!({})).unwrap();
+        assert_eq!(std::fs::metadata(&today).unwrap().len(), MIB);
+        policy.daily_info_mib = 2;
+        std::fs::write(&path, serde_json::to_vec(&policy).unwrap()).unwrap();
+        append(&dir, seconds + 63, 0, "info", "changed", json!({})).unwrap();
+        assert!(std::fs::metadata(&today).unwrap().len() > MIB);
+        std::fs::write(&old, "preserve").unwrap();
+        std::fs::write(&path, "invalid").unwrap();
+        append(&dir, seconds + 200, 0, "warn", "bad-policy", json!({})).unwrap();
+        assert!(old.exists());
+        std::fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn writes_the_shared_format_and_keeps_fourteen_days() {

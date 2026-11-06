@@ -390,6 +390,23 @@ fn desktop() {
         let output = process::spm(&spm_exe()?, &args, std::time::Duration::from_secs(360)).await?;
         setup::decode_activation(output.code, &output.stdout)
     }
+    /// Per-user logging settings are owned by SPM and shared by every window.
+    #[tauri::command]
+    async fn logging_settings(
+        action: String,
+        policy: Option<setup::LogPolicy>,
+        state: tauri::State<'_, State>,
+    ) -> Result<setup::LoggingSettings, setup::SetupFailure> {
+        let args = setup::logging_args(&action, policy.as_ref())
+            .ok_or_else(|| setup::SetupFailure::new("invalid_input"))?;
+        let _permit = state
+            .discover_gate
+            .try_acquire()
+            .map_err(|_| setup::SetupFailure::new("setup_busy"))?;
+        let args: Vec<&str> = args.iter().map(String::as_str).collect();
+        let output = process::spm(&spm_exe()?, &args, std::time::Duration::from_secs(20)).await?;
+        setup::decode_logging(output.code, &output.stdout)
+    }
     /// The background service's health: project, gates and unmapped values.
     #[tauri::command]
     async fn service_status(
@@ -753,6 +770,7 @@ fn desktop() {
             template_apply,
             project_status,
             connections,
+            logging_settings,
             connection_sign_in,
             discover,
             draft,
