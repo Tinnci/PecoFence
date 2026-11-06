@@ -1,10 +1,9 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { ChevronLeft, ChevronRight, Info, RefreshCw } from "lucide-react";
+import { ChevronLeft, ChevronRight, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Spinner } from "@/components/ui/spinner";
 import { Toggle } from "@/components/ui/toggle";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { ContextTarget, type ContextAction } from "./components/context-menu";
@@ -23,6 +22,7 @@ import {
 import type { CalEvent, CalOrigin, Calendar, OtaPlan } from "./contracts/setup";
 import { queryClient, calendarKey, profilesKey } from "./focus-cache";
 import { locale, t } from "./i18n";
+import { RefreshStatus } from "./RefreshStatus";
 
 const REFRESH_MS = 30 * 60_000;
 /** Lanes a week shows before the rest fold behind a count. */
@@ -41,18 +41,23 @@ function useCalendar() {
   const fresh = useQuery(
     {
       queryKey: calendarKey,
-      queryFn: async (): Promise<Calendar | null> =>
-        (
-          await focus("calendar").finally(() =>
-            queryClient.invalidateQueries({ queryKey: profilesKey }),
-          )
-        )?.calendar ?? null,
+      queryFn: async (): Promise<Calendar> => {
+        const result = await focus("calendar").finally(() =>
+          queryClient.invalidateQueries({ queryKey: profilesKey }),
+        );
+        if (!result.calendar) throw { code: "spm_invalid_response" };
+        return result.calendar;
+      },
       staleTime: 5 * 60_000,
       refetchInterval: REFRESH_MS,
     },
     queryClient,
   );
-  return { calendar: fresh.data ?? cached.data, fresh };
+  return {
+    calendar: fresh.data ?? cached.data,
+    fresh,
+    error: fresh.error || (!fresh.isFetching && !fresh.data && cached.error),
+  };
 }
 
 const stageName = (e: CalEvent) => t(`calendar.stage.${e.key}`);
@@ -194,7 +199,7 @@ export function CalendarPage({
   onModel: (code: string, tab?: ModelTab) => void;
 }) {
   useTranslation();
-  const { calendar, fresh } = useCalendar();
+  const { calendar, fresh, error } = useCalendar();
   const ota = useQuery(otaOptions, queryClient).data;
   const planOf = (event: CalEvent) =>
     ota?.models
@@ -227,7 +232,6 @@ export function CalendarPage({
     locale(),
     { year: "numeric", month: "long" },
   );
-  const failed = calendar?.sources.filter((s) => s.error) ?? [];
   const weekdays = weeks[0].map((day) =>
     new Date(`${day}T00:00:00`).toLocaleDateString(locale(), {
       weekday: "short",
@@ -296,26 +300,19 @@ export function CalendarPage({
           aria-label={t("calendar.search")}
           onChange={(e) => setView({ ...view, words: e.target.value })}
         />
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          disabled={fresh.isFetching}
-          aria-label={t("calendar.refresh")}
-          title={t("calendar.refresh")}
-          onClick={() => void fresh.refetch()}
-        >
-          {fresh.isFetching ? (
-            <Spinner aria-hidden="true" />
-          ) : (
-            <RefreshCw aria-hidden="true" />
-          )}
-        </Button>
+        <RefreshStatus
+          reading={fresh.isFetching}
+          error={error}
+          hasData={!!calendar}
+          sources={calendar?.sources.map((s) => ({
+            label: t(`calendar.source.${s.source}`),
+            error: s.error,
+            updatedAt: !s.error ? calendar.computed_at : undefined,
+          }))}
+          label={t("calendar.refresh")}
+          onRefresh={fresh.refetch}
+        />
       </header>
-      {failed.map((s) => (
-        <p key={s.source} className="short" role="alert">
-          {t("calendar.failed", { source: t(`calendar.source.${s.source}`) })}
-        </p>
-      ))}
       {calendar && !calendar.configured ? (
         <p className="quiet">{t("calendar.notConfigured")}</p>
       ) : null}

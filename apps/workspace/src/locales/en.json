@@ -196,7 +196,7 @@
   "model.pages": "{{v0}} pages",
   "model.building2": "{{count}} building",
   "model.noFreezeDateSet": "No freeze date set",
-  "templateImport.importRequiresTheDesktopWorkspaceApp": "Import requires the desktop app.",
+  "templateImport.importRequiresTheDesktopWorkspaceApp": "This action requires the desktop app.",
   "templateImport.windowsSpmWasNotFoundInstallSPMFirst": "Windows spm was not found. Install SPM first.",
   "templateImport.thisVersionOfSpmDoesNotSupportProjectImport": "This version of spm does not support project import. Update SPM.",
   "templateImport.spmDidNotRespondInTimeTryAgain": "spm did not respond in time. Try again.",
@@ -1460,5 +1460,14 @@
   "calendar.rule.test": "Worked out: starts the day after the build, ends on the test completion date",
   "calendar.rule.fix": "Worked out: the days between test completion and the next build",
   "calendar.rule.dev": "Worked out: from the planned start to the day before the first build",
-  "calendar.days": "{{count}} days"
+  "calendar.days": "{{count}} days",
+  "refresh.reading": "Reading…",
+  "refresh.updated": "Updated {{time}}",
+  "refresh.partial": "Partially updated · some sources could not be read",
+  "refresh.failedCached": "Read failed · showing the last result",
+  "refresh.failed": "Could not read the sources",
+  "refresh.unconfirmed": "Refresh not yet confirmed",
+  "refresh.lastUpdated": "Last updated {{time}}",
+  "refresh.sourceUnavailable": "Source unavailable",
+  "refresh.workItems": "Work items"
 }

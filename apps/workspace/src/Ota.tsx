@@ -1,25 +1,31 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { ChevronRight, RefreshCw } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { Spinner } from "@/components/ui/spinner";
 import { ContextTarget } from "./components/context-menu";
 import { copyContextAction, openContextAction } from "./context-actions";
 import type { ModelOta, OtaItem, OtaPlan, OtaReport } from "./contracts/setup";
 import { focus, type ModelTab } from "./api";
 import { otaKey, queryClient } from "./focus-cache";
 import { t } from "./i18n";
+import { RefreshStatus } from "./RefreshStatus";
 
 export { otaKey };
 export const otaOptions = {
   queryKey: otaKey,
   queryFn: async (): Promise<OtaReport | null> =>
-    (await focus("ota"))?.ota ?? null,
+    requireOta((await focus("ota")).ota),
   staleTime: 5 * 60_000,
 };
+
+function requireOta(report: OtaReport | undefined): OtaReport {
+  if (!report || !Array.isArray(report.models) || !Array.isArray(report.errors))
+    throw { code: "spm_invalid_response" };
+  return report;
+}
 
 const HOUR = 60 * 60_000;
 
@@ -31,15 +37,56 @@ export function useOta() {
       queryKey: [...otaKey, "read"],
       queryFn: async () => {
         const data = await focus("ota_refresh");
-        if (data.ota) queryClient.setQueryData(otaKey, data.ota);
-        return true;
+        const report = requireOta(data.ota);
+        await queryClient.cancelQueries({ queryKey: otaKey, exact: true });
+        queryClient.setQueryData(otaKey, report);
+        return report;
       },
       staleTime: HOUR,
       refetchInterval: HOUR,
     },
     queryClient,
   );
-  return { report: query.data, reading: read.isFetching, reread: read.refetch };
+  return {
+    report: query.data,
+    reading: read.isFetching,
+    error: read.error || (!read.isFetching && query.error),
+    reread: read.refetch,
+  };
+}
+
+function OtaRefresh({
+  state,
+  code,
+}: {
+  state: ReturnType<typeof useOta>;
+  code?: string;
+}) {
+  const sources = state.report?.sources?.filter(
+    (s) => !code || s.code === code,
+  );
+  const issues = state.report?.sources
+    ? []
+    : state.report?.errors.filter((e) => !code || e.startsWith(`${code} `));
+  return (
+    <RefreshStatus
+      reading={state.reading}
+      error={state.error}
+      hasData={sources ? sources.some((s) => !!s.updated_at) : !!state.report}
+      sources={sources?.map((s) => ({
+        label: [s.code, t(`ota.kind.${s.kind}`), s.label]
+          .filter(Boolean)
+          .join(" · "),
+        updatedAt: s.updated_at,
+        stale: s.stale,
+        error: s.error,
+      }))}
+      issues={issues}
+      label={t("ota.reread")}
+      scope={t("refresh.workItems")}
+      onRefresh={state.reread}
+    />
+  );
 }
 
 const shipping = (plan: OtaPlan) => plan.official || plan.rollout || plan.pre1;
@@ -311,17 +358,17 @@ function Waiting({ ota, plans }: { ota: ModelOta; plans?: OtaPlan[] }) {
 /** One model's OTAs: what is coming open, what shipped folded away. */
 export function ModelOtaTab({ code }: { code: string }) {
   useTranslation();
-  const { report } = useOta();
-  const ota = report?.models.find((m) => m.code === code);
-  if (!ota) return <p className="quiet">{t("ota.nothingYet")}</p>;
-  const current = ota.plans.filter(live);
-  const past = ota.plans.filter((p) => !live(p)).reverse();
+  const state = useOta();
+  const ota = state.report?.models.find((m) => m.code === code);
+  const current = ota?.plans.filter(live) ?? [];
+  const past = ota?.plans.filter((p) => !live(p)).reverse() ?? [];
   return (
     <div className="ota-model">
+      <OtaRefresh state={state} code={code} />
       {current.map((plan, at) => (
         <Card key={plan.version} plan={plan} code={code} start={at === 0} />
       ))}
-      <Waiting ota={ota} />
+      {ota ? <Waiting ota={ota} /> : null}
       {past.length ? (
         <Fold title={t("ota.shipped")} count={past.length}>
           {past.map((plan) => (
@@ -329,7 +376,16 @@ export function ModelOtaTab({ code }: { code: string }) {
           ))}
         </Fold>
       ) : null}
-      {!ota.plans.length && !ota.undecided.length && !ota.left_out.length ? (
+      {ota &&
+      !state.reading &&
+      !state.error &&
+      !state.report?.sources?.some(
+        (s) => s.code === code && (s.stale || s.error),
+      ) &&
+      !state.report?.errors.length &&
+      !ota.plans.length &&
+      !ota.undecided.length &&
+      !ota.left_out.length ? (
         <p className="quiet">{t("ota.nothingYet")}</p>
       ) : null}
     </div>
@@ -357,7 +413,8 @@ export function OtaPage({
   onModel: (code: string, tab?: ModelTab) => void;
 }) {
   useTranslation();
-  const { report, reading, reread } = useOta();
+  const state = useOta();
+  const { report } = state;
   const name = (code: string) =>
     models.find((m) => m.code === code)?.name ?? code;
   const rows = (report?.models ?? [])
@@ -376,27 +433,8 @@ export function OtaPage({
     <div className="ota-page">
       <div className="ota-title-row">
         <h1>{t("nav.ota")}</h1>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          disabled={reading}
-          aria-label={t("ota.reread")}
-          title={t("ota.reread")}
-          onClick={() => void reread()}
-        >
-          {reading ? (
-            <Spinner aria-hidden="true" />
-          ) : (
-            <RefreshCw aria-hidden="true" />
-          )}
-        </Button>
+        <OtaRefresh state={state} />
       </div>
-      {report?.errors.length ? (
-        <p className="short" role="alert">
-          {report.errors.join("；")}
-        </p>
-      ) : null}
       {rows.length ? (
         <ul className="ota-list">
           {rows.map(({ code, plan }) => (
@@ -415,9 +453,13 @@ export function OtaPage({
             </li>
           ))}
         </ul>
-      ) : (
+      ) : report &&
+        !state.reading &&
+        !state.error &&
+        !report.errors.length &&
+        !report.sources?.some((s) => s.stale || s.error) ? (
         <p className="quiet">{t("ota.nothingYet")}</p>
-      )}
+      ) : null}
       {waiting.map((ota) => (
         <section key={ota.code} className="ota-waiting">
           <h2>{name(ota.code)}</h2>

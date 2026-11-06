@@ -149,15 +149,17 @@ export function failureOf(error: unknown): SetupFailure {
 }
 export function FailureNote({ failure }: { failure: SetupFailure }) {
   useTranslation();
-  const text = failures[failure.code] ?? failures.spm_unavailable;
   return (
     <Alert className="alert-warning">
       <CircleAlert />
-      <AlertDescription>
-        {failure.message ? `${text}：${failure.message}` : text}
-      </AlertDescription>
+      <AlertDescription>{failureText(failure)}</AlertDescription>
     </Alert>
   );
+}
+export function failureText(error: unknown) {
+  const failure = failureOf(error);
+  const text = failures[failure.code] ?? failures.spm_unavailable;
+  return failure.message ? `${text}：${failure.message}` : text;
 }
 /** Plan, confirm and apply one template; project status is owned by the app. */
 export default function TemplateImport({

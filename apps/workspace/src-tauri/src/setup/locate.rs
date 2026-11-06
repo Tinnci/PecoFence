@@ -179,6 +179,7 @@ pub fn types() -> String {
             OtaPlan::decl(&config),
             ModelOta::decl(&config),
             OtaReport::decl(&config),
+            OtaSource::decl(&config),
             RelatedChange::decl(&config),
             LinkEvidence::decl(&config),
             SimilarItem::decl(&config),

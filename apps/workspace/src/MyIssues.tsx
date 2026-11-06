@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, RefreshCw } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { Num } from "@/components/motion";
 import { Button } from "@/components/ui/button";
 import {
@@ -9,13 +9,13 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { Spinner } from "@/components/ui/spinner";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { focus } from "./api";
 import { openContextAction } from "./context-actions";
 import type { Mine, MyIssue } from "./contracts/setup";
 import { focusKey, queryClient } from "./focus-cache";
 import { t } from "./i18n";
+import { RefreshStatus } from "./RefreshStatus";
 import {
   BANDS,
   bandCounts,
@@ -48,14 +48,21 @@ function useMine() {
   const fresh = useQuery(
     {
       queryKey: mineKey,
-      queryFn: async (): Promise<Mine | null> =>
-        (await focus("mine"))?.mine ?? null,
+      queryFn: async (): Promise<Mine> => {
+        const result = await focus("mine");
+        if (!result.mine) throw { code: "spm_invalid_response" };
+        return result.mine;
+      },
       staleTime: 5 * 60_000,
       refetchInterval: REFRESH_MS,
     },
     queryClient,
   );
-  return { mine: fresh.data ?? cached.data, fresh };
+  return {
+    mine: fresh.data ?? cached.data,
+    fresh,
+    error: fresh.error || (!fresh.isFetching && !fresh.data && cached.error),
+  };
 }
 
 function savedLens(): Lens {
@@ -176,13 +183,18 @@ function BandBar({
 /** 我的问题: Jira and 飞书项目 work under the signed-in user, by urgency score. */
 export function MyIssues({ onModel }: { onModel: (code: string) => void }) {
   useTranslation();
-  const { mine, fresh } = useMine();
+  const { mine, fresh, error } = useMine();
   const [all, setAll] = useState(false);
   const [lens, setLens] = useState(savedLens);
   const [band, setBand] = useState<Band | null>(null);
-  const failed = mine?.sources.filter((s) => s.error) ?? [];
   const works = useMemo(() => mergeWork(mine?.items ?? []), [mine]);
-  if (!works.length && !failed.length) return null;
+  if (
+    !works.length &&
+    !error &&
+    !fresh.isFetching &&
+    !mine?.sources.some((s) => s.error)
+  )
+    return null;
   const counts = bandCounts(works);
   const visible = band
     ? works.filter((w) => bandOf(w.lead.score) === band)
@@ -221,28 +233,20 @@ export function MyIssues({ onModel }: { onModel: (code: string) => void }) {
             </ToggleGroupItem>
           ))}
         </ToggleGroup>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          disabled={fresh.isFetching}
-          aria-label={t("mine.refresh")}
-          title={t("mine.refresh")}
-          onClick={() => void fresh.refetch()}
-        >
-          {fresh.isFetching ? (
-            <Spinner aria-hidden="true" />
-          ) : (
-            <RefreshCw aria-hidden="true" />
-          )}
-        </Button>
+        <RefreshStatus
+          reading={fresh.isFetching}
+          error={error}
+          hasData={!!mine}
+          sources={mine?.sources.map((s) => ({
+            label: t(`mine.source.${s.source}`),
+            error: s.error,
+            updatedAt: !s.error ? mine.computed_at : undefined,
+          }))}
+          label={t("mine.refresh")}
+          onRefresh={fresh.refetch}
+        />
       </header>
       <BandBar counts={counts} picked={band} onPick={setBand} />
-      {failed.map((s) => (
-        <p key={s.source} className="short" role="alert">
-          {t("mine.failed", { source: t(`mine.source.${s.source}`) })}
-        </p>
-      ))}
       {lens === "board" ? (
         <div className="work-board">
           {workColumns(visible).map(([column, list]) => (

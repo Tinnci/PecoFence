@@ -5637,3 +5637,15 @@ button[data-slot="button"]:active:not(:disabled),
     animation: none;
   }
 }
+
+/* Source refresh feedback stays beside its action; failures remain below it. */
+.refresh-feedback { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.refresh-control { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.refresh-control > span { overflow-wrap: anywhere; }
+.refresh-control > button { flex-shrink: 0; }
+.refresh-errors { font-size: 12px; overflow-wrap: anywhere; }
+.refresh-errors p { margin: 0; }
+.ota-title-row { align-items: flex-start; flex-wrap: wrap; }
+.ota-title-row .refresh-feedback { margin-left: auto; max-width: 100%; }
+.cal-toolbar .refresh-feedback { flex-basis: 100%; }
+.my-issues-head .refresh-feedback { margin-left: auto; max-width: 100%; }

@@ -282,7 +282,8 @@ phase_from: string, read_at: string, };
 export type OtaItem = { id: string, display_id: string, source: string, instance: string, kind: string, title: string, url: string, status: string, owner: string, severity: string, labels: Array<string>, tags: Array<string>, stage: string, must: boolean, customer: boolean, late: boolean, reason: string, };
 export type OtaPlan = { version: string, pre1: string, pre2: string, official: string, rollout: string, state: string, total: number, merged: number, verified: number, late: number, must_open: number, items: Array<OtaItem>, };
 export type ModelOta = { code: string, plans: Array<OtaPlan>, undecided: Array<OtaItem>, left_out: Array<OtaItem>, };
-export type OtaReport = { models: Array<ModelOta>, errors: Array<string>, };
+export type OtaReport = { models: Array<ModelOta>, errors: Array<string>, sources?: Array<OtaSource>, };
+export type OtaSource = { code: string, kind: string, id: string, label: string, checked_at: string, updated_at: string | null, stale: boolean, error: string | null, };
 export type RelatedChange = { change: number, 
 /**
  * The model whose summary read the change; None when none did.

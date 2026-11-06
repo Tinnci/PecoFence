@@ -831,6 +831,20 @@ pub struct ModelOta {
 pub struct OtaReport {
     pub models: Vec<ModelOta>,
     pub errors: Vec<String>,
+    #[serde(default)]
+    #[ts(optional)]
+    pub sources: Option<Vec<OtaSource>>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct OtaSource {
+    pub code: String,
+    pub kind: String,
+    pub id: String,
+    pub label: String,
+    pub checked_at: String,
+    pub updated_at: Option<String>,
+    pub stale: bool,
+    pub error: Option<String>,
 }
 /// Gerrit changes bound to an item, and items like it with how they were fixed.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]

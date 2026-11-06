@@ -196,7 +196,7 @@
   "model.pages": "{{v0}} 页面",
   "model.building2": "{{count}} 个构建中",
   "model.noFreezeDateSet": "未设冻结日期",
-  "templateImport.importRequiresTheDesktopWorkspaceApp": "导入需要在桌面版中进行。",
+  "templateImport.importRequiresTheDesktopWorkspaceApp": "此操作需要在桌面版中进行。",
   "templateImport.windowsSpmWasNotFoundInstallSPMFirst": "未找到 Windows 版 spm。请先安装 SPM。",
   "templateImport.thisVersionOfSpmDoesNotSupportProjectImport": "已安装的 spm 不支持项目导入，请更新 SPM。",
   "templateImport.spmDidNotRespondInTimeTryAgain": "spm 未及时响应，请重试。",
@@ -1460,5 +1460,14 @@
   "calendar.rule.test": "推算：出版本次日开始，到测试完成日结束",
   "calendar.rule.fix": "推算：测试完成到下一次出版本之间的天数",
   "calendar.rule.dev": "推算：从计划开始到首次出版本的前一天",
-  "calendar.days": "{{count}} 天"
+  "calendar.days": "{{count}} 天",
+  "refresh.reading": "正在读取…",
+  "refresh.updated": "已更新 {{time}}",
+  "refresh.partial": "部分更新 · 部分来源未能读取",
+  "refresh.failedCached": "读取失败，沿用上次结果",
+  "refresh.failed": "未能读取来源",
+  "refresh.unconfirmed": "尚未确认更新",
+  "refresh.lastUpdated": "上次更新 {{time}}",
+  "refresh.sourceUnavailable": "来源暂不可用",
+  "refresh.workItems": "工作项"
 }
