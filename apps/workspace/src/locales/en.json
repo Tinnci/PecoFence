@@ -1379,5 +1379,6 @@
   "calendar.stage.release": "software release",
   "calendar.stage.seal": "sealed",
   "calendar.stage.freeze": "MP freeze",
-  "calendar.stage.iteration": "iteration"
+  "calendar.stage.iteration": "iteration",
+  "calendar.stage.dev": "Development"
 }

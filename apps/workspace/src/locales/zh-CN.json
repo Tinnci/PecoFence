@@ -1379,5 +1379,6 @@
   "calendar.stage.release": "软件释放",
   "calendar.stage.seal": "封板",
   "calendar.stage.freeze": "MP 冻结",
-  "calendar.stage.iteration": "迭代"
+  "calendar.stage.iteration": "迭代",
+  "calendar.stage.dev": "研发"
 }

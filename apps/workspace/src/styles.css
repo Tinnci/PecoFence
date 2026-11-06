@@ -4670,6 +4670,7 @@ a .owner-chip { color: inherit; }
 .cal-bar.is-done { opacity: 0.55; }
 .cal-build { background: var(--chart-1); color: var(--on-solid); }
 .cal-release, .cal-rollout { background: var(--brand-2-fill); color: var(--on-solid); }
+.cal-dev { background: color-mix(in srgb, #8f6bc4 26%, transparent); }
 .cal-test { background: color-mix(in srgb, var(--chart-1) 20%, transparent); }
 .cal-fix { background: color-mix(in srgb, var(--chart-2) 24%, transparent); }
 .cal-acceptance { background: color-mix(in srgb, var(--brand-2-fill) 24%, transparent); }
