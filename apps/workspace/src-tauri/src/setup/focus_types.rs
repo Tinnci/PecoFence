@@ -167,6 +167,9 @@ pub struct FocusModel {
     pub legacy: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
+    pub aliases: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub iterations: Option<Vec<Iteration>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
@@ -739,6 +742,30 @@ pub struct Platform {
     pub kernel: Vec<String>,
     pub evidence: Vec<String>,
 }
+/// A value and every place that states it.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct ProfileValue {
+    pub value: String,
+    pub origins: Vec<CalOrigin>,
+}
+/// One answer about a model; empty while its sources disagree.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct ProfileField {
+    pub field: String,
+    pub value: String,
+    pub values: Vec<ProfileValue>,
+    pub conflict: bool,
+}
+/// One model as every view should describe it.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct ModelProfile {
+    pub code: String,
+    pub aliases: Vec<String>,
+    pub suggested_aliases: Vec<String>,
+    pub platform: Platform,
+    pub fields: Vec<ProfileField>,
+    pub read_at: String,
+}
 /// Gerrit changes bound to an item, and items like it with how they were fixed.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct Related {
@@ -984,6 +1011,9 @@ pub struct FocusData {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub platforms: Option<Vec<Platform>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub profiles: Option<Vec<ModelProfile>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub logs: Option<Logs>,

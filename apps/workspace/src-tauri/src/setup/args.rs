@@ -120,6 +120,8 @@ pub struct FocusRequest {
     pub baseband: Option<String>,
     /// Words to find in what is cached.
     pub query: Option<String>,
+    /// A project name in the documents that means this model.
+    pub alias: Option<String>,
 }
 
 fn valid_address(url: &str) -> bool {
@@ -184,6 +186,27 @@ pub fn route_args(r: &FocusRequest) -> Option<Vec<String>> {
         }
         "build_evidence" => build_evidence_args(code?, r.job.as_deref()?, r.build?),
         "platforms" => Some(vec!["focus".into(), "platforms".into()]),
+        "profile" => Some(vec!["focus".into(), "profile".into()]),
+        "profile_refresh" => Some(vec!["focus".into(), "profile".into(), "--refresh".into()]),
+        "alias" | "alias_remove" => {
+            let code = code.filter(|c| valid_code(c))?;
+            let name = r.alias.as_deref().map(str::trim)?;
+            if name.is_empty() || name.chars().count() > 60 || name.chars().any(char::is_control) {
+                return None;
+            }
+            let mut args = vec![
+                "focus".into(),
+                "alias".into(),
+                "--code".into(),
+                code.into(),
+                // Equals keeps names starting with a dash as values.
+                format!("--name={name}"),
+            ];
+            if action == "alias_remove" {
+                args.push("--remove".into());
+            }
+            Some(args)
+        }
         "needs" => Some(vec!["focus".into(), "needs".into()]),
         "needs_cached" => Some(vec!["focus".into(), "needs".into(), "--cached".into()]),
         "forecast" => Some(vec!["focus".into(), "forecast".into()]),

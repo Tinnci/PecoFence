@@ -10,6 +10,8 @@ import type {
 // One desktop window uses the default SPM configuration root. Keep the scope in
 // every key so a future profile picker can create an isolated cache.
 export const focusKey = ["spm", "default"] as const;
+export const calendarKey = [...focusKey, "calendar"];
+export const profilesKey = ["profiles"] as const;
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {

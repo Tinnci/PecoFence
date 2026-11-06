@@ -223,6 +223,10 @@ export async function focus(
     | "history"
     | "related"
     | "platforms"
+    | "profile"
+    | "profile_refresh"
+    | "alias"
+    | "alias_remove"
     | "logs"
     | "traces"
     | "chip"
@@ -248,6 +252,7 @@ export async function focus(
     instance?: string;
     chip?: string;
     baseband?: string;
+    alias?: string;
     path?: string;
     items?: string[];
     addresses?: string[];

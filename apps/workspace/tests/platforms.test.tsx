@@ -10,9 +10,15 @@ import {
 } from "@testing-library/react";
 const mocks = vi.hoisted(() => ({ focus: vi.fn() }));
 vi.mock("../src/api", () => mocks);
-import { Platforms, ModelPlatform, platformsKey } from "../src/Platforms";
+import {
+  Platforms,
+  ModelPlatform,
+  platformsKey,
+  profilesKey,
+  profileWords,
+} from "../src/Platforms";
 import { queryClient } from "../src/focus-cache";
-import type { Platform } from "../src/contracts/setup";
+import type { ModelProfile, Platform } from "../src/contracts/setup";
 const platform: Platform = {
   code: "P6700LV",
   vendor: "Unisoc",
@@ -138,4 +144,80 @@ it("reloads platform facts explicitly from the header", async () => {
   fireEvent.click(screen.getByRole("button", { name: "重新读取平台信息" }));
   await screen.findByText(/UPDATED CHIP/);
   expect(mocks.focus).toHaveBeenCalledWith("platforms");
+});
+
+const origin = (document: string, place: string, url = "") => ({
+  role: "chip",
+  document,
+  place,
+  field: "平台",
+  value: place,
+  url,
+});
+const open: ModelProfile = {
+  code: "P6700LV",
+  aliases: ["P6700LV-A"],
+  suggested_aliases: ["P6700LV-B"],
+  platform: { ...platform, chip: "" },
+  read_at: "",
+  fields: [
+    {
+      field: "chip",
+      value: "",
+      conflict: true,
+      values: [
+        {
+          value: "Unisoc T606",
+          origins: [origin("sheet", "B9", "https://feishu.example/B9")],
+        },
+        { value: "Unisoc T765", origins: [origin("base", "P6700LV V15")] },
+      ],
+    },
+  ],
+};
+it("shows disagreeing documents and saves the chip you pick", async () => {
+  queryClient.setQueryData(platformsKey, [{ ...platform, chip: "" }]);
+  queryClient.setQueryData(profilesKey, [open]);
+  mocks.focus.mockResolvedValue({ platforms: [platform], profiles: [open] });
+  const user = userEvent.setup();
+  render(<ModelPlatform code="P6700LV" />);
+  const line = screen.getByRole("button", { name: "P6700LV 的平台信息" });
+  expect(line.textContent).toContain("Unisoc T606 / Unisoc T765");
+  await user.click(line);
+  expect(
+    screen.getByRole("link", { name: "Unisoc T606" }).getAttribute("href"),
+  ).toBe("https://feishu.example/B9");
+  await user.click(screen.getByRole("button", { name: "用 Unisoc T765" }));
+  await waitFor(() =>
+    expect(mocks.focus).toHaveBeenCalledWith("chip", {
+      code: "P6700LV",
+      chip: "Unisoc T765",
+    }),
+  );
+});
+it("ties a near name in the documents to the model", async () => {
+  queryClient.setQueryData(platformsKey, [platform]);
+  queryClient.setQueryData(profilesKey, [open]);
+  mocks.focus.mockResolvedValue({ platforms: [platform], profiles: [open] });
+  const user = userEvent.setup();
+  render(<ModelPlatform code="P6700LV" />);
+  await user.click(screen.getByRole("button", { name: "P6700LV 的平台信息" }));
+  await user.click(screen.getByRole("button", { name: "同一机型：P6700LV-B" }));
+  await waitFor(() =>
+    expect(mocks.focus).toHaveBeenCalledWith("alias", {
+      code: "P6700LV",
+      alias: "P6700LV-B",
+    }),
+  );
+  await user.click(screen.getByRole("button", { name: "移除 P6700LV-A" }));
+  await waitFor(() =>
+    expect(mocks.focus).toHaveBeenCalledWith("alias_remove", {
+      code: "P6700LV",
+      alias: "P6700LV-A",
+    }),
+  );
+});
+it("finds a model by what the documents say about it", () => {
+  expect(profileWords(open)).toContain("Unisoc T765");
+  expect(profileWords(open)).toContain("P6700LV-A");
 });

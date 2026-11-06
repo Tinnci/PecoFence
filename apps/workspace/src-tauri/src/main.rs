@@ -429,6 +429,7 @@ fn desktop() {
         chip: Option<String>,
         baseband: Option<String>,
         query: Option<String>,
+        alias: Option<String>,
         state: tauri::State<'_, State>,
     ) -> Result<setup::FocusData, setup::SetupFailure> {
         let request = setup::FocusRequest {
@@ -448,6 +449,7 @@ fn desktop() {
             chip,
             baseband,
             query,
+            alias,
         };
         let args =
             setup::route_args(&request).ok_or_else(|| setup::SetupFailure::new("invalid_input"))?;
@@ -489,6 +491,8 @@ fn desktop() {
             | "forecast"
             | "calendar"
             | "calendar_cached"
+            | "profile"
+            | "profile_refresh"
             | "repos"
             | "chip" => None,
             "issues" | "requirements" | "issues_full" | "requirements_full" => {
@@ -509,7 +513,7 @@ fn desktop() {
         let deadline = std::time::Duration::from_secs(match action.as_str() {
             "summary" | "refresh" => 600,
             "suggest" => 180,
-            "calendar" => 150,
+            "calendar" | "profile_refresh" => 150,
             "builds" | "build_evidence" => 120,
             "change_files"
             | "change_diff"

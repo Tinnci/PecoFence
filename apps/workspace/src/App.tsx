@@ -7,6 +7,8 @@ import { t } from "./i18n";
 import { setTheme, themePreference, type Theme } from "./theme";
 import { useModelPreference } from "./model-navigation";
 import { prefetchBuilds, queryClient, focusKey } from "./focus-cache";
+import { useQuery } from "@tanstack/react-query";
+import { profilesOptions, profileWords, useProfileRead } from "./Platforms";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
@@ -334,6 +336,8 @@ function Workspace() {
   const followed = focusState.summary?.models.length
     ? focusState.ordered
     : null;
+  useProfileRead();
+  const profiles = useQuery(profilesOptions, queryClient);
   const tabs = (focusState.models ?? []).map((m) => {
     const summary = focusState.summary?.models.find((x) => x.code === m.code);
     return {
@@ -437,7 +441,12 @@ function Workspace() {
     ...tabs.map((m) => ({
       id: `model-${m.code}`,
       label: m.name,
-      words: m.code,
+      words: [
+        m.code,
+        ...(profiles.data ?? [])
+          .filter((p) => p.code === m.code)
+          .map(profileWords),
+      ].join(" "),
       typed: true,
       run: () => openModel(m.code),
     })),

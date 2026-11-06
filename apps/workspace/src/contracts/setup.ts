@@ -93,7 +93,7 @@ export type FocusTargets = { severe_pct: number, overall_pct: number, fatal_max:
 export type ReleaseLine = { id: string, label: string, lifecycle: string, phase: string, branches: Array<string>, jobs: Array<string>, };
 export type JobSource = { history?: Array<SourceSegment>, branch: string, previous: Array<string>, since_build?: number, note: string, };
 export type SourceSegment = { branch: string, first_build: number, last_build: number, note: string, };
-export type FocusModel = { legacy?: boolean, iterations?: Array<Iteration>, name?: string, job_sources?: { [key in string]: JobSource }, branch_jobs?: { [key in string]: Array<string> }, release_lines?: Array<ReleaseLine>, ignored_jobs?: Array<string>, tracking?: TrackingConfig, code: string, issues: Array<ScopeQuery>, branches: Array<string>, 
+export type FocusModel = { legacy?: boolean, aliases?: Array<string>, iterations?: Array<Iteration>, name?: string, job_sources?: { [key in string]: JobSource }, branch_jobs?: { [key in string]: Array<string> }, release_lines?: Array<ReleaseLine>, ignored_jobs?: Array<string>, tracking?: TrackingConfig, code: string, issues: Array<ScopeQuery>, branches: Array<string>, 
 /**
  * Jenkins jobs by full name; empty reads the model's Project_Daily_Build folder.
  */
@@ -260,6 +260,9 @@ export type SearchHit = {
 type: string, model: string, id: string, title: string, status: string, owner: string, snippet: string, url: string, };
 export type SearchResults = { total: number, results: Array<SearchHit>, };
 export type Platform = { code: string, vendor: string, chip: string, baseband: string, modem: Array<string>, modem_repos: Array<string>, modem_changes: number, android: Array<string>, kernel: Array<string>, evidence: Array<string>, };
+export type ProfileValue = { value: string, origins: Array<CalOrigin>, };
+export type ProfileField = { field: string, value: string, values: Array<ProfileValue>, conflict: boolean, };
+export type ModelProfile = { code: string, aliases: Array<string>, suggested_aliases: Array<string>, platform: Platform, fields: Array<ProfileField>, read_at: string, };
 export type RelatedChange = { change: number, 
 /**
  * The model whose summary read the change; None when none did.
@@ -304,5 +307,5 @@ export type FocusData = { build_evidence?: BuildEvidence, work_items?: WorkItems
 /**
  * After an annotation: the item as the last read shows it, with the new layer.
  */
-work_item?: AnnotatedItem, history?: ItemHistory, change_files?: ChangeFiles, change_diff?: ChangeDiff, change_diffs?: ChangeDiffs, flow?: ItemFlow, related?: Related, platforms?: Array<Platform>, logs?: Logs, traces?: Traces, search?: SearchResults, mine?: Mine, needs?: Needs, forecasts?: Array<Forecast>, calendar?: Calendar, repos?: Array<RepoRow>, backup?: BackupSummary, backup_plan?: BackupPlan, backup_restored?: BackupRestored, flows?: Array<ItemFlow>, flow_errors?: Array<FlowFailure>, source_fields?: SourceFields, models?: Array<FocusModel>, suggestions?: Suggestions, summary?: FocusSummary, preview?: Preview, changes?: Array<Listed>, builds?: Builds, };
+work_item?: AnnotatedItem, history?: ItemHistory, change_files?: ChangeFiles, change_diff?: ChangeDiff, change_diffs?: ChangeDiffs, flow?: ItemFlow, related?: Related, platforms?: Array<Platform>, profiles?: Array<ModelProfile>, logs?: Logs, traces?: Traces, search?: SearchResults, mine?: Mine, needs?: Needs, forecasts?: Array<Forecast>, calendar?: Calendar, repos?: Array<RepoRow>, backup?: BackupSummary, backup_plan?: BackupPlan, backup_restored?: BackupRestored, flows?: Array<ItemFlow>, flow_errors?: Array<FlowFailure>, source_fields?: SourceFields, models?: Array<FocusModel>, suggestions?: Suggestions, summary?: FocusSummary, preview?: Preview, changes?: Array<Listed>, builds?: Builds, };
 export type Activation = { health?: ServiceHealth, waited_secs?: number, };

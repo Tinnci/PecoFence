@@ -16,6 +16,7 @@ fn sample(action: &str) -> FocusRequest {
     FocusRequest {
         action: action.into(),
         code: Some("E6765GDL".into()),
+        alias: Some("E6765GDL-A".into()),
         job: Some("folder/model_A16".into()),
         build: Some(23),
         change: Some(80481),
@@ -55,29 +56,29 @@ fn sample(action: &str) -> FocusRequest {
 }
 
 #[test]
-    fn every_command_the_page_can_call_is_permitted() {
-        // A command missing from either list is refused by Tauri only in the packaged app.
-        let main = include_str!("../main.rs");
-        let handler = main.split("generate_handler![").nth(1).unwrap();
-        let names: Vec<&str> = handler
-            .split(']')
-            .next()
-            .unwrap()
-            .split(',')
-            .map(str::trim)
-            .filter(|n| !n.is_empty())
-            .collect();
-        assert!(names.len() > 10);
-        let build = include_str!("../../build.rs");
-        let capabilities = include_str!("../../capabilities/main.json");
-        for name in names {
-            assert!(build.contains(&format!("\"{name}\"")), "{name} in build.rs");
-            let allow = format!("\"allow-{}\"", name.replace('_', "-"));
-            assert!(capabilities.contains(&allow), "{name} in capabilities");
-        }
+fn every_command_the_page_can_call_is_permitted() {
+    // A command missing from either list is refused by Tauri only in the packaged app.
+    let main = include_str!("../main.rs");
+    let handler = main.split("generate_handler![").nth(1).unwrap();
+    let names: Vec<&str> = handler
+        .split(']')
+        .next()
+        .unwrap()
+        .split(',')
+        .map(str::trim)
+        .filter(|n| !n.is_empty())
+        .collect();
+    assert!(names.len() > 10);
+    let build = include_str!("../../build.rs");
+    let capabilities = include_str!("../../capabilities/main.json");
+    for name in names {
+        assert!(build.contains(&format!("\"{name}\"")), "{name} in build.rs");
+        let allow = format!("\"allow-{}\"", name.replace('_', "-"));
+        assert!(capabilities.contains(&allow), "{name} in capabilities");
     }
+}
 
-    #[test]
+#[test]
 fn project_changes_take_only_known_verbs_and_safe_names() {
     assert!(project_args("remove", "P6700LV", "main").is_some());
     assert!(project_args("restore", "P6700LV", "main").is_some());
@@ -733,5 +734,32 @@ fn snapshot_copies_bounded_templates_and_apply_flags_are_literal() {
     assert_eq!(
         import_args("t.json", true, true),
         ["setup", "import-template", "t.json", "--apply", "--replace"]
+    );
+}
+
+#[test]
+fn an_alias_reaches_spm_as_one_value() {
+    let args = route_args(&FocusRequest {
+        alias: Some("-E6751SM-A".into()),
+        ..sample("alias_remove")
+    })
+    .unwrap();
+    assert_eq!(
+        args,
+        [
+            "focus",
+            "alias",
+            "--code",
+            "E6765GDL",
+            "--name=-E6751SM-A",
+            "--remove"
+        ]
+    );
+    assert!(
+        route_args(&FocusRequest {
+            alias: Some("a\nb".into()),
+            ..sample("alias")
+        })
+        .is_none()
     );
 }

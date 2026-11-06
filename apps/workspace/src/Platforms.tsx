@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { Cpu, RefreshCw } from "lucide-react";
+import { Cpu, Link2, RefreshCw, TriangleAlert, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
@@ -11,9 +11,17 @@ import {
   DialogDescription,
   DialogTitle,
 } from "@/components/ui/dialog";
-import type { FocusModel, Platform } from "./contracts/setup";
+import type {
+  FocusModel,
+  ModelProfile,
+  Platform,
+  ProfileField,
+} from "./contracts/setup";
 import { focus } from "./api";
-import { queryClient } from "./focus-cache";
+import { ContextTarget, type ContextAction } from "./components/context-menu";
+import { openContextAction } from "./context-actions";
+import { originPlace } from "./Calendar";
+import { calendarKey, profilesKey, queryClient } from "./focus-cache";
 import { FailureNote, failureOf } from "./TemplateImport";
 import { t } from "./i18n";
 
@@ -24,11 +32,92 @@ export const platformsOptions = {
   staleTime: 10 * 60_000,
 };
 
+export { profilesKey };
+export const profilesOptions = {
+  queryKey: profilesKey,
+  queryFn: async () => (await focus("profile")).profiles ?? [],
+  staleTime: 10 * 60_000,
+};
+
+/** Rereads the documents once an hour; every view sees the answer through the two caches. */
+export function useProfileRead() {
+  useQuery(
+    {
+      queryKey: [...profilesKey, "read"],
+      queryFn: async () => {
+        const read = await focus("profile_refresh");
+        queryClient.setQueryData(profilesKey, read.profiles ?? []);
+        await queryClient.invalidateQueries({ queryKey: platformsKey });
+        return true;
+      },
+      staleTime: 60 * 60_000,
+      refetchInterval: 60 * 60_000,
+    },
+    queryClient,
+  );
+}
+
+function forget() {
+  void queryClient.invalidateQueries({ queryKey: profilesKey, exact: true });
+  void queryClient.invalidateQueries({ queryKey: platformsKey });
+}
+
+/** What Ctrl+K finds a model by, beyond its code: chip, customer, other names. */
+export function profileWords(profile: ModelProfile) {
+  return [
+    ...profile.aliases,
+    ...profile.fields.flatMap((f) => f.values.map((v) => v.value)),
+  ].join(" ");
+}
+
+const field = (profile: ModelProfile | undefined, name: string) =>
+  profile?.fields.find((f) => f.field === name);
+
+/** One line for a model: its platform, then what certifies it. */
+function profileLine(platform: Platform, profile?: ModelProfile) {
+  const chip = field(profile, "chip");
+  const open = chip?.conflict
+    ? chip.values.map((v) => v.value).join(" / ")
+    : "";
+  return [
+    platformLabel(open ? { ...platform, chip: open, vendor: "" } : platform),
+    field(profile, "certification")?.value,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+/** The right-click list: where each answer in the line came from. */
+function sourceActions(profile?: ModelProfile): ContextAction[] {
+  const shown = ["chip", "android", "certification"];
+  return (profile?.fields ?? [])
+    .filter((f) => shown.includes(f.field))
+    .flatMap((f) =>
+      f.values.slice(0, 3).flatMap((value, at) =>
+        value.origins.slice(0, 2).flatMap((origin, from) => {
+          const label = t("profile.source", {
+            field: `${t(`profile.field.${f.field}`)} ${value.value}`,
+            place: originPlace(origin),
+          });
+          const id = `${f.field}-${at}-${from}`;
+          return [
+            openContextAction(id, label, origin.url) ?? {
+              id,
+              label,
+              disabled: true,
+              run: () => {},
+            },
+          ];
+        }),
+      ),
+    );
+}
+
 /** One line for a platform: vendor · chip · Android · kernel, whatever is known. */
 export function platformLabel(p: Platform | null | undefined) {
   if (!p) return "";
   return [
-    p.vendor,
+    p.chip.startsWith(p.vendor) ? "" : p.vendor,
     p.chip,
     p.android.join("/"),
     p.kernel.length ? `kernel ${p.kernel.join("/")}` : "",
@@ -44,6 +133,7 @@ async function savePlatform(
 ) {
   await focus("chip", { code, ...values });
   await queryClient.invalidateQueries({ queryKey: platformsKey });
+  void queryClient.invalidateQueries({ queryKey: profilesKey, exact: true });
   if (values.chip !== undefined)
     void queryClient.invalidateQueries({ queryKey: ["related"] });
 }
@@ -74,26 +164,37 @@ function PlatformRefresh({
 export function ModelPlatform({ code }: { code: string }) {
   useTranslation();
   const query = useQuery(platformsOptions, queryClient);
+  const profiles = useQuery(profilesOptions, queryClient);
+  const profile = profiles.data?.find((p) => p.code === code);
   const [editingCode, setEditingCode] = useState<string | null>(null);
   const platform = query.data?.find((p) => p.code === code);
-  const label = platformLabel(platform);
+  const label = platform ? profileLine(platform, profile) : "";
+  const conflict = field(profile, "chip")?.conflict;
   if (!platform && !query.error) return null;
   return (
     <>
       <div className="model-platform">
         {platform ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="platform-edit-trigger"
-            aria-label={t("platform.editFor", { code })}
-            title={platform.evidence.join("\n")}
-            onClick={() => setEditingCode(code)}
-          >
-            <Cpu size={14} aria-hidden="true" />{" "}
-            {label || t("platform.addDetails")}
-          </Button>
+          <ContextTarget actions={sourceActions(profile)}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className={`platform-edit-trigger${conflict ? " is-conflict" : ""}`}
+              aria-label={t("platform.editFor", { code })}
+              title={
+                conflict ? t("profile.conflict") : platform.evidence.join("\n")
+              }
+              onClick={() => setEditingCode(code)}
+            >
+              {conflict ? (
+                <TriangleAlert size={14} aria-hidden="true" />
+              ) : (
+                <Cpu size={14} aria-hidden="true" />
+              )}{" "}
+              {label || t("platform.addDetails")}
+            </Button>
+          </ContextTarget>
         ) : null}
         <PlatformRefresh
           busy={query.isFetching}
@@ -109,6 +210,7 @@ export function ModelPlatform({ code }: { code: string }) {
         <PlatformEditor
           key={code}
           platform={platform}
+          profile={profile}
           onClose={() => setEditingCode(null)}
         />
       ) : null}
@@ -116,11 +218,128 @@ export function ModelPlatform({ code }: { code: string }) {
   );
 }
 
+function FieldRow({
+  item,
+  onPick,
+}: {
+  item: ProfileField;
+  onPick: (value: string) => void;
+}) {
+  const name = t(`profile.field.${item.field}`);
+  return (
+    <>
+      <dt>{name}</dt>
+      <dd>
+        {item.values.map((value) => {
+          const link = value.origins.find((o) => o.url);
+          return (
+            <span key={value.value} className="profile-value">
+              {link ? (
+                <a
+                  href={link.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  title={value.origins.map(originPlace).join("\n")}
+                >
+                  {value.value}
+                </a>
+              ) : (
+                <span title={value.origins.map(originPlace).join("\n")}>
+                  {value.value}
+                </span>
+              )}
+              {item.conflict && item.field === "chip" ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="xs"
+                  onClick={() => onPick(value.value)}
+                >
+                  {t("profile.pick", { value: value.value })}
+                </Button>
+              ) : null}
+            </span>
+          );
+        })}
+      </dd>
+    </>
+  );
+}
+
+function Aliases({ profile }: { profile: ModelProfile }) {
+  const [name, setName] = useState("");
+  const [failed, setFailed] = useState(false);
+  async function change(alias: string, remove = false) {
+    setFailed(false);
+    try {
+      await focus(remove ? "alias_remove" : "alias", {
+        code: profile.code,
+        alias,
+      });
+      setName("");
+      forget();
+      void queryClient.invalidateQueries({ queryKey: calendarKey });
+    } catch {
+      setFailed(true);
+    }
+  }
+  return (
+    <div className="profile-aliases">
+      <span className="quiet">{t("profile.aliases")}</span>
+      {profile.aliases.map((alias) => (
+        <span key={alias} className="related-term">
+          {alias}
+          <button
+            type="button"
+            aria-label={t("profile.removeAlias", { name: alias })}
+            onClick={() => void change(alias, true)}
+          >
+            <X size={12} aria-hidden="true" />
+          </button>
+        </span>
+      ))}
+      {profile.suggested_aliases.map((alias) => (
+        <Button
+          key={alias}
+          type="button"
+          variant="outline"
+          size="xs"
+          onClick={() => void change(alias)}
+        >
+          <Link2 aria-hidden="true" />
+          {t("profile.suggestAlias", { name: alias })}
+        </Button>
+      ))}
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (name.trim()) void change(name.trim());
+        }}
+      >
+        <Input
+          value={name}
+          maxLength={60}
+          placeholder={t("profile.aliasPlaceholder")}
+          aria-label={t("profile.addAlias")}
+          onChange={(e) => setName(e.target.value)}
+        />
+      </form>
+      {failed ? (
+        <p className="short" role="alert">
+          {t("platform.saveFailed")}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function PlatformEditor({
   platform,
+  profile,
   onClose,
 }: {
   platform: Platform;
+  profile?: ModelProfile;
   onClose: () => void;
 }) {
   const [initial] = useState({
@@ -162,6 +381,26 @@ function PlatformEditor({
           {t("platform.editTitle", { code: platform.code })}
         </DialogTitle>
         <DialogDescription>{t("platform.editHint")}</DialogDescription>
+        {profile ? (
+          <>
+            <dl className="profile-facts">
+              {profile.fields.map((item) => (
+                <FieldRow
+                  key={item.field}
+                  item={item}
+                  onPick={(chip) => {
+                    setBusy(true);
+                    savePlatform(platform.code, { chip })
+                      .then(onClose)
+                      .catch(() => setFailed(true))
+                      .finally(() => setBusy(false));
+                  }}
+                />
+              ))}
+            </dl>
+            <Aliases profile={profile} />
+          </>
+        ) : null}
         <form
           className="platform-editor"
           onSubmit={(e) => {
@@ -216,7 +455,7 @@ function PlatformEditor({
   );
 }
 
-/** Every followed model's platform, grouped by SoC vendor; the chip is named here. */
+/** Every followed model's platform, grouped by chip, or by vendor until a chip is known. */
 export function Platforms({ models }: { models: FocusModel[] | null }) {
   useTranslation();
   const query = useQuery(platformsOptions, queryClient);
@@ -225,8 +464,10 @@ export function Platforms({ models }: { models: FocusModel[] | null }) {
   const name = (code: string) =>
     models?.find((m) => m.code === code)?.name ?? code;
   const groups = new Map<string, Platform[]>();
-  for (const p of list ?? [])
-    groups.set(p.vendor, [...(groups.get(p.vendor) ?? []), p]);
+  for (const p of list ?? []) {
+    const group = p.chip || p.vendor;
+    groups.set(group, [...(groups.get(group) ?? []), p]);
+  }
   const order = [...groups.keys()].sort((a, b) =>
     !a ? 1 : !b ? -1 : a.localeCompare(b),
   );

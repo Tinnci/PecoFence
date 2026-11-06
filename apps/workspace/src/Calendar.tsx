@@ -20,10 +20,9 @@ import {
   type CalendarView,
 } from "./calendar";
 import type { CalEvent, CalOrigin, Calendar } from "./contracts/setup";
-import { focusKey, queryClient } from "./focus-cache";
+import { queryClient, calendarKey, profilesKey } from "./focus-cache";
 import { locale, t } from "./i18n";
 
-const calendarKey = [...focusKey, "calendar"];
 const REFRESH_MS = 30 * 60_000;
 /** Lanes a week shows before the rest fold behind a count. */
 const LANES = 5;
@@ -42,7 +41,11 @@ function useCalendar() {
     {
       queryKey: calendarKey,
       queryFn: async (): Promise<Calendar | null> =>
-        (await focus("calendar"))?.calendar ?? null,
+        (
+          await focus("calendar").finally(() =>
+            queryClient.invalidateQueries({ queryKey: profilesKey }),
+          )
+        )?.calendar ?? null,
       staleTime: 5 * 60_000,
       refetchInterval: REFRESH_MS,
     },
@@ -58,7 +61,7 @@ const barLabel = (e: CalEvent) =>
     : `${e.project} ${stageName(e)}`;
 
 /** Where a value lives, in a few words: 飞书表格 I12 · Pre1-OTA 版本释放时间. */
-function originPlace(origin: CalOrigin) {
+export function originPlace(origin: CalOrigin) {
   return [
     t(`calendar.document.${origin.document}`),
     origin.place,

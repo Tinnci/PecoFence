@@ -4572,6 +4572,14 @@ a .owner-chip { color: inherit; }
 .platform-editor, .platform-editor label { display: flex; flex-direction: column; gap: 6px; }
 .platform-editor { gap: 14px; }
 .platform-editor label { font-size: 13px; }
+.platform-edit-trigger.is-conflict { color: var(--warning, #b45309); }
+.profile-facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 14px; margin: 0; font-size: 13px; }
+.profile-facts dt { color: var(--muted-foreground); }
+.profile-facts dd { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.profile-value { display: inline-flex; align-items: center; gap: 6px; }
+.profile-aliases { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; }
+.profile-aliases form { flex: 1 1 180px; }
+.profile-aliases .related-term button { padding: 0; border: 0; background: none; color: inherit; vertical-align: -2px; margin-left: 4px; }
 .platform-field { min-width: 0; }
 .platform-suggestion { display: block; max-width: 100%; margin-top: 4px; padding: 0; border: 0; background: none; color: var(--brand-2); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .platform-suggestion:hover { text-decoration: underline; }
