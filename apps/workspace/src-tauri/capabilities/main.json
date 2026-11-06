@@ -16,6 +16,7 @@
     "allow-project-status",
     "allow-connections",
     "allow-logging-settings",
+    "allow-calendar-settings",
     "allow-connection-sign-in",
     "allow-discover",
     "allow-draft",

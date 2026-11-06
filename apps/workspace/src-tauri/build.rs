@@ -14,6 +14,7 @@ fn main() {
             "project_status",
             "connections",
             "logging_settings",
+            "calendar_settings",
             "connection_sign_in",
             "discover",
             "draft",

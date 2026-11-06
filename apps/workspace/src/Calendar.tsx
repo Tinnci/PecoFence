@@ -7,10 +7,12 @@ import { Input } from "@/components/ui/input";
 import { Toggle } from "@/components/ui/toggle";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { ContextTarget, type ContextAction } from "./components/context-menu";
-import { focus, type ModelTab } from "./api";
+import { focus, calendarSettings, type ModelTab } from "./api";
 import { otaOptions } from "./Ota";
 import { copyContextAction, openContextAction } from "./context-actions";
 import {
+  dayInfo,
+  workingDays,
   isoDay,
   monthWeeks,
   shiftMonth,
@@ -19,7 +21,13 @@ import {
   weekBars,
   type CalendarView,
 } from "./calendar";
-import type { CalEvent, CalOrigin, Calendar, OtaPlan } from "./contracts/setup";
+import type {
+  CalEvent,
+  CalOrigin,
+  Calendar,
+  OtaPlan,
+  RegionalCalendar,
+} from "./contracts/setup";
 import { queryClient, calendarKey, profilesKey } from "./focus-cache";
 import { locale, t } from "./i18n";
 import { RefreshStatus } from "./RefreshStatus";
@@ -127,18 +135,88 @@ function eventActions(
   ];
 }
 
+function duration(event: CalEvent, calendar?: RegionalCalendar | null) {
+  const work = workingDays(event, calendar);
+  return `${t("calendar.days", { count: spanDays(event) })} · ${work === undefined ? t("calendar.coverageMissing") : t("calendar.workdays", { count: work })}`;
+}
+function CalendarRegion({ calendar }: { calendar?: RegionalCalendar | null }) {
+  const [country, setCountry] = useState(calendar?.country ?? "CN");
+  const [subdivision, setSubdivision] = useState(calendar?.subdivision ?? "");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const save = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      const work_calendar = await calendarSettings(
+        country,
+        subdivision.trim() || undefined,
+      );
+      for (const key of [calendarKey, [...calendarKey, "cached"]])
+        queryClient.setQueryData<Calendar | null>(key, (old) =>
+          old ? { ...old, work_calendar } : old,
+        );
+    } catch {
+      setError(t("calendar.regionError"));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="cal-region">
+      <select
+        aria-label={t("calendar.region")}
+        value={country}
+        onChange={(e) => {
+          setCountry(e.target.value);
+          setSubdivision("");
+        }}
+      >
+        {["CN", "IN", "BD", "BR"].map((c) => (
+          <option key={c} value={c}>
+            {t(`calendar.country.${c}`)}
+          </option>
+        ))}
+      </select>
+      {country === "IN" || country === "BR" ? (
+        <Input
+          aria-label={t("calendar.subdivision")}
+          placeholder={t("calendar.subdivision")}
+          value={subdivision}
+          onChange={(e) => setSubdivision(e.target.value.toUpperCase())}
+          maxLength={24}
+        />
+      ) : null}
+      <Button
+        size="xs"
+        variant="outline"
+        disabled={busy}
+        onClick={() => void save()}
+      >
+        {t("calendar.apply")}
+      </Button>
+      {error ? <span role="alert">{error}</span> : null}
+    </div>
+  );
+}
+
 function Detail({
   event,
   onModel,
+  regional,
 }: {
+  regional?: RegionalCalendar | null;
   event: CalEvent;
   onModel: (code: string, tab?: ModelTab) => void;
 }) {
   const facts = [
     dates(event),
-    event.milestone
-      ? t("calendar.node")
-      : t("calendar.days", { count: spanDays(event) }),
+    event.milestone ? t("calendar.node") : duration(event, regional),
+    event.milestone &&
+    dayInfo(event.start, regional).covered &&
+    !dayInfo(event.start, regional).working
+      ? t("calendar.restConflict")
+      : "",
     event.version,
     event.status,
     event.customer,
@@ -200,6 +278,7 @@ export function CalendarPage({
 }) {
   useTranslation();
   const { calendar, fresh, error } = useCalendar();
+  const regional = calendar?.work_calendar;
   const ota = useQuery(otaOptions, queryClient).data;
   const planOf = (event: CalEvent) =>
     ota?.models
@@ -316,6 +395,31 @@ export function CalendarPage({
       {calendar && !calendar.configured ? (
         <p className="quiet">{t("calendar.notConfigured")}</p>
       ) : null}
+      <CalendarRegion
+        key={`${regional?.country}:${regional?.subdivision}`}
+        calendar={regional}
+      />
+      <p className="quiet cal-calendar-source">
+        {regional?.country}
+        {regional?.subdivision ? ` · ${regional.subdivision}` : ""}{" "}
+        {regional?.timezone} ·{" "}
+        {(() => {
+          const source = regional?.years.find((y) => y.year === shown.year);
+          return source ? (
+            <a
+              href={source.source_url}
+              target="_blank"
+              rel="noreferrer"
+              title={`${source.source} · ${source.revision}`}
+            >
+              {t(`calendar.status.${source.status}`)} · {source.year}
+            </a>
+          ) : (
+            t("calendar.coverageMissing")
+          );
+        })()}
+        {regional?.errors.length ? ` · ${regional.errors.join(" · ")}` : ""}
+      </p>
       <div className="cal-head" aria-hidden="true">
         {weekdays.map((name) => (
           <span key={name}>{name}</span>
@@ -337,10 +441,12 @@ export function CalendarPage({
               {week.map((day, at) => {
                 const date = new Date(`${day}T00:00:00`);
                 const off = date.getMonth() !== shown.month;
+                const info = dayInfo(day, regional);
                 return (
                   <div
                     key={day}
-                    className={`cal-day${at > 4 ? " is-weekend" : ""}${off ? " is-off" : ""}`}
+                    title={info.name}
+                    className={`cal-day${!info.working ? " is-weekend" : ""}${off ? " is-off" : ""}`}
                     style={{ gridColumn: at + 1 }}
                   >
                     <span
@@ -348,11 +454,21 @@ export function CalendarPage({
                     >
                       {date.getDate()}
                     </span>
+                    {info.exception ? (
+                      <span className="cal-day-badge">
+                        {t(info.working ? "calendar.work" : "calendar.rest")}
+                      </span>
+                    ) : null}
+                    <span className="cal-holiday">{info.name}</span>
                   </div>
                 );
               })}
               {shownBars.map((bar) => {
-                const days = spanDays(bar.event);
+                const work = workingDays(bar.event, regional);
+                const conflict =
+                  bar.event.milestone &&
+                  dayInfo(bar.event.start, regional).covered &&
+                  !dayInfo(bar.event.start, regional).working;
                 const label = barLabel(bar.event);
                 const shape = bar.event.milestone
                   ? "is-node"
@@ -373,8 +489,8 @@ export function CalendarPage({
                       className={`cal-bar ${shape} cal-${bar.event.stage}${bar.event.status === "已完成" ? " is-done" : ""}${picked?.id === bar.event.id ? " is-picked" : ""}`}
                       title={
                         bar.event.milestone
-                          ? `${label} · ${bar.event.start}`
-                          : `${label} · ${dates(bar.event)} · ${t("calendar.days", { count: days })}`
+                          ? `${label} · ${bar.event.start}${conflict ? ` · ${t("calendar.restConflict")}` : ""}`
+                          : `${label} · ${dates(bar.event)} · ${duration(bar.event, regional)}`
                       }
                       style={{
                         gridColumn: `${bar.column + 1} / span ${bar.span}`,
@@ -386,11 +502,12 @@ export function CalendarPage({
                         )
                       }
                     >
+                      {conflict ? "⚠ " : ""}
                       {label}
                       {progress(bar.event)}
                       {bar.event.milestone || bar.before
                         ? null
-                        : ` · ${t("calendar.days", { count: days })}`}
+                        : ` · ${work === undefined ? t("calendar.days", { count: spanDays(bar.event) }) : t("calendar.workdays", { count: work })}`}
                     </button>
                   </ContextTarget>
                 );
@@ -421,7 +538,9 @@ export function CalendarPage({
           {t("calendar.span")}
         </span>
       </p>
-      {picked ? <Detail event={picked} onModel={onModel} /> : null}
+      {picked ? (
+        <Detail event={picked} onModel={onModel} regional={regional} />
+      ) : null}
     </section>
   );
 }

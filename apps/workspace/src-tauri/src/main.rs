@@ -390,6 +390,29 @@ fn desktop() {
         let output = process::spm(&spm_exe()?, &args, std::time::Duration::from_secs(360)).await?;
         setup::decode_activation(output.code, &output.stdout)
     }
+    #[tauri::command]
+    async fn calendar_settings(
+        country: String,
+        subdivision: Option<String>,
+        state: tauri::State<'_, State>,
+    ) -> Result<setup::RegionalCalendar, setup::SetupFailure> {
+        let mut args = vec![
+            "calendar".to_string(),
+            "set".into(),
+            "--country".into(),
+            country,
+        ];
+        if let Some(subdivision) = subdivision.filter(|s| !s.is_empty()) {
+            args.extend(["--subdivision".into(), subdivision]);
+        }
+        let _permit = state
+            .discover_gate
+            .try_acquire()
+            .map_err(|_| setup::SetupFailure::new("setup_busy"))?;
+        let args: Vec<&str> = args.iter().map(String::as_str).collect();
+        let output = process::spm(&spm_exe()?, &args, std::time::Duration::from_secs(20)).await?;
+        setup::decode_calendar(output.code, &output.stdout)
+    }
     /// Per-user logging settings are owned by SPM and shared by every window.
     #[tauri::command]
     async fn logging_settings(
@@ -771,6 +794,7 @@ fn desktop() {
             project_status,
             connections,
             logging_settings,
+            calendar_settings,
             connection_sign_in,
             discover,
             draft,

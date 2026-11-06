@@ -5665,3 +5665,11 @@ button[data-slot="button"]:active:not(:disabled),
 .log-paths > div + div { margin-top: 6px; }
 .log-policy-hint { margin: 0; font-size: 12px; }
 .settings-dialog { max-height: calc(100dvh - 48px); overflow-y: auto; }
+
+.cal-region { display:flex; align-items:center; gap:8px; margin:8px 0; flex-wrap:wrap; }
+.cal-region input { width:210px; }
+.cal-region select { background:var(--background); color:inherit; border:1px solid var(--line); border-radius:6px; padding:4px 8px; }
+.cal-day-badge { font-size:10px; margin-left:4px; color:var(--muted-foreground); }
+.cal-holiday { font-size:10px; margin-left:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.cal-day { overflow:hidden; white-space:nowrap; }
+.cal-calendar-source { font-size:12px; }

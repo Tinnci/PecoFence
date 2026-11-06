@@ -7,6 +7,8 @@ mod args;
 pub use args::*;
 mod locate;
 pub use locate::*;
+mod work_calendar;
+pub use work_calendar::*;
 mod logging;
 pub use logging::*;
 use serde::{Deserialize, Serialize};

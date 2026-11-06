@@ -15,6 +15,7 @@ import type {
   ServiceHealth,
   LoggingSettings,
   LogPolicy,
+  RegionalCalendar,
 } from "./contracts/setup";
 export function loggingSettings(
   action: "show" | "set" | "reset",
@@ -337,5 +338,17 @@ export async function savePng(
 ): Promise<string | null> {
   return isTauri()
     ? invoke<string | null>("save_png", { name, png: Array.from(png) })
+    : desktopOnly();
+}
+
+export function calendarSettings(
+  country: string,
+  subdivision?: string,
+): Promise<RegionalCalendar> {
+  return isTauri()
+    ? invoke<RegionalCalendar>("calendar_settings", {
+        country,
+        subdivision: subdivision || null,
+      })
     : desktopOnly();
 }

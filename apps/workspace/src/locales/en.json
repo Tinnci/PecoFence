@@ -1494,5 +1494,20 @@
   "logging.daemonFolder": "Daemon log folder",
   "logging.saved": "Logging settings saved.",
   "logging.restored": "Default logging settings restored.",
-  "logging.ioFailed": "Could not read or save logging settings."
+  "logging.ioFailed": "Could not read or save logging settings.",
+  "calendar.workdays": "{{count}} workdays",
+  "calendar.coverageMissing": "Holiday data unavailable for this year",
+  "calendar.region": "Work calendar",
+  "calendar.subdivision": "Region code (e.g. DL / SP)",
+  "calendar.apply": "Apply",
+  "calendar.regionError": "Could not save; check region code",
+  "calendar.restConflict": "Milestone falls on a day off",
+  "calendar.rest": "Off",
+  "calendar.work": "Work",
+  "calendar.status.published": "Published annual schedule",
+  "calendar.status.calculated": "Calculated holidays",
+  "calendar.country.CN": "China",
+  "calendar.country.IN": "India",
+  "calendar.country.BD": "Bangladesh",
+  "calendar.country.BR": "Brazil"
 }

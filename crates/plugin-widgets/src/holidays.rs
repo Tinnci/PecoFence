@@ -21,6 +21,7 @@ impl CalendarData {
         for (year, bytes) in [
             (2025, work_calendar::china::bundled(2025).unwrap()),
             (2026, work_calendar::china::bundled(2026).unwrap()),
+            (2027, work_calendar::china::bundled(2027).unwrap()),
         ] {
             let schedule =
                 YearSchedule::parse(bytes, year, None).expect("validated bundled holidays");

@@ -1494,5 +1494,20 @@
   "logging.daemonFolder": "守护进程日志目录",
   "logging.saved": "日志设置已保存。",
   "logging.restored": "已恢复默认日志设置。",
-  "logging.ioFailed": "无法读取或保存日志设置。"
+  "logging.ioFailed": "无法读取或保存日志设置。",
+  "calendar.workdays": "{{count}} 工作日",
+  "calendar.coverageMissing": "该年度假期数据未配置",
+  "calendar.region": "工作日历",
+  "calendar.subdivision": "地区代码（如 DL / SP）",
+  "calendar.apply": "应用",
+  "calendar.regionError": "保存失败，请检查地区代码",
+  "calendar.restConflict": "节点落在休息日",
+  "calendar.rest": "休",
+  "calendar.work": "班",
+  "calendar.status.published": "已发布的年度安排",
+  "calendar.status.calculated": "规则推算假期",
+  "calendar.country.CN": "中国",
+  "calendar.country.IN": "印度",
+  "calendar.country.BD": "孟加拉",
+  "calendar.country.BR": "巴西"
 }

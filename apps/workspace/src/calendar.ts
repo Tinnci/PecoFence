@@ -1,4 +1,4 @@
-import type { CalEvent } from "./contracts/setup";
+import type { CalEvent, RegionalCalendar } from "./contracts/setup";
 
 const DAYS = 7;
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -99,4 +99,40 @@ export function visibleEvents(events: CalEvent[], view: CalendarView) {
 export function shiftMonth(year: number, month: number, by: number) {
   const at = new Date(year, month + by, 1);
   return { year: at.getFullYear(), month: at.getMonth() };
+}
+
+/** Company overrides precede annual exceptions, which precede the regional week. */
+export function dayInfo(day: string, calendar?: RegionalCalendar | null) {
+  const override = calendar?.overrides.find((d) => d.date === day);
+  const years = [...(calendar?.years ?? [])].sort((a, b) => b.year - a.year);
+  const exception =
+    override ?? years.flatMap((y) => y.days).find((d) => d.date === day);
+  const covered =
+    !!override || years.some((y) => y.year === Number(day.slice(0, 4)));
+  const weekday = (new Date(`${day}T00:00:00Z`).getUTCDay() + 6) % 7;
+  return {
+    working: exception
+      ? !exception.is_off_day
+      : (calendar?.weekdays ?? [0, 1, 2, 3, 4]).includes(weekday),
+    covered,
+    name: exception?.name ?? "",
+    exception: !!exception,
+  };
+}
+export function workingDays(
+  event: CalEvent,
+  calendar?: RegionalCalendar | null,
+) {
+  let count = 0;
+  const cursor = new Date(`${event.start}T00:00:00Z`);
+  const end = Date.parse(`${event.end}T00:00:00Z`);
+  if (!Number.isFinite(cursor.getTime()) || !Number.isFinite(end))
+    return undefined;
+  while (cursor.getTime() <= end) {
+    const day = dayInfo(cursor.toISOString().slice(0, 10), calendar);
+    if (!day.covered) return undefined;
+    count += Number(day.working);
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return count;
 }

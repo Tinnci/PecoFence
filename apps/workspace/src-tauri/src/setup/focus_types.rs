@@ -647,9 +647,42 @@ pub struct CalSource {
     pub count: u32,
     pub error: String,
 }
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct CalendarDay {
+    pub date: String,
+    pub name: String,
+    pub is_off_day: bool,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct CalendarYear {
+    pub schema_version: u32,
+    pub country: String,
+    pub subdivision: Option<String>,
+    pub year: i32,
+    pub timezone: String,
+    pub weekdays: Vec<u32>,
+    pub source: String,
+    pub source_url: String,
+    pub revision: String,
+    pub status: String,
+    pub days: Vec<CalendarDay>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct RegionalCalendar {
+    pub country: String,
+    pub subdivision: Option<String>,
+    pub timezone: String,
+    pub weekdays: Vec<u32>,
+    pub overrides: Vec<CalendarDay>,
+    pub years: Vec<CalendarYear>,
+    pub errors: Vec<String>,
+}
 /// Everything scheduled across projects.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct Calendar {
+    #[serde(default)]
+    #[ts(optional)]
+    pub work_calendar: Option<RegionalCalendar>,
     pub computed_at: String,
     pub configured: bool,
     pub sources: Vec<CalSource>,
