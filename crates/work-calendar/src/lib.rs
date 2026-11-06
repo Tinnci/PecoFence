@@ -13,7 +13,7 @@ pub struct Day {
     pub name: String,
     pub is_off_day: bool,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CalendarYear {
     pub schema_version: u32,
     pub country: String,
