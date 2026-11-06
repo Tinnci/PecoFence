@@ -52,9 +52,8 @@ To install for the current user, run from Windows (WSL paths via `wslpath -w`):
 ```
 
 It copies the executable to `%LOCALAPPDATA%\Tinnci\Workspace\versions\<version>-<sha256
-prefix>` after a checksum check and leaves earlier versions in place. It writes Start menu
-shortcuts under `Tinnci`: Maon, Maon · 设置清单 (`--open setup`) and Maon · 运行状况
-(`--open health`), plus a desktop Maon unless `-NoDesktop`. Rerunning with a new build
+prefix>` after a checksum check and leaves earlier versions in place. It writes one **Maon** Start menu shortcut under `Tinnci`, plus a desktop Maon unless
+`-NoDesktop`. Setup and health are available inside the app. Rerunning with a new build
 repoints every shortcut. `-DryRun` prints the target and shortcut paths.
 
 For browser development on WSL:

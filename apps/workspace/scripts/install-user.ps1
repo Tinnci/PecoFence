@@ -16,9 +16,7 @@ $directory = Join-Path $InstallRoot "versions\$Version-$($hash.Substring(0, 12))
 $target = Join-Path $directory 'lune.exe'
 $programs = Join-Path ([Environment]::GetFolderPath('Programs')) 'Tinnci'
 $shortcuts = @(
-  @{ Path = Join-Path $programs 'Maon.lnk'; Arguments = '' },
-  @{ Path = Join-Path $programs 'Maon · 设置清单.lnk'; Arguments = '--open setup' },
-  @{ Path = Join-Path $programs 'Maon · 运行状况.lnk'; Arguments = '--open health' }
+  @{ Path = Join-Path $programs 'Maon.lnk'; Arguments = '' }
 )
 if (-not $NoDesktop) {
   $shortcuts += @{ Path = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Maon.lnk'; Arguments = '' }
@@ -41,10 +39,11 @@ if (Test-Path -LiteralPath $target) {
   Move-Item -LiteralPath "$target.partial" -Destination $target
 }
 New-Item -ItemType Directory -Force -Path $programs | Out-Null
-# Remove shortcuts made under the former application names.
+# Remove former application names and the retired setup/health shortcuts.
 foreach ($folder in @($programs, [Environment]::GetFolderPath('Desktop'))) {
   foreach ($name in '工作台.lnk', '工作台 · 设置清单.lnk', '工作台 · 运行状况.lnk',
-                    '望 Lune.lnk', '望 · 设置清单.lnk', '望 · 运行状况.lnk') {
+                    '望 Lune.lnk', '望 · 设置清单.lnk', '望 · 运行状况.lnk',
+                    'Maon · 设置清单.lnk', 'Maon · 运行状况.lnk') {
     Remove-Item -LiteralPath (Join-Path $folder $name) -ErrorAction SilentlyContinue
   }
 }
