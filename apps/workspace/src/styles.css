@@ -4664,18 +4664,36 @@ a .owner-chip { color: inherit; }
 .cal-day.is-off .cal-num { opacity: 0.4; }
 .cal-num { display: inline-block; min-width: 22px; font-size: 12px; font-weight: 600; line-height: 22px; text-align: center; font-variant-numeric: tabular-nums; }
 .cal-num.is-today { border-radius: 11px; background: var(--foreground); color: var(--background); }
-.cal-bar { z-index: 1; min-width: 0; margin: 0 3px; padding: 0 7px; overflow: hidden; border: 0; border-radius: 4px; color: var(--foreground); font: inherit; font-size: 12px; font-weight: 500; line-height: 24px; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
+.cal-bar { z-index: 1; min-width: 0; margin: 0 3px; padding: 0 7px; overflow: hidden; border: 0; color: var(--foreground); font: inherit; font-size: 12px; font-weight: 500; line-height: 24px; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
 .cal-bar:hover { filter: brightness(1.1); }
 .cal-bar.is-picked { outline: 2px solid var(--foreground); outline-offset: 1px; }
 .cal-bar.is-done { opacity: 0.55; }
-.cal-build { background: var(--chart-1); color: var(--on-solid); }
-.cal-release, .cal-rollout { background: var(--brand-2-fill); color: var(--on-solid); }
-.cal-dev { background: color-mix(in srgb, #8f6bc4 26%, transparent); }
-.cal-test { background: color-mix(in srgb, var(--chart-1) 20%, transparent); }
-.cal-fix { background: color-mix(in srgb, var(--chart-2) 24%, transparent); }
-.cal-acceptance { background: color-mix(in srgb, var(--brand-2-fill) 24%, transparent); }
-.cal-freeze { background: var(--bad-solid); color: var(--on-solid); }
-.cal-iteration { background: var(--muted); }
+/* A milestone is a point: a pill with a diamond that fills only its own day. */
+.cal-bar.is-node { justify-self: start; max-width: calc(100% - 6px); border-radius: 12px; background: var(--bar); color: var(--on-solid); font-weight: 600; }
+.cal-bar.is-node::before { content: ""; display: inline-block; width: 7px; height: 7px; margin: 0 6px 1px 1px; background: currentColor; rotate: 45deg; }
+/* A duration is a band: end caps where it really starts and stops, open where it runs on. */
+.cal-bar.is-span { border-inline: 3px solid var(--bar); border-radius: 2px; background: color-mix(in srgb, var(--bar) 22%, transparent); }
+.cal-bar.is-span.from-before { margin-left: 0; border-left: 0; border-radius: 0 2px 2px 0; }
+.cal-bar.is-span.to-after { margin-right: 0; border-right: 0; border-radius: 2px 0 0 2px; }
+.cal-bar.is-span.from-before.to-after { border-radius: 0; }
+.cal-build { --bar: var(--chart-1); }
+.cal-release, .cal-rollout { --bar: var(--brand-2-fill); }
+.cal-dev { --bar: #8f6bc4; }
+.cal-test { --bar: var(--chart-1); }
+.cal-fix { --bar: var(--chart-2); }
+.cal-acceptance { --bar: var(--brand-2-fill); }
+.cal-freeze { --bar: var(--bad-solid); }
+.cal-iteration { --bar: var(--muted-foreground); }
+.cal-legend { display: flex; gap: 16px; margin: 0; color: var(--muted-foreground); font-size: 12px; }
+.cal-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.cal-legend-node { width: 8px; height: 8px; background: var(--muted-foreground); rotate: 45deg; }
+.cal-legend-span { width: 22px; height: 9px; border-inline: 3px solid var(--muted-foreground); background: color-mix(in srgb, var(--muted-foreground) 25%, transparent); }
+.cal-origins { display: grid; gap: 3px; margin: 6px 0 0; }
+.cal-origins dt { color: var(--muted-foreground); font-size: 12px; }
+.cal-origins dd { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; }
+.cal-origins button { padding: 0; border: 0; background: none; color: var(--brand-2); font: inherit; text-align: left; }
+.cal-origins button:hover { text-decoration: underline; }
+.cal-rule { font-size: 12px; }
 .cal-more { z-index: 1; grid-column: 1 / -1; justify-self: start; margin: 0 6px; padding: 0; border: 0; background: none; color: var(--muted-foreground); font: inherit; font-size: 12px; }
 .cal-more:hover { color: var(--foreground); text-decoration: underline; }
 .cal-detail { display: grid; gap: 4px; padding: 10px 0; font-size: 13px; }

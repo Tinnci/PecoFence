@@ -595,6 +595,16 @@ pub struct Logs {
     pub apps: std::collections::BTreeMap<String, LogCount>,
     pub truncated: bool,
 }
+/// One value a calendar event rests on, and where to find it.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct CalOrigin {
+    pub role: String,
+    pub document: String,
+    pub place: String,
+    pub field: String,
+    pub value: String,
+    pub url: String,
+}
 /// One dated stage or milestone on the calendar.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct CalEvent {
@@ -613,6 +623,8 @@ pub struct CalEvent {
     pub customer: String,
     pub owner: String,
     pub note: String,
+    #[serde(default)]
+    pub origins: Vec<CalOrigin>,
 }
 /// How one calendar source read.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]

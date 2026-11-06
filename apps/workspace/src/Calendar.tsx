@@ -1,22 +1,25 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
+import { ChevronLeft, ChevronRight, Info, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { Toggle } from "@/components/ui/toggle";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { ContextTarget, type ContextAction } from "./components/context-menu";
 import { focus } from "./api";
+import { copyContextAction, openContextAction } from "./context-actions";
 import {
   isoDay,
   monthWeeks,
   shiftMonth,
+  spanDays,
   visibleEvents,
   weekBars,
   type CalendarView,
 } from "./calendar";
-import type { CalEvent, Calendar } from "./contracts/setup";
+import type { CalEvent, CalOrigin, Calendar } from "./contracts/setup";
 import { focusKey, queryClient } from "./focus-cache";
 import { locale, t } from "./i18n";
 
@@ -54,6 +57,56 @@ const barLabel = (e: CalEvent) =>
     ? `${e.version || e.project} ${stageName(e)}`
     : `${e.project} ${stageName(e)}`;
 
+/** Where a value lives, in a few words: 飞书表格 I12 · Pre1-OTA 版本释放时间. */
+function originPlace(origin: CalOrigin) {
+  return [
+    t(`calendar.document.${origin.document}`),
+    origin.place,
+    origin.document === "local"
+      ? t(`calendar.stage.${origin.field}`)
+      : origin.field,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+const dates = (e: CalEvent) =>
+  e.start === e.end ? e.start : `${e.start} – ${e.end}`;
+
+function eventActions(
+  event: CalEvent,
+  onDetail: () => void,
+  onModel: (code: string) => void,
+): ContextAction[] {
+  const sources = event.origins.map((origin, at): ContextAction => {
+    const label = `${t(`calendar.role.${origin.role}`)}：${originPlace(origin)}`;
+    const id = `origin-${at}`;
+    return (
+      openContextAction(id, label, origin.url) ?? {
+        id,
+        label,
+        disabled: true,
+        run: () => {},
+      }
+    );
+  });
+  return [
+    { id: "detail", label: t("calendar.detail"), icon: Info, run: onDetail },
+    ...sources.map((action, at) => ({ ...action, separator: at === 0 })),
+    ...(event.model
+      ? [
+          {
+            id: "model",
+            label: t("calendar.openModel"),
+            separator: true,
+            run: () => onModel(event.model),
+          },
+        ]
+      : []),
+    copyContextAction("copy-dates", t("calendar.copyDates"), dates(event)),
+  ];
+}
+
 function Detail({
   event,
   onModel,
@@ -62,7 +115,10 @@ function Detail({
   onModel: (code: string) => void;
 }) {
   const facts = [
-    event.start === event.end ? event.start : `${event.start} – ${event.end}`,
+    dates(event),
+    event.milestone
+      ? t("calendar.node")
+      : t("calendar.days", { count: spanDays(event) }),
     event.version,
     event.status,
     event.customer,
@@ -84,6 +140,34 @@ function Detail({
       </header>
       <p className="quiet">{facts.join(" · ")}</p>
       {event.note ? <p className="cal-note">{event.note}</p> : null}
+      <dl className="cal-origins">
+        <dt>{t("calendar.origin")}</dt>
+        {event.origins.map((origin) => {
+          const open = openContextAction(
+            origin.place,
+            originPlace(origin),
+            origin.url,
+          );
+          return (
+            <dd key={`${origin.role}:${origin.place}:${origin.field}`}>
+              <span className="quiet">{t(`calendar.role.${origin.role}`)}</span>
+              {open ? (
+                <button type="button" onClick={() => void open.run()}>
+                  {originPlace(origin)}
+                </button>
+              ) : (
+                <span>{originPlace(origin)}</span>
+              )}
+              <span className="quiet">{origin.value}</span>
+            </dd>
+          );
+        })}
+        {event.origins.length > 1 ? (
+          <dd className="quiet cal-rule">
+            {t(`calendar.rule.${event.stage}`, { defaultValue: "" })}
+          </dd>
+        ) : null}
+      </dl>
     </section>
   );
 }
@@ -240,23 +324,48 @@ export function CalendarPage({ onModel }: { onModel: (code: string) => void }) {
                   </div>
                 );
               })}
-              {shownBars.map((bar) => (
-                <button
-                  type="button"
-                  key={bar.event.id}
-                  className={`cal-bar cal-${bar.event.stage}${bar.event.status === "已完成" ? " is-done" : ""}${picked?.id === bar.event.id ? " is-picked" : ""}`}
-                  title={barLabel(bar.event)}
-                  style={{
-                    gridColumn: `${bar.column + 1} / span ${bar.span}`,
-                    gridRow: bar.lane + 2,
-                  }}
-                  onClick={() =>
-                    setPicked(picked?.id === bar.event.id ? null : bar.event)
-                  }
-                >
-                  {barLabel(bar.event)}
-                </button>
-              ))}
+              {shownBars.map((bar) => {
+                const days = spanDays(bar.event);
+                const label = barLabel(bar.event);
+                const shape = bar.event.milestone
+                  ? "is-node"
+                  : `is-span${bar.before ? " from-before" : ""}${bar.after ? " to-after" : ""}`;
+                return (
+                  <ContextTarget
+                    key={bar.event.id}
+                    title={label}
+                    actions={eventActions(
+                      bar.event,
+                      () => setPicked(bar.event),
+                      onModel,
+                    )}
+                  >
+                    <button
+                      type="button"
+                      className={`cal-bar ${shape} cal-${bar.event.stage}${bar.event.status === "已完成" ? " is-done" : ""}${picked?.id === bar.event.id ? " is-picked" : ""}`}
+                      title={
+                        bar.event.milestone
+                          ? `${label} · ${bar.event.start}`
+                          : `${label} · ${dates(bar.event)} · ${t("calendar.days", { count: days })}`
+                      }
+                      style={{
+                        gridColumn: `${bar.column + 1} / span ${bar.span}`,
+                        gridRow: bar.lane + 2,
+                      }}
+                      onClick={() =>
+                        setPicked(
+                          picked?.id === bar.event.id ? null : bar.event,
+                        )
+                      }
+                    >
+                      {label}
+                      {bar.event.milestone || bar.before
+                        ? null
+                        : ` · ${t("calendar.days", { count: days })}`}
+                    </button>
+                  </ContextTarget>
+                );
+              })}
               {hidden > 0 || wide ? (
                 <button
                   type="button"
@@ -273,6 +382,16 @@ export function CalendarPage({ onModel }: { onModel: (code: string) => void }) {
           );
         })}
       </div>
+      <p className="cal-legend" aria-hidden="true">
+        <span>
+          <i className="cal-legend-node" />
+          {t("calendar.node")}
+        </span>
+        <span>
+          <i className="cal-legend-span" />
+          {t("calendar.span")}
+        </span>
+      </p>
       {picked ? <Detail event={picked} onModel={onModel} /> : null}
     </section>
   );

@@ -1380,5 +1380,20 @@
   "calendar.stage.seal": "封板",
   "calendar.stage.freeze": "MP 冻结",
   "calendar.stage.iteration": "迭代",
-  "calendar.stage.dev": "研发"
+  "calendar.stage.dev": "研发",
+  "calendar.node": "节点",
+  "calendar.span": "时长",
+  "calendar.detail": "查看详情",
+  "calendar.copyDates": "复制日期",
+  "calendar.origin": "数据来源",
+  "calendar.role.date": "日期",
+  "calendar.role.start": "起点",
+  "calendar.role.end": "终点",
+  "calendar.document.sheet": "OTA 计划表",
+  "calendar.document.base": "项目看板",
+  "calendar.document.local": "工作台",
+  "calendar.rule.test": "推算：出版本次日开始，到测试完成日结束",
+  "calendar.rule.fix": "推算：测试完成到下一次出版本之间的天数",
+  "calendar.rule.dev": "推算：从计划开始到首次出版本的前一天",
+  "calendar.days": "{{count}} 天"
 }

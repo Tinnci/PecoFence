@@ -27,7 +27,16 @@ export type Bar = {
   column: number;
   span: number;
   lane: number;
+  /** It carries on past this week's edge, so the bar stays open on that side. */
+  before: boolean;
+  after: boolean;
 };
+
+/** A stage's length, counting both ends. */
+export function spanDays(event: CalEvent) {
+  const day = (text: string) => Date.parse(`${text}T00:00:00Z`);
+  return Math.round((day(event.end) - day(event.start)) / 86_400_000) + 1;
+}
 
 /** A week's events as bars: dated milestones take the top lanes so a fold never hides them,
  * then each window takes the first free lane. */
@@ -40,7 +49,13 @@ export function weekBars(week: string[], events: CalEvent[]) {
       const from = event.start < first ? first : event.start;
       const to = event.end > last ? last : event.end;
       const column = week.indexOf(from);
-      return { event, column, span: week.indexOf(to) - column + 1 };
+      return {
+        event,
+        column,
+        span: week.indexOf(to) - column + 1,
+        before: event.start < first,
+        after: event.end > last,
+      };
     })
     .sort(
       (a, b) =>

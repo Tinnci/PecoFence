@@ -159,6 +159,7 @@ pub fn types() -> String {
             MyIssue::decl(&config),
             MineSource::decl(&config),
             Mine::decl(&config),
+            CalOrigin::decl(&config),
             CalEvent::decl(&config),
             CalSource::decl(&config),
             Calendar::decl(&config),

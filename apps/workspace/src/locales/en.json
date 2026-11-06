@@ -1380,5 +1380,20 @@
   "calendar.stage.seal": "sealed",
   "calendar.stage.freeze": "MP freeze",
   "calendar.stage.iteration": "iteration",
-  "calendar.stage.dev": "Development"
+  "calendar.stage.dev": "Development",
+  "calendar.node": "Milestone",
+  "calendar.span": "Duration",
+  "calendar.detail": "Show details",
+  "calendar.copyDates": "Copy dates",
+  "calendar.origin": "Comes from",
+  "calendar.role.date": "Date",
+  "calendar.role.start": "Start",
+  "calendar.role.end": "End",
+  "calendar.document.sheet": "OTA plan sheet",
+  "calendar.document.base": "Project board",
+  "calendar.document.local": "Workspace",
+  "calendar.rule.test": "Worked out: starts the day after the build, ends on the test completion date",
+  "calendar.rule.fix": "Worked out: the days between test completion and the next build",
+  "calendar.rule.dev": "Worked out: from the planned start to the day before the first build",
+  "calendar.days": "{{count}} days"
 }

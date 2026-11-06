@@ -3,6 +3,7 @@ import type { CalEvent } from "../src/contracts/setup";
 import {
   monthWeeks,
   shiftMonth,
+  spanDays,
   visibleEvents,
   weekBars,
 } from "../src/calendar";
@@ -23,6 +24,7 @@ const event = (over: Partial<CalEvent>): CalEvent => ({
   customer: "",
   owner: "",
   note: "",
+  origins: [],
   ...over,
 });
 const week = [
@@ -55,6 +57,19 @@ describe("calendar", () => {
     expect(of("b")).toMatchObject({ column: 1, span: 6, lane: 1 });
     expect(of("c")).toMatchObject({ lane: 0 });
     expect(of("d")).toBeUndefined();
+  });
+  it("knows a stage's length and which weeks it runs past", () => {
+    const stage = event({ start: "2026-11-20", end: "2026-12-02" });
+    expect(spanDays(stage)).toBe(13);
+    expect(spanDays(event({}))).toBe(1);
+    expect(weekBars(week, [stage])[0]).toMatchObject({
+      before: true,
+      after: true,
+    });
+    expect(weekBars(week, [event({})])[0]).toMatchObject({
+      before: false,
+      after: false,
+    });
   });
   it("puts milestones first so a fold never hides them", () => {
     const bars = weekBars(week, [
