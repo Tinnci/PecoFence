@@ -475,6 +475,10 @@ pub struct TrackingConfig {
 /// A software issue or requirement in a model's scope.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct WorkItem {
+    /// The source's own labels: Jira's labels, 飞书项目's 标签.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub labels: Option<Vec<String>>,
     /// What part of the product it touches: Jira's 领域, 飞书项目's 组件.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
@@ -528,6 +532,10 @@ pub struct ItemActivity {
     pub target_versions: Vec<String>,
     pub reopened: u32,
     pub last_activity: String,
+    /// When the code bot last said a change was merged.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub merged_at: Option<String>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct Comment {
@@ -764,7 +772,59 @@ pub struct ModelProfile {
     pub suggested_aliases: Vec<String>,
     pub platform: Platform,
     pub fields: Vec<ProfileField>,
+    /// development, release, ota or maintenance; empty when no source says.
+    #[serde(default)]
+    pub phase: String,
     pub read_at: String,
+}
+/// One item on its way into an OTA.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct OtaItem {
+    pub id: String,
+    pub display_id: String,
+    pub source: String,
+    pub instance: String,
+    pub kind: String,
+    pub title: String,
+    pub url: String,
+    pub status: String,
+    pub owner: String,
+    pub severity: String,
+    pub labels: Vec<String>,
+    pub tags: Vec<String>,
+    pub stage: String,
+    pub must: bool,
+    pub customer: bool,
+    pub late: bool,
+    pub reason: String,
+}
+/// One OTA: when it ships, what it carries and how far that has come.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct OtaPlan {
+    pub version: String,
+    pub pre1: String,
+    pub pre2: String,
+    pub official: String,
+    pub rollout: String,
+    pub state: String,
+    pub total: usize,
+    pub merged: usize,
+    pub verified: usize,
+    pub late: usize,
+    pub must_open: usize,
+    pub items: Vec<OtaItem>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct ModelOta {
+    pub code: String,
+    pub plans: Vec<OtaPlan>,
+    pub undecided: Vec<OtaItem>,
+    pub left_out: Vec<OtaItem>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct OtaReport {
+    pub models: Vec<ModelOta>,
+    pub errors: Vec<String>,
 }
 /// Gerrit changes bound to an item, and items like it with how they were fixed.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -1014,6 +1074,9 @@ pub struct FocusData {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub profiles: Option<Vec<ModelProfile>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub ota: Option<OtaReport>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub logs: Option<Logs>,

@@ -174,6 +174,11 @@ export function ModelPlatform({ code }: { code: string }) {
   return (
     <>
       <div className="model-platform">
+        {profile?.phase ? (
+          <span className="phase-chip">
+            {t(`profile.phase.${profile.phase}`)}
+          </span>
+        ) : null}
         {platform ? (
           <ContextTarget actions={sourceActions(profile)}>
             <Button

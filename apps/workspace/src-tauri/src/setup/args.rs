@@ -188,6 +188,8 @@ pub fn route_args(r: &FocusRequest) -> Option<Vec<String>> {
         "platforms" => Some(vec!["focus".into(), "platforms".into()]),
         "profile" => Some(vec!["focus".into(), "profile".into()]),
         "profile_refresh" => Some(vec!["focus".into(), "profile".into(), "--refresh".into()]),
+        "ota" => Some(vec!["focus".into(), "ota".into()]),
+        "ota_refresh" => Some(vec!["focus".into(), "ota".into(), "--refresh".into()]),
         "alias" | "alias_remove" => {
             let code = code.filter(|c| valid_code(c))?;
             let name = r.alias.as_deref().map(str::trim)?;

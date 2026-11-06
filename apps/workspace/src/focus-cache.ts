@@ -12,6 +12,7 @@ import type {
 export const focusKey = ["spm", "default"] as const;
 export const calendarKey = [...focusKey, "calendar"];
 export const profilesKey = ["profiles"] as const;
+export const otaKey = ["ota"] as const;
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {

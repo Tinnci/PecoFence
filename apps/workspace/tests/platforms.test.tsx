@@ -160,6 +160,7 @@ const open: ModelProfile = {
   suggested_aliases: ["P6700LV-B"],
   platform: { ...platform, chip: "" },
   read_at: "",
+  phase: "",
   fields: [
     {
       field: "chip",

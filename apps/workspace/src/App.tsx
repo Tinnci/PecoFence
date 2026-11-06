@@ -8,6 +8,7 @@ import { setTheme, themePreference, type Theme } from "./theme";
 import { useModelPreference } from "./model-navigation";
 import { prefetchBuilds, queryClient, focusKey } from "./focus-cache";
 import { useQuery } from "@tanstack/react-query";
+import { OtaPage } from "./Ota";
 import { profilesOptions, profileWords, useProfileRead } from "./Platforms";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Progress } from "@/components/ui/progress";
@@ -176,7 +177,8 @@ function Workspace() {
       positions.current.set(viewKey, element.scrollTop);
     };
   }, [viewKey]);
-  function openModel(code: string) {
+  function openModel(code: string, tab?: ModelTab) {
+    if (tab) queryClient.setQueryData([...focusKey, "view", code, "tab"], tab);
     void focusState.ensure(code);
     setModelCode(code);
     setPage("model");
@@ -330,6 +332,7 @@ function Workspace() {
     traces: [t("nav.traces"), ""],
     mine: [t("nav.mine"), ""],
     calendar: [t("nav.calendar"), ""],
+    ota: [t("nav.ota"), ""],
     model: [t("app.model"), ""],
     follow: [t("app.followAModel"), ""],
   };
@@ -391,7 +394,8 @@ function Workspace() {
   const commands: Command[] = [
     pageCommand("mine", t("nav.mine"), "my work assigned"),
     pageCommand("home", t("nav.models"), "models home"),
-    pageCommand("calendar", t("nav.calendar"), "calendar ota schedule"),
+    pageCommand("calendar", t("nav.calendar"), "calendar schedule"),
+    pageCommand("ota", t("nav.ota"), "ota release bugfix"),
     pageCommand("activity", t("nav.activity"), "activity gerrit"),
     pageCommand("health", t("nav.health"), "health status"),
     pageCommand("setup", t("nav.setup"), "setup checklist"),
@@ -571,6 +575,8 @@ function Workspace() {
                 </div>
               ) : page === "calendar" ? (
                 <CalendarPage onModel={openModel} />
+              ) : page === "ota" ? (
+                <OtaPage models={tabs} onModel={openModel} />
               ) : page === "model" && modelCode ? (
                 <ModelPage
                   key={modelCode}

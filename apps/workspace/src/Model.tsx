@@ -1,4 +1,5 @@
-import { ModelPlatform } from "./Platforms";
+import { ModelPlatform, profilesOptions } from "./Platforms";
+import { ModelOtaTab, OtaLead } from "./Ota";
 import {
   BuildActivity,
   DurationSummary,
@@ -141,6 +142,9 @@ const tabNames: Record<ModelTab, string> = {
   },
   get requirements() {
     return t("model.requirements");
+  },
+  get ota() {
+    return t("nav.ota");
   },
   get branches() {
     return t("model.branches");
@@ -1868,6 +1872,33 @@ export function SettingsTab({
 }
 
 /** 机型: the head with its gates, then 概览, 分支, 构建 and 设置. */
+/** What the overview leads with depends on where the model is in its life. */
+function PhaseLead({
+  code,
+  openRequirements,
+  onTab,
+}: {
+  code: string;
+  openRequirements: number;
+  onTab: (tab: ModelTab) => void;
+}) {
+  const profiles = useQuery(profilesOptions, queryClient).data;
+  const phase = profiles?.find((p) => p.code === code)?.phase;
+  if (phase === "ota")
+    return <OtaLead code={code} onOpen={() => onTab("ota")} />;
+  if (phase === "development" && openRequirements)
+    return (
+      <button
+        type="button"
+        className="ota-lead"
+        onClick={() => onTab("requirements")}
+      >
+        {t("profile.openRequirements", { count: openRequirements })}
+      </button>
+    );
+  return null;
+}
+
 export function ModelPage({
   state,
   code,
@@ -2128,6 +2159,13 @@ export function ModelPage({
             />
           ) : null}
           {tab === "overview" ? (
+            <PhaseLead
+              code={code}
+              openRequirements={requirementWork.openCount ?? 0}
+              onTab={onTab}
+            />
+          ) : null}
+          {tab === "overview" ? (
             <ModelForecast
               forecast={
                 saved?.legacy
@@ -2154,6 +2192,8 @@ export function ModelPage({
               }}
               onBuilds={() => onTab("builds")}
             />
+          ) : tab === "ota" ? (
+            <ModelOtaTab code={code} />
           ) : tab === "issues" || tab === "requirements" ? (
             <WorkItemsTab code={code} kind={tab} saved={saved} state={state} />
           ) : tab === "branches" ? (

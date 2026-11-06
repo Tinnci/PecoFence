@@ -8,7 +8,8 @@ import { Spinner } from "@/components/ui/spinner";
 import { Toggle } from "@/components/ui/toggle";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { ContextTarget, type ContextAction } from "./components/context-menu";
-import { focus } from "./api";
+import { focus, type ModelTab } from "./api";
+import { otaOptions } from "./Ota";
 import { copyContextAction, openContextAction } from "./context-actions";
 import {
   isoDay,
@@ -19,7 +20,7 @@ import {
   weekBars,
   type CalendarView,
 } from "./calendar";
-import type { CalEvent, CalOrigin, Calendar } from "./contracts/setup";
+import type { CalEvent, CalOrigin, Calendar, OtaPlan } from "./contracts/setup";
 import { queryClient, calendarKey, profilesKey } from "./focus-cache";
 import { locale, t } from "./i18n";
 
@@ -79,7 +80,8 @@ const dates = (e: CalEvent) =>
 function eventActions(
   event: CalEvent,
   onDetail: () => void,
-  onModel: (code: string) => void,
+  onModel: (code: string, tab?: ModelTab) => void,
+  carried?: OtaPlan,
 ): ContextAction[] {
   const sources = event.origins.map((origin, at): ContextAction => {
     const label = `${t(`calendar.role.${origin.role}`)}：${originPlace(origin)}`;
@@ -96,6 +98,16 @@ function eventActions(
   return [
     { id: "detail", label: t("calendar.detail"), icon: Info, run: onDetail },
     ...sources.map((action, at) => ({ ...action, separator: at === 0 })),
+    ...(carried
+      ? [
+          {
+            id: "ota",
+            label: t("calendar.openOta", { version: carried.version }),
+            separator: true,
+            run: () => onModel(event.model, "ota"),
+          },
+        ]
+      : []),
     ...(event.model
       ? [
           {
@@ -115,7 +127,7 @@ function Detail({
   onModel,
 }: {
   event: CalEvent;
-  onModel: (code: string) => void;
+  onModel: (code: string, tab?: ModelTab) => void;
 }) {
   const facts = [
     dates(event),
@@ -176,9 +188,24 @@ function Detail({
 }
 
 /** A month of OTA stages and project dates, one bar per stage per week. */
-export function CalendarPage({ onModel }: { onModel: (code: string) => void }) {
+export function CalendarPage({
+  onModel,
+}: {
+  onModel: (code: string, tab?: ModelTab) => void;
+}) {
   useTranslation();
   const { calendar, fresh } = useCalendar();
+  const ota = useQuery(otaOptions, queryClient).data;
+  const planOf = (event: CalEvent) =>
+    ota?.models
+      .find((m) => m.code === event.model)
+      ?.plans.find((p) => p.version === event.version.trim().toUpperCase());
+  const progress = (event: CalEvent) => {
+    const plan = planOf(event);
+    return plan?.total && ["pre1", "official"].includes(event.key)
+      ? ` · ${plan.merged}/${plan.total}`
+      : "";
+  };
   const today = isoDay(new Date());
   const [shown, setShown] = useState(() => {
     const now = new Date();
@@ -341,6 +368,7 @@ export function CalendarPage({ onModel }: { onModel: (code: string) => void }) {
                       bar.event,
                       () => setPicked(bar.event),
                       onModel,
+                      planOf(bar.event),
                     )}
                   >
                     <button
@@ -362,6 +390,7 @@ export function CalendarPage({ onModel }: { onModel: (code: string) => void }) {
                       }
                     >
                       {label}
+                      {progress(bar.event)}
                       {bar.event.milestone || bar.before
                         ? null
                         : ` · ${t("calendar.days", { count: days })}`}

@@ -493,9 +493,10 @@ fn desktop() {
             | "calendar_cached"
             | "profile"
             | "profile_refresh"
+            | "ota"
             | "repos"
             | "chip" => None,
-            "issues" | "requirements" | "issues_full" | "requirements_full" => {
+            "issues" | "requirements" | "issues_full" | "requirements_full" | "ota_refresh" => {
                 Some(&state.items_gate)
             }
             "flow" | "flows" | "flows_refresh" => Some(&state.flow_gate),
@@ -511,7 +512,7 @@ fn desktop() {
             None => None,
         };
         let deadline = std::time::Duration::from_secs(match action.as_str() {
-            "summary" | "refresh" => 600,
+            "summary" | "refresh" | "ota_refresh" => 600,
             "suggest" => 180,
             "calendar" | "profile_refresh" => 150,
             "builds" | "build_evidence" => 120,

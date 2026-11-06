@@ -4580,6 +4580,33 @@ a .owner-chip { color: inherit; }
 .profile-aliases { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; }
 .profile-aliases form { flex: 1 1 180px; }
 .profile-aliases .related-term button { padding: 0; border: 0; background: none; color: inherit; vertical-align: -2px; margin-left: 4px; }
+.phase-chip { flex-shrink: 0; padding: 1px 6px; border: 1px solid var(--border); border-radius: 999px; font-size: 11px; }
+.ota-page, .ota-model { display: flex; flex-direction: column; gap: 12px; }
+.ota-title-row { display: flex; align-items: center; gap: 8px; }
+.ota-title-row h1 { margin: 0; }
+.ota-list { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--border); }
+.ota-list li { border-bottom: 1px solid var(--border); }
+.ota-card { border: 1px solid var(--border); border-radius: var(--radius-md, 8px); }
+.ota-head, .ota-lead { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; width: 100%; padding: 10px 12px; border: 0; background: none; color: inherit; font: inherit; font-size: 13px; text-align: left; }
+.ota-head:hover, .ota-lead:hover, .ota-fold-head:hover { background: var(--muted); }
+.ota-head > svg, .ota-fold-head > svg { width: 14px; height: 14px; flex-shrink: 0; transition: transform .15s; }
+.ota-head[aria-expanded="true"] > svg, .ota-fold-head[aria-expanded="true"] > svg { transform: rotate(90deg); }
+.ota-lead { margin-bottom: 12px; border: 1px solid var(--border); border-radius: var(--radius-md, 8px); }
+.ota-dates { display: inline-flex; flex-wrap: wrap; gap: 10px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.ota-meter { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; font-variant-numeric: tabular-nums; }
+.ota-meter [data-slot="progress"] { width: 96px; }
+.ota-items { display: flex; flex-direction: column; margin: 0; padding: 0 12px 8px; list-style: none; }
+.ota-row { display: grid; grid-template-columns: auto max-content minmax(0, 1fr) auto auto; align-items: center; gap: 12px; padding: 6px 0; border-top: 1px solid var(--border); font-size: 13px; }
+.ota-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ota-flags { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 4px; }
+.ota-stage { display: inline-flex; gap: 2px; }
+.ota-stage i { width: 10px; height: 4px; border-radius: 2px; background: var(--border); }
+.ota-stage i.is-on { background: var(--brand-2, currentColor); }
+.ota-row.is-late .ota-stage i.is-on { background: var(--destructive); }
+.ota-empty { margin: 0; padding: 0 12px 10px; font-size: 13px; }
+.ota-fold-head { display: flex; align-items: center; gap: 6px; width: 100%; padding: 6px 4px; border: 0; background: none; color: inherit; font: inherit; font-size: 13px; text-align: left; }
+.ota-waiting h2 { margin: 8px 0 0; font-size: 14px; }
+@media (max-width: 760px) { .ota-row { grid-template-columns: auto minmax(0, 1fr); } .ota-title { grid-column: 1 / -1; white-space: normal; } .ota-meter { margin-left: 0; } }
 .platform-field { min-width: 0; }
 .platform-suggestion { display: block; max-width: 100%; margin-top: 4px; padding: 0; border: 0; background: none; color: var(--brand-2); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .platform-suggestion:hover { text-decoration: underline; }

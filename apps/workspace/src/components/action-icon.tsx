@@ -48,6 +48,7 @@ import {
 } from "lucide-react";
 
 const icons = {
+  ota: ArrowDownToLine,
   overview: LayoutDashboard,
   branches: GitBranch,
   builds: Hammer,

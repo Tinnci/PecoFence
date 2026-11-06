@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import {
   Activity,
   CalendarDays,
+  PackageCheck,
   ChevronRight,
   Gauge,
   Inbox,
@@ -282,6 +283,7 @@ export function Rail({
       </div>
       <div className="rail-foot">
         {link("calendar", CalendarDays, t("nav.calendar"), page === "calendar")}
+        {link("ota", PackageCheck, t("nav.ota"), page === "ota")}
         {link("activity", Activity, t("nav.activity"), page === "activity")}
         {link("health", Gauge, t("nav.system"), isSystem(page))}
         <RailLink

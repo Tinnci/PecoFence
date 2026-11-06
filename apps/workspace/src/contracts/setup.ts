@@ -143,6 +143,10 @@ export type FocusSummary = { computed_at?: string, models: Array<ModelSummary>, 
 export type TrackingConfig = { jira_software_field?: string, jira_requirement_jql?: string, jira_software_values?: Array<string>, };
 export type WorkItem = { 
 /**
+ * The source's own labels: Jira's labels, 飞书项目's 标签.
+ */
+labels?: Array<string>, 
+/**
  * What part of the product it touches: Jira's 领域, 飞书项目's 组件.
  */
 domains?: Array<string>, id: string, 
@@ -175,7 +179,11 @@ export type ItemActivity = { created: string, status_since: string,
 /**
  * history, created, field or observed.
  */
-status_since_source: string, last_comment: Comment | null, comment_count: number, progress: string, found_versions: Array<string>, target_versions: Array<string>, reopened: number, last_activity: string, };
+status_since_source: string, last_comment: Comment | null, comment_count: number, progress: string, found_versions: Array<string>, target_versions: Array<string>, reopened: number, last_activity: string, 
+/**
+ * When the code bot last said a change was merged.
+ */
+merged_at?: string, };
 export type Comment = { at: string, by: string, text: string, };
 export type LocalLayer = { tags: Array<string>, corrections: Array<Correction>, notes: Array<Note>, next_check: string | null, };
 export type AnnotatedItem = { 
@@ -262,7 +270,15 @@ export type SearchResults = { total: number, results: Array<SearchHit>, };
 export type Platform = { code: string, vendor: string, chip: string, baseband: string, modem: Array<string>, modem_repos: Array<string>, modem_changes: number, android: Array<string>, kernel: Array<string>, evidence: Array<string>, };
 export type ProfileValue = { value: string, origins: Array<CalOrigin>, };
 export type ProfileField = { field: string, value: string, values: Array<ProfileValue>, conflict: boolean, };
-export type ModelProfile = { code: string, aliases: Array<string>, suggested_aliases: Array<string>, platform: Platform, fields: Array<ProfileField>, read_at: string, };
+export type ModelProfile = { code: string, aliases: Array<string>, suggested_aliases: Array<string>, platform: Platform, fields: Array<ProfileField>, 
+/**
+ * development, release, ota or maintenance; empty when no source says.
+ */
+phase: string, read_at: string, };
+export type OtaItem = { id: string, display_id: string, source: string, instance: string, kind: string, title: string, url: string, status: string, owner: string, severity: string, labels: Array<string>, tags: Array<string>, stage: string, must: boolean, customer: boolean, late: boolean, reason: string, };
+export type OtaPlan = { version: string, pre1: string, pre2: string, official: string, rollout: string, state: string, total: number, merged: number, verified: number, late: number, must_open: number, items: Array<OtaItem>, };
+export type ModelOta = { code: string, plans: Array<OtaPlan>, undecided: Array<OtaItem>, left_out: Array<OtaItem>, };
+export type OtaReport = { models: Array<ModelOta>, errors: Array<string>, };
 export type RelatedChange = { change: number, 
 /**
  * The model whose summary read the change; None when none did.
@@ -307,5 +323,5 @@ export type FocusData = { build_evidence?: BuildEvidence, work_items?: WorkItems
 /**
  * After an annotation: the item as the last read shows it, with the new layer.
  */
-work_item?: AnnotatedItem, history?: ItemHistory, change_files?: ChangeFiles, change_diff?: ChangeDiff, change_diffs?: ChangeDiffs, flow?: ItemFlow, related?: Related, platforms?: Array<Platform>, profiles?: Array<ModelProfile>, logs?: Logs, traces?: Traces, search?: SearchResults, mine?: Mine, needs?: Needs, forecasts?: Array<Forecast>, calendar?: Calendar, repos?: Array<RepoRow>, backup?: BackupSummary, backup_plan?: BackupPlan, backup_restored?: BackupRestored, flows?: Array<ItemFlow>, flow_errors?: Array<FlowFailure>, source_fields?: SourceFields, models?: Array<FocusModel>, suggestions?: Suggestions, summary?: FocusSummary, preview?: Preview, changes?: Array<Listed>, builds?: Builds, };
+work_item?: AnnotatedItem, history?: ItemHistory, change_files?: ChangeFiles, change_diff?: ChangeDiff, change_diffs?: ChangeDiffs, flow?: ItemFlow, related?: Related, platforms?: Array<Platform>, profiles?: Array<ModelProfile>, ota?: OtaReport, logs?: Logs, traces?: Traces, search?: SearchResults, mine?: Mine, needs?: Needs, forecasts?: Array<Forecast>, calendar?: Calendar, repos?: Array<RepoRow>, backup?: BackupSummary, backup_plan?: BackupPlan, backup_restored?: BackupRestored, flows?: Array<ItemFlow>, flow_errors?: Array<FlowFailure>, source_fields?: SourceFields, models?: Array<FocusModel>, suggestions?: Suggestions, summary?: FocusSummary, preview?: Preview, changes?: Array<Listed>, builds?: Builds, };
 export type Activation = { health?: ServiceHealth, waited_secs?: number, };

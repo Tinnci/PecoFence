@@ -24,6 +24,7 @@ export type Page =
   | "traces"
   | "mine"
   | "calendar"
+  | "ota"
   | "model"
   | "follow";
 export function isPage(value: unknown): value is Page {
@@ -36,7 +37,8 @@ export function isPage(value: unknown): value is Page {
     value === "logs" ||
     value === "traces" ||
     value === "mine" ||
-    value === "calendar"
+    value === "calendar" ||
+    value === "ota"
   );
 }
 export async function loadHub(
@@ -64,6 +66,7 @@ export type ModelTab =
   | "overview"
   | "issues"
   | "requirements"
+  | "ota"
   | "branches"
   | "builds"
   | "checklist"
@@ -72,6 +75,7 @@ const modelTabs: ModelTab[] = [
   "overview",
   "issues",
   "requirements",
+  "ota",
   "branches",
   "builds",
   "checklist",
@@ -227,6 +231,8 @@ export async function focus(
     | "profile_refresh"
     | "alias"
     | "alias_remove"
+    | "ota"
+    | "ota_refresh"
     | "logs"
     | "traces"
     | "chip"
