@@ -213,6 +213,7 @@ export async function focus(
     | "related"
     | "platforms"
     | "logs"
+    | "traces"
     | "chip"
     | "change_files"
     | "change_diff"

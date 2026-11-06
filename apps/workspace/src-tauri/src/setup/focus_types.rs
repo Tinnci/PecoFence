@@ -592,6 +592,43 @@ pub struct Logs {
     pub apps: std::collections::BTreeMap<String, LogCount>,
     pub truncated: bool,
 }
+/// One timed step of an action.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct TraceSpan {
+    pub app: String,
+    pub name: String,
+    pub verb: String,
+    /// In the tree; a span's children follow it.
+    pub depth: u32,
+    pub offset_ms: u32,
+    pub ms: u32,
+    /// Time not covered by children.
+    pub self_ms: u32,
+    /// ok, failed, running, or lost when its process ended first.
+    pub status: String,
+    pub code: String,
+    /// The stretches the whole action had to wait for, from the trace's start.
+    pub critical: Vec<(u32, u32)>,
+}
+/// One action across Workspace, spm, tools and bridges.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct Trace {
+    pub id: String,
+    pub run_id: String,
+    pub app: String,
+    pub name: String,
+    pub started: String,
+    pub ms: u32,
+    pub running: bool,
+    pub failed: u32,
+    pub spans: Vec<TraceSpan>,
+}
+/// Recent actions, newest first.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct Traces {
+    pub traces: Vec<Trace>,
+    pub truncated: bool,
+}
 /// A model's platform: vendor, Android and kernel from its code, the chip as named.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct Platform {
@@ -858,6 +895,9 @@ pub struct FocusData {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub logs: Option<Logs>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub traces: Option<Traces>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub search: Option<SearchResults>,

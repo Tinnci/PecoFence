@@ -12,15 +12,71 @@ import { queryClient } from "./focus-cache";
 import { FailureNote, failureOf } from "./TemplateImport";
 import { t } from "./i18n";
 import { shortTime } from "./time-format";
+import { TracesPanel } from "./Traces";
 
 const levels = ["problems", "all"] as const;
+const views = ["events", "traces"] as const;
 
-/** What every tool did: spm, spmd, Workspace and PecoFence on one timeline. */
+/** What every tool did: as one list of events, or as a live waterfall per action. */
 export function LogsPage() {
   useTranslation();
-  const [app, setApp] = useState("all");
-  const [level, setLevel] = useState<(typeof levels)[number]>("problems");
+  const [view, setView] = useState<(typeof views)[number]>("events");
   const [search, setSearch] = useState("");
+  return (
+    <section className="logs-page" aria-label={t("logs.title")}>
+      <ToggleGroup
+        variant="outline"
+        size="sm"
+        className="chips"
+        value={[view]}
+        onValueChange={(next: string[]) => {
+          if (next[0]) setView(next[0] as (typeof views)[number]);
+        }}
+        aria-label={t("logs.view")}
+      >
+        {views.map((v) => (
+          <ToggleGroupItem key={v} value={v}>
+            {t(`logs.${v}`)}
+          </ToggleGroupItem>
+        ))}
+      </ToggleGroup>
+      {view === "traces" ? (
+        <TracesPanel
+          search={search}
+          onSearch={setSearch}
+          onShowLog={(runId) => {
+            setSearch(runId);
+            setView("events");
+          }}
+        />
+      ) : (
+        <EventLog
+          search={search}
+          onSearch={setSearch}
+          onShowRun={(runId) => {
+            setSearch(runId);
+            setView("traces");
+          }}
+        />
+      )}
+    </section>
+  );
+}
+
+function EventLog({
+  search,
+  onSearch,
+  onShowRun,
+}: {
+  search: string;
+  onSearch: (next: string) => void;
+  onShowRun: (runId: string) => void;
+}) {
+  const [app, setApp] = useState("all");
+  // A search for one run is asked to see all of it.
+  const [level, setLevel] = useState<(typeof levels)[number]>(
+    search ? "all" : "problems",
+  );
   const query = useQuery(
     {
       queryKey: ["logs"],
@@ -44,7 +100,7 @@ export function LogsPage() {
   }, [log, app, level, search]);
   const apps = Object.entries(log?.apps ?? {});
   return (
-    <section className="logs-page" aria-label={t("logs.title")}>
+    <>
       <div className="logs-toolbar">
         <ToggleGroup
           variant="outline"
@@ -88,7 +144,7 @@ export function LogsPage() {
           maxLength={200}
           placeholder={t("logs.search")}
           aria-label={t("logs.search")}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => onSearch(e.target.value)}
         />
         <Button
           type="button"
@@ -125,11 +181,7 @@ export function LogsPage() {
                     type="button"
                     className="logs-run"
                     title={t("logs.showRun")}
-                    onClick={() => {
-                      setApp("all");
-                      setLevel("all");
-                      setSearch(e.run_id);
-                    }}
+                    onClick={() => onShowRun(e.run_id)}
                   >
                     {e.run_id.slice(-8)}
                   </button>
@@ -140,6 +192,6 @@ export function LogsPage() {
         </ol>
       ) : null}
       {log?.truncated ? <p className="quiet">{t("logs.truncated")}</p> : null}
-    </section>
+    </>
   );
 }

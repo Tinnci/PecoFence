@@ -207,6 +207,13 @@ pub fn route_args(r: &FocusRequest) -> Option<Vec<String>> {
             .map(String::from)
             .to_vec(),
         ),
+        "traces" => Some(
+            [
+                "focus", "traces", "--since", "24h", "--limit", "100", "--format", "json",
+            ]
+            .map(String::from)
+            .to_vec(),
+        ),
         "chip" => {
             let code = code.filter(|c| valid_code(c))?;
             if r.chip.is_none() && r.baseband.is_none() {

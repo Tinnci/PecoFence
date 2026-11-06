@@ -213,6 +213,25 @@ export type LogEntry = { ts: string, level: string, app: string, event: string, 
 run_id: string, };
 export type LogCount = { total: number, problems: number, };
 export type Logs = { entries: Array<LogEntry>, apps: { [key in string]: LogCount }, truncated: boolean, };
+export type TraceSpan = { app: string, name: string, verb: string, 
+/**
+ * In the tree; a span's children follow it.
+ */
+depth: number, offset_ms: number, ms: number, 
+/**
+ * Time not covered by children.
+ */
+self_ms: number, 
+/**
+ * ok, failed, running, or lost when its process ended first.
+ */
+status: string, code: string, 
+/**
+ * The stretches the whole action had to wait for, from the trace's start.
+ */
+critical: Array<[number, number]>, };
+export type Trace = { id: string, run_id: string, app: string, name: string, started: string, ms: number, running: boolean, failed: number, spans: Array<TraceSpan>, };
+export type Traces = { traces: Array<Trace>, truncated: boolean, };
 export type BackupSummary = { path: string, models: number, items: number, };
 export type BackupPlan = { created_at: string, added: number, replaced: number, kept: number, items: number, };
 export type BackupRestored = { models: number, items: number, };
@@ -273,5 +292,5 @@ export type FocusData = { build_evidence?: BuildEvidence, work_items?: WorkItems
 /**
  * After an annotation: the item as the last read shows it, with the new layer.
  */
-work_item?: AnnotatedItem, history?: ItemHistory, change_files?: ChangeFiles, change_diff?: ChangeDiff, change_diffs?: ChangeDiffs, flow?: ItemFlow, related?: Related, platforms?: Array<Platform>, logs?: Logs, search?: SearchResults, mine?: Mine, repos?: Array<RepoRow>, backup?: BackupSummary, backup_plan?: BackupPlan, backup_restored?: BackupRestored, flows?: Array<ItemFlow>, flow_errors?: Array<FlowFailure>, source_fields?: SourceFields, models?: Array<FocusModel>, suggestions?: Suggestions, summary?: FocusSummary, preview?: Preview, changes?: Array<Listed>, builds?: Builds, };
+work_item?: AnnotatedItem, history?: ItemHistory, change_files?: ChangeFiles, change_diff?: ChangeDiff, change_diffs?: ChangeDiffs, flow?: ItemFlow, related?: Related, platforms?: Array<Platform>, logs?: Logs, traces?: Traces, search?: SearchResults, mine?: Mine, repos?: Array<RepoRow>, backup?: BackupSummary, backup_plan?: BackupPlan, backup_restored?: BackupRestored, flows?: Array<ItemFlow>, flow_errors?: Array<FlowFailure>, source_fields?: SourceFields, models?: Array<FocusModel>, suggestions?: Suggestions, summary?: FocusSummary, preview?: Preview, changes?: Array<Listed>, builds?: Builds, };
 export type Activation = { health?: ServiceHealth, waited_secs?: number, };

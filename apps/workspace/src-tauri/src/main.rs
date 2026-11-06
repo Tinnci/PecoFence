@@ -480,6 +480,7 @@ fn desktop() {
             | "related"
             | "platforms"
             | "logs"
+            | "traces"
             | "search"
             | "mine"
             | "mine_cached"
@@ -518,15 +519,26 @@ fn desktop() {
         let started = std::time::Instant::now();
         let run_id = logbook::new_run_id();
         let spm = spm_exe()?;
+        // Reading the log is what a live page does every second; it stays out of the log.
+        let quiet = matches!(action.as_str(), "logs" | "traces");
+        if !quiet {
+            logbook::record(
+                "info",
+                "focus.started",
+                serde_json::json!({ "action": action, "span": "focus", "run_id": run_id }),
+            );
+        }
         let result = match process::spm_run(&spm, &args, input.as_deref(), &run_id, deadline).await
         {
             Ok(output) => setup::decode_focus(output.code, &output.stdout),
             Err(failure) => Err(failure),
         };
-        note_focus(&action, &run_id, started.elapsed(), &result);
+        if !quiet {
+            note_focus(&action, &run_id, started.elapsed(), &result);
+        }
         result
     }
-    /// Failures always; successes only when slow, so the log stays readable.
+    /// Closes the call's span; a failure is a warning.
     fn note_focus(
         action: &str,
         run_id: &str,
@@ -538,14 +550,13 @@ fn desktop() {
             Err(failure) => logbook::record(
                 "warn",
                 "focus.failed",
-                serde_json::json!({ "action": action, "ms": ms, "code": failure.code, "run_id": run_id }),
+                serde_json::json!({ "action": action, "ms": ms, "code": failure.code, "span": "focus", "run_id": run_id }),
             ),
-            Ok(_) if ms >= 3000 => logbook::record(
+            Ok(_) => logbook::record(
                 "info",
-                "focus.slow",
-                serde_json::json!({ "action": action, "ms": ms, "run_id": run_id }),
+                "focus.finished",
+                serde_json::json!({ "action": action, "ms": ms, "span": "focus", "run_id": run_id }),
             ),
-            Ok(_) => {}
         }
     }
     /// A frontend error: its type and where it happened. Its message can hold anything.
