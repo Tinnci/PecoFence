@@ -33,6 +33,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { BrandMark } from "@/components/brand-mark";
+import { Lune } from "@/components/lune";
 import { Num } from "@/components/motion";
 import { m as motion } from "motion/react";
 import { Button } from "@/components/ui/button";
@@ -762,6 +763,7 @@ export function FocusHome({
             aria-label={t(`profile.phase.${phase}`)}
           >
             <h2 className="ledger-phase">
+              <Lune phase={phase} />
               {t(`profile.phase.${phase}`)}
               <span className="quiet">{rows.length}</span>
             </h2>

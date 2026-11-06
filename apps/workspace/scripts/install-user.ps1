@@ -1,4 +1,4 @@
-﻿# Per-user install of Tinnci Workspace with Start menu and desktop shortcuts.
+﻿# Per-user install of Lune with Start menu and desktop shortcuts.
 # Copies the executable into versions\<version>-<sha256 prefix>; earlier versions stay.
 [CmdletBinding()]
 param(
@@ -13,15 +13,15 @@ if ($Version -notmatch '^\d+\.\d+\.\d+$') { throw "Invalid version: $Version" }
 $Executable = (Resolve-Path -LiteralPath $Executable).ProviderPath
 $hash = (Get-FileHash -LiteralPath $Executable -Algorithm SHA256).Hash.ToLower()
 $directory = Join-Path $InstallRoot "versions\$Version-$($hash.Substring(0, 12))"
-$target = Join-Path $directory 'tinnci-workspace.exe'
+$target = Join-Path $directory 'lune.exe'
 $programs = Join-Path ([Environment]::GetFolderPath('Programs')) 'Tinnci'
 $shortcuts = @(
-  @{ Path = Join-Path $programs '工作台.lnk'; Arguments = '' },
-  @{ Path = Join-Path $programs '工作台 · 设置清单.lnk'; Arguments = '--open setup' },
-  @{ Path = Join-Path $programs '工作台 · 运行状况.lnk'; Arguments = '--open health' }
+  @{ Path = Join-Path $programs '望 Lune.lnk'; Arguments = '' },
+  @{ Path = Join-Path $programs '望 · 设置清单.lnk'; Arguments = '--open setup' },
+  @{ Path = Join-Path $programs '望 · 运行状况.lnk'; Arguments = '--open health' }
 )
 if (-not $NoDesktop) {
-  $shortcuts += @{ Path = Join-Path ([Environment]::GetFolderPath('Desktop')) '工作台.lnk'; Arguments = '' }
+  $shortcuts += @{ Path = Join-Path ([Environment]::GetFolderPath('Desktop')) '望 Lune.lnk'; Arguments = '' }
 }
 if ($DryRun) {
   [ordered]@{ target = $target; sha256 = $hash; shortcuts = $shortcuts.Path } | ConvertTo-Json
@@ -41,6 +41,11 @@ if (Test-Path -LiteralPath $target) {
   Move-Item -LiteralPath "$target.partial" -Destination $target
 }
 New-Item -ItemType Directory -Force -Path $programs | Out-Null
+# Shortcuts from before the app was named 望.
+foreach ($name in '工作台.lnk', '工作台 · 设置清单.lnk', '工作台 · 运行状况.lnk') {
+  Remove-Item -LiteralPath (Join-Path $programs $name) -ErrorAction SilentlyContinue
+}
+Remove-Item -LiteralPath (Join-Path ([Environment]::GetFolderPath('Desktop')) '工作台.lnk') -ErrorAction SilentlyContinue
 $shell = New-Object -ComObject WScript.Shell
 foreach ($entry in $shortcuts) {
   $link = $shell.CreateShortcut($entry.Path)
@@ -48,7 +53,7 @@ foreach ($entry in $shortcuts) {
   $link.Arguments = $entry.Arguments
   $link.WorkingDirectory = $directory
   $link.IconLocation = "$target,0"
-  $link.Description = 'Tinnci Workspace · 本机工具与 SPM 项目'
+  $link.Description = '望 Lune · 关注的机型、变更和构建'
   $link.Save()
 }
 [ordered]@{ target = $target; sha256 = $hash; shortcuts = $shortcuts.Path } | ConvertTo-Json

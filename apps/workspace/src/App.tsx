@@ -502,14 +502,14 @@ function Workspace() {
           <button
             type="button"
             className="wordmark"
-            aria-label={t("app.workspace")}
+            aria-label={t("app.name")}
             onClick={() => {
               setSelected(null);
               setPage("home");
             }}
           >
             <BrandMark busy={focusState.refreshing} />
-            <span className="wordmark-label">{t("app.workspace")}</span>
+            <span className="wordmark-label">{t("app.name")}</span>
           </button>
           <div className="appbar-center" data-tauri-drag-region>
             <CommandPalette commands={commands} onModel={openModel} />

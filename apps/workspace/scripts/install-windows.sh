@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Overwrites the active install with the current Windows build. While a window runs from the
-# exe it is moved aside as `.old`, and the next Workspace start removes it. Two version folders
+# exe it is moved aside as `.old`, and the next start removes it. Two version folders
 # stay; older ones go to the Recycle Bin.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 ROOT=/mnt/c/Users/Administrator/AppData/Local/Tinnci/Workspace/versions
-TARGET="${1:-$ROOT/$(ls -t "$ROOT" | head -1)}/tinnci-workspace.exe"
-BUILT=src-tauri/target/x86_64-pc-windows-msvc/release/tinnci-workspace.exe
+TARGET="${1:-$ROOT/$(ls -t "$ROOT" | head -1)}/lune.exe"
+BUILT=src-tauri/target/x86_64-pc-windows-msvc/release/lune.exe
 # An install copies a build, so a build older than the source would ship the old program.
 if [ -n "$(find src src-tauri/src index.html -newer "$BUILT" -print -quit)" ]; then
   echo "$BUILT is older than the source: run scripts/build-windows.sh first" >&2

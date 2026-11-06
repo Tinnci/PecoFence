@@ -20,7 +20,8 @@ export const themePreference = () => theme;
 
 export function setTheme(value: Theme) {
   theme = value;
-  apply();
+  if (document.startViewTransition) document.startViewTransition(apply);
+  else apply();
   try {
     window.localStorage.setItem(storageKey, value);
   } catch {

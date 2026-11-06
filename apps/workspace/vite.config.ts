@@ -46,7 +46,7 @@ function localHub(): Plugin {
           }
           const binary = fileURLToPath(
             new URL(
-              `./src-tauri/target/debug/tinnci-workspace${process.platform === "win32" ? ".exe" : ""}`,
+              `./src-tauri/target/debug/lune${process.platform === "win32" ? ".exe" : ""}`,
               import.meta.url,
             ),
           );

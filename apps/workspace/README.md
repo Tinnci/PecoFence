@@ -1,17 +1,17 @@
-<img src="icons/banner.svg" alt="工作台 · Tinnci Workspace" width="800">
+<img src="icons/banner.svg" alt="望 · Tinnci Lune" width="800">
 
-# Tinnci Workspace · 工作台
+# Tinnci Lune · 望
 
 An independent Windows window for discovering the local tool ecosystem and
 understanding first-time setup. Version 0.3 added first-launch prerequisite diagnosis and recovery; 0.4 imports SPM project templates; 0.5 connects sources; 0.6 creates an SPM project from discovery; 0.7 makes it one page that ends with collection running; 0.8 adds 代码活动; 0.9 centres the window on followed models; 0.10 gives each model 概览, 分支, 构建 and 设置. PecoFence and spmd keep their own lifetimes.
-Closing Workspace leaves both running.
+Closing Lune leaves both running.
 
 This first increment provides Home, a per-component setup checklist and Health.
 All cards and steps come from `dev-cli hub --json`; no project or account fixture
 is bundled. Opening Home reads inventory without running checks. Each checkable component can also be checked on its own; other observations and their timestamps are preserved. “检查状态” runs
 `hub --check`, with the CLI's read-only check policy. The SPM template step imports
 a project through the owner CLI (0.4); other unimplemented steps remain “待支持”, and
-Workspace accepts no tokens.
+Lune accepts no tokens.
 Board, timeline, issues, CI and accounts pages follow in later increments.
 
 ## Run and build
@@ -26,7 +26,7 @@ The backend asks WSL for `HOME` and `PATH`, then resolves `.local/bin/dev-cli`.
 It prepends the CLI directory and the user tool directory to the child
 process PATH, so non-interactive WSL can discover and run installed tools. A nonstandard
 installation can set the Windows user environment variable `TINNCI_DEV_CLI_WSL`
-to its absolute Linux executable path before starting Workspace. It never runs
+to its absolute Linux executable path before starting Lune. It never runs
 a login shell or accepts arbitrary commands from the frontend.
 
 From this directory on Windows:
@@ -35,7 +35,7 @@ From this directory on Windows:
 npm ci --ignore-scripts
 npm run build
 cargo build --release --locked --manifest-path src-tauri/Cargo.toml
-./src-tauri/target/release/tinnci-workspace.exe
+./src-tauri/target/release/lune.exe
 ```
 
 Cargo defaults to the `custom-protocol` feature, embedding the built frontend.
@@ -48,13 +48,13 @@ PecoFence's cross-build script.
 To install for the current user, run from Windows (WSL paths via `wslpath -w`):
 
 ```powershell
-.\scripts\install-user.ps1 -Executable .\src-tauri\target\x86_64-pc-windows-msvc\release\tinnci-workspace.exe -Version 0.6.0
+.\scripts\install-user.ps1 -Executable .\src-tauri\target\x86_64-pc-windows-msvc\release\lune.exe -Version 0.6.0
 ```
 
 It copies the executable to `%LOCALAPPDATA%\Tinnci\Workspace\versions\<version>-<sha256
 prefix>` after a checksum check and leaves earlier versions in place. It writes Start menu
-shortcuts under `Tinnci`: 工作台, 工作台 · 设置清单 (`--open setup`) and 工作台 · 运行状况
-(`--open health`), plus a desktop 工作台 unless `-NoDesktop`. Rerunning with a new build
+shortcuts under `Tinnci`: 望 Lune, 望 · 设置清单 (`--open setup`) and 望 · 运行状况
+(`--open health`), plus a desktop 望 Lune unless `-NoDesktop`. Rerunning with a new build
 repoints every shortcut. `-DryRun` prints the target and shortcut paths.
 
 For browser development on WSL:
@@ -113,10 +113,10 @@ or malformed scoped response leaves the previous inventory intact.
 
 ## Native measurement
 
-Run with no other Workspace instance open, from Windows or WSL:
+Run with no other Lune instance open, from Windows or WSL:
 
 ```sh
-python scripts/measure.py src-tauri/target/release/tinnci-workspace.exe
+python scripts/measure.py src-tauri/target/release/lune.exe
 ```
 
 From WSL use `src-tauri/target/x86_64-pc-windows-msvc/release/…` instead. The script
@@ -134,7 +134,7 @@ Local x64 release observation, 2026-10-31, executable on WSL storage:
 | App + WebView2 summed working set | 479.20 MiB | 471.75 MiB |
 | App + WebView2 private working set | 135.49 MiB | 145.00 MiB |
 | Second launch / timed exit | exit 0 / exit 0 | exit 0 / exit 0 |
-| Workspace instances after second launch | 1 | 1 |
+| Lune instances after second launch | 1 | 1 |
 
 The callback runs after two animation frames of the initial shell. It measures
 shell presentation; inventory loading finishes separately. Summed working sets
@@ -192,7 +192,7 @@ changed by verification.
 
 SPM setup follows [ADR-0004](../../../tooling/docs/ADR-0004-guided-project-setup.md):
 连接来源 → 选择项目 → 设置门槛 → 确认并开始采集. Each source keeps the login of the tool that
-owns it; Workspace never handles a token.
+owns it; Lune never handles a token.
 
 连接来源 runs `spm connections` through the native `connections` command and lists
 飞书项目 and Jira as issue sources, Gerrit and Jenkins as code and build sources. Each row
@@ -252,7 +252,7 @@ A GitHub-style grid of Gerrit changes per day over the past year, for one reposi
 optionally, one branch (`--open activity`). The repository box searches all repositories
 (`spm discover gerrit-projects`, 4142 in 5.4 s) and remembers the last choice per viewer; the
 grid comes from `spm discover gerrit-activity` (DreamCamera2's 4444 changes in 5.4 s), one cell
-per local day in Monday-first columns, graded at the quartiles of busy days in Workspace's greens.
+per local day in Monday-first columns, graded at the quartiles of busy days in the ink ramp.
 The big number is the year's total with merged/open/abandoned beside it; hovering a day fills a
 reserved line with its count and how many merged; the repository's branches are listed with
 counts and pick the branch view. Selections over 10000 changes ask for a branch.
@@ -384,7 +384,7 @@ Jenkins reads need jenkins-bridge 0.5 and the Windows cdp-forwarder reachable fr
 
 The SPM checklist's template step lists imported projects and imports one more:
 
-1. **选择项目模板…** opens the native file dialog from Rust. Workspace copies the
+1. **选择项目模板…** opens the native file dialog from Rust. Lune copies the
    chosen file (at most 1 MiB) to its cache and runs
    `spm.exe setup import-template <copy>`, which validates and plans without writing.
 2. The plan shows template, project, scope and each file's action. A conflict
@@ -407,21 +407,19 @@ writers. Imports use live mode; historical imports stay in the CLI.
 
 ## Icon
 
-`icons/workspace.svg` is the Windows app icon: 工 on the window's paper, its beam and
-base in ink and its upright a column of change cells in the activity greens, one of them
-flagged in the shortfall orange — what the app is for, in its own colours. A faint ink edge
-keeps the tile on light taskbars. Cells blur below 48 px, so `icons/workspace-small.svg`
-(a fuller tile, heavier bars, one green and one flagged block) supplies the 16, 24 and
-32 px sizes used by the title bar, tray and small taskbar.
-`scripts/icons.sh` regenerates `src-tauri/icons` from both.
+The name is 望: to watch, and the full moon. `icons/lune.svg` is the Windows app icon: weeks
+of code activity shaped as a disc, dim to bright, in paper on an ink tile.
+`icons/lune-small.svg` (a fuller tile, fewer cells) supplies the 16, 24 and 32 px sizes used
+by the title bar, tray and small taskbar. `scripts/icons.sh` regenerates `src-tauri/icons`
+from both, and `scripts/icons.py` then draws every size from 16 to 256 px cell by cell on
+whole pixels, so the icon stays sharp at each Windows display scale.
 
-The same parts make the rest of the set: `icons/banner.svg` (1600×400, the mark, 工作台 and a
-field of change cells that grows denser to the right, with two flagged; the cells build in
-column by column), `icons/card.svg` (1200×630 for sharing and about pages) and
-`icons/workspace-animated.svg`, whose upright fills cell by cell, holds and clears on a
-4.8 s loop. In the window, the mark builds in once when it appears — beam down, base up,
-the green block grows, the flag pops — and the green block pulses while a summary read
-runs, in the top bar and beside 正在读取关注的机型….
+`icons/lune-phases.svg` shows the same disc as a product's life: filling in 研发, whole at 封板,
+emptying through OTA and one column in 维护中. `Lune` draws them beside each phase name in the
+window. `icons/banner.svg` (1600×400, with a field of change cells that builds in column by
+column), `icons/card.svg` (1200×630) and `icons/lune-animated.svg` complete the set. In the
+window, the mark lights column by column when it appears and keeps sweeping while a summary
+read runs, in the top bar and beside 正在读取关注的机型….
 
 Interface motion uses Motion (`motion/react`, `LazyMotion` with `m`; the layout features
 load as a separate chunk after first paint) and NumberFlow. The current-tab underline slides
@@ -430,9 +428,9 @@ collapses out of 需要留意; ledger rows glide to their new place when a refre
 gate percentages, 本周 and the 设置 preview's before → after figures roll to new values.
 Every animation stops under `prefers-reduced-motion`.
 
-Following Windows guidance, the paper tile stays on Windows surfaces. Inside the
-app, the top bar's `BrandMark` draws the small variant's 工 without its tile, beam and
-base in the text colour; the browser favicon uses the small variant.
+Following Windows guidance, the ink tile stays on Windows surfaces. Inside the
+app, the top bar's `BrandMark` draws the disc without its tile in the text colour;
+the browser favicon uses the small variant.
 
 
 ## Model caching and language

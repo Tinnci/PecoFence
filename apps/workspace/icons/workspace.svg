@@ -1,9 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
-  <title>工作台</title>
-  <rect x="48" y="48" width="928" height="928" rx="216" fill="#24552b"/>
-  <g fill="#f4f2ec">
-    <rect x="272" y="280" width="480" height="104" rx="16"/>
-    <rect x="460" y="330" width="104" height="364"/>
-    <rect x="216" y="640" width="592" height="104" rx="16"/>
-  </g>
-</svg>

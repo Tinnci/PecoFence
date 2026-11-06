@@ -1,3 +1,4 @@
+import { Lune } from "@/components/lune";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -182,6 +183,7 @@ function PhaseChip({
   if (!onPhase)
     return (
       <span className="phase-chip" title={from}>
+        <Lune phase={profile.phase as Phase} />
         {name}
       </span>
     );
@@ -196,6 +198,7 @@ function PhaseChip({
             title={from}
             aria-label={t("profile.phaseFor", { code: profile.code })}
           >
+            <Lune phase={profile.phase as Phase} />
             {name}
           </button>
         }
@@ -210,6 +213,7 @@ function PhaseChip({
           >
             {(["auto", ...RUNNING, "maintenance"] as const).map((choice) => (
               <DropdownMenuRadioItem key={choice} value={choice}>
+                {choice === "auto" ? null : <Lune phase={choice} />}
                 {t(`profile.phase.${choice}`)}
               </DropdownMenuRadioItem>
             ))}

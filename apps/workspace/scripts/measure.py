@@ -38,10 +38,10 @@ do {{
   $old = $ids.Count
   $ids += @($rows | Where-Object {{ $_.ParentProcessId -in $ids -and $_.ProcessId -notin $ids }} | ForEach-Object {{ $_.ProcessId }})
 }} while ($ids.Count -gt $old)
-$processes = @(Get-Process -Id $ids -ErrorAction SilentlyContinue | Where-Object {{ $_.ProcessName -in @('tinnci-workspace','msedgewebview2') }})
+$processes = @(Get-Process -Id $ids -ErrorAction SilentlyContinue | Where-Object {{ $_.ProcessName -in @('lune','msedgewebview2') }})
 $private = @(Get-CimInstance Win32_PerfFormattedData_PerfProc_Process | Where-Object {{ $_.IDProcess -in $processes.Id }})
 [pscustomobject]@{{
-  app_count = @($processes | Where-Object {{ $_.ProcessName -eq 'tinnci-workspace' }}).Count
+  app_count = @($processes | Where-Object {{ $_.ProcessName -eq 'lune' }}).Count
   process_count = $processes.Count
   app_working_set_mib = [math]::Round((Get-Process -Id {root}).WorkingSet64 / 1MB, 2)
   tree_working_set_mib = [math]::Round(($processes | Measure-Object WorkingSet64 -Sum).Sum / 1MB, 2)
@@ -64,7 +64,7 @@ $private = @(Get-CimInstance Win32_PerfFormattedData_PerfProc_Process | Where-Ob
                 **memory,
             }, indent=2))
         except (queue.Empty, ValueError) as exc:
-            raise SystemExit("No first-frame signal; close any existing Workspace instance and retry") from exc
+            raise SystemExit("No first-frame signal; close any existing Lune instance and retry") from exc
 
 
 if __name__ == "__main__":

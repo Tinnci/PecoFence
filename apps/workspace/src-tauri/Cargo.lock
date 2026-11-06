@@ -3989,7 +3989,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "tinnci-workspace"
+name = "lune"
 version = "0.10.0"
 dependencies = [
  "libc",

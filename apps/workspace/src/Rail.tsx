@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ContextTarget, type ContextAction } from "./components/context-menu";
 import { Fragment } from "react";
+import { Lune } from "@/components/lune";
 import { RUNNING } from "./phase";
 import { TabLine } from "./Model";
 import { prefetchBuilds } from "./focus-cache";
@@ -275,7 +276,10 @@ export function Rail({
               {collapsed ? (
                 <hr className="rail-phase-rule" />
               ) : (
-                <div className="rail-phase">{t(`profile.phase.${phase}`)}</div>
+                <div className="rail-phase">
+                  <Lune phase={phase} size={11} />
+                  {t(`profile.phase.${phase}`)}
+                </div>
               )}
               {rows.map(modelRow)}
             </Fragment>
