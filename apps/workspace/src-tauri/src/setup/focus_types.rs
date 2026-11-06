@@ -595,6 +595,40 @@ pub struct Logs {
     pub apps: std::collections::BTreeMap<String, LogCount>,
     pub truncated: bool,
 }
+/// One dated stage or milestone on the calendar.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct CalEvent {
+    pub id: String,
+    pub source: String,
+    pub key: String,
+    pub stage: String,
+    pub milestone: bool,
+    pub project: String,
+    pub model: String,
+    pub legacy: bool,
+    pub start: String,
+    pub end: String,
+    pub status: String,
+    pub version: String,
+    pub customer: String,
+    pub owner: String,
+    pub note: String,
+}
+/// How one calendar source read.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct CalSource {
+    pub source: String,
+    pub count: u32,
+    pub error: String,
+}
+/// Everything scheduled across projects.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct Calendar {
+    pub computed_at: String,
+    pub configured: bool,
+    pub sources: Vec<CalSource>,
+    pub events: Vec<CalEvent>,
+}
 /// One thing waiting on the signed-in user.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct NeedItem {
@@ -956,6 +990,9 @@ pub struct FocusData {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub forecasts: Option<Vec<Forecast>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub calendar: Option<Calendar>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub repos: Option<Vec<RepoRow>>,

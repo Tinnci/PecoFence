@@ -487,6 +487,8 @@ fn desktop() {
             | "needs"
             | "needs_cached"
             | "forecast"
+            | "calendar"
+            | "calendar_cached"
             | "repos"
             | "chip" => None,
             "issues" | "requirements" | "issues_full" | "requirements_full" => {
@@ -507,6 +509,7 @@ fn desktop() {
         let deadline = std::time::Duration::from_secs(match action.as_str() {
             "summary" | "refresh" => 600,
             "suggest" => 180,
+            "calendar" => 150,
             "builds" | "build_evidence" => 120,
             "change_files"
             | "change_diff"

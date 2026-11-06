@@ -4649,6 +4649,39 @@ a .owner-chip { color: inherit; }
   }
 }
 
+/* Calendar: stages as bars across each week; solid is a dated build or release, tint a window. */
+.calendar { display: grid; gap: 10px; min-width: 0; }
+.cal-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.cal-toolbar h1 { margin: 0 6px; font-size: 22px; }
+.cal-gap { flex: 1; }
+.cal-head, .cal-week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.cal-head { color: var(--muted-foreground); font-size: 12px; }
+.cal-head span { padding: 0 8px; }
+.cal-month { display: grid; border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
+.cal-week { position: relative; min-height: 104px; row-gap: 3px; padding-bottom: 4px; border-bottom: 1px solid var(--line); }
+.cal-day { grid-row: 1 / -1; margin-bottom: -4px; padding: 3px 8px; border-right: 1px solid var(--line); }
+.cal-day.is-weekend { background: color-mix(in srgb, var(--muted) 55%, transparent); }
+.cal-day.is-off .cal-num { opacity: 0.4; }
+.cal-num { display: inline-block; min-width: 22px; font-size: 12px; font-weight: 600; line-height: 22px; text-align: center; font-variant-numeric: tabular-nums; }
+.cal-num.is-today { border-radius: 11px; background: var(--foreground); color: var(--background); }
+.cal-bar { z-index: 1; min-width: 0; margin: 0 3px; padding: 0 7px; overflow: hidden; border: 0; border-radius: 4px; color: var(--foreground); font: inherit; font-size: 12px; font-weight: 500; line-height: 24px; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
+.cal-bar:hover { filter: brightness(1.1); }
+.cal-bar.is-picked { outline: 2px solid var(--foreground); outline-offset: 1px; }
+.cal-bar.is-done { opacity: 0.55; }
+.cal-build { background: var(--chart-1); color: var(--on-solid); }
+.cal-release, .cal-rollout { background: var(--brand-2-fill); color: var(--on-solid); }
+.cal-test { background: color-mix(in srgb, var(--chart-1) 20%, transparent); }
+.cal-fix { background: color-mix(in srgb, var(--chart-2) 24%, transparent); }
+.cal-acceptance { background: color-mix(in srgb, var(--brand-2-fill) 24%, transparent); }
+.cal-freeze { background: var(--bad-solid); color: var(--on-solid); }
+.cal-iteration { background: var(--muted); }
+.cal-more { z-index: 1; grid-column: 1 / -1; justify-self: start; margin: 0 6px; padding: 0; border: 0; background: none; color: var(--muted-foreground); font: inherit; font-size: 12px; }
+.cal-more:hover { color: var(--foreground); text-decoration: underline; }
+.cal-detail { display: grid; gap: 4px; padding: 10px 0; font-size: 13px; }
+.cal-detail header { display: flex; align-items: center; gap: 10px; }
+.cal-detail p { margin: 0; }
+.cal-note { white-space: pre-line; }
+
 /* Legacy models stay in reach but raise nothing: no alarm colour, set apart, folded. */
 .is-legacy .short, .is-legacy .gate-cell .short { color: var(--muted-foreground); }
 .is-legacy .gate-track .short { background: var(--muted-foreground); opacity: 0.45; }

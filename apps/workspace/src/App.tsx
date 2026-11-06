@@ -67,6 +67,7 @@ import { projectWorkbench } from "./project-workbench";
 import { DataBackup } from "./DataBackup";
 import { RemoveModelDialog } from "./RemoveModelDialog";
 import { RenameModelDialog } from "./RenameModelDialog";
+import { CalendarPage } from "./Calendar";
 import { CommandPalette } from "./CommandPalette";
 import { MyIssues } from "./MyIssues";
 import { hardNeeds, NeedsYou, useNeeds } from "./NeedsYou";
@@ -326,6 +327,7 @@ function Workspace() {
     logs: [t("logs.title"), ""],
     traces: [t("nav.traces"), ""],
     mine: [t("nav.mine"), ""],
+    calendar: [t("nav.calendar"), ""],
     model: [t("app.model"), ""],
     follow: [t("app.followAModel"), ""],
   };
@@ -385,6 +387,7 @@ function Workspace() {
   const commands: Command[] = [
     pageCommand("mine", t("nav.mine"), "my work assigned"),
     pageCommand("home", t("nav.models"), "models home"),
+    pageCommand("calendar", t("nav.calendar"), "calendar ota schedule"),
     pageCommand("activity", t("nav.activity"), "activity gerrit"),
     pageCommand("health", t("nav.health"), "health status"),
     pageCommand("setup", t("nav.setup"), "setup checklist"),
@@ -557,6 +560,8 @@ function Workspace() {
                   <NeedsYou onModel={openModel} />
                   <MyIssues onModel={openModel} />
                 </div>
+              ) : page === "calendar" ? (
+                <CalendarPage onModel={openModel} />
               ) : page === "model" && modelCode ? (
                 <ModelPage
                   key={modelCode}

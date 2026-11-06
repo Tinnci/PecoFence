@@ -187,6 +187,8 @@ pub fn route_args(r: &FocusRequest) -> Option<Vec<String>> {
         "needs" => Some(vec!["focus".into(), "needs".into()]),
         "needs_cached" => Some(vec!["focus".into(), "needs".into(), "--cached".into()]),
         "forecast" => Some(vec!["focus".into(), "forecast".into()]),
+        "calendar" => Some(vec!["focus".into(), "calendar".into()]),
+        "calendar_cached" => Some(vec!["focus".into(), "calendar".into(), "--cached".into()]),
         "mine" => Some(vec!["focus".into(), "mine".into()]),
         "mine_cached" => Some(vec!["focus".into(), "mine".into(), "--cached".into()]),
         "search" => {

@@ -23,6 +23,7 @@ export type Page =
   | "logs"
   | "traces"
   | "mine"
+  | "calendar"
   | "model"
   | "follow";
 export function isPage(value: unknown): value is Page {
@@ -34,7 +35,8 @@ export function isPage(value: unknown): value is Page {
     value === "activity" ||
     value === "logs" ||
     value === "traces" ||
-    value === "mine"
+    value === "mine" ||
+    value === "calendar"
   );
 }
 export async function loadHub(
@@ -199,6 +201,8 @@ export async function focus(
     | "needs"
     | "needs_cached"
     | "forecast"
+    | "calendar"
+    | "calendar_cached"
     | "repos"
     | "summary"
     | "cached"

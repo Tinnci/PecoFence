@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Activity,
+  CalendarDays,
   ChevronRight,
   Gauge,
   Inbox,
@@ -280,6 +281,7 @@ export function Rail({
         ) : null}
       </div>
       <div className="rail-foot">
+        {link("calendar", CalendarDays, t("nav.calendar"), page === "calendar")}
         {link("activity", Activity, t("nav.activity"), page === "activity")}
         {link("health", Gauge, t("nav.system"), isSystem(page))}
         <RailLink
