@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Move the Maon workspace app to its own repository. PecoFence no longer builds or packages it.
 - Mark the SPM panel stale when its snapshot is older than `freshness_ttl_secs`, with the data age, and name sources that report errors, partial coverage or their own expired TTL. The capsule keeps its gate counts and adds a warning marker. Historical (retained) data is therefore never shown as current.
 
 ## 0.0.5 — Native widgets and bounded exit
