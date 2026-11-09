@@ -14,7 +14,7 @@ a project through the owner CLI (0.4); other unimplemented steps remain “待�
 Maon accepts no tokens.
 Board, timeline, issues, CI and accounts pages follow in later increments.
 
-## Run and build
+## Run, build and install
 
 Requirements: Windows 11 x64, WebView2, Rust MSVC, C++ Build Tools, Node >=24,
 and the default WSL distribution with `dev-cli` installed. The hub command first
@@ -29,7 +29,7 @@ installation can set the Windows user environment variable `TINNCI_DEV_CLI_WSL`
 to its absolute Linux executable path before starting Maon. It never runs
 a login shell or accepts arbitrary commands from the frontend.
 
-From this directory on Windows:
+Build from Windows in this directory:
 
 ```powershell
 npm ci --ignore-scripts
@@ -38,36 +38,29 @@ cargo build --release --locked --manifest-path src-tauri/Cargo.toml
 ./src-tauri/target/release/lune.exe
 ```
 
-Cargo defaults to the `custom-protocol` feature, embedding the built frontend.
-The resulting executable starts by double-click, without Vite or PecoFence.
-For desktop UI development, use `npm run tauri -- dev --no-default-features`.
-For WSL cross-builds, run `./apps/workspace/scripts/build-windows.sh` from the
-repository root. It uses the existing MSVC and SDK overrides documented by
-PecoFence's cross-build script.
+From the repository root in WSL, `./apps/workspace/scripts/build-windows.sh`
+runs the same frontend build and cross-compiles to
+`src-tauri/target/x86_64-pc-windows-msvc/release/lune.exe`. Cargo's default
+`custom-protocol` feature embeds `dist`, so the executable starts without Vite
+or PecoFence. Use `npm run tauri -- dev --no-default-features` for desktop UI
+development.
 
-To install for the current user, run from Windows (WSL paths via `wslpath -w`):
+Install for the current user with:
 
 ```powershell
-.\scripts\install-user.ps1 -Executable .\src-tauri\target\x86_64-pc-windows-msvc\release\lune.exe -Version 0.6.0
+.\scripts\install-user.ps1 `
+  -Executable .\src-tauri\target\x86_64-pc-windows-msvc\release\lune.exe `
+  -Version 0.10.0
 ```
 
-It copies the executable to `%LOCALAPPDATA%\Tinnci\Workspace\versions\<version>-<sha256
-prefix>` after a checksum check and leaves earlier versions in place. It writes one **Maon** Start menu shortcut under `Tinnci`, plus a desktop Maon unless
-`-NoDesktop`. Setup and health are available inside the app. Rerunning with a new build
-repoints every shortcut. `-DryRun` prints the target and shortcut paths.
+That creates `%LOCALAPPDATA%\Tinnci\Workspace\versions\<version>-<sha256-prefix>\lune.exe`
+and the Maon shortcuts. `-NoDesktop` skips the desktop shortcut; `-DryRun`
+prints the paths. For browser development, run `npm run bridge:build` then
+`npm run dev`; that localhost adapter uses the same Rust hub projection and is
+not part of production.
 
-For browser development on WSL:
-
-```sh
-npm ci --ignore-scripts
-npm run bridge:build
-npm run dev
-```
-
-The development-only localhost adapter invokes the same compiled Rust hub
-projection. Rebuild the bridge after changing Rust. Production has no HTTP
-listener. The Rust crate has its own workspace and lockfile so the organizer's
-ordinary build does not acquire a web runtime dependency.
+The exact toolchain, WSL/Windows split, install variants, artifact hashes and
+troubleshooting are in [docs/BUILD.md](docs/BUILD.md).
 
 ## Verification
 

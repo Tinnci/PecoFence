@@ -17,6 +17,11 @@
 - [Process lifecycle: closing, watchdog, `status` and `quit`](LIFECYCLE.md)
 - [README in other languages](readme/) — the root README is English; translations live in `docs/readme/`
 
+## Maon (`apps/workspace`)
+
+- [Build, artifact and install](../apps/workspace/docs/BUILD.md)
+- [Maon README: runtime boundary and feature history](../apps/workspace/README.md)
+
 `ARCHITECTURE.md` is the target design, not a claim that the rewrite is complete.
 The roadmap distinguishes implemented slices from planned work. Older Cordis,
 P0–P2a, and cross-repository planning documents under `docs/` are historical
