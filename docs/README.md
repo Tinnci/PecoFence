@@ -1,5 +1,6 @@
 # Documentation
 
+- [Repository map: products, directories, artifacts](REPOSITORY_MAP.md)
 - [User requirements and native Settings replacement checklist, in Chinese](USER_REQUIREMENTS.md)
 - [Application architecture and typed interfaces, in Chinese](ARCHITECTURE.md)
 - [Architecture implementation roadmap, in Chinese](ROADMAP.md)
