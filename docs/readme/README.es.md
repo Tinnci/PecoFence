@@ -143,7 +143,7 @@ precisa hasta una interacción de escritorio mejor resuelta.
 Instala Rust stable y Visual Studio Build Tools con la carga de trabajo de C++ y el Windows SDK.
 El Windows SDK es una herramienta de desarrollo, distinta del runtime de Windows App SDK incluido.
 Las compilaciones públicas usan solo este repositorio y registros públicos,
-incluido `crates/spm-contracts` (0.1.0); no necesitan un token privado ni una copia
+incluido `crates/spm-contracts` (0.2.0); no necesitan un token privado ni una copia
 de SPM. El backend opcional `Tinnci/spm` sigue siendo privado y solo se necesita
 para datos SPM en vivo, no para compilar o usar los grupos de escritorio normales.
 No se distribuye con PecoFence. Consulta el [límite SPM](../SPM_BOUNDARY.md).

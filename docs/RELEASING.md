@@ -55,7 +55,7 @@ checkout. Actions no longer reads private SPM source. Do not introduce privilege
 hash-pinned Windows App SDK source NuGet only. Runtime extraction is regenerated
 and hash-verified on each build.
 
-The local public `crates/spm-contracts` crate (0.1.0) is not a daemon distribution.
+The local public `crates/spm-contracts` crate (0.2.0) is not a daemon distribution.
 Source checks and headless/synthetic protocol tests remain required; feature gates
 must not silently skip failures. Live private-daemon integration belongs to a
 separate authorized private workflow and must not be claimed from public CI

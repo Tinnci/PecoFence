@@ -29,7 +29,7 @@ license = "Apache-2.0"
 [workspace.dependencies]
 # The public wire contract lives here; private SPM consumes an immutable revision
 # of this repository. Neither desktop builds nor protocol tests need backend access.
-spm-contracts = { version = "=0.1.0", path = "crates/spm-contracts" }
+spm-contracts = { version = "=0.2.0", path = "crates/spm-contracts" }
 windows-core = "0.100"
 windows-numerics = "0.100"
 windows-window = "0.100"

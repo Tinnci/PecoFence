@@ -23,7 +23,7 @@ their own declared `runs.using` version.
   YAML validator or a recursive supply-chain audit.
 - The winget wrapper still invokes mutable/downloaded upstream tools. It remains
   disabled by default; see [INDEPENDENCE.md](INDEPENDENCE.md).
-- Cargo automation is deliberately not enabled yet. `spm-contracts` 0.1.0 is a
+- Cargo automation is deliberately not enabled yet. `spm-contracts` 0.2.0 is a
   public workspace crate, not a private Git dependency; Windows Composition is
   vendored. Review contracts, Rust/Windows toolchain and binding changes together.
 - The Windows App SDK runtime comes from the public NuGet flat-container endpoint

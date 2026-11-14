@@ -108,7 +108,14 @@ def check(root: Path, metadata: dict | None = None) -> list[str]:
     errors = []
     manifest = tomllib.loads((root / "Cargo.toml").read_text(encoding="utf-8"))
     dependency = manifest["workspace"]["dependencies"].get("spm-contracts")
-    if dependency != {"version": "=0.1.0", "path": "crates/spm-contracts"}:
+    contract_manifest = root / "crates/spm-contracts/Cargo.toml"
+    contract_version = (
+        tomllib.loads(contract_manifest.read_text(encoding="utf-8"))["package"]["version"]
+        if contract_manifest.is_file() else None
+    )
+    if not contract_version or dependency != {
+        "version": f"={contract_version}", "path": "crates/spm-contracts"
+    }:
         errors.append("spm-contracts must use the exact public workspace path/version")
     excluded = manifest["workspace"].get("exclude", [])
     if not isinstance(excluded, list) or WINDOWS_REACTOR_PATH not in excluded:
@@ -181,8 +188,8 @@ def check(root: Path, metadata: dict | None = None) -> list[str]:
                         pending.append(target / "Cargo.toml")
     lock = tomllib.loads((root / "Cargo.lock").read_text(encoding="utf-8"))
     contracts = [p for p in lock["package"] if p["name"] == "spm-contracts"]
-    if len(contracts) != 1 or contracts[0].get("source") or contracts[0]["version"] != "0.1.0":
-        errors.append("Cargo.lock must contain one local spm-contracts 0.1.0")
+    if len(contracts) != 1 or contracts[0].get("source") or contracts[0]["version"] != contract_version:
+        errors.append("Cargo.lock must contain the declared local spm-contracts version")
     windows_reactors = [p for p in lock["package"] if p["name"] == "windows-reactor"]
     if (
         len(windows_reactors) != 1

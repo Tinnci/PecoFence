@@ -141,7 +141,7 @@ PecoFence steht unter der Apache-2.0-Lizenz, und Beiträge sind willkommen – v
 Installieren Sie Rust stable sowie die Visual Studio Build Tools mit C++-Workload und Windows SDK.
 Das Windows SDK dient der Entwicklung; es ist nicht die mitgelieferte Windows App SDK Runtime.
 Öffentliche Builds verwenden nur dieses Repository und öffentliche Registries,
-einschließlich `crates/spm-contracts` (0.1.0); weder ein privater Token noch ein
+einschließlich `crates/spm-contracts` (0.2.0); weder ein privater Token noch ein
 SPM-Checkout ist nötig. Das optionale Backend `Tinnci/spm` bleibt privat und wird
 nur für Live-SPM-Daten benötigt, nicht zum Kompilieren oder Nutzen normaler
 Desktop-Gruppen. Es wird nicht mitgeliefert. Siehe [SPM-Grenze](../SPM_BOUNDARY.md).

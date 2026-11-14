@@ -129,7 +129,7 @@ https://github.com/user-attachments/assets/6320cf28-a791-4720-9659-b4575df021a0
 
 安装 Rust stable、Visual Studio Build Tools 的 C++ 工作负载和 Windows SDK。
 Windows SDK 是开发工具，与发行包自包含的 Windows App SDK Runtime 不同。
-公开构建只使用本仓库和公开 registry，包含本地 `crates/spm-contracts`（0.1.0），
+公开构建只使用本仓库和公开 registry，包含本地 `crates/spm-contracts`（0.2.0），
 不需要私有 token 或 SPM checkout。可选的 `Tinnci/spm` 后端保持私有，
 仅实时 SPM 数据需要它；编译或使用普通桌面围栏不需要，也不随 PecoFence 分发。
 详见 [SPM 边界](../SPM_BOUNDARY.md)。运行：

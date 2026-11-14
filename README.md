@@ -145,7 +145,12 @@ Install Rust stable and Visual Studio Build Tools with the C++ workload and Wind
 The Windows SDK is for development; released packages are intended to carry the
 Windows App SDK Runtime 2.5.1 self-contained, not require users to install it separately.
 Public builds use only this repository and public registries, including the local
-`crates/spm-contracts` crate (0.1.0); no private token or SPM checkout is needed.
+`crates/spm-contracts` crate (0.2.0); no private token or SPM checkout is needed.
+
+SPM consumers pin the exact `spm-contracts` crate release and source revision.
+The crate's release version tracks Rust API changes. Runtime compatibility is
+negotiated using `PROTOCOL_MAJOR`, `PROTOCOL_MINOR`, and advertised IPC features.
+
 The optional `Tinnci/spm` backend remains private and is needed only for live SPM
 data, not for compiling or using ordinary desktop fences. It is not distributed
 with PecoFence. See the [SPM boundary](docs/SPM_BOUNDARY.md).

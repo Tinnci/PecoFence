@@ -136,7 +136,7 @@ PecoFence は Apache 2.0 ライセンスで公開されています。訳文の�
 Rust stable と、C++ ワークロードおよび Windows SDK を含む Visual Studio Build Tools をインストールします。
 Windows SDK は開発用ツールで、同梱する Windows App SDK Runtime とは別のものです。
 公開ビルドは、このリポジトリと公開レジストリのみを使用します。
-`crates/spm-contracts`（0.1.0）を含み、非公開トークンや SPM のチェックアウトは不要です。
+`crates/spm-contracts`（0.2.0）を含み、非公開トークンや SPM のチェックアウトは不要です。
 オプションの `Tinnci/spm` バックエンドは非公開のままで、ライブ SPM データにのみ必要です。
 通常のデスクトップグループのビルドや利用には不要で、PecoFence には同梱されません。
 [SPM の境界](../SPM_BOUNDARY.md)を参照してください。

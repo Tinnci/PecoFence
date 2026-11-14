@@ -144,7 +144,7 @@ a uma interação melhor na área de trabalho.
 Instale o Rust stable e o Visual Studio Build Tools com a carga de trabalho C++ e o Windows SDK.
 O Windows SDK é uma ferramenta de desenvolvimento, diferente do Windows App SDK Runtime incluído.
 As compilações públicas usam apenas este repositório e registros públicos, incluindo
-`crates/spm-contracts` (0.1.0); não exigem token privado nem checkout do SPM.
+`crates/spm-contracts` (0.2.0); não exigem token privado nem checkout do SPM.
 O backend opcional `Tinnci/spm` permanece privado e só é necessário para dados SPM
 ao vivo, não para compilar ou usar os grupos normais da área de trabalho.
 Ele não é distribuído com o PecoFence. Veja o [limite SPM](../SPM_BOUNDARY.md).

@@ -8,7 +8,7 @@
 - Python >=3.14 for catalog checks/source packaging.
 
 Public builds use only this repository and public registries. The local
-`crates/spm-contracts` crate is version 0.1.0; no SPM checkout or private token
+`crates/spm-contracts` crate is version 0.2.0; no SPM checkout or private token
 is required. Ordinary desktop fences work without the optional private backend;
 live SPM data needs an authorized backend installation, not distributed here.
 See [SPM_BOUNDARY.md](SPM_BOUNDARY.md) for the contract and verification boundary.
@@ -145,7 +145,7 @@ the run and expects them to be unchanged.
 | `crates/render` | Direct2D/Composition drawing, motion and glass |
 | `crates/app` | Native windows, input, application state and Settings UI |
 | `crates/watchdog` | Records a crash in the session record and restores desktop icons after an abnormal app exit ([LIFECYCLE.md](LIFECYCLE.md)) |
-| `crates/spm-contracts` | Public shared SPM wire contracts (0.1.0), not the private daemon |
+| `crates/spm-contracts` | Public shared SPM wire contracts (0.2.0), not the private daemon |
 | `locales` | Shared native and settings messages |
 
 Regenerate Win32 bindings with `cargo run -p tool_bindgen`. The definitions in
