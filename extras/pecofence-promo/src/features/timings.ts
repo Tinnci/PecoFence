@@ -1,6 +1,6 @@
 // Captured action times mapped to the edited shots, in frames at 30 fps.
 export const timings = {
-  "groups": {
+  groups: {
     "draw-new-area": 4,
     "create-menu": 58,
     "rename-menu": 84,
@@ -10,22 +10,22 @@ export const timings = {
     "drag-file-2": 149,
     "position-group": 181,
     "resize-group": 213,
-    "poster": 295
+    poster: 295,
   },
-  "rules": {
+  rules: {
     "new-image": 79,
     "new-document": 195,
     "rule-proof": 309,
-    "poster": 369
+    poster: 369,
   },
-  "portal": {
+  portal: {
     "enter-brand": 67,
     "return-parent": 144,
     "live-folder-update": 216,
     "point-new-file": 300,
-    "poster": 391
+    poster: 391,
   },
-  "tabs": {
+  tabs: {
     "tabbed-groups": 28,
     "merge-state": 64,
     "switch-media": 90,
@@ -33,17 +33,17 @@ export const timings = {
     "separate-tab": 186,
     "park-pointer": 257,
     "align-detached-tab": 263,
-    "poster": 321
+    poster: 321,
   },
-  "peek": {
+  peek: {
     "working-application": 0,
-    "poster": 329
+    poster: 329,
   },
-  "hide": {
+  hide: {
     "point-desktop": 35,
     "point-title": 136,
     "leave-title": 145,
     "hover-expand": 214,
-    "poster": 281
-  }
+    poster: 281,
+  },
 };

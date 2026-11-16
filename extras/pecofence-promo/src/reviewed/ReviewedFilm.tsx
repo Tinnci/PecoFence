@@ -1,1 +1,1 @@
-export {MotionFilm as ReviewedFilm} from "../motion/MotionFilm";
+export { MotionFilm as ReviewedFilm } from "../motion/MotionFilm";

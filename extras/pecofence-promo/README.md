@@ -31,12 +31,12 @@ The current music is an original 128 BPM dance track with a four-on-the-floor
 kick, backbeat claps, offbeat hats, syncopated bass and transition risers.
 Kick/impact accents align with 7, 15 and 23 seconds.
 
-| Time | What the viewer sees |
-|---|---|
-| 0–7 s | Work and Art panels assemble from depth beside the product name and definition |
-| 7–15 s | New Coast.png and Notes.txt files automatically appear in Art and Work |
-| 15–23 s | Native groups merge and switch; the camera closes in on the tabbed panel |
-| 23–30 s | Panels reassemble beside the brand, closing promise and availability |
+| Time    | What the viewer sees                                                           |
+| ------- | ------------------------------------------------------------------------------ |
+| 0–7 s   | Work and Art panels assemble from depth beside the product name and definition |
+| 7–15 s  | New Coast.png and Notes.txt files automatically appear in Art and Work         |
+| 15–23 s | Native groups merge and switch; the camera closes in on the tabbed panel       |
+| 23–30 s | Panels reassemble beside the brand, closing promise and availability           |
 
 `review/PECOFENCE-AUTO-PLAN.md` records the current update;
 `review/TECH-PLAN.md` records the independently reviewed visual direction. Projected
@@ -99,13 +99,13 @@ npm run launch:render
 Earlier output: `out/PecoFence-launch-en-1080p.mp4` and
 `out/PecoFence-launch-poster.png`. Preview composition: `PecoFence-Launch`.
 
-| Time | What the viewer sees |
-|---|---|
-| 0–3 s | A close reveal of the current glass desktop |
-| 3–8 s | Complete groups with documents, folders and image thumbnails |
-| 8–15 s | Work / Art tab switching and native tab separation |
-| 15–23 s | Peek brings files above a staged project workspace |
-| 23–28 s | PecoFence: Make room for focus |
+| Time    | What the viewer sees                                         |
+| ------- | ------------------------------------------------------------ |
+| 0–3 s   | A close reveal of the current glass desktop                  |
+| 3–8 s   | Complete groups with documents, folders and image thumbnails |
+| 8–15 s  | Work / Art tab switching and native tab separation           |
+| 15–23 s | Peek brings files above a staged project workspace           |
+| 23–28 s | PecoFence: Make room for focus                               |
 
 See `LAUNCH-STORYBOARD.md` for the short-film plan. It favors benefits and native
 motion over instructions. It contains no voiceover or numbered tutorial steps.
@@ -151,16 +151,16 @@ Earlier output: `out/PecoFence-features-en-1080p.mp4` and
 The earlier timeline is `src/features/FeatureFilm.tsx`. Its English headings,
 step-by-step captions and operation callouts accompany six native recordings:
 
-| Time | Demonstration |
-|---|---|
-| 0–4 s | What PecoFence does |
-| 4–14 s | Create and name a group, drag in two files, move and resize |
-| 14–26 s | New PNG and TXT files automatically reach the configured groups |
+| Time    | Demonstration                                                       |
+| ------- | ------------------------------------------------------------------- |
+| 0–4 s   | What PecoFence does                                                 |
+| 4–14 s  | Create and name a group, drag in two files, move and resize         |
+| 14–26 s | New PNG and TXT files automatically reach the configured groups     |
 | 26–39 s | Browse a folder portal, return to the parent, see a new file appear |
-| 39–50 s | Switch between Work and Art tabs, then separate the groups |
-| 50–61 s | Raise groups over a sample application with Peek, then return |
-| 61–71 s | Hide and restore groups, roll up one group, hover to expand |
-| 71–75 s | Closing brand card |
+| 39–50 s | Switch between Work and Art tabs, then separate the groups          |
+| 50–61 s | Raise groups over a sample application with Peek, then return       |
+| 61–71 s | Hide and restore groups, roll up one group, hover to expand         |
+| 71–75 s | Closing brand card                                                  |
 
 See `FEATURE-STORYBOARD.md` for the feature plan and editorial decisions.
 The feature film is understandable without sound; its music contains no voiceover.
@@ -189,14 +189,14 @@ Each scene is also registered separately in Remotion Studio. Copy and layout liv
 
 ## Original brand film storyboard
 
-| Time | Scene | Headline |
-|---|---|---|
-| 0–4.3 s | Scattered desktop files | Less clutter. More clarity. |
-| 4.3–10.2 s | Organized real product panels | Everything in its place. |
-| 10.2–15.2 s | Acrylic material close-up | Native feel. Clear thinking. |
-| 15.2–20.7 s | Recorded tab merge and roll-up | More space. Same desktop. |
+| Time        | Scene                             | Headline                       |
+| ----------- | --------------------------------- | ------------------------------ |
+| 0–4.3 s     | Scattered desktop files           | Less clutter. More clarity.    |
+| 4.3–10.2 s  | Organized real product panels     | Everything in its place.       |
+| 10.2–15.2 s | Acrylic material close-up         | Native feel. Clear thinking.   |
+| 15.2–20.7 s | Recorded tab merge and roll-up    | More space. Same desktop.      |
 | 20.7–25.2 s | Animated quick-hide demonstration | Your desktop. Room to breathe. |
-| 25.2–30 s | Brand closing frame | Make room for focus. |
+| 25.2–30 s   | Brand closing frame               | Make room for focus.           |
 
 Transitions overlap by 12 frames. Organization and quick-hide shots use motion
 graphics built from actual panel captures; the tab/roll-up shot uses a real recording.

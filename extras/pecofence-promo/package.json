@@ -30,6 +30,8 @@
     "build": "remotion bundle",
     "upgrade": "remotion upgrade",
     "lint": "eslint src && tsc",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "stills": "node scripts/render.mjs --stills",
     "render": "node scripts/render.mjs",
     "assets": "node scripts/make-assets.mjs",
