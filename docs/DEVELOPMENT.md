@@ -50,8 +50,9 @@ Development and test builds disable debug symbols and incremental compilation
 to keep `target/` smaller. Debug assertions and overflow checks remain enabled;
 the tradeoffs are less detailed debugger/backtrace information and slower rebuilds.
 Release builds retain line-table symbols for crash diagnosis. Only `pecofence-core`
-uses size optimization for model/protocol code; renderer/platform/application keep
-performance optimization. The `pecofence.exe` gate is 7 MiB (7,340,032 bytes);
+and `pecofence-plugin-widgets` use size optimization (`opt-level = "s"`);
+renderer/platform/application keep performance optimization. The `pecofence.exe`
+gate is 7 MiB (7,340,032 bytes);
 the 59,158,503-byte SDK runtime inventory is measured and bounded separately.
 
 For a debugger session, temporarily set `CARGO_PROFILE_DEV_DEBUG=2` (or
@@ -141,15 +142,28 @@ the run and expects them to be unchanged.
 | Directory | Responsibility |
 |---|---|
 | `crates/core` | Platform-independent models, configuration, rules, geometry and translation |
+| `crates/work-calendar` | Regional holiday and workday data |
+| `crates/cli` | `pecofence-cli.exe` read-only queries, organizing suggestions, status and quit |
+| `crates/spm-contracts` | Public shared SPM wire contracts (`0.2.0`), not the private daemon |
+| `crates/spm-transport` | Named-pipe SPM transport actor and host IPC capability adapter |
+| `crates/plugin-api` | Public plugin traits, scene/canvas commands and design tokens |
+| `crates/plugin-kernel` | Plugin scope tree, capability registry and task supervisor |
+| `crates/plugin-spm` | Live SPM panels (`board`, `ci_watch`, `issues`, `planning`) |
+| `crates/plugin-widgets` | Clock, calendar, note, to-do and Mermaid diagram widgets |
+| `crates/shell-contract` | Shared Win32 shell command wire contract |
+| `crates/shell-extension` | Explorer context-menu COM DLL (`cdylib`) |
 | `crates/platform` | Win32, shell, desktop integration and display-language detection |
 | `crates/render` | Direct2D/Composition drawing, motion and glass |
 | `crates/app` | Native windows, input, application state and Settings UI |
 | `crates/watchdog` | Records a crash in the session record and restores desktop icons after an abnormal app exit ([LIFECYCLE.md](LIFECYCLE.md)) |
-| `crates/spm-contracts` | Public shared SPM wire contracts (0.2.0), not the private daemon |
+| `tools/bindgen` | Regenerates Win32/WinRT bindings into `platform`, `render` and `shell-extension` |
+| `vendor/windows-reactor` | Patched WinUI 3 Reactor host framework for native Settings (excluded sub-workspace) |
+| `vendor/windows-composition` | Patched `windows-composition` wrapper exposing raw Visual/Compositor accessors |
 | `locales` | Shared native and settings messages |
 
 Regenerate Win32 bindings with `cargo run -p tool_bindgen`. The definitions in
-`tools/bindgen` generate platform, Composition and GPU-glass bindings.
+`tools/bindgen` generate platform, UIA, shell-extension, Composition and
+GPU-glass bindings.
 
 `vendor/windows-composition` carries the small upstream wrapper patch needed by
 the renderer. Preserve its license files when changing or distributing it.

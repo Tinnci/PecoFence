@@ -2,6 +2,7 @@
 name = "tool_bindgen"
 version = "0.0.0"
 edition = "2024"
+rust-version.workspace = true
 publish = false
 
 [dependencies]
@@ -10,3 +11,6 @@ windows-bindgen = { workspace = true }
 [[bin]]
 name = "tool_bindgen"
 path = "src/main.rs"
+
+[lints]
+workspace = true

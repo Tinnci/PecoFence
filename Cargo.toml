@@ -32,7 +32,6 @@ license = "Apache-2.0"
 spm-contracts = { version = "=0.2.0", path = "crates/spm-contracts" }
 windows-core = "0.100"
 windows-numerics = "0.100"
-windows-window = "0.100"
 windows-canvas = { version = "0.100", features = ["composition"] }
 windows-composition = { version = "0.100", features = ["system"] }
 windows-bindgen = "0.100"

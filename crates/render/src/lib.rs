@@ -20,7 +20,7 @@ pub mod raster;
     dead_code,
     unused_imports
 )]
-pub mod comp;
+mod comp;
 
 #[cfg(windows)]
 pub mod backdrop;

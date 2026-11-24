@@ -40,6 +40,7 @@ scripts.
 │   ├── shell-extension/        Explorer context-menu COM DLL
 │   ├── shell-contract/         shared shell types
 │   ├── spm-contracts/          public SPM wire contract (shared with other tools)
+│   ├── spm-transport/          named-pipe SPM transport actor and host IPC adapter
 │   └── work-calendar/          regional work-day data (shared with other tools)
 ├── docs/                       current PecoFence and repo-level docs
 │   ├── archive/                retired designs and historical reviews

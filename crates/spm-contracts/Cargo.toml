@@ -4,6 +4,7 @@
 name = "spm-contracts"
 version = "0.2.0"
 edition = "2021"
+rust-version.workspace = true
 license = "Apache-2.0"
 authors = ["SPM Engineering"]
 description = "Runtime-independent SPM v2 wire contracts"
@@ -14,3 +15,6 @@ serde_json.workspace = true
 uuid.workspace = true
 chrono = { version = "0.4", default-features = false, features = ["std", "clock", "serde"] }
 thiserror = "2.0"
+
+[lints]
+workspace = true

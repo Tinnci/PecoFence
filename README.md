@@ -178,23 +178,14 @@ The optional video project in `extras/` is independent of the app build.
 
 </details>
 
+## CLI, Skills & Additional Guides
+
+- **CLI & Agent guidance:** Command reference, examples, side effects, error schema and offline verification are documented in [AGENT_CLI_GUIDANCE.md](docs/AGENT_CLI_GUIDANCE.md).
+- **Agent skill:** See [skills/pecofence/SKILL.md](skills/pecofence/SKILL.md) for capability scope, discovery commands, output schemas and write boundaries. Link that directory to `~/.agents/skills/pecofence` (or `~/.claude/skills/pecofence` for Claude Code) to register it locally; skill registration never grants remote write or data export access.
+- **Notes & To-Do widgets:** Shared creation, editing and persistence behavior is described in [NOTES_AND_TODO.md](docs/NOTES_AND_TODO.md).
+- **Local build source history:** Model settings can record a Jenkins job's current primary tracked branch, previous branches, an optional cutover build number and explicit inclusive historical build ranges as local manual assignments (unknown ranges stay unassigned; overlapping ranges or contradictory cutovers are rejected; Jenkins access remains read-only).
+
 ---
 
 **Made for a desktop you enjoy coming back to.**  
 [Apache License 2.0](LICENSE) · [Third-party notices](third_party/README.md)
-
-## CLI 与 Agent 引导
-
-命令用途、示例、副作用、错误协议及离线验收见 [CLI 与 Agent 引导](docs/AGENT_CLI_GUIDANCE.md)。
-
-## Agent skill
-
-[标准技能说明](skills/pecofence/SKILL.md) 包含用途、发现命令、平台限制、输出和写入边界。
-本地注册时将该技能目录链接到 `~/.agents/skills/pecofence`；Claude Code 可使用 `~/.claude/skills/pecofence`。
-技能注册不授予远端写入、数据外发或导出权限。
-
-便笺与待办的统一创建、编辑和保存方式见 [组件体验说明](docs/NOTES_AND_TODO.md)。
-
-### Local build source history
-
-Model settings can record a Jenkins job’s current primary tracked branch, previous branches, an optional cutover build number, and explicit inclusive historical build ranges. These records are local manual assignments. Unknown build ranges stay unassigned; overlapping ranges and contradictory cutovers are rejected. Source branches are added to the followed scope, including shared parent branches whose names differ from the model. Jenkins access remains read-only.

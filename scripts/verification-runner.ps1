@@ -1,4 +1,4 @@
-# Shared command runner and explicit verification plan. Dot-sourcing defines
+﻿# Shared command runner and explicit verification plan. Dot-sourcing defines
 # functions only; it does not execute checks or modify the machine.
 
 function New-VerificationCheck {
@@ -285,6 +285,7 @@ function Get-DesktopVerificationPlan {
   ) $full $fullReason))
   $plan.Add((New-VerificationCheck "bindings-diff" "Bindings match source" "git" @(
     "diff", "--exit-code", "--", "crates/platform/src/bindings.rs",
+    "crates/platform/src/uia_bindings.rs",
     "crates/render/src/comp.rs", "crates/render/src/gpu_bindings.rs",
     "crates/shell-extension/src/bindings.rs"
   ) $full $fullReason))
