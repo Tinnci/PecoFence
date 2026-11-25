@@ -21,6 +21,8 @@ mod settings_ui;
 mod shadow;
 use pecofence_spm_transport as spm_transport;
 mod state;
+#[allow(dead_code)]
+mod update_check;
 #[cfg(debug_assertions)]
 mod workspace_spike;
 
