@@ -239,7 +239,7 @@ mod tests {
     #[test]
     fn scaled_fence_fonts_draw_chrome_and_rows_at_independent_monitor_dpis() {
         use crate::fence_chrome::{
-            FenceChrome, GroupHeaderDraw, HeaderColumn, RowCell, RowColumns, RowsDraw,
+            FenceChrome, GroupHeaderDraw, HeaderColumn, HeaderLabels, RowCell, RowColumns, RowsDraw,
         };
         use pecofence_plugin_api::file_geometry::text_band_height;
         let _ole = pecofence_platform::com::OleGuard::init().unwrap();
@@ -285,6 +285,7 @@ mod tests {
                     type_: None,
                     size: Some((228.0, 60.0)),
                 },
+                header_labels: HeaderLabels::default(),
                 icon_size: 20.0,
                 header_h: row_h,
                 sort_column: Some(HeaderColumn::Date),

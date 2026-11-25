@@ -1297,6 +1297,12 @@ impl FenceViewState {
                 type_: cols.type_,
                 size: cols.size,
             },
+            header_labels: HeaderLabels {
+                name: pecofence_core::i18n::text("名称"),
+                date: pecofence_core::i18n::text("修改日期"),
+                type_: pecofence_core::i18n::text("类型"),
+                size: pecofence_core::i18n::text("大小"),
+            },
             icon_size: metrics.icon,
             header_h: metrics.header_h,
             sort_column: sort_column(self.file_view.sort),

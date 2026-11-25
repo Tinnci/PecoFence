@@ -449,7 +449,6 @@ name = "pecofence-render"
 version = "0.0.6"
 dependencies = [
  "bezier_easing",
- "pecofence-core",
  "pecofence-platform",
  "pecofence-plugin-api",
  "tiny-skia",
@@ -478,8 +477,6 @@ dependencies = [
 name = "pecofence-spm-transport"
 version = "0.0.6"
 dependencies = [
- "pecofence-core",
- "pecofence-platform",
  "pecofence-plugin-api",
  "pecofence-plugin-kernel",
  "serde_json",

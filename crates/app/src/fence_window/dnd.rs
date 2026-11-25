@@ -1344,6 +1344,7 @@ impl FenceViewState {
                         type_: cols.type_.map(|(x, w)| (x - l, w)),
                         size: cols.size.map(|(x, w)| (x - l, w)),
                     },
+                    header_labels: HeaderLabels::default(),
                     icon_size: metrics.icon,
                     header_h: 0.0,
                     sort_column: None,

@@ -12,7 +12,7 @@ use tokio::sync::mpsc;
 #[cfg(any(windows, test))]
 mod actor;
 #[cfg(windows)]
-pub use actor::{probe_current, run};
+pub use actor::{probe, run};
 
 pub const MAX_OPERATIONS: usize = 64;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

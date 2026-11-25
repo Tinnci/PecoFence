@@ -32,7 +32,8 @@ use pecofence_platform::window::{
 use pecofence_platform::{HWND, RECT, desktop, dwm, monitors, msg};
 use pecofence_render::fence_chrome::{
     Backdrop, BackdropCrop, ContentDraw, FenceChrome, FenceStyle, GroupHeaderDraw, HeaderColumn,
-    ItemCell, RowCell, RowColumns, RowsDraw, ScrollbarDraw, TabDraw, TitleDeco, TitleState,
+    HeaderLabels, ItemCell, RowCell, RowColumns, RowsDraw, ScrollbarDraw, TabDraw, TitleDeco,
+    TitleState,
 };
 use pecofence_render::motion::{self, Curve, Fades, Motion, Prop, Tween};
 use pecofence_render::{

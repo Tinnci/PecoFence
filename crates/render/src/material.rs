@@ -1,6 +1,27 @@
 //! Material policies. Theme owns colours; the selected strategy owns their use.
 use crate::{ColorF, Image, Rect, Theme};
 
+/// What a plate is made of.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Surface {
+    /// Liquid Glass: refracted wallpaper inside the plate's own antialiased outline.
+    Glass,
+    /// Matte paper of `color` (0..1); `translucency` of the blurred wallpaper shows through,
+    /// tinted by the paper; `seed` varies the fibres per fence. DWM rounds the window, so
+    /// the plate fills its whole rectangle.
+    Paper {
+        color: [f32; 3],
+        translucency: f32,
+        seed: f32,
+    },
+}
+
+impl Surface {
+    pub(crate) fn is_paper(self) -> bool {
+        matches!(self, Self::Paper { .. })
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MaterialKind {
     Fluent,
@@ -18,8 +39,8 @@ pub enum BackdropSource {
 
 pub trait Material: Sync {
     fn backdrop_source(&self) -> BackdropSource;
-    fn gpu_surface(&self, _theme: &Theme, _seed: f32) -> crate::gpu_glass::Surface {
-        crate::gpu_glass::Surface::Glass
+    fn gpu_surface(&self, _theme: &Theme, _seed: f32) -> Surface {
+        Surface::Glass
     }
     fn corner_radius(&self, theme: &Theme) -> f32 {
         theme.corner_radius
@@ -96,8 +117,8 @@ impl Material for LiquidGlass {
     }
 }
 impl Material for Paper {
-    fn gpu_surface(&self, theme: &Theme, seed: f32) -> crate::gpu_glass::Surface {
-        crate::gpu_glass::Surface::Paper {
+    fn gpu_surface(&self, theme: &Theme, seed: f32) -> Surface {
+        Surface::Paper {
             color: theme.paper_rgb(),
             translucency: theme.paper_translucency(),
             seed,

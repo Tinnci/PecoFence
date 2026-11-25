@@ -166,26 +166,7 @@ pub struct Stats {
     pub control_map_builds: u64,
 }
 
-/// What a plate is made of.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Surface {
-    /// Liquid Glass: refracted wallpaper inside the plate's own antialiased outline.
-    Glass,
-    /// Matte paper of `color` (0..1); `translucency` of the blurred wallpaper shows through,
-    /// tinted by the paper; `seed` varies the fibres per fence. DWM rounds the window, so
-    /// the plate fills its whole rectangle.
-    Paper {
-        color: [f32; 3],
-        translucency: f32,
-        seed: f32,
-    },
-}
-
-impl Surface {
-    fn is_paper(self) -> bool {
-        matches!(self, Self::Paper { .. })
-    }
-}
+pub use crate::material::Surface;
 
 /// How a plate bends the wallpaper.
 enum Lens {

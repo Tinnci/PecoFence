@@ -155,23 +155,25 @@ fn main() -> Result<()> {
             });
     }
     if std::env::args().any(|arg| arg == "--probe-spm") {
+        let to_win_err = |error: std::io::Error| {
+            windows_core::Error::new(
+                windows_core::HRESULT(0x80004005u32 as i32),
+                error.to_string(),
+            )
+        };
+        let identity = spm_contracts::EndpointIdentity {
+            user_sid: pecofence_platform::named_pipe::current_user_sid().map_err(to_win_err)?,
+            windows_session_id: pecofence_platform::named_pipe::current_windows_session_id()
+                .map_err(to_win_err)?,
+            instance: pecofence_core::brand::var("PECOFENCE_INSTANCE").ok(),
+        };
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
-            .map_err(|error| {
-                windows_core::Error::new(
-                    windows_core::HRESULT(0x80004005u32 as i32),
-                    error.to_string(),
-                )
-            })?;
+            .map_err(to_win_err)?;
         return runtime
-            .block_on(spm_transport::probe_current())
-            .map_err(|error| {
-                windows_core::Error::new(
-                    windows_core::HRESULT(0x80004005u32 as i32),
-                    error.to_string(),
-                )
-            });
+            .block_on(spm_transport::probe(&identity))
+            .map_err(to_win_err);
     }
     let args = parse_args();
     let instance_name = pecofence_core::brand::var("PECOFENCE_INSTANCE").ok();

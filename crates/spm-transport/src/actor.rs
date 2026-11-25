@@ -755,13 +755,9 @@ async fn write_envelope(
 
 /// A candidate binary can verify its own pinned SPM contract before replacing the desktop UI.
 #[cfg(windows)]
-pub async fn probe_current() -> std::io::Result<()> {
-    let endpoint = spm_contracts::v2_pipe_name(&spm_contracts::EndpointIdentity {
-        user_sid: pecofence_platform::named_pipe::current_user_sid()?,
-        windows_session_id: pecofence_platform::named_pipe::current_windows_session_id()?,
-        instance: pecofence_core::brand::var("PECOFENCE_INSTANCE").ok(),
-    })
-    .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidInput, error))?;
+pub async fn probe(identity: &spm_contracts::EndpointIdentity) -> std::io::Result<()> {
+    let endpoint = spm_contracts::v2_pipe_name(identity)
+        .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidInput, error))?;
     tokio::time::timeout(Duration::from_secs(3), async {
         let mut pipe = tokio::net::windows::named_pipe::ClientOptions::new().open(&endpoint)?;
         let request_id = RequestId::new();

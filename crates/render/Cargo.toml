@@ -15,7 +15,6 @@ tiny-skia = { version = "=0.11.4", default-features = false, features = ["std", 
 raster = ["dep:tiny-skia"]
 
 [target.'cfg(windows)'.dependencies]
-pecofence-core = { path = "../core" }
 windows-core = { workspace = true }
 windows-numerics = { workspace = true }
 windows-canvas = { workspace = true }

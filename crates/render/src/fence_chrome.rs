@@ -294,11 +294,31 @@ impl ScrollbarDraw {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct HeaderLabels<'a> {
+    pub name: &'a str,
+    pub date: &'a str,
+    pub type_: &'a str,
+    pub size: &'a str,
+}
+
+impl Default for HeaderLabels<'static> {
+    fn default() -> Self {
+        Self {
+            name: "名称",
+            date: "修改日期",
+            type_: "类型",
+            size: "大小",
+        }
+    }
+}
+
 pub struct RowsDraw<'a> {
     pub rows: &'a [RowCell<'a>],
     /// Section headers interleaved with the rows (drawn in the scrolling band).
     pub group_headers: &'a [GroupHeaderDraw<'a>],
     pub columns: RowColumns,
+    pub header_labels: HeaderLabels<'a>,
     pub icon_size: f32,
     /// 0 for the List layout (no header).
     pub header_h: f32,
@@ -1555,7 +1575,10 @@ impl FenceChrome {
         // A test-only marker lets a lossless screen recording locate the actually
         // presented window independently of GetWindowRect and render submission times.
         #[cfg(debug_assertions)]
-        if title == "运动探针" && pecofence_core::brand::var_os("PECOFENCE_PRESENT_PROBE").is_some()
+        if title == "运动探针"
+            && std::env::var_os("PECOFENCE_PRESENT_PROBE")
+                .or_else(|| std::env::var_os("OPENFENCE_PRESENT_PROBE"))
+                .is_some()
         {
             let marker = session.create_solid_brush(ColorF::new(1.0, 0.0, 1.0, 1.0))?;
             session.fill_rect(
@@ -2419,36 +2442,18 @@ impl FenceChrome {
             captions.push((
                 cols.name_x + 4.0,
                 cols.name_w - 4.0,
-                pecofence_core::i18n::text("名称"),
+                rows.header_labels.name,
                 HeaderColumn::Name,
                 false,
             ));
             if let Some((x, w)) = cols.date {
-                captions.push((
-                    x,
-                    w,
-                    pecofence_core::i18n::text("修改日期"),
-                    HeaderColumn::Date,
-                    false,
-                ));
+                captions.push((x, w, rows.header_labels.date, HeaderColumn::Date, false));
             }
             if let Some((x, w)) = cols.type_ {
-                captions.push((
-                    x,
-                    w,
-                    pecofence_core::i18n::text("类型"),
-                    HeaderColumn::Type,
-                    false,
-                ));
+                captions.push((x, w, rows.header_labels.type_, HeaderColumn::Type, false));
             }
             if let Some((x, w)) = cols.size {
-                captions.push((
-                    x,
-                    w,
-                    pecofence_core::i18n::text("大小"),
-                    HeaderColumn::Size,
-                    true,
-                ));
+                captions.push((x, w, rows.header_labels.size, HeaderColumn::Size, true));
             }
             for (index, (x, w, text, col, right)) in captions.into_iter().enumerate() {
                 let cell_rect = Rect::from_xywh(x - 4.0, 2.0, w + 8.0, header_h - 6.0);
