@@ -496,13 +496,17 @@ impl App {
         let pecofence_core::FenceContentSpec::Panel { panel } = &shown.content else {
             return None;
         };
-        let rules = pecofence_plugin_widgets::grid::span_rules(&panel.provider)?;
+        let rules = self
+            .panel_manager
+            .borrow()
+            .descriptor(&panel.provider)?
+            .grid?;
         let metrics =
             crate::layout::GridMetrics::for_icon_size(shown.view.icon_size, shown.view.label_lines)
                 .with_line_h(self.ctx.chrome.label_line_h());
         Some(crate::fence_window::WidgetGrid {
             rules,
-            cell: pecofence_plugin_widgets::grid::Cell {
+            cell: pecofence_plugin_api::grid::Cell {
                 w: metrics.cell_w,
                 h: metrics.cell_h,
             },
@@ -517,9 +521,11 @@ impl App {
                 .state
                 .window_content(id)
                 .is_some_and(|shown| match &shown.content {
-                    pecofence_core::FenceContentSpec::Panel { panel } => {
-                        pecofence_plugin_widgets::grid::span_rules(&panel.provider).is_some()
-                    }
+                    pecofence_core::FenceContentSpec::Panel { panel } => self
+                        .panel_manager
+                        .borrow()
+                        .descriptor(&panel.provider)
+                        .is_some_and(|d| d.grid.is_some()),
                     _ => false,
                 })
     }
@@ -585,7 +591,7 @@ impl App {
         let stored = self.state.container(id).and_then(|c| c.span);
         let span = match stored {
             Some(span) => grid.rules.clamp(
-                pecofence_plugin_widgets::grid::Span::new(span.columns, span.rows),
+                pecofence_plugin_api::grid::Span::new(span.columns, span.rows),
                 grid.cell,
                 text_scale,
             ),
@@ -1085,32 +1091,28 @@ impl App {
         y: i32,
         near: Option<ContainerId>,
     ) {
-        let title = match provider {
-            pecofence_plugin_widgets::CLOCK_PROVIDER => "数字时钟",
-            pecofence_plugin_widgets::CALENDAR_PROVIDER => "日历",
-            pecofence_plugin_widgets::TODO_PROVIDER => "待办清单",
-            pecofence_plugin_widgets::NOTE_PROVIDER => "便笺",
-            pecofence_plugin_widgets::DIAGRAM_PROVIDER => "图表",
-            _ => return,
+        let Some(desc) = self.panel_manager.borrow().descriptor(provider) else {
+            return;
         };
-        let Some(rules) = pecofence_plugin_widgets::grid::span_rules(provider) else {
+        let Some(rules) = desc.grid else {
             return;
         };
         // Default span on the grid new fences use (settings icon size, two label lines).
         let metrics =
             crate::layout::GridMetrics::for_icon_size(self.state.config.settings.icon_size, 2)
                 .with_line_h(self.ctx.chrome.label_line_h());
-        let cell = pecofence_plugin_widgets::grid::Cell {
+        let cell = pecofence_plugin_api::grid::Cell {
             w: metrics.cell_w,
             h: metrics.cell_h,
         };
         let span = rules.clamp(rules.default, cell, self.ctx.behavior.text_scale.get());
         let (width, height) = span.size(cell);
         let rect = self.place_new_fence_dip(width, height, x, y, near);
-        if let Some(id) =
-            self.state
-                .new_widget_fence(pecofence_core::i18n::text(title), rect, provider)
-        {
+        if let Some(id) = self.state.new_widget_fence(
+            pecofence_core::i18n::text(desc.display_name),
+            rect,
+            provider,
+        ) {
             if let Some(host) = self.state.host_of(id)
                 && let Some(container) = self.state.container_mut(host)
             {
@@ -1121,15 +1123,11 @@ impl App {
             }
             self.resync_windows();
             self.schedule_save();
-            if matches!(
-                provider,
-                pecofence_plugin_widgets::NOTE_PROVIDER
-                    | pecofence_plugin_widgets::TODO_PROVIDER
-                    | pecofence_plugin_widgets::DIAGRAM_PROVIDER
-            ) && let Some(pecofence_core::FenceSnapshot {
-                content: pecofence_core::FenceContentSpec::Panel { panel },
-                ..
-            }) = self.state.fence(id)
+            if desc.auto_edit_on_create
+                && let Some(pecofence_core::FenceSnapshot {
+                    content: pecofence_core::FenceContentSpec::Panel { panel },
+                    ..
+                }) = self.state.fence(id)
             {
                 // Ask the provider for its editor, including its live body bounds,
                 // colors and template, just like the on-panel Edit action.

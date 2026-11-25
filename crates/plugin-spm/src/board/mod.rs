@@ -84,9 +84,12 @@ impl PanelProvider for BoardPlugin {
     fn descriptor(&self) -> ProviderDescriptor {
         ProviderDescriptor {
             id: PROVIDER_ID,
+            display_name: "交付看板",
             api_major: 1,
             config_major: CONFIG_VERSION,
-            required_services: &["render", "theme", "desktop", "ipc", "storage"],
+            required_services: &["render", "theme", "ipc"],
+            grid: None,
+            auto_edit_on_create: false,
         }
     }
 

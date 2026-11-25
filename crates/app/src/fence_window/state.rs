@@ -5,8 +5,8 @@ use super::*;
 /// Grid a widget window snaps to: its provider's span rules and the fence icon cell in DIPs.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WidgetGrid {
-    pub rules: pecofence_plugin_widgets::grid::SpanRules,
-    pub cell: pecofence_plugin_widgets::grid::Cell,
+    pub rules: pecofence_plugin_api::grid::SpanRules,
+    pub cell: pecofence_plugin_api::grid::Cell,
 }
 
 pub struct FenceViewState {

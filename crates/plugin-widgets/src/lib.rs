@@ -200,9 +200,12 @@ impl PanelProvider for ClockPlugin {
     fn descriptor(&self) -> ProviderDescriptor {
         ProviderDescriptor {
             id: CLOCK_PROVIDER,
+            display_name: "数字时钟",
             api_major: 1,
             config_major: 1,
             required_services: &["theme"],
+            grid: crate::grid::span_rules(CLOCK_PROVIDER),
+            auto_edit_on_create: false,
         }
     }
 
@@ -219,9 +222,12 @@ impl PanelProvider for CalendarPlugin {
     fn descriptor(&self) -> ProviderDescriptor {
         ProviderDescriptor {
             id: CALENDAR_PROVIDER,
+            display_name: "日历",
             api_major: 1,
             config_major: 1,
             required_services: &["theme"],
+            grid: crate::grid::span_rules(CALENDAR_PROVIDER),
+            auto_edit_on_create: false,
         }
     }
 

@@ -3,18 +3,16 @@ use pecofence_core::PanelSpec;
 use pecofence_plugin_api::*;
 use pecofence_plugin_kernel::{ScopeKind, ScopeTree, ServiceKey, ServiceRegistry, TaskSupervisor};
 use pecofence_spm_transport::{self as spm_transport, PipeIpc, PipeState};
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 const RENDER: ServiceKey<dyn RenderService> = ServiceKey::new("host", "render", 1);
 const THEME: ServiceKey<dyn ThemeService> = ServiceKey::new("host", "theme", 1);
-const DESKTOP: ServiceKey<dyn DesktopService> = ServiceKey::new("host", "desktop", 1);
 const IPC: ServiceKey<dyn IpcService> = ServiceKey::new("host", "ipc", 1);
-const STORAGE: ServiceKey<dyn StorageService> = ServiceKey::new("host", "storage", 1);
 const NAVIGATION: ServiceKey<dyn NavigationService> = ServiceKey::new("host", "navigation", 1);
 const CLIPBOARD: ServiceKey<dyn ClipboardService> = ServiceKey::new("host", "clipboard", 1);
 
@@ -78,6 +76,7 @@ pub(crate) struct PanelManager {
     ipc_state: Arc<PipeState>,
     ipc_transport: spm_transport::TransportHandle,
     render_invalidations: Arc<Mutex<HashSet<MountKey>>>,
+    theme: Arc<ThemeHost>,
     notify_hwnd: pecofence_platform::HWND,
     holiday_revision: u64,
 }
@@ -128,6 +127,7 @@ impl PanelManager {
                 },
             )
             .expect("SPM transport supervisor capacity");
+        let theme = Arc::new(ThemeHost::new());
         let mut services = ServiceRegistry::new();
         services
             .publish(
@@ -141,10 +141,13 @@ impl PanelManager {
             )
             .expect("unique service");
         services
-            .publish(THEME, service_scope, Box::new(HostTheme))
-            .expect("unique service");
-        services
-            .publish(DESKTOP, service_scope, Box::new(HostDesktop))
+            .publish(
+                THEME,
+                service_scope,
+                Box::new(HostTheme {
+                    host: theme.clone(),
+                }),
+            )
             .expect("unique service");
         services
             .publish(
@@ -157,13 +160,22 @@ impl PanelManager {
             )
             .expect("unique service");
         services
-            .publish(STORAGE, service_scope, Box::new(MemoryStorage::default()))
+            .publish(
+                NAVIGATION,
+                service_scope,
+                Box::new(HostNavigation {
+                    next_token: AtomicU64::new(1),
+                }),
+            )
             .expect("unique service");
         services
-            .publish(NAVIGATION, service_scope, Box::new(HostNavigation))
-            .expect("unique service");
-        services
-            .publish(CLIPBOARD, service_scope, Box::new(HostClipboard))
+            .publish(
+                CLIPBOARD,
+                service_scope,
+                Box::new(HostClipboard {
+                    next_token: AtomicU64::new(1),
+                }),
+            )
             .expect("unique service");
         Self {
             providers: HashMap::new(),
@@ -177,9 +189,22 @@ impl PanelManager {
             ipc_state,
             ipc_transport: transport,
             render_invalidations,
+            theme,
             notify_hwnd,
             holiday_revision: pecofence_plugin_widgets::holidays::revision(),
         }
+    }
+
+    pub fn set_animations(&self, enabled: bool) {
+        self.theme.set_animations(enabled);
+    }
+
+    pub fn theme_host(&self) -> &Arc<ThemeHost> {
+        &self.theme
+    }
+
+    pub fn descriptor(&self, provider: &str) -> Option<ProviderDescriptor> {
+        self.providers.get(provider).map(|p| p.descriptor())
     }
 
     pub fn register_provider(&mut self, provider: Rc<dyn PanelProvider>) -> Result<()> {
@@ -251,13 +276,7 @@ impl PanelManager {
             theme: self
                 .services
                 .resolve(THEME, instance_scope, scope.clone())?,
-            desktop: self
-                .services
-                .resolve(DESKTOP, instance_scope, scope.clone())?,
             ipc: self.services.resolve(IPC, instance_scope, scope.clone())?,
-            storage: self
-                .services
-                .resolve(STORAGE, instance_scope, scope.clone())?,
             navigation: Some(
                 self.services
                     .resolve(NAVIGATION, instance_scope, scope.clone())?,
@@ -775,6 +794,7 @@ impl RenderService for HostRender {
 /// whenever the derived tokens change.
 pub(crate) struct ThemeHost {
     epoch: AtomicU64,
+    animations: AtomicBool,
     current: Mutex<Arc<ThemeSnapshot>>,
 }
 
@@ -782,11 +802,17 @@ impl ThemeHost {
     fn new() -> Self {
         Self {
             epoch: AtomicU64::new(1),
+            animations: AtomicBool::new(true),
             current: Mutex::new(Arc::new(theme_snapshot_for(
                 &pecofence_render::Theme::dark(),
                 1,
+                true,
             ))),
         }
+    }
+
+    pub(crate) fn set_animations(&self, enabled: bool) {
+        self.animations.store(enabled, Ordering::Relaxed);
     }
 
     pub(crate) fn epoch(&self) -> u64 {
@@ -811,7 +837,7 @@ impl ThemeHost {
         theme: &pecofence_render::Theme,
         paper: pecofence_plugin_api::PaperEnvironment,
     ) {
-        let mut candidate = theme_snapshot_for(theme, 0);
+        let mut candidate = theme_snapshot_for(theme, 0, self.animations.load(Ordering::Relaxed));
         candidate.paper = paper;
         let mut guard = self.current.lock().expect("theme mutex");
         if !same_tokens(&guard, &candidate) {
@@ -821,20 +847,6 @@ impl ThemeHost {
             *guard = Arc::new(next);
         }
     }
-}
-
-/// Mirror of the host's animation switch (`SPI_GETCLIENTAREAANIMATION`) for plugin themes.
-static PLUGIN_ANIMATIONS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
-
-pub(crate) fn set_plugin_animations(enabled: bool) {
-    PLUGIN_ANIMATIONS.store(enabled, Ordering::Relaxed);
-}
-
-/// Process-wide theme host so fence-window paint bridges and the service
-/// published to plugins observe the same state.
-fn theme_host() -> &'static ThemeHost {
-    static THEME_HOST: std::sync::OnceLock<ThemeHost> = std::sync::OnceLock::new();
-    THEME_HOST.get_or_init(ThemeHost::new)
 }
 
 pub(super) struct PanelHostBridge(pub(super) Rc<RefCell<PanelManager>>);
@@ -849,7 +861,7 @@ impl crate::fence_window::FencePanelHost for PanelHostBridge {
         theme: &pecofence_render::Theme,
         paper: pecofence_plugin_api::PaperEnvironment,
     ) -> crate::fence_window::SyncedTheme {
-        let host = theme_host();
+        let host = Arc::clone(self.0.borrow().theme_host());
         host.sync_with_paper(theme, paper);
         crate::fence_window::SyncedTheme {
             snapshot: host.snapshot(),
@@ -860,7 +872,11 @@ impl crate::fence_window::FencePanelHost for PanelHostBridge {
 
 /// Resolve provider roles from the same live material/foreground as file content.
 /// A mode-only palette loses per-fence readability and system accent changes.
-fn theme_snapshot_for(theme: &pecofence_render::Theme, revision: u64) -> ThemeSnapshot {
+fn theme_snapshot_for(
+    theme: &pecofence_render::Theme,
+    revision: u64,
+    animations: bool,
+) -> ThemeSnapshot {
     use pecofence_render::ThemeMode;
     let mut snapshot = ThemeSnapshot::dark();
     if theme.mode == ThemeMode::Light {
@@ -871,7 +887,7 @@ fn theme_snapshot_for(theme: &pecofence_render::Theme, revision: u64) -> ThemeSn
     let rgba = |c: pecofence_render::ColorF| [c.r, c.g, c.b, c.a];
     snapshot.revision = revision;
     snapshot.high_contrast = theme.is_high_contrast();
-    snapshot.animations = PLUGIN_ANIMATIONS.load(Ordering::Relaxed);
+    snapshot.animations = animations;
     snapshot.text_primary = rgba(theme.text_primary);
     snapshot.text_secondary = rgba(theme.text_secondary);
     snapshot.surface_panel = rgba(theme.solid_fill);
@@ -914,60 +930,18 @@ fn same_tokens(a: &ThemeSnapshot, b: &ThemeSnapshot) -> bool {
         && a.info == b.info
 }
 
-struct HostTheme;
+struct HostTheme {
+    host: Arc<ThemeHost>,
+}
 impl ThemeService for HostTheme {
     fn snapshot(&self) -> Result<Arc<ThemeSnapshot>> {
-        Ok(theme_host().snapshot())
+        Ok(self.host.snapshot())
     }
 }
 
-struct HostDesktop;
-impl DesktopService for HostDesktop {
-    fn request_mode(&self, _instance: InstanceKey, _mode: Presentation) -> Result<()> {
-        Ok(())
-    }
+struct HostNavigation {
+    next_token: AtomicU64,
 }
-
-#[derive(Default)]
-struct MemoryStorage {
-    values: RefCell<HashMap<String, VersionedValue>>,
-    next: Cell<u64>,
-}
-impl MemoryStorage {
-    fn token(&self) -> Result<Token> {
-        let value = self.next.get().checked_add(1).ok_or(Error::Exhausted)?;
-        self.next.set(value);
-        Ok(Token(value))
-    }
-}
-impl StorageService for MemoryStorage {
-    fn read(&self, scope: &ScopeHandle, _key: &str) -> Result<Token> {
-        scope.check()?;
-        self.token()
-    }
-    fn compare_and_set(
-        &self,
-        scope: &ScopeHandle,
-        key: &str,
-        expected: Option<u64>,
-        bytes: Arc<[u8]>,
-    ) -> Result<Token> {
-        scope.check()?;
-        let mut values = self.values.borrow_mut();
-        let current = values.get(key).map(|value| value.revision);
-        if current != expected {
-            return Err(Error::Revoked);
-        }
-        let revision = current
-            .unwrap_or(0)
-            .checked_add(1)
-            .ok_or(Error::Exhausted)?;
-        values.insert(key.into(), VersionedValue { revision, bytes });
-        self.token()
-    }
-}
-
-struct HostNavigation;
 impl NavigationService for HostNavigation {
     fn open(&self, scope: &ScopeHandle, target: ExternalTarget) -> Result<Token> {
         scope.check()?;
@@ -978,17 +952,19 @@ impl NavigationService for HostNavigation {
             None,
         )
         .map_err(|error| Error::Backend(error.to_string()))?;
-        Ok(Token(1))
+        Ok(Token(self.next_token.fetch_add(1, Ordering::Relaxed)))
     }
 }
 
-struct HostClipboard;
+struct HostClipboard {
+    next_token: AtomicU64,
+}
 impl ClipboardService for HostClipboard {
     fn write_text(&self, scope: &ScopeHandle, text: String) -> Result<Token> {
         scope.check()?;
         pecofence_platform::clipboard::set_text(&text)
             .map_err(|error| Error::Backend(error.to_string()))?;
-        Ok(Token(1))
+        Ok(Token(self.next_token.fetch_add(1, Ordering::Relaxed)))
     }
 }
 

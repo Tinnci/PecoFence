@@ -819,7 +819,6 @@ impl App {
 
         let motion = Rc::new(Motion::new(&stack)?);
         motion.set_enabled(sysparams::client_area_animation());
-        panel_manager::set_plugin_animations(motion.enabled());
         let frames = {
             // HWND is not Send; the clock thread only ever posts to it.
             let control_hwnd = control.hwnd().0 as isize;
@@ -833,6 +832,7 @@ impl App {
             }))
         };
         let panel_manager = Rc::new(RefCell::new(PanelManager::new(control.hwnd())));
+        panel_manager.borrow().set_animations(motion.enabled());
         panel_manager
             .borrow_mut()
             .register_provider(Rc::new(pecofence_plugin_spm::SpmPlugin))

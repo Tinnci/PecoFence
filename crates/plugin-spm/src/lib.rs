@@ -962,9 +962,12 @@ impl PanelProvider for SpmPlugin {
     fn descriptor(&self) -> ProviderDescriptor {
         ProviderDescriptor {
             id: PROVIDER_ID,
+            display_name: "SPM",
             api_major: 1,
             config_major: 2,
-            required_services: &["render", "theme", "desktop", "ipc", "storage"],
+            required_services: &["render", "theme", "ipc"],
+            grid: None,
+            auto_edit_on_create: false,
         }
     }
 
@@ -1500,25 +1503,6 @@ mod tests {
             Err(Error::Revoked)
         }
     }
-    impl DesktopService for Mock {
-        fn request_mode(&self, _: InstanceKey, _: Presentation) -> Result<()> {
-            Err(Error::Revoked)
-        }
-    }
-    impl StorageService for Mock {
-        fn read(&self, _: &ScopeHandle, _: &str) -> Result<Token> {
-            Err(Error::Revoked)
-        }
-        fn compare_and_set(
-            &self,
-            _: &ScopeHandle,
-            _: &str,
-            _: Option<u64>,
-            _: Arc<[u8]>,
-        ) -> Result<Token> {
-            Err(Error::Revoked)
-        }
-    }
     fn capability<S: ?Sized + 'static>(
         service: Box<S>,
         scope: &ScopeHandle,
@@ -1542,17 +1526,7 @@ mod tests {
                 &mut keep,
             ),
             theme: capability::<dyn ThemeService>(Box::new(Mock(calls.clone())), &scope, &mut keep),
-            desktop: capability::<dyn DesktopService>(
-                Box::new(Mock(calls.clone())),
-                &scope,
-                &mut keep,
-            ),
             ipc: capability::<dyn IpcService>(Box::new(Mock(calls.clone())), &scope, &mut keep),
-            storage: capability::<dyn StorageService>(
-                Box::new(Mock(calls.clone())),
-                &scope,
-                &mut keep,
-            ),
             clipboard: Some(capability::<dyn ClipboardService>(
                 Box::new(Mock(calls.clone())),
                 &scope,

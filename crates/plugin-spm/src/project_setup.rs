@@ -131,9 +131,7 @@ impl PanelInstance for ProjectSetup {
                         scope: saved.scope.clone(),
                         render: saved.render.clone(),
                         theme: saved.theme.clone(),
-                        desktop: saved.desktop.clone(),
                         ipc: saved.ipc.clone(),
-                        storage: saved.storage.clone(),
                         navigation: saved.navigation.clone(),
                         clipboard: saved.clipboard.clone(),
                     };

@@ -56,25 +56,6 @@ impl ThemeService for Mock {
         self.1.clone().map(Arc::new).ok_or(Error::Revoked)
     }
 }
-impl DesktopService for Mock {
-    fn request_mode(&self, _: InstanceKey, _: Presentation) -> Result<()> {
-        Ok(())
-    }
-}
-impl StorageService for Mock {
-    fn read(&self, _: &ScopeHandle, _: &str) -> Result<Token> {
-        Err(Error::Revoked)
-    }
-    fn compare_and_set(
-        &self,
-        _: &ScopeHandle,
-        _: &str,
-        _: Option<u64>,
-        _: Arc<[u8]>,
-    ) -> Result<Token> {
-        Err(Error::Revoked)
-    }
-}
 
 fn capability<S: ?Sized + 'static>(
     service: Box<S>,
@@ -106,9 +87,7 @@ fn harness(paper: PaperStyle, hc: bool) -> (Panel, Vec<Rc<dyn std::any::Any>>) {
         scope: scope.clone(),
         render: capability::<dyn RenderService>(m(), &scope, &mut keep),
         theme: capability::<dyn ThemeService>(m(), &scope, &mut keep),
-        desktop: capability::<dyn DesktopService>(m(), &scope, &mut keep),
         ipc: capability::<dyn IpcService>(m(), &scope, &mut keep),
-        storage: capability::<dyn StorageService>(m(), &scope, &mut keep),
         clipboard: None,
         navigation: Some(capability::<dyn NavigationService>(m(), &scope, &mut keep)),
     };

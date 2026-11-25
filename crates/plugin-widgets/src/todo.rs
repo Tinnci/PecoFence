@@ -114,9 +114,12 @@ impl PanelProvider for TodoPlugin {
     fn descriptor(&self) -> ProviderDescriptor {
         ProviderDescriptor {
             id: TODO_PROVIDER,
+            display_name: "待办清单",
             api_major: 1,
             config_major: 1,
             required_services: &["theme"],
+            grid: crate::grid::span_rules(TODO_PROVIDER),
+            auto_edit_on_create: true,
         }
     }
 

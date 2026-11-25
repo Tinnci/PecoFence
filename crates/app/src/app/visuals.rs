@@ -346,7 +346,9 @@ impl App {
         self.ctx
             .motion
             .set_enabled(sysparams::client_area_animation());
-        super::panel_manager::set_plugin_animations(self.ctx.motion.enabled());
+        self.panel_manager
+            .borrow()
+            .set_animations(self.ctx.motion.enabled());
         self.ctx
             .behavior
             .wheel_lines

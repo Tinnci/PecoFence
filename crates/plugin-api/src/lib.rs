@@ -13,6 +13,7 @@ use std::time::Duration;
 /// Shared presentation primitives for every Direct2D fence content provider.
 pub mod design;
 pub mod file_geometry;
+pub mod grid;
 pub mod paper;
 pub mod scene;
 
@@ -385,12 +386,6 @@ pub fn check_https_uri(uri: &str) -> Result<()> {
     Ok(())
 }
 
-#[derive(Clone, Debug)]
-pub struct VersionedValue {
-    pub revision: u64,
-    pub bytes: Arc<[u8]>,
-}
-
 pub trait RenderService {
     fn measure(&self, text: &TextSpec, width: f32) -> Result<TextMetrics>;
     fn invalidate(&self, mount: MountKey, rect: Option<RectDip>) -> Result<()>;
@@ -398,10 +393,6 @@ pub trait RenderService {
 
 pub trait ThemeService {
     fn snapshot(&self) -> Result<Arc<ThemeSnapshot>>;
-}
-
-pub trait DesktopService {
-    fn request_mode(&self, instance: InstanceKey, mode: Presentation) -> Result<()>;
 }
 
 pub trait IpcService {
@@ -412,17 +403,6 @@ pub trait IpcService {
     /// Close a subscription or revoke local operation delivery. This does not
     /// promise cancellation/rollback of an already dispatched remote effect.
     fn cancel(&self, token: Token) -> Result<()>;
-}
-
-pub trait StorageService {
-    fn read(&self, scope: &ScopeHandle, key: &str) -> Result<Token>;
-    fn compare_and_set(
-        &self,
-        scope: &ScopeHandle,
-        key: &str,
-        expected: Option<u64>,
-        bytes: Arc<[u8]>,
-    ) -> Result<Token>;
 }
 
 pub trait NavigationService {
@@ -437,9 +417,7 @@ pub struct PluginContext {
     pub scope: ScopeHandle,
     pub render: Capability<dyn RenderService>,
     pub theme: Capability<dyn ThemeService>,
-    pub desktop: Capability<dyn DesktopService>,
     pub ipc: Capability<dyn IpcService>,
-    pub storage: Capability<dyn StorageService>,
     pub navigation: Option<Capability<dyn NavigationService>>,
     pub clipboard: Option<Capability<dyn ClipboardService>>,
 }
@@ -447,9 +425,12 @@ pub struct PluginContext {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ProviderDescriptor {
     pub id: &'static str,
+    pub display_name: &'static str,
     pub api_major: u16,
     pub config_major: u16,
     pub required_services: &'static [&'static str],
+    pub grid: Option<grid::SpanRules>,
+    pub auto_edit_on_create: bool,
 }
 
 #[derive(Clone, Debug)]

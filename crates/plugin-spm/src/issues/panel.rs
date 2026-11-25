@@ -119,9 +119,12 @@ impl PanelProvider for IssuesPlugin {
     fn descriptor(&self) -> ProviderDescriptor {
         ProviderDescriptor {
             id: PROVIDER_ID,
+            display_name: "我的问题",
             api_major: 1,
             config_major: 1,
             required_services: &["render", "theme", "ipc"],
+            grid: None,
+            auto_edit_on_create: false,
         }
     }
     fn validate(&self, config: &PanelConfig) -> Result<()> {

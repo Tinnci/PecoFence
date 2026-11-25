@@ -139,9 +139,12 @@ impl PanelProvider for NotePlugin {
     fn descriptor(&self) -> ProviderDescriptor {
         ProviderDescriptor {
             id: NOTE_PROVIDER,
+            display_name: "便笺",
             api_major: 1,
             config_major: 1,
             required_services: &["theme"],
+            grid: crate::grid::span_rules(NOTE_PROVIDER),
+            auto_edit_on_create: true,
         }
     }
 

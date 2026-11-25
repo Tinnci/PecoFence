@@ -44,9 +44,12 @@ impl PanelProvider for PlanningPlugin {
     fn descriptor(&self) -> ProviderDescriptor {
         ProviderDescriptor {
             id: PROVIDER_ID,
+            display_name: "交付计划",
             api_major: 1,
             config_major: 1,
             required_services: &["render", "theme", "ipc"],
+            grid: None,
+            auto_edit_on_create: false,
         }
     }
     fn validate(&self, c: &PanelConfig) -> Result<()> {

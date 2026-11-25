@@ -142,9 +142,12 @@ impl PanelProvider for DiagramPlugin {
     fn descriptor(&self) -> ProviderDescriptor {
         ProviderDescriptor {
             id: DIAGRAM_PROVIDER,
+            display_name: "图表",
             api_major: 1,
             config_major: 1,
             required_services: &["theme"],
+            grid: crate::grid::span_rules(DIAGRAM_PROVIDER),
+            auto_edit_on_create: true,
         }
     }
 
