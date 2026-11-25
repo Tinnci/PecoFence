@@ -5,7 +5,13 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 const MAX_MANIFEST_BYTES: usize = 256 * 1024;
+const MAX_HTML_BYTES: usize = 128 * 1024;
+const MAX_SCRIPT_BYTES: usize = 2 * 1024 * 1024;
+const MAX_CHUNKS: usize = 16;
+const MAX_NODES: usize = 10;
 const GITHUB_OWNER_REPO: &str = "Tinnci/PecoFence";
+const AKAMS_HOST: &str = "github.akams.cn";
+const DEFAULT_MIRRORS: &[&str] = &["ghproxy.net", "gh-proxy.com"];
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ReleaseInfo {
@@ -83,13 +89,141 @@ pub fn parse_latest_manifest(bytes: &[u8], platform_key: &str) -> Option<Release
     })
 }
 
+/// Validate a public HTTPS mirror hostname (blocks localhost and IP literals).
+pub fn sanitize_mirror_host(raw: &str) -> Option<String> {
+    let clean = raw.trim().trim_end_matches('.').to_ascii_lowercase();
+    if clean.is_empty()
+        || clean == "localhost"
+        || !clean.contains('.')
+        || !clean
+            .bytes()
+            .next()
+            .is_some_and(|b| b.is_ascii_alphabetic())
+        || clean.parse::<std::net::IpAddr>().is_ok()
+        || !clean
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'.' || b == b'-')
+    {
+        return None;
+    }
+    Some(clean)
+}
+
+/// Extract unique `/_next/static/chunks/*.js` script paths from `github.akams.cn` HTML.
+pub fn extract_akams_chunks(html: &str) -> Vec<String> {
+    let prefix = "/_next/static/chunks/";
+    let mut out = Vec::new();
+    let mut rest = html;
+    while let Some(pos) = rest.find(prefix) {
+        rest = &rest[pos..];
+        let end = rest
+            .find(|c: char| {
+                !(c.is_ascii_alphanumeric() || matches!(c, '/' | '_' | '.' | '~' | '-'))
+            })
+            .unwrap_or(rest.len());
+        let cand = &rest[..end];
+        if cand.ends_with(".js") && !cand.contains("..") && !out.iter().any(|s| s == cand) {
+            out.push(cand.to_owned());
+            if out.len() >= MAX_CHUNKS {
+                break;
+            }
+        }
+        rest = &rest[end.max(1)..];
+    }
+    out
+}
+
+/// Extract unique sanitized mirror hosts from `label: "contribute"|"search", value: "<host>"`.
+pub fn extract_akams_nodes(text: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    for marker in [
+        r#"label: "contribute""#,
+        r#"label: "search""#,
+        r#"label:"contribute""#,
+        r#"label:"search""#,
+    ] {
+        let mut rest = text;
+        while let Some(pos) = rest.find(marker) {
+            rest = &rest[pos + marker.len()..];
+            let window = &rest[..rest.len().min(64)];
+            if let Some(vpos) = window.find("value:") {
+                let after = window[vpos + 6..].trim_start();
+                if let Some(quoted) = after.strip_prefix('"')
+                    && let Some(qend) = quoted.find('"')
+                    && let Some(host) = sanitize_mirror_host(&quoted[..qend])
+                    && !out.contains(&host)
+                {
+                    out.push(host);
+                    if out.len() >= MAX_NODES {
+                        return out;
+                    }
+                }
+            }
+        }
+    }
+    out
+}
+
+fn discover_akams_mirrors() -> Vec<String> {
+    let mut out = Vec::new();
+    let Ok(html_bytes) = http::get_https(AKAMS_HOST, "/", MAX_HTML_BYTES) else {
+        return out;
+    };
+    let html = String::from_utf8_lossy(&html_bytes);
+    for host in extract_akams_nodes(&html) {
+        if !out.contains(&host) {
+            out.push(host);
+        }
+    }
+    for chunk in extract_akams_chunks(&html) {
+        if out.len() >= MAX_NODES {
+            break;
+        }
+        if let Ok(bytes) = http::get_https(AKAMS_HOST, &chunk, MAX_SCRIPT_BYTES) {
+            let text = String::from_utf8_lossy(&bytes);
+            for host in extract_akams_nodes(&text) {
+                if !out.contains(&host) {
+                    out.push(host);
+                    if out.len() >= MAX_NODES {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    out
+}
+
 pub fn check_latest_release(current_version: &str) -> Result<Option<ReleaseInfo>, String> {
     let path = format!("/{GITHUB_OWNER_REPO}/releases/latest/download/latest.json");
-    let bytes = http::get_https("github.com", &path, MAX_MANIFEST_BYTES)
-        .map_err(|error| format!("release check failed: {error}"))?;
-    let info = parse_latest_manifest(&bytes, host_platform_key())
-        .ok_or_else(|| "invalid or untrusted release manifest".to_owned())?;
-    Ok(is_newer_version(current_version, &info.version).then_some(info))
+    let mirror_path = format!("/https://github.com{path}");
+    let mut last_err = match http::get_https("github.com", &path, MAX_MANIFEST_BYTES) {
+        Ok(bytes) => {
+            let info = parse_latest_manifest(&bytes, host_platform_key())
+                .ok_or_else(|| "invalid or untrusted release manifest".to_owned())?;
+            return Ok(is_newer_version(current_version, &info.version).then_some(info));
+        }
+        Err(error) => format!("release check failed: {error}"),
+    };
+
+    for host in DEFAULT_MIRRORS {
+        if let Ok(bytes) = http::get_https(host, &mirror_path, MAX_MANIFEST_BYTES)
+            && let Some(info) = parse_latest_manifest(&bytes, host_platform_key())
+        {
+            return Ok(is_newer_version(current_version, &info.version).then_some(info));
+        }
+    }
+
+    for host in discover_akams_mirrors() {
+        if let Ok(bytes) = http::get_https(&host, &mirror_path, MAX_MANIFEST_BYTES)
+            && let Some(info) = parse_latest_manifest(&bytes, host_platform_key())
+        {
+            return Ok(is_newer_version(current_version, &info.version).then_some(info));
+        }
+        last_err = format!("release check failed via {host}");
+    }
+
+    Err(last_err)
 }
 
 fn find_updater_script(exe_dir: &Path) -> Option<PathBuf> {
@@ -201,5 +335,30 @@ mod tests {
         let (title, body) = format_update_notification(&info);
         assert_eq!(title, "PecoFence v0.0.7 available");
         assert_eq!(body, "Faster startup");
+    }
+
+    #[test]
+    fn akams_extracts_chunks_and_filters_unsafe_mirror_hosts() {
+        assert_eq!(sanitize_mirror_host("localhost"), None);
+        assert_eq!(sanitize_mirror_host("127.0.0.1"), None);
+        assert_eq!(
+            sanitize_mirror_host("Mirror-A.Example.com").as_deref(),
+            Some("mirror-a.example.com")
+        );
+
+        let html = r#"<script src="/_next/static/chunks/main-123.js"></script><script src="/_next/static/chunks/main-123.js"></script>"#;
+        assert_eq!(
+            extract_akams_chunks(html),
+            vec!["/_next/static/chunks/main-123.js".to_owned()]
+        );
+
+        let js = r#"{label: "contribute", value: "mirror-a.example.com"}, {label: "search", value: "127.0.0.1"}, {label: "search", value: "mirror-b.example.com"}"#;
+        assert_eq!(
+            extract_akams_nodes(js),
+            vec![
+                "mirror-a.example.com".to_owned(),
+                "mirror-b.example.com".to_owned(),
+            ]
+        );
     }
 }
