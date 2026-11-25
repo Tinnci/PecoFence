@@ -23,7 +23,7 @@ pub struct FenceWindow {
     pub(super) view: Rc<RefCell<Option<FenceViewState>>>,
     pub(super) anchor: AnchorCell,
     pub(super) _drop_target: Option<DropTargetRegistration>,
-    pub(super) panel_manager: Rc<RefCell<crate::app::panel_manager::PanelManager>>,
+    pub(super) panel_host: Rc<dyn FencePanelHost>,
 }
 
 impl Drop for FenceWindow {
@@ -348,7 +348,7 @@ impl FenceWindow {
             view,
             anchor: ctx.anchor.clone(),
             _drop_target: drop_target,
-            panel_manager: ctx.panel_manager.clone(),
+            panel_host: ctx.panel_host.clone(),
         })
     }
 
@@ -638,10 +638,11 @@ impl FenceWindow {
         };
         let panel = match content {
             pecofence_core::FenceContentSpec::Panel { panel } => {
-                match self.panel_manager.borrow_mut().open_panel(panel) {
+                match self.panel_host.open_panel(panel) {
                     Ok(panel) => Some(super::plugin_panel::PluginPanelContent::new(
                         panel,
                         capture_release,
+                        self.panel_host.clone(),
                     )),
                     Err(error) => {
                         tracing::warn!(%error, provider = %panel.provider, "panel activation failed");

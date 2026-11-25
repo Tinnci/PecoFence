@@ -20,8 +20,6 @@
 )]
 mod bindings;
 
-pub mod accessibility;
-
 #[allow(
     non_snake_case,
     non_camel_case_types,
@@ -31,49 +29,26 @@ pub mod accessibility;
 )]
 mod uia_bindings;
 
-pub mod autostart;
-#[cfg(debug_assertions)]
-pub mod child_host;
-pub mod clipboard;
 pub mod com;
-pub mod crashlog;
-pub mod d2d;
-pub mod desktop;
-pub mod dialogs;
-pub mod dispatcher;
-pub mod dragdrop;
-pub mod dwm;
-pub mod edit;
-pub mod filedialog;
-pub mod fileinfo;
-pub mod fonts;
-pub mod frameclock;
-pub mod hotkey;
-pub mod http;
-pub mod layered;
-pub mod locale;
-pub mod memstats;
-pub mod monitors;
-pub mod msg;
-pub mod named_pipe;
-pub mod portal_reader;
-pub mod ports;
-pub mod process;
-pub mod quicklook;
-pub mod rawinput;
+pub mod gfx;
+pub mod os;
 pub mod shell;
-pub mod shell_icons;
-pub mod shell_menu;
-pub mod shell_notify;
-pub mod sysparams;
-pub mod theme;
-pub mod tooltip;
-pub mod tray;
-pub mod wallpaper;
-pub mod watcher;
-pub mod wide;
 pub mod window;
-pub mod winevent;
+
+pub use self::com::{accessibility, clipboard, dispatcher, dragdrop};
+pub use self::gfx::{d2d, fonts, frameclock, monitors, theme, wallpaper};
+pub use self::os::{
+    autostart, crashlog, http, locale, memstats, named_pipe, ports, process, sysparams, wide,
+};
+pub use self::shell::{
+    desktop, filedialog, fileinfo, portal_reader, quicklook, shell_icons, shell_menu, shell_notify,
+    watcher,
+};
+#[cfg(debug_assertions)]
+pub use self::window::child_host;
+pub use self::window::{
+    dialogs, dwm, edit, hotkey, layered, msg, rawinput, tooltip, tray, winevent,
+};
 
 pub use bindings::{HWND, POINT, RECT};
 pub use windows_core::{Error, Result};

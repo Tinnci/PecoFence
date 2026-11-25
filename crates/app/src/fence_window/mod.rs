@@ -90,6 +90,24 @@ use self::tabs::*;
 use self::tooltip::*;
 use self::window_drag::*;
 
+pub struct SyncedTheme {
+    pub snapshot: std::sync::Arc<pecofence_plugin_api::ThemeSnapshot>,
+    pub epoch: u64,
+}
+
+/// Host-provided panel lifecycle and theme-sync bridge, breaking the `fence_window -> app` cycle.
+pub trait FencePanelHost {
+    fn open_panel(
+        &self,
+        spec: &pecofence_core::PanelSpec,
+    ) -> pecofence_plugin_api::Result<PanelHandle>;
+    fn sync_theme(
+        &self,
+        theme: &Theme,
+        paper: pecofence_plugin_api::PaperEnvironment,
+    ) -> SyncedTheme;
+}
+
 /// Shared per-process context for all fence windows.
 pub struct FenceContext {
     pub stack: Rc<RenderStack>,
@@ -109,7 +127,7 @@ pub struct FenceContext {
     pub motion: Rc<Motion>,
     /// Frame ticks for client-side tweens; call `request()` whenever a tween is running.
     pub frames: Rc<FrameClock>,
-    pub panel_manager: Rc<RefCell<crate::app::panel_manager::PanelManager>>,
+    pub panel_host: Rc<dyn FencePanelHost>,
 }
 
 /// Live-tunable behaviour flags shared by all fence windows (mirrors `Settings`).

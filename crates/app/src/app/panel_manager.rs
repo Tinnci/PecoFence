@@ -832,9 +832,30 @@ pub(crate) fn set_plugin_animations(enabled: bool) {
 
 /// Process-wide theme host so fence-window paint bridges and the service
 /// published to plugins observe the same state.
-pub(crate) fn theme_host() -> &'static ThemeHost {
+fn theme_host() -> &'static ThemeHost {
     static THEME_HOST: std::sync::OnceLock<ThemeHost> = std::sync::OnceLock::new();
     THEME_HOST.get_or_init(ThemeHost::new)
+}
+
+pub(super) struct PanelHostBridge(pub(super) Rc<RefCell<PanelManager>>);
+
+impl crate::fence_window::FencePanelHost for PanelHostBridge {
+    fn open_panel(&self, spec: &PanelSpec) -> Result<PanelHandle> {
+        self.0.borrow_mut().open_panel(spec)
+    }
+
+    fn sync_theme(
+        &self,
+        theme: &pecofence_render::Theme,
+        paper: pecofence_plugin_api::PaperEnvironment,
+    ) -> crate::fence_window::SyncedTheme {
+        let host = theme_host();
+        host.sync_with_paper(theme, paper);
+        crate::fence_window::SyncedTheme {
+            snapshot: host.snapshot(),
+            epoch: host.epoch(),
+        }
+    }
 }
 
 /// Resolve provider roles from the same live material/foreground as file content.

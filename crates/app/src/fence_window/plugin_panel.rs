@@ -109,6 +109,7 @@ impl PanelHandle {
 
 pub(super) struct PluginPanelContent {
     handle: PanelHandle,
+    panel_host: Rc<dyn super::FencePanelHost>,
     committed: Option<Rc<dyn PreparedFrame>>,
     storage: Option<(u64, u32, u64)>,
     pressed: Option<(u64, u64, Rc<dyn PreparedFrame>)>,
@@ -124,9 +125,14 @@ pub(super) struct PluginPanelContent {
 }
 
 impl PluginPanelContent {
-    pub fn new(handle: PanelHandle, capture_release_pending: Rc<Cell<bool>>) -> Self {
+    pub fn new(
+        handle: PanelHandle,
+        capture_release_pending: Rc<Cell<bool>>,
+        panel_host: Rc<dyn super::FencePanelHost>,
+    ) -> Self {
         Self {
             handle,
+            panel_host,
             committed: None,
             storage: None,
             pressed: None,
@@ -298,9 +304,8 @@ impl PluginPanelContent {
         // Sync the fence window's live theme into the shared theme host, then
         // let the panel know when the derived tokens changed. The epoch only
         // advances on actual token changes, so this is free in steady state.
-        let theme_host = crate::app::panel_manager::theme_host();
-        theme_host.sync_with_paper(theme, paper);
-        let theme_revision = theme_host.snapshot().revision;
+        let synced_theme = self.panel_host.sync_theme(theme, paper);
+        let theme_revision = synced_theme.snapshot.revision;
         if self.handle.theme_revision.get() != theme_revision {
             self.handle.theme_revision.set(theme_revision);
             let _ = self
@@ -318,7 +323,7 @@ impl PluginPanelContent {
             exposure: self.handle.exposure.get(),
             active: self.handle.active.get(),
             text_scale,
-            theme_epoch: theme_host.epoch(),
+            theme_epoch: synced_theme.epoch,
             device_epoch,
         }) {
             Ok(frame) => frame,
@@ -327,7 +332,7 @@ impl PluginPanelContent {
                 return Ok(true);
             }
         };
-        let feedback_theme = theme_host.snapshot();
+        let feedback_theme = synced_theme.snapshot;
         let mut interaction = self.interaction.clone();
         interaction.reconcile_viewport(candidate.hit_tree(), viewport);
         let grab = self.grab;
@@ -1168,6 +1173,25 @@ mod candidate_error_tests {
         let prepares = Rc::new(Cell::new(0));
         let fail = Rc::new(Cell::new(false));
         let capture_release = Rc::new(Cell::new(false));
+        struct DummyPanelHost;
+        impl super::super::FencePanelHost for DummyPanelHost {
+            fn open_panel(
+                &self,
+                _spec: &pecofence_core::PanelSpec,
+            ) -> pecofence_plugin_api::Result<PanelHandle> {
+                unreachable!()
+            }
+            fn sync_theme(
+                &self,
+                _theme: &pecofence_render::Theme,
+                _paper: pecofence_plugin_api::PaperEnvironment,
+            ) -> super::super::SyncedTheme {
+                super::super::SyncedTheme {
+                    snapshot: std::sync::Arc::new(ThemeSnapshot::dark()),
+                    epoch: 1,
+                }
+            }
+        }
         let mut content = PluginPanelContent::new(
             PanelHandle::new(
                 InstanceKey {
@@ -1180,6 +1204,7 @@ mod candidate_error_tests {
                 }),
             ),
             capture_release.clone(),
+            Rc::new(DummyPanelHost),
         );
         let theme = Theme::dark();
         assert!(

@@ -61,7 +61,7 @@ mod fileops;
 mod items;
 mod menus;
 mod motion;
-pub(crate) mod panel_manager;
+mod panel_manager;
 mod peek;
 mod persistence;
 mod portals;
@@ -956,7 +956,7 @@ impl App {
                     state.config.settings.widget_paper_brightness,
                 ),
             }),
-            panel_manager: panel_manager.clone(),
+            panel_host: Rc::new(panel_manager::PanelHostBridge(panel_manager.clone())),
         });
 
         // Tray (the glyph uses the same accent token as the selection).
