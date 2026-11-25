@@ -12,12 +12,6 @@ pecofence-shell-contract = { path = "../shell-contract" }
 windows-core = { workspace = true }
 windows-numerics = { workspace = true }
 tracing = { workspace = true }
-windows-sys = { version = "0.61", features = [
-    "Win32_Foundation",
-    "Win32_Security",
-    "Win32_Security_Authorization",
-    "Win32_System_Threading",
-] }
 
 [target.'cfg(windows)'.dev-dependencies]
 windows-sys = { version = "0.61", features = [

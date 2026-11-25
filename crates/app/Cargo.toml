@@ -34,6 +34,7 @@ tracing-subscriber = { workspace = true }
 tokio = { workspace = true }
 
 [dev-dependencies]
+pecofence-canvas-test = { path = "../canvas-test" }
 windows-reactor = { workspace = true, features = ["test"] }
 
 [lints]

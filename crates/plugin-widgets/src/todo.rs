@@ -987,7 +987,7 @@ fn build_todo(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pecofence_render::HeadlessCanvas;
+    use pecofence_canvas_test::HeadlessCanvas;
 
     #[test]
     fn todo_config_round_trips_and_rejects_empty_titles() {

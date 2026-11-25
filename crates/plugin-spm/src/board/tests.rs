@@ -823,7 +823,7 @@ fn layouts_hold_their_geometry_across_themes_and_text_scales() {
                         );
                     }
                 }
-                let mut canvas = pecofence_render::HeadlessCanvas::default();
+                let mut canvas = pecofence_canvas_test::HeadlessCanvas::default();
                 scene.paint(&mut canvas).unwrap();
                 assert!(canvas.is_balanced());
             }
@@ -877,15 +877,15 @@ fn board_snapshots_hold_their_layout() {
             h.settle();
         }
         let scene = h.frame(w, ht);
-        let mut canvas = pecofence_render::HeadlessCanvas::default();
+        let mut canvas = pecofence_canvas_test::HeadlessCanvas::default();
         scene.paint(&mut canvas).unwrap();
-        let pixmap = pecofence_render::raster::rasterize(
+        let pixmap = pecofence_canvas_test::raster::rasterize(
             canvas.commands(),
             w as u32,
             ht as u32,
             [background[0], background[1], background[2], 1.0],
         );
-        pecofence_render::raster::assert_snapshot(&pixmap, &dir.join(format!("{name}.png")));
+        pecofence_canvas_test::raster::assert_snapshot(&pixmap, &dir.join(format!("{name}.png")));
     }
 }
 
@@ -1217,15 +1217,15 @@ fn timeline_snapshots() {
                 .filter(|n| n.action.is_some())
                 .all(|n| !n.name.trim().is_empty())
         );
-        let mut canvas = pecofence_render::HeadlessCanvas::default();
+        let mut canvas = pecofence_canvas_test::HeadlessCanvas::default();
         scene.paint(&mut canvas).unwrap();
-        let pixmap = pecofence_render::raster::rasterize(
+        let pixmap = pecofence_canvas_test::raster::rasterize(
             canvas.commands(),
             w as u32,
             ht as u32,
             h.panel.palette.base,
         );
-        pecofence_render::raster::assert_snapshot(&pixmap, &dir.join(format!("{name}.png")));
+        pecofence_canvas_test::raster::assert_snapshot(&pixmap, &dir.join(format!("{name}.png")));
     }
 }
 
@@ -1466,15 +1466,18 @@ fn board_capsule_with_ci_segment_snapshot() {
     capsule.presentation = Presentation::Capsule;
     let scene = h.panel.prepare(capsule, &Heuristic).unwrap();
     let background = light().surface_panel;
-    let mut canvas = pecofence_render::HeadlessCanvas::default();
+    let mut canvas = pecofence_canvas_test::HeadlessCanvas::default();
     scene.paint(&mut canvas).unwrap();
-    let pixmap = pecofence_render::raster::rasterize(
+    let pixmap = pecofence_canvas_test::raster::rasterize(
         canvas.commands(),
         w as u32,
         ht as u32,
         [background[0], background[1], background[2], 1.0],
     );
-    pecofence_render::raster::assert_snapshot(&pixmap, &dir.join("board-capsule-ci-light-360.png"));
+    pecofence_canvas_test::raster::assert_snapshot(
+        &pixmap,
+        &dir.join("board-capsule-ci-light-360.png"),
+    );
 }
 
 #[test]

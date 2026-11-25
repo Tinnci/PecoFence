@@ -5,8 +5,6 @@
 //! fences' data model — it draws what the app tells it to.
 
 pub mod canvas;
-#[cfg(feature = "raster")]
-pub mod raster;
 
 #[cfg(windows)]
 #[allow(
@@ -68,7 +66,6 @@ pub use backdrop::{Image, MicaTint, MonitorBackdrop, WallpaperPosition};
 pub use bitmaps::BitmapCache;
 #[cfg(windows)]
 pub use canvas::{Direct2dCanvas, TextFormatCache};
-pub use canvas::{DrawCommand, HeadlessCanvas};
 #[cfg(windows)]
 pub use panel::{Clip, Panel};
 #[cfg(windows)]

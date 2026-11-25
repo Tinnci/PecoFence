@@ -15,6 +15,7 @@ members = [
     "crates/shell-extension",
     "crates/platform",
     "crates/render",
+    "crates/canvas-test",
     "crates/app",
     "crates/watchdog",
     "tools/bindgen",

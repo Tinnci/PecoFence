@@ -102,10 +102,10 @@ fn render_planning_in_light_dark_and_high_contrast() {
             nodes,
         )
         .unwrap();
-        let mut canvas = pecofence_render::HeadlessCanvas::default();
+        let mut canvas = pecofence_canvas_test::HeadlessCanvas::default();
         scene.paint(&mut canvas).unwrap();
-        let pixmap = pecofence_render::raster::rasterize(canvas.commands(), 720, 680, p.base);
-        pecofence_render::raster::assert_snapshot(&pixmap, &dir.join(format!("{name}.png")));
+        let pixmap = pecofence_canvas_test::raster::rasterize(canvas.commands(), 720, 680, p.base);
+        pecofence_canvas_test::raster::assert_snapshot(&pixmap, &dir.join(format!("{name}.png")));
     }
 }
 

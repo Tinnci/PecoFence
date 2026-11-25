@@ -18,7 +18,7 @@ chrono = { workspace = true }
 uuid = { workspace = true }
 
 [dev-dependencies]
-pecofence-render = { path = "../render", features = ["raster"] }
+pecofence-canvas-test = { path = "../canvas-test", features = ["raster"] }
 
 [lints]
 workspace = true

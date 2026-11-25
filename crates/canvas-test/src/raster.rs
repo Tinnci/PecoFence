@@ -6,7 +6,7 @@
 //! and is drawn as one placeholder bar per line (its box, alignment and line count are what
 //! a layout regression changes), images as grey boxes. Strokes use round joins.
 
-use crate::canvas::DrawCommand;
+use crate::DrawCommand;
 use pecofence_plugin_api::{Path, RectDip, TextAlign, TextSpec};
 use tiny_skia::{
     Color, FillRule, LineCap, LineJoin, Mask, Paint, PathBuilder, Pixmap, Rect, Stroke, Transform,

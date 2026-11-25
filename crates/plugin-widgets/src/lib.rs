@@ -1918,7 +1918,7 @@ fn month_for(today: NaiveDate, offset: i32) -> (i32, u32) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pecofence_render::HeadlessCanvas;
+    use pecofence_canvas_test::HeadlessCanvas;
 
     #[test]
     fn contrast_calendar_selection_has_a_border_without_an_extra_hit_target() {
@@ -1981,14 +1981,14 @@ mod tests {
         assert_eq!(hit.rect, selected.rect);
         assert_eq!(semantic.rect, hit.rect);
         assert_eq!(scene.hit_tree().len(), 32);
-        let mut canvas = pecofence_render::HeadlessCanvas::default();
+        let mut canvas = pecofence_canvas_test::HeadlessCanvas::default();
         scene.paint(&mut canvas).unwrap();
         assert!(canvas.is_balanced());
         assert!(
-            canvas
-                .commands()
-                .iter()
-                .any(|command| matches!(command, pecofence_render::DrawCommand::DrawRect(_, _)))
+            canvas.commands().iter().any(|command| matches!(
+                command,
+                pecofence_canvas_test::DrawCommand::DrawRect(_, _)
+            ))
         );
     }
 
@@ -2088,7 +2088,7 @@ mod tests {
             assert_eq!(node.style.size, design::BODY * factor);
             assert!(frame.identity().layout_revision > previous_revision);
             previous_revision = frame.identity().layout_revision;
-            let mut canvas = pecofence_render::HeadlessCanvas::default();
+            let mut canvas = pecofence_canvas_test::HeadlessCanvas::default();
             frame.paint(&mut canvas).unwrap();
             assert!(canvas.is_balanced());
         }

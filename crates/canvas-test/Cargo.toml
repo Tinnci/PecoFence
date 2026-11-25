@@ -1,0 +1,17 @@
+[package]
+name = "pecofence-canvas-test"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+autoexamples = false
+
+[dependencies]
+pecofence-plugin-api = { path = "../plugin-api" }
+tiny-skia = { version = "=0.11.4", default-features = false, features = ["std", "simd", "png-format"], optional = true }
+
+[features]
+raster = ["dep:tiny-skia"]
+
+[lints]
+workspace = true

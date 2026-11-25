@@ -2192,13 +2192,13 @@ mod tests {
                     .unwrap();
                 assert_eq!(hit.rect, semantic.rect);
             }
-            let mut canvas = pecofence_render::HeadlessCanvas::default();
+            let mut canvas = pecofence_canvas_test::HeadlessCanvas::default();
             frame.paint(&mut canvas).unwrap();
             assert!(canvas.is_balanced());
             assert!(!canvas.commands().iter().any(|command| matches!(command,
-                pecofence_render::DrawCommand::FillRoundedRect(rect, _, _) if *rect == viewport)));
+                pecofence_canvas_test::DrawCommand::FillRoundedRect(rect, _, _) if *rect == viewport)));
             assert!(canvas.commands().iter().any(|command| matches!(command,
-                pecofence_render::DrawCommand::DrawText(_, spec, _) if spec.size_dip == design::TITLE * factor)));
+                pecofence_canvas_test::DrawCommand::DrawText(_, spec, _) if spec.size_dip == design::TITLE * factor)));
         }
     }
 
@@ -2240,7 +2240,7 @@ mod tests {
             1.0,
         )
         .unwrap();
-        let mut canvas = pecofence_render::HeadlessCanvas::default();
+        let mut canvas = pecofence_canvas_test::HeadlessCanvas::default();
         frame.paint(&mut canvas).unwrap();
         assert!(canvas.is_balanced());
         assert!(!canvas.commands().is_empty());

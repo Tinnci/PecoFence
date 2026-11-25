@@ -414,15 +414,15 @@ fn cicd_pixel_snapshots() {
             (480, 744)
         };
         let scene = frame(&mut panel, width as f32, height as f32);
-        let mut canvas = pecofence_render::HeadlessCanvas::default();
+        let mut canvas = pecofence_canvas_test::HeadlessCanvas::default();
         scene.paint(&mut canvas).unwrap();
-        let pixmap = pecofence_render::raster::rasterize(
+        let pixmap = pecofence_canvas_test::raster::rasterize(
             canvas.commands(),
             width,
             height,
             panel.palette.base,
         );
-        pecofence_render::raster::assert_snapshot(&pixmap, &dir.join(format!("{name}.png")));
+        pecofence_canvas_test::raster::assert_snapshot(&pixmap, &dir.join(format!("{name}.png")));
     }
 }
 

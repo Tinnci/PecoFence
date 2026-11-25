@@ -1377,16 +1377,19 @@ mod tests {
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/snapshots");
         for (name, source) in cases {
             let scene = scene(source, 560.0, 400.0, true);
-            let mut canvas = pecofence_render::HeadlessCanvas::default();
+            let mut canvas = pecofence_canvas_test::HeadlessCanvas::default();
             scene.paint(&mut canvas).unwrap();
             assert!(canvas.is_balanced());
-            let pixmap = pecofence_render::raster::rasterize(
+            let pixmap = pecofence_canvas_test::raster::rasterize(
                 canvas.commands(),
                 560,
                 400,
                 [1.0, 1.0, 1.0, 1.0],
             );
-            pecofence_render::raster::assert_snapshot(&pixmap, &dir.join(format!("{name}.png")));
+            pecofence_canvas_test::raster::assert_snapshot(
+                &pixmap,
+                &dir.join(format!("{name}.png")),
+            );
         }
     }
 
@@ -1428,14 +1431,14 @@ mod tests {
                 .iter()
                 .any(|h| h.id == STAGE && h.action == EDIT)
         );
-        let mut canvas = pecofence_render::HeadlessCanvas::default();
+        let mut canvas = pecofence_canvas_test::HeadlessCanvas::default();
         scene.paint(&mut canvas).unwrap();
         assert!(canvas.is_balanced());
         assert!(
             canvas
                 .commands()
                 .iter()
-                .any(|c| matches!(c, pecofence_render::DrawCommand::StrokePath(_, _)))
+                .any(|c| matches!(c, pecofence_canvas_test::DrawCommand::StrokePath(_, _)))
         );
     }
 
@@ -1530,11 +1533,11 @@ mod tests {
             let node = scene.nodes().iter().find(|n| n.id == id).unwrap();
             assert!(node.rect.w > 0.0 && node.rect.h > 0.0);
             let path = node.style.path.as_ref().unwrap();
-            let mut canvas = pecofence_render::HeadlessCanvas::default();
+            let mut canvas = pecofence_canvas_test::HeadlessCanvas::default();
             scene.paint(&mut canvas).unwrap();
             assert!(canvas.commands().iter().any(|c| matches!(
                 c,
-                pecofence_render::DrawCommand::StrokePath(p, _) if p == path
+                pecofence_canvas_test::DrawCommand::StrokePath(p, _) if p == path
             )));
         }
     }

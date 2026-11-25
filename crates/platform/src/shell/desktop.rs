@@ -533,10 +533,8 @@ mod anchor_tests {
                 "minimized" => {
                     // SAFETY: our own off-screen fixture, without activation.
                     unsafe {
-                        windows_sys::Win32::UI::WindowsAndMessaging::ShowWindow(
-                            phantom.hwnd().0,
-                            windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWMINNOACTIVE,
-                        );
+                        // SW_SHOWMINNOACTIVE = 7
+                        let _ = crate::bindings::ShowWindow(phantom.hwnd(), 7);
                     }
                 }
                 "cloaked" => set_cloak(phantom.hwnd(), true)?,

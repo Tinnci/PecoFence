@@ -352,6 +352,7 @@ name = "pecofence"
 version = "0.0.6"
 dependencies = [
  "chrono",
+ "pecofence-canvas-test",
  "pecofence-core",
  "pecofence-platform",
  "pecofence-plugin-api",
@@ -369,6 +370,14 @@ dependencies = [
  "uuid",
  "windows-core 0.100.0",
  "windows-reactor",
+]
+
+[[package]]
+name = "pecofence-canvas-test"
+version = "0.0.6"
+dependencies = [
+ "pecofence-plugin-api",
+ "tiny-skia",
 ]
 
 [[package]]
@@ -430,8 +439,8 @@ name = "pecofence-plugin-spm"
 version = "0.0.6"
 dependencies = [
  "chrono",
+ "pecofence-canvas-test",
  "pecofence-plugin-api",
- "pecofence-render",
  "serde",
  "serde_json",
  "spm-contracts",
@@ -444,9 +453,9 @@ version = "0.0.6"
 dependencies = [
  "chinese-lunisolar-calendar",
  "chrono",
+ "pecofence-canvas-test",
  "pecofence-mermaid",
  "pecofence-plugin-api",
- "pecofence-render",
  "serde",
  "serde_json",
  "work-calendar",
@@ -457,9 +466,9 @@ name = "pecofence-render"
 version = "0.0.6"
 dependencies = [
  "bezier_easing",
+ "pecofence-canvas-test",
  "pecofence-platform",
  "pecofence-plugin-api",
- "tiny-skia",
  "tracing",
  "windows-canvas",
  "windows-collections",

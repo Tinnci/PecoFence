@@ -1141,7 +1141,7 @@ mod candidate_error_tests {
             device_epoch: 1,
         };
         let frame = provider.prepare_frame(input).unwrap();
-        let mut canvas = pecofence_render::HeadlessCanvas::default();
+        let mut canvas = pecofence_canvas_test::HeadlessCanvas::default();
         canvas_feedback(
             &mut canvas,
             input.viewport,
@@ -1158,9 +1158,9 @@ mod candidate_error_tests {
         .unwrap();
         assert!(canvas.is_balanced());
         assert!(
-            matches!(canvas.commands(), [pecofence_render::DrawCommand::PushClip(_),
-            pecofence_render::DrawCommand::FillRoundedRect(rect, radius, _),
-            pecofence_render::DrawCommand::PopClip] if *rect == frame.hit_tree()[0].rect && *radius == 4.0)
+            matches!(canvas.commands(), [pecofence_canvas_test::DrawCommand::PushClip(_),
+            pecofence_canvas_test::DrawCommand::FillRoundedRect(rect, radius, _),
+            pecofence_canvas_test::DrawCommand::PopClip] if *rect == frame.hit_tree()[0].rect && *radius == 4.0)
         );
     }
 

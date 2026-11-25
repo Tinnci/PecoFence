@@ -31,6 +31,7 @@ scripts.
 │   ├── app/                    pecofence.exe (native shell and wiring)
 │   ├── core/                   model, workspace and protocol logic
 │   ├── platform/ render/       Windows platform and rendering adapters
+│   ├── canvas-test/            headless canvas and CPU rasterizer for tests
 │   ├── plugin-api/             public plugin boundary
 │   ├── plugin-kernel/          plugin loading and lifecycle
 │   ├── plugin-spm/             live SPM integration

@@ -8,11 +8,9 @@ autoexamples = false
 
 [dependencies]
 pecofence-plugin-api = { path = "../plugin-api" }
-# Test-only rasterizer (feature `raster`); never part of the app build.
-tiny-skia = { version = "=0.11.4", default-features = false, features = ["std", "simd", "png-format"], optional = true }
 
-[features]
-raster = ["dep:tiny-skia"]
+[dev-dependencies]
+pecofence-canvas-test = { path = "../canvas-test" }
 
 [target.'cfg(windows)'.dependencies]
 windows-core = { workspace = true }
