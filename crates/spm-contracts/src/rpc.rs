@@ -288,6 +288,37 @@ pub enum Event {
 
 pub type Extensions = BTreeMap<String, serde_json::Value>;
 
+impl Response {
+    /// Return the RPC method corresponding to this response variant.
+    pub fn method(&self) -> RpcMethod {
+        match self {
+            Self::GetDeliveryPlan(_) => RpcMethod::GetDeliveryPlan,
+            Self::Hello(_) => RpcMethod::Hello,
+            Self::GetCapabilities(_) => RpcMethod::GetCapabilities,
+            Self::Subscribe(_) => RpcMethod::Subscribe,
+            Self::Unsubscribe(_) => RpcMethod::Unsubscribe,
+            Self::QueryPage(_) => RpcMethod::QueryPage,
+            Self::Refresh(_) => RpcMethod::Refresh,
+            Self::ResolveNavigation(_) => RpcMethod::ResolveNavigation,
+            Self::BuildBriefing(_) => RpcMethod::BuildBriefing,
+            Self::Ping(_) => RpcMethod::Ping,
+            Self::QueryBoardPage(_) => RpcMethod::QueryBoardPage,
+            Self::GetCardEvidence(_) => RpcMethod::GetCardEvidence,
+            Self::GetCiWatch(_) => RpcMethod::GetCiWatch,
+            Self::UpdateCiWatchlist(_) => RpcMethod::UpdateCiWatchlist,
+            Self::SuggestCiWatch(_) => RpcMethod::SuggestCiWatch,
+            Self::QueryIssues(_) => RpcMethod::QueryIssues,
+            Self::GetIssue(_) => RpcMethod::GetIssue,
+            Self::GetGateReadiness(_) => RpcMethod::GetGateReadiness,
+            Self::ReviewAssignment(_) => RpcMethod::ReviewAssignment,
+            Self::JudgeSuggestion(_) => RpcMethod::JudgeSuggestion,
+            Self::SearchWorkspace(_) => RpcMethod::SearchWorkspace,
+            Self::GateWhatIf(_) => RpcMethod::GateWhatIf,
+            Self::RefreshIssues(_) => RpcMethod::RefreshIssues,
+        }
+    }
+}
+
 impl Request {
     pub fn method(&self) -> RpcMethod {
         match self {

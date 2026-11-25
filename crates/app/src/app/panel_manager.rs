@@ -100,7 +100,14 @@ impl PanelManager {
             );
         }));
         let render_invalidations = Arc::new(Mutex::new(HashSet::new()));
-        let instance = pecofence_core::brand::var("PECOFENCE_INSTANCE").ok();
+        let instance = pecofence_core::brand::var("PECOFENCE_INSTANCE")
+            .ok()
+            .filter(|s| !s.trim().is_empty())
+            .or_else(|| {
+                std::env::var("SPM_INSTANCE")
+                    .ok()
+                    .filter(|s| !s.trim().is_empty())
+            });
         let endpoint = spm_endpoint(
             pecofence_platform::named_pipe::current_user_sid().expect("current process user SID"),
             pecofence_platform::named_pipe::current_windows_session_id()

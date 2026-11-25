@@ -509,7 +509,7 @@ impl Actor {
             && let Some(operation) = self.pending_operations.remove(&request_id)
         {
             let result = match &envelope.body {
-                Body::Response(response) if response_method(response) == operation.method => {
+                Body::Response(response) if response.method() == operation.method => {
                     serde_json::to_vec(&envelope)
                         .map(Arc::<[u8]>::from)
                         .map_err(|error| Error::Invalid(error.to_string()))
@@ -656,34 +656,6 @@ impl Actor {
                 );
             }
         }
-    }
-}
-
-fn response_method(response: &Response) -> RpcMethod {
-    match response {
-        Response::GetDeliveryPlan(_) => RpcMethod::GetDeliveryPlan,
-        Response::Hello(_) => RpcMethod::Hello,
-        Response::GetCapabilities(_) => RpcMethod::GetCapabilities,
-        Response::Subscribe(_) => RpcMethod::Subscribe,
-        Response::Unsubscribe(_) => RpcMethod::Unsubscribe,
-        Response::QueryPage(_) => RpcMethod::QueryPage,
-        Response::Refresh(_) => RpcMethod::Refresh,
-        Response::ResolveNavigation(_) => RpcMethod::ResolveNavigation,
-        Response::BuildBriefing(_) => RpcMethod::BuildBriefing,
-        Response::Ping(_) => RpcMethod::Ping,
-        Response::QueryBoardPage(_) => RpcMethod::QueryBoardPage,
-        Response::GetCardEvidence(_) => RpcMethod::GetCardEvidence,
-        Response::GetCiWatch(_) => RpcMethod::GetCiWatch,
-        Response::UpdateCiWatchlist(_) => RpcMethod::UpdateCiWatchlist,
-        Response::SuggestCiWatch(_) => RpcMethod::SuggestCiWatch,
-        Response::QueryIssues(_) => RpcMethod::QueryIssues,
-        Response::GetIssue(_) => RpcMethod::GetIssue,
-        Response::GetGateReadiness(_) => RpcMethod::GetGateReadiness,
-        Response::ReviewAssignment(_) => RpcMethod::ReviewAssignment,
-        Response::JudgeSuggestion(_) => RpcMethod::JudgeSuggestion,
-        Response::SearchWorkspace(_) => RpcMethod::SearchWorkspace,
-        Response::GateWhatIf(_) => RpcMethod::GateWhatIf,
-        Response::RefreshIssues(_) => RpcMethod::RefreshIssues,
     }
 }
 
