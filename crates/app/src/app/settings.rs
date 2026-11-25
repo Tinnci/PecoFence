@@ -220,7 +220,7 @@ impl App {
             snapshots,
             backups: self.state.backup_files(),
             monitors,
-            version: env!("CARGO_PKG_VERSION"),
+            version: env!("PECOFENCE_DISPLAY_VERSION"),
             config_path: self.state.config_path().to_path_buf(),
             memory_mb: mem_mb,
             item_count: self.state.workspace_item_count(),

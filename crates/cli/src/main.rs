@@ -602,7 +602,10 @@ fn main_with(args: &[String], env: &Env, now: i64) -> (u8, String, String) {
     let json = args.iter().any(|a| a == "--json");
     let result = parse(args).and_then(|options| match options.command.as_str() {
         "help" => Ok(format!("{HELP}\n")),
-        "version" => Ok(format!("pecofence-cli {}\n", env!("CARGO_PKG_VERSION"))),
+        "version" => Ok(format!(
+            "pecofence-cli {}\n",
+            env!("PECOFENCE_DISPLAY_VERSION")
+        )),
         command => match command {
             "status" => lifecycle::status(&options, env, now),
             "quit" => lifecycle::quit(&options, env),
