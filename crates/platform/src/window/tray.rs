@@ -62,6 +62,17 @@ pub struct TrayIcon {
     id: u32,
 }
 
+const NIIF_ERROR: u32 = 0x0000_0003;
+const NIIF_RESPECT_QUIET_TIME: u32 = 0x0000_0080;
+
+/// Severity level for notification-area balloon/toast messages.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NotificationSeverity {
+    Info,
+    Warning,
+    Error,
+}
+
 impl TrayIcon {
     /// Adds the icon; notifications arrive as `callback_message` on `hwnd` (NOTIFYICON_VERSION_4:
     /// `LOWORD(lParam)` = event such as `WM_CONTEXTMENU`/`NIN_SELECT`, x/y in wParam).
@@ -102,18 +113,28 @@ impl TrayIcon {
         }
     }
 
-    /// Shows a toast/balloon notification.
-    pub fn show_info(&self, title: &str, text: &str, warning: bool) {
+    /// Shows a toast/balloon notification, respecting Windows Focus Assist / quiet time when requested.
+    pub fn show_notification(
+        &self,
+        title: &str,
+        text: &str,
+        severity: NotificationSeverity,
+        respect_quiet_time: bool,
+    ) {
+        let mut flags = match severity {
+            NotificationSeverity::Info => NIIF_INFO as u32,
+            NotificationSeverity::Warning => NIIF_WARNING as u32,
+            NotificationSeverity::Error => NIIF_ERROR,
+        };
+        if respect_quiet_time {
+            flags |= NIIF_RESPECT_QUIET_TIME;
+        }
         let mut data = NOTIFYICONDATAW {
             cbSize: size_of::<NOTIFYICONDATAW>() as u32,
             hWnd: self.hwnd,
             uID: self.id,
             uFlags: NIF_INFO as u32,
-            dwInfoFlags: if warning {
-                NIIF_WARNING as u32
-            } else {
-                NIIF_INFO as u32
-            },
+            dwInfoFlags: flags,
             ..Default::default()
         };
         copy_wide(&mut data.szInfoTitle, title);
@@ -122,6 +143,16 @@ impl TrayIcon {
         unsafe {
             let _ = Shell_NotifyIconW(NIM_MODIFY as u32, &data);
         }
+    }
+
+    /// Shows a toast/balloon notification.
+    pub fn show_info(&self, title: &str, text: &str, warning: bool) {
+        let severity = if warning {
+            NotificationSeverity::Warning
+        } else {
+            NotificationSeverity::Info
+        };
+        self.show_notification(title, text, severity, true);
     }
 }
 

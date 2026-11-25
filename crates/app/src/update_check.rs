@@ -128,6 +128,19 @@ pub fn trigger_portable_self_update(
     Ok(())
 }
 
+/// Format a concise title and body for a PecoFence tray/toast update notification.
+pub fn format_update_notification(info: &ReleaseInfo) -> (String, String) {
+    let title = format!("PecoFence v{} available", info.version);
+    let body = info
+        .notes
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| s.lines().next().unwrap_or(s).to_owned())
+        .unwrap_or_else(|| "A newer release package is ready to install.".to_owned());
+    (title, body)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -165,5 +178,19 @@ mod tests {
             }
         }"#;
         assert_eq!(parse_latest_manifest(untrusted, "windows-x86_64"), None);
+    }
+
+    #[test]
+    fn formats_update_notification_with_first_notes_line() {
+        let info = ReleaseInfo {
+            version: "0.0.7".into(),
+            download_url: "https://github.com/Tinnci/PecoFence/releases/download/v0.0.7/p.zip"
+                .into(),
+            sha256: None,
+            notes: Some("Faster startup\nMore details".into()),
+        };
+        let (title, body) = format_update_notification(&info);
+        assert_eq!(title, "PecoFence v0.0.7 available");
+        assert_eq!(body, "Faster startup");
     }
 }
