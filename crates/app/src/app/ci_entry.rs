@@ -298,7 +298,12 @@ impl App {
             &[build.job.clone(), number],
         );
         if let Some(tray) = &self.tray {
-            tray.show_info("PecoFence · CI/CD", &text, true);
+            tray.show_notification(
+                "PecoFence · CI/CD",
+                &text,
+                pecofence_platform::window::NotificationSeverity::Error,
+                true,
+            );
         }
         self.ci_last_failure = Some(entry::build_key(build));
     }

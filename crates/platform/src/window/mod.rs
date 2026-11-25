@@ -13,3 +13,4 @@ pub mod tray;
 pub mod winevent;
 
 pub use self::host::*;
+pub use self::tray::NotificationSeverity;

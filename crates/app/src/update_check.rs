@@ -141,6 +141,15 @@ pub fn format_update_notification(info: &ReleaseInfo) -> (String, String) {
     (title, body)
 }
 
+/// Check for a newer release and return a ready-to-display notification tuple when available.
+pub fn check_and_format_notification(
+    current_version: &str,
+) -> Option<(String, String, ReleaseInfo)> {
+    let info = check_latest_release(current_version).ok().flatten()?;
+    let (title, body) = format_update_notification(&info);
+    Some((title, body, info))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
