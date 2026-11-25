@@ -135,6 +135,25 @@ unsafe extern "system" fn module_base(h: HANDLE, addr: u64) -> u64 {
     unsafe { SymGetModuleBase64(h, addr) }
 }
 
+#[cfg(any(target_arch = "x86_64", target_arch = "arm64ec"))]
+fn initial_frame(context: &CONTEXT) -> (u32, u64, u64, u64) {
+    (
+        IMAGE_FILE_MACHINE_AMD64 as u32,
+        context.Rip,
+        context.Rbp,
+        context.Rsp,
+    )
+}
+
+#[cfg(target_arch = "aarch64")]
+fn initial_frame(context: &CONTEXT) -> (u32, u64, u64, u64) {
+    const IMAGE_FILE_MACHINE_ARM64: u32 = 0xAA64;
+    // SAFETY: `ARM64_NT_CONTEXT_0` is a C union of the named register view (`Fp` = X29) and `X: [u64; 31]`;
+    // both variants represent the same initialized general-purpose register array.
+    let fp = unsafe { context.Anonymous.Anonymous.Fp };
+    (IMAGE_FILE_MACHINE_ARM64, context.Pc, fp, context.Sp)
+}
+
 /// Frames of the faulting thread as `module+rva`, from the exception context (the filter's own
 /// frames are not part of it).
 fn walk(ctx: *mut CONTEXT) -> Vec<String> {
@@ -148,16 +167,17 @@ fn walk(ctx: *mut CONTEXT) -> Vec<String> {
         let process = GetCurrentProcess();
         let _ = SymInitializeW(process, PCWSTR::null(), true);
         let mut context: CONTEXT = *ctx;
+        let (machine, pc, fp, sp) = initial_frame(&context);
         let mut frame = STACKFRAME64::default();
-        frame.AddrPC.Offset = context.Rip;
+        frame.AddrPC.Offset = pc;
         frame.AddrPC.Mode = AddrModeFlat;
-        frame.AddrFrame.Offset = context.Rbp;
+        frame.AddrFrame.Offset = fp;
         frame.AddrFrame.Mode = AddrModeFlat;
-        frame.AddrStack.Offset = context.Rsp;
+        frame.AddrStack.Offset = sp;
         frame.AddrStack.Mode = AddrModeFlat;
         for _ in 0..48 {
             let ok = StackWalk64(
-                IMAGE_FILE_MACHINE_AMD64 as u32,
+                machine,
                 process,
                 GetCurrentThread(),
                 &mut frame,
