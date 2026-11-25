@@ -1,0 +1,109 @@
+name: Cut Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Version bump type (or custom)"
+        required: true
+        default: "patch"
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+          - custom
+      custom_version:
+        description: "Custom semver without 'v' (e.g. 0.0.8 or 0.0.8-rc1, used when bump=custom)"
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  cut-release:
+    name: Bump, Tag & Trigger Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main (full history)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Bump version in Cargo.toml and Cargo.lock
+        id: version
+        shell: bash
+        run: |
+          NEW_VER=$(python3 - "${{ inputs.bump }}" "${{ inputs.custom_version }}" << 'PYEOF'
+          import pathlib, re, sys
+
+          bump, custom = sys.argv[1], sys.argv[2].strip().lstrip("v")
+          cargo_path = pathlib.Path("Cargo.toml")
+          cargo_text = cargo_path.read_text(encoding="utf-8")
+          m = re.search(r'(?ms)^(\[workspace\.package\]\s+.*?^version\s*=\s*")([^"]+)(")', cargo_text)
+          if not m:
+              raise SystemExit("Could not locate [workspace.package] version in Cargo.toml")
+          curr = m.group(2)
+
+          if bump == "custom":
+              if not re.match(r"^\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$", custom):
+                  raise SystemExit(f"Invalid custom_version: {custom}")
+              nxt = custom
+          else:
+              core = curr.split("-")[0].split("+")[0]
+              maj, min_, pat = map(int, core.split("."))
+              if bump == "major":
+                  nxt = f"{maj + 1}.0.0"
+              elif bump == "minor":
+                  nxt = f"{maj}.{min_ + 1}.0"
+              else:
+                  nxt = f"{maj}.{min_}.{pat + 1}"
+
+          cargo_path.write_text(cargo_text[:m.start(2)] + nxt + cargo_text[m.end(2):], encoding="utf-8")
+
+          lock_path = pathlib.Path("Cargo.lock")
+          if lock_path.is_file():
+              crates = []
+              for member in pathlib.Path("crates").iterdir():
+                  toml = member / "Cargo.toml"
+                  if toml.is_file():
+                      nm = re.search(r'(?m)^name\s*=\s*"([^"]+)"', toml.read_text(encoding="utf-8"))
+                      if nm and nm.group(1) != "spm-contracts" and nm.group(1) != "work-calendar":
+                          crates.append(nm.group(1))
+              lock_text = lock_path.read_text(encoding="utf-8")
+              for name in crates:
+                  lock_text = re.sub(
+                      rf'(\[\[package\]\]\s+name = "{re.escape(name)}"\s+version = )"[^"]+"',
+                      rf'\1"{nxt}"',
+                      lock_text,
+                  )
+              lock_path.write_text(lock_text, encoding="utf-8")
+
+          print(nxt)
+          PYEOF
+          )
+          NEW_TAG="v${NEW_VER}"
+          if git rev-parse "$NEW_TAG" >/dev/null 2>&1; then
+            echo "::error::Tag $NEW_TAG already exists."
+            exit 1
+          fi
+          echo "version=$NEW_VER" >> "$GITHUB_OUTPUT"
+          echo "tag=$NEW_TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Commit, tag, push & trigger release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          NEW_TAG="${{ steps.version.outputs.tag }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Cargo.toml Cargo.lock
+          git commit -m "chore(release): ${NEW_TAG}"
+          git push origin HEAD:main
+          git tag -a "$NEW_TAG" -m "Release $NEW_TAG"
+          git push origin "$NEW_TAG"
+          gh workflow run release.yml --ref "$NEW_TAG"

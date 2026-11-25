@@ -35,10 +35,16 @@ pub fn is_trusted_release_url(url: &str) -> bool {
 }
 
 fn parse_semver(raw: &str) -> Option<(u64, u64, u64, String)> {
-    let trimmed = raw.trim().strip_prefix('v').unwrap_or(raw.trim());
-    let (core, pre) = match trimmed.split_once('-') {
+    let trimmed = raw
+        .trim()
+        .strip_prefix('v')
+        .or_else(|| raw.trim().strip_prefix('V'))
+        .unwrap_or(raw.trim());
+    let without_display = trimmed.split_whitespace().next()?;
+    let without_build = without_display.split('+').next()?.trim();
+    let (core, pre) = match without_build.split_once('-') {
         Some((core, pre)) => (core, pre.to_owned()),
-        None => (trimmed, String::new()),
+        None => (without_build, String::new()),
     };
     let mut parts = core.split('.');
     let major = parts.next()?.parse().ok()?;
@@ -294,6 +300,9 @@ mod tests {
         assert!(is_newer_version("0.1.0-rc.1", "0.1.0"));
         assert!(!is_newer_version("0.1.0", "0.1.0-rc.1"));
         assert!(!is_newer_version("0.2.0", "0.1.9"));
+        assert!(is_newer_version("0.0.6 (r19 · d2800c8)", "0.0.7"));
+        assert!(!is_newer_version("0.0.7 (r20 · 261e8cc)", "0.0.7"));
+        assert!(!is_newer_version("0.0.7+g261e8cc", "0.0.7"));
     }
 
     #[test]
