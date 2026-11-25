@@ -23,6 +23,7 @@ pub mod ci_watch;
 pub mod freshness;
 pub mod issues;
 pub mod navigation;
+mod panel_support;
 pub mod planning;
 mod project_setup;
 

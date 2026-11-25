@@ -15,7 +15,6 @@ mod diagram;
 pub mod grid;
 pub mod holidays;
 mod lunar;
-mod mermaid;
 mod note;
 mod paper_theme;
 mod todo;

@@ -391,6 +391,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "pecofence-mermaid"
+version = "0.0.6"
+dependencies = [
+ "chrono",
+]
+
+[[package]]
 name = "pecofence-platform"
 version = "0.0.6"
 dependencies = [
@@ -437,6 +444,7 @@ version = "0.0.6"
 dependencies = [
  "chinese-lunisolar-calendar",
  "chrono",
+ "pecofence-mermaid",
  "pecofence-plugin-api",
  "pecofence-render",
  "serde",

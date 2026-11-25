@@ -10,26 +10,26 @@ use chrono::{Datelike, NaiveDate, Weekday};
 use std::collections::HashMap;
 
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) struct Task {
-    pub(crate) name: String,
-    pub(crate) section: Option<String>,
-    pub(crate) start: NaiveDate,
+pub struct Task {
+    pub name: String,
+    pub section: Option<String>,
+    pub start: NaiveDate,
     /// Exclusive end; equal to `start` for milestones.
-    pub(crate) end: NaiveDate,
-    pub(crate) done: bool,
-    pub(crate) active: bool,
-    pub(crate) critical: bool,
-    pub(crate) milestone: bool,
+    pub end: NaiveDate,
+    pub done: bool,
+    pub active: bool,
+    pub critical: bool,
+    pub milestone: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) struct Gantt {
-    pub(crate) title: Option<String>,
-    pub(crate) tasks: Vec<Task>,
+pub struct Gantt {
+    pub title: Option<String>,
+    pub tasks: Vec<Task>,
 }
 
 impl Gantt {
-    pub(crate) fn span(&self) -> Option<(NaiveDate, NaiveDate)> {
+    pub fn span(&self) -> Option<(NaiveDate, NaiveDate)> {
         let start = self.tasks.iter().map(|t| t.start).min()?;
         let end = self.tasks.iter().map(|t| t.end.max(t.start)).max()?;
         Some((start, end.max(start.succ_opt().unwrap_or(start))))

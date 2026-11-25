@@ -1,15 +1,15 @@
 //! Diagram widget: Mermaid text drawn natively as scene nodes (Pele-style), so the
 //! result is crisp at any DPI, themed by the paper palette and readable by UIA.
 
-use super::mermaid::{
-    self, Diagnostic, Diagram, Estimate, FlowLayout, Flowchart, Gantt, Parsed, Severity, Shape,
-    Stroke, TextMeasure,
-};
 use super::{
     CAPSULE_HEIGHT, CONTENT_TOP, Colors, Control, FRAME_INTERVAL, HEADER_META, HeaderAction, Tween,
     WidgetElement, WidgetFrame, build_capsule, build_panel_header, fade, glyph, paper,
 };
 use chrono::{Datelike, Local, NaiveDate};
+use pecofence_mermaid::{
+    self as mermaid, Diagnostic, Diagram, Estimate, FlowLayout, Flowchart, Gantt, Parsed, Severity,
+    Shape, Stroke, TextMeasure,
+};
 use pecofence_plugin_api::design;
 use pecofence_plugin_api::design::motion::{self, Curve};
 use pecofence_plugin_api::*;

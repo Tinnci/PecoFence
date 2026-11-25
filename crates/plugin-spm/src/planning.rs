@@ -1,7 +1,7 @@
 //! Read-only delivery plans. Calculations and evidence remain in SPM.
 use crate::board::{
     palette::Palette,
-    text::{Fitter, HostMeasure, Measure},
+    text::{Fitter, Measure},
 };
 use crate::scene_builder::{Builder, r};
 use pecofence_plugin_api::{design::ContentScale, scene::Scene, *};
@@ -413,29 +413,21 @@ impl PanelInstance for Panel {
     }
     fn prepare_frame(&mut self, input: FrameInput) -> Result<Rc<dyn PreparedFrame>> {
         self.revision += 1;
-        let render = self.ctx.render.clone();
-        let measure = move |s: &TextSpec, w: f32| {
-            render
-                .with(|r| r.measure(s, w))
-                .ok()
-                .map(|m| (m.width, m.height))
-        };
         let scale = ContentScale::new(input.viewport, input.text_scale);
         let viewport = scale.logical_viewport();
         self.viewport = viewport.h;
-        let (mut nodes, height) = layout(
-            self.snapshot.as_ref(),
-            viewport,
-            self.scroll,
-            &self.palette(),
-            &HostMeasure(&measure),
-        );
+        let (mut nodes, height) =
+            crate::panel_support::with_host_measure(self.ctx.render.clone(), |measure| {
+                layout(
+                    self.snapshot.as_ref(),
+                    viewport,
+                    self.scroll,
+                    &self.palette(),
+                    measure,
+                )
+            });
         self.height = height;
-        for n in &mut nodes {
-            n.rect = scale.rect(n.rect);
-            n.style.size *= scale.factor();
-            n.style.radius *= scale.factor();
-        }
+        crate::panel_support::scale_nodes(&mut nodes, scale);
         Ok(Rc::new(Scene::new(
             FrameIdentity {
                 mount_key: self.mount.ok_or(Error::Closed)?,
@@ -460,17 +452,18 @@ impl PanelInstance for Panel {
         }
     }
     fn next_wake_after(&self) -> Option<Duration> {
-        if !self.stopped && Instant::now() < self.chrome_warmup_until {
-            return Some(Duration::from_millis(500));
-        }
-        if !self.stopped && !self.chrome_published {
-            return Some(Duration::from_millis(10));
-        }
-        (!self.stopped && self.config.selection.is_some()).then(|| {
-            Duration::from_secs(120)
-                .saturating_sub(self.last.elapsed())
-                .max(Duration::from_secs(1))
-        })
+        crate::panel_support::warmup_wake_after(
+            self.stopped,
+            self.chrome_warmup_until,
+            self.chrome_published,
+            || {
+                self.config.selection.is_some().then(|| {
+                    Duration::from_secs(120)
+                        .saturating_sub(self.last.elapsed())
+                        .max(Duration::from_secs(1))
+                })
+            },
+        )
     }
 }
 fn date(v: &DeliveryPlanView, t: Option<u32>) -> String {

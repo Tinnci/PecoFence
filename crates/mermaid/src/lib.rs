@@ -6,25 +6,25 @@
 mod flowchart;
 mod gantt;
 
-pub(crate) use flowchart::{
+pub use flowchart::{
     CLUSTER_TITLE, EDGE_LABEL_SIZE, FlowLayout, Flowchart, LABEL_SIZE, Shape, Stroke,
     layout_flowchart,
 };
-pub(crate) use gantt::Gantt;
+pub use gantt::Gantt;
 
-pub(crate) const MAX_NODES: usize = 200;
-pub(crate) const MAX_EDGES: usize = 400;
-pub(crate) const MAX_TASKS: usize = 120;
+pub const MAX_NODES: usize = 200;
+pub const MAX_EDGES: usize = 400;
+pub const MAX_TASKS: usize = 120;
 const MAX_LABEL_CHARS: usize = 80;
 
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) enum Diagram {
+pub enum Diagram {
     Flowchart(Flowchart),
     Gantt(Gantt),
 }
 
 impl Diagram {
-    pub(crate) fn title(&self) -> Option<&str> {
+    pub fn title(&self) -> Option<&str> {
         match self {
             Diagram::Flowchart(chart) => chart.title.as_deref(),
             Diagram::Gantt(chart) => chart.title.as_deref(),
@@ -34,7 +34,7 @@ impl Diagram {
 
 /// What went wrong, independent of the UI language.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) enum ErrorKind {
+pub enum ErrorKind {
     UnknownType,
     UnsupportedType(String),
     UnexpectedText,
@@ -55,7 +55,7 @@ pub(crate) enum ErrorKind {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum Severity {
+pub enum Severity {
     Info,
     Warning,
     /// Fatal: nothing could be drawn from the source.
@@ -64,23 +64,23 @@ pub(crate) enum Severity {
 
 /// A problem in the source: fatal as `Err`, otherwise one of [`Parsed::warnings`].
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct Diagnostic {
+pub struct Diagnostic {
     /// 1-based source line, 0 when the problem is not tied to one line.
-    pub(crate) line: usize,
-    pub(crate) kind: ErrorKind,
-    pub(crate) text: String,
-    pub(crate) severity: Severity,
+    pub line: usize,
+    pub kind: ErrorKind,
+    pub text: String,
+    pub severity: Severity,
 }
 
 /// A drawable diagram and the non-fatal problems found on the way.
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) struct Parsed {
-    pub(crate) diagram: Diagram,
-    pub(crate) warnings: Vec<Diagnostic>,
+pub struct Parsed {
+    pub diagram: Diagram,
+    pub warnings: Vec<Diagnostic>,
 }
 
 impl Diagnostic {
-    pub(crate) fn message(&self, chinese: bool) -> String {
+    pub fn message(&self, chinese: bool) -> String {
         use ErrorKind::*;
         match (&self.kind, chinese) {
             (UnknownType, true) => "第一行需写明图表类型，例如 flowchart LR 或 gantt".into(),
@@ -155,14 +155,14 @@ fn error(line: usize, kind: ErrorKind, text: &str) -> Diagnostic {
 // ---------------------------------------------------------------- pipeline
 
 /// Source after preprocessing: front matter read, comment and blank lines gone.
-pub(crate) struct Source<'a> {
+pub struct Source<'a> {
     /// Front matter `title:`, the only key read.
-    pub(crate) title: Option<String>,
+    pub title: Option<String>,
     /// Statements with their 1-based line numbers; the first is the type header.
-    pub(crate) lines: Vec<(usize, &'a str)>,
+    pub lines: Vec<(usize, &'a str)>,
 }
 
-pub(crate) fn preprocess(source: &str) -> Source<'_> {
+pub fn preprocess(source: &str) -> Source<'_> {
     let mut lines = source
         .lines()
         .enumerate()
@@ -255,7 +255,7 @@ fn detect(source: &Source) -> Result<&'static DiagramType, Diagnostic> {
 }
 
 /// Parse Mermaid source. Front matter `title:` and `%%` comment lines are honoured.
-pub(crate) fn parse(source: &str) -> Result<Parsed, Diagnostic> {
+pub fn parse(source: &str) -> Result<Parsed, Diagnostic> {
     let source = preprocess(source);
     let mut warnings = Vec::new();
     let diagram = (detect(&source)?.parse)(&source, &mut warnings)?;
@@ -264,7 +264,7 @@ pub(crate) fn parse(source: &str) -> Result<Parsed, Diagnostic> {
 
 /// Split a line into statements at `;`, except inside quotes, `[]`, `()`, `{}`,
 /// `|…|` link labels and `#…;` entity codes.
-pub(crate) fn statements(line: &str) -> Vec<&str> {
+pub fn statements(line: &str) -> Vec<&str> {
     let (mut out, mut start, mut at) = (Vec::new(), 0, 0);
     let (mut depth, mut quoted, mut piped) = (0usize, false, false);
     // Byte scan: every delimiter is ASCII, and UTF-8 continuation bytes never are.
@@ -301,7 +301,7 @@ fn entity_len(text: &str) -> Option<usize> {
 
 /// Decode Mermaid's entity codes: `#NNN;` (decimal code point) and named ones such
 /// as `#quot;` or `#59;` for `;`. Unknown codes stay as written.
-pub(crate) fn decode_entities(text: &str) -> String {
+pub fn decode_entities(text: &str) -> String {
     const NAMED: [(&str, char); 18] = [
         ("quot", '"'),
         ("amp", '&'),
@@ -352,7 +352,7 @@ fn unquote(text: &str) -> &str {
 
 /// Advance widths for layout. The widget passes the host's DirectWrite measurer;
 /// tests, and hosts without one, use the deterministic [`Estimate`].
-pub(crate) trait TextMeasure {
+pub trait TextMeasure {
     /// Width of one line of `text` at `size` DIPs.
     fn line_width(&self, text: &str, size: f32) -> f32;
 }
@@ -360,7 +360,7 @@ pub(crate) trait TextMeasure {
 /// Deterministic per-character estimate for Segoe UI / Noto Sans SC: Latin about
 /// 0.56 em (capitals 0.64), East Asian wide and fullwidth one em, combining marks,
 /// controls and zero-width characters nothing, everything else 0.6 em.
-pub(crate) struct Estimate;
+pub struct Estimate;
 
 impl TextMeasure for Estimate {
     fn line_width(&self, text: &str, size: f32) -> f32 {
@@ -411,7 +411,7 @@ fn char_em(c: char) -> f32 {
 }
 
 /// Width of the widest line of `text`.
-pub(crate) fn text_width(measure: &dyn TextMeasure, text: &str, size: f32) -> f32 {
+pub fn text_width(measure: &dyn TextMeasure, text: &str, size: f32) -> f32 {
     text.lines()
         .map(|line| measure.line_width(line, size))
         .fold(0.0, f32::max)
@@ -419,7 +419,7 @@ pub(crate) fn text_width(measure: &dyn TextMeasure, text: &str, size: f32) -> f3
 
 /// Greedy wrap to `max` DIPs: breaks after spaces and around wide characters, and
 /// inside a word only when the word alone is too wide.
-pub(crate) fn wrap(measure: &dyn TextMeasure, text: &str, size: f32, max: f32) -> String {
+pub fn wrap(measure: &dyn TextMeasure, text: &str, size: f32, max: f32) -> String {
     let mut out = String::new();
     for (i, line) in text.lines().enumerate() {
         if i > 0 {
@@ -454,11 +454,11 @@ pub(crate) fn wrap(measure: &dyn TextMeasure, text: &str, size: f32, max: f32) -
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub(crate) struct Box2 {
-    pub(crate) x: f32,
-    pub(crate) y: f32,
-    pub(crate) w: f32,
-    pub(crate) h: f32,
+pub struct Box2 {
+    pub x: f32,
+    pub y: f32,
+    pub w: f32,
+    pub h: f32,
 }
 
 #[cfg(test)]

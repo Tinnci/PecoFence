@@ -2,10 +2,7 @@
 //! the 问题 workspace. SPM answers every question; this panel only asks, remembers what the user
 //! chose, and sends local verdicts back. Nothing here writes to Lark, Meegle, Gerrit or Jenkins.
 use super::{ProposalAction, layout, text::Lang};
-use crate::board::{
-    palette::Palette,
-    text::{HostMeasure, Measure},
-};
+use crate::board::{palette::Palette, text::Measure};
 use pecofence_plugin_api::{
     design::{ContentScale, LayoutTracker},
     scene::Scene,
@@ -676,11 +673,7 @@ impl Panel {
         self.content_height = built.content_height;
         self.field = scale.rect(built.field);
         self.actions = built.actions;
-        for node in &mut built.nodes {
-            node.rect = scale.rect(node.rect);
-            node.style.size *= scale.factor();
-            node.style.radius *= scale.factor();
-        }
+        crate::panel_support::scale_nodes(&mut built.nodes, scale);
         let scene = Scene::new(
             FrameIdentity {
                 mount_key,
@@ -769,14 +762,10 @@ impl PanelInstance for Panel {
         self.handle(event)
     }
     fn prepare_frame(&mut self, input: FrameInput) -> Result<Rc<dyn PreparedFrame>> {
-        let render = self.ctx.render.clone();
-        let measure = move |spec: &TextSpec, width: f32| {
-            render
-                .with(|r| r.measure(spec, width))
-                .ok()
-                .map(|m| (m.width, m.height))
-        };
-        Ok(Rc::new(self.prepare(input, &HostMeasure(&measure))?))
+        let frame = crate::panel_support::with_host_measure(self.ctx.render.clone(), |measure| {
+            self.prepare(input, measure)
+        })?;
+        Ok(Rc::new(frame))
     }
     fn unmount(&mut self, key: MountKey) {
         if self.mount == Some(key) {
@@ -791,17 +780,18 @@ impl PanelInstance for Panel {
     }
     fn next_wake_after(&self) -> Option<Duration> {
         // Publish the chrome again after the fence HWND exists, as the CI panel does.
-        if !self.stopped && Instant::now() < self.chrome_warmup_until {
-            return Some(Duration::from_millis(500));
-        }
-        if !self.published_chrome && !self.stopped {
-            return Some(Duration::from_millis(10));
-        }
-        (self.demo.is_none() && !self.stopped).then(|| {
-            REFRESH
-                .saturating_sub(self.last_refresh.elapsed())
-                .max(Duration::from_secs(1))
-        })
+        crate::panel_support::warmup_wake_after(
+            self.stopped,
+            self.chrome_warmup_until,
+            self.published_chrome,
+            || {
+                self.demo.is_none().then(|| {
+                    REFRESH
+                        .saturating_sub(self.last_refresh.elapsed())
+                        .max(Duration::from_secs(1))
+                })
+            },
+        )
     }
 }
 

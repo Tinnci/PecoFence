@@ -35,6 +35,7 @@ scripts.
 │   ├── plugin-kernel/          plugin loading and lifecycle
 │   ├── plugin-spm/             live SPM integration
 │   ├── plugin-widgets/         note, TODO, calendar and diagram widgets
+│   ├── mermaid/                dependency-free Mermaid parser and layout engine
 │   ├── cli/                    pecofence-cli.exe
 │   ├── watchdog/               pecofence-watchdog.exe
 │   ├── shell-extension/        Explorer context-menu COM DLL

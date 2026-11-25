@@ -9,7 +9,7 @@ use super::{
 use std::collections::HashMap;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum Direction {
+pub enum Direction {
     LeftRight,
     RightLeft,
     TopBottom,
@@ -17,13 +17,13 @@ pub(crate) enum Direction {
 }
 
 impl Direction {
-    pub(crate) fn horizontal(self) -> bool {
+    pub fn horizontal(self) -> bool {
         matches!(self, Direction::LeftRight | Direction::RightLeft)
     }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum Shape {
+pub enum Shape {
     Rect,
     Round,
     Stadium,
@@ -32,44 +32,44 @@ pub(crate) enum Shape {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum Stroke {
+pub enum Stroke {
     Solid,
     Dotted,
     Thick,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) struct Node {
-    pub(crate) id: String,
-    pub(crate) label: String,
-    pub(crate) shape: Shape,
+pub struct Node {
+    pub id: String,
+    pub label: String,
+    pub shape: Shape,
     /// Innermost `subgraph` the node was first mentioned in.
-    pub(crate) cluster: Option<usize>,
+    pub cluster: Option<usize>,
 }
 
 /// A `subgraph … end` block; parents come before their children.
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) struct Cluster {
-    pub(crate) title: String,
-    pub(crate) parent: Option<usize>,
+pub struct Cluster {
+    pub title: String,
+    pub parent: Option<usize>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) struct Edge {
-    pub(crate) from: usize,
-    pub(crate) to: usize,
-    pub(crate) label: Option<String>,
-    pub(crate) stroke: Stroke,
-    pub(crate) arrow: bool,
+pub struct Edge {
+    pub from: usize,
+    pub to: usize,
+    pub label: Option<String>,
+    pub stroke: Stroke,
+    pub arrow: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) struct Flowchart {
-    pub(crate) title: Option<String>,
-    pub(crate) direction: Direction,
-    pub(crate) nodes: Vec<Node>,
-    pub(crate) edges: Vec<Edge>,
-    pub(crate) clusters: Vec<Cluster>,
+pub struct Flowchart {
+    pub title: Option<String>,
+    pub direction: Direction,
+    pub nodes: Vec<Node>,
+    pub edges: Vec<Edge>,
+    pub clusters: Vec<Cluster>,
 }
 
 #[derive(Default)]
@@ -418,9 +418,9 @@ fn parse_link(cursor: &mut Cursor) -> Result<Link, ErrorKind> {
 
 // ---------------------------------------------------------------- layout
 
-pub(crate) const LABEL_SIZE: f32 = 13.0;
+pub const LABEL_SIZE: f32 = 13.0;
 /// Link labels draw at the caption size.
-pub(crate) const EDGE_LABEL_SIZE: f32 = 12.0;
+pub const EDGE_LABEL_SIZE: f32 = 12.0;
 const LINE_HEIGHT: f32 = 18.0;
 const RANK_GAP: f32 = 56.0;
 const NODE_GAP: f32 = 20.0;
@@ -431,27 +431,27 @@ const CLUSTER_PAD: f32 = 8.0;
 /// Least room per link end along a node side, and between turn tracks in a gap.
 const PORT_GAP: f32 = 8.0;
 const TRACK_GAP: f32 = 8.0;
-pub(crate) const CLUSTER_TITLE: f32 = 18.0;
+pub const CLUSTER_TITLE: f32 = 18.0;
 
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) struct PlacedEdge {
-    pub(crate) points: Vec<(f32, f32)>,
+pub struct PlacedEdge {
+    pub points: Vec<(f32, f32)>,
     /// Wrapped text and the box reserved for it.
-    pub(crate) label: Option<(String, Box2)>,
-    pub(crate) stroke: Stroke,
-    pub(crate) arrow: bool,
+    pub label: Option<(String, Box2)>,
+    pub stroke: Stroke,
+    pub arrow: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) struct FlowLayout {
+pub struct FlowLayout {
     /// One box and one wrapped label per node, in `Flowchart::nodes` order.
-    pub(crate) boxes: Vec<Box2>,
-    pub(crate) labels: Vec<String>,
-    pub(crate) edges: Vec<PlacedEdge>,
+    pub boxes: Vec<Box2>,
+    pub labels: Vec<String>,
+    pub edges: Vec<PlacedEdge>,
     /// One border per subgraph; `None` only for a subgraph without nodes.
-    pub(crate) clusters: Vec<Option<Box2>>,
-    pub(crate) width: f32,
-    pub(crate) height: f32,
+    pub clusters: Vec<Option<Box2>>,
+    pub width: f32,
+    pub height: f32,
 }
 
 /// Reorders one gap's turns `(from, to, link, step)` so a link leaving cross `c` turns
@@ -590,7 +590,7 @@ fn rank_nodes(chart: &Flowchart) -> Vec<usize> {
 /// a node. Barycenter sweeps order each layer, layers are centred on a shared axis so
 /// parallel branches sit symmetrically, and links run orthogonally, turning only in
 /// the empty gaps between layers. Links against the ranks are routed reversed.
-pub(crate) fn layout_flowchart(chart: &Flowchart, measure: &dyn TextMeasure) -> FlowLayout {
+pub fn layout_flowchart(chart: &Flowchart, measure: &dyn TextMeasure) -> FlowLayout {
     let n = chart.nodes.len();
     let labels: Vec<String> = chart
         .nodes

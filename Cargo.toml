@@ -3,6 +3,7 @@ resolver = "3"
 members = [
     "crates/core",
     "crates/work-calendar",
+    "crates/mermaid",
     "crates/cli",
     "crates/spm-contracts",
     "crates/spm-transport",
@@ -87,6 +88,9 @@ opt-level = "s"
 # Widget scene construction and annual JSON parsing operate on small bounded
 # inputs; favor compact code here while native raster/GPU rendering stays at 3.
 [profile.release.package.pecofence-plugin-widgets]
+opt-level = "s"
+
+[profile.release.package.pecofence-mermaid]
 opt-level = "s"
 
 [profile.dev]

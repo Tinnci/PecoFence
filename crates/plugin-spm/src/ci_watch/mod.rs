@@ -2,10 +2,7 @@
 pub mod entry;
 pub mod layout;
 pub mod text;
-use crate::board::{
-    palette::Palette,
-    text::{HostMeasure, Measure},
-};
+use crate::board::{palette::Palette, text::Measure};
 use pecofence_plugin_api::{
     design::{ContentScale, LayoutTracker},
     scene::Scene,
@@ -813,11 +810,7 @@ impl Panel {
         self.content_height = layout.content_height;
         self.field = scale.rect(layout.field);
         self.actions = layout.actions;
-        for node in &mut layout.nodes {
-            node.rect = scale.rect(node.rect);
-            node.style.size *= scale.factor();
-            node.style.radius *= scale.factor();
-        }
+        crate::panel_support::scale_nodes(&mut layout.nodes, scale);
         let scene = Scene::new(
             FrameIdentity {
                 mount_key,
@@ -846,14 +839,10 @@ impl PanelInstance for Panel {
         self.handle(event)
     }
     fn prepare_frame(&mut self, input: FrameInput) -> Result<Rc<dyn PreparedFrame>> {
-        let render = self.ctx.render.clone();
-        let measure = move |spec: &TextSpec, width: f32| {
-            render
-                .with(|r| r.measure(spec, width))
-                .ok()
-                .map(|m| (m.width, m.height))
-        };
-        Ok(Rc::new(self.prepare(input, &HostMeasure(&measure))?))
+        let frame = crate::panel_support::with_host_measure(self.ctx.render.clone(), |measure| {
+            self.prepare(input, measure)
+        })?;
+        Ok(Rc::new(frame))
     }
     fn unmount(&mut self, key: MountKey) {
         if self.mount == Some(key) {
@@ -869,17 +858,18 @@ impl PanelInstance for Panel {
     fn next_wake_after(&self) -> Option<Duration> {
         // The first host wake can precede the fence HWND. Publish again after it
         // mounts, so an early chrome update cannot leave the generic title behind.
-        if !self.stopped && Instant::now() < self.chrome_warmup_until {
-            return Some(Duration::from_millis(500));
-        }
-        if !self.published_chrome && !self.stopped {
-            return Some(Duration::from_millis(10));
-        }
-        (!self.config.demo && !self.stopped).then(|| {
-            self.cadence()
-                .saturating_sub(self.last_refresh.elapsed())
-                .max(Duration::from_secs(1))
-        })
+        crate::panel_support::warmup_wake_after(
+            self.stopped,
+            self.chrome_warmup_until,
+            self.published_chrome,
+            || {
+                (!self.config.demo).then(|| {
+                    self.cadence()
+                        .saturating_sub(self.last_refresh.elapsed())
+                        .max(Duration::from_secs(1))
+                })
+            },
+        )
     }
 }
 #[cfg(test)]

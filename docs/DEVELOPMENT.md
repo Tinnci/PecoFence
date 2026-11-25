@@ -143,6 +143,7 @@ the run and expects them to be unchanged.
 |---|---|
 | `crates/core` | Platform-independent models, configuration, rules, geometry and translation |
 | `crates/work-calendar` | Regional holiday and workday data |
+| `crates/mermaid` | Dependency-free Mermaid parser and Sugiyama flowchart/Gantt layout engine |
 | `crates/cli` | `pecofence-cli.exe` read-only queries, organizing suggestions, status and quit |
 | `crates/spm-contracts` | Public shared SPM wire contracts (`0.2.0`), not the private daemon |
 | `crates/spm-transport` | Named-pipe SPM transport actor and host IPC capability adapter |
