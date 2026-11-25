@@ -1,5 +1,5 @@
 //! One frame's title controls, shared by painting, input and semantics.
-use crate::fence_chrome::{CaptionButton, TabDraw, TitleCommandDraw, TitleDeco, TitleState};
+use crate::fence_chrome::types::{CaptionButton, TabDraw, TitleCommandDraw, TitleDeco, TitleState};
 use pecofence_plugin_api::RectDip;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
