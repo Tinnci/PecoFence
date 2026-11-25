@@ -909,7 +909,18 @@ impl App {
                 )
             })?;
 
-        let chrome = Rc::new(FenceChrome::new()?);
+        let text_scale = sysparams::text_scale_percent() as f32 / 100.0;
+        let icon_font = sysparams::icon_title_font();
+        let chrome = Rc::new(FenceChrome::with_typography(
+            text_scale,
+            icon_font.as_ref().map(|f| {
+                (
+                    f.family.as_str(),
+                    f.size_dip,
+                    pecofence_render::FontWeight(f.weight),
+                )
+            }),
+        )?);
         let mut theme = theme;
         theme.title_height = chrome.title_height();
         let ctx = Rc::new(FenceContext {
@@ -950,7 +961,7 @@ impl App {
                     state.config.settings.roll_up.hide_inactive_scrollbar,
                 ),
                 wheel_lines: std::cell::Cell::new(sysparams::wheel_scroll_lines()),
-                text_scale: std::cell::Cell::new(sysparams::text_scale_percent() as f32 / 100.0),
+                text_scale: std::cell::Cell::new(text_scale),
                 widget_paper_style: std::cell::Cell::new(state.config.settings.widget_paper_style),
                 widget_paper_brightness: std::cell::Cell::new(
                     state.config.settings.widget_paper_brightness,

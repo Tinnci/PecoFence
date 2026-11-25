@@ -7,9 +7,8 @@ use windows_canvas::{
 };
 use windows_core::Result;
 
-/// Icon-label font: the system icon-title font (`SPI_GETICONTITLELOGFONT` scaled by the
-/// Settings › Accessibility › Text size factor, see `sysparams::icon_title_font`) with its
-/// measured line height, so the cell grid grows with the text like the desktop's does.
+/// Icon-label font: the desktop icon-title font (injected from host system parameters)
+/// with its measured line height, so the cell grid grows with the text like the desktop's does.
 pub(super) struct LabelFont {
     pub(super) format: TextFormat,
     family: String,
@@ -124,6 +123,13 @@ pub struct FenceChrome {
 
 impl FenceChrome {
     pub fn new() -> Result<Self> {
+        Self::with_typography(1.0, None)
+    }
+
+    pub fn with_typography(
+        text_scale: f32,
+        icon_title_font: Option<(&str, f32, FontWeight)>,
+    ) -> Result<Self> {
         // WinUI type ramp: Body Strong 14/600 for the title, Caption 12 (Small optical size) for
         // labels and the rolled item count, Body 14 for the empty state. No letter-spacing.
         let label_font = RefCell::new(LabelFont {
@@ -153,20 +159,17 @@ impl FenceChrome {
             label_font,
             glyph_format,
             typography: RefCell::new(FenceTypography::new(
-                pecofence_plugin_api::design::ContentScale::new(
-                    RectDip::default(),
-                    pecofence_platform::sysparams::text_scale_percent() as f32 / 100.0,
-                )
-                .factor(),
+                pecofence_plugin_api::design::ContentScale::new(RectDip::default(), text_scale)
+                    .factor(),
             )?),
             sort_glyph_format,
             title_glyph_format,
             caption_glyph_format,
         };
         // Labels follow the desktop's icon-title font from the start (12 px / 16 stays the
-        // fallback when the system call fails).
-        if let Some(f) = pecofence_platform::sysparams::icon_title_font() {
-            let _ = chrome.set_icon_title_font(&f.family, f.size_dip, FontWeight(f.weight));
+        // fallback when none is supplied).
+        if let Some((family, size_dip, weight)) = icon_title_font {
+            let _ = chrome.set_icon_title_font(family, size_dip, weight);
         }
         Ok(chrome)
     }
